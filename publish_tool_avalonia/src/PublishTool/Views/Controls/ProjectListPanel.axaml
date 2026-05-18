@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:PublishTool.Views.Controls"
+             xmlns:vm="using:PublishTool.ViewModels"
+             x:Class="PublishTool.Views.Controls.ProjectListPanel"
+             x:DataType="vm:MainWindowViewModel">
+  <Grid RowDefinitions="40,*,30">
+    <!-- 搜索框 -->
+    <Border Grid.Row="0" Background="#0d0d0d" BorderThickness="0,0,0,1" BorderBrush="#2d2d2d">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox Text="{Binding SearchText}" 
+                 PlaceholderText="搜索项目..."
+                 Background="Transparent" Foreground="White"
+                 BorderThickness="0" FontSize="12"
+                 Padding="12,0"/>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,8,0">
+          <Button Width="28" Height="28" 
+                  Background="Transparent" BorderThickness="0"
+                  Tag="add" Click="ActionButton_Click"
+                  ToolTip.Tip="添加客户端项目">
+            <Path Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" 
+                  Width="18" Height="18" Fill="#00a8ff"/>
+          </Button>
+          <Button Width="28" Height="28" 
+                  Background="Transparent" BorderThickness="0"
+                  Tag="addserver" Click="ActionButton_Click"
+                  ToolTip.Tip="添加服务器项目">
+            <Path Data="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" 
+                  Width="18" Height="18" Fill="#00a8ff"/>
+          </Button>
+          <Button Width="28" Height="28" 
+                  Background="Transparent" BorderThickness="0"
+                  Tag="refresh" Click="ActionButton_Click"
+                  ToolTip.Tip="刷新项目列表">
+            <Path Data="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" 
+                  Width="18" Height="18" Fill="#888888"/>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- 项目列表 -->
+    <ScrollViewer Grid.Row="1" Background="#1a1a1a" BorderThickness="0">
+      <ItemsControl ItemsSource="{Binding FilteredProjects}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <controls:ProjectCard />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+        <ItemsControl.Styles>
+          <Style Selector="ItemsControl">
+            <Setter Property="Padding" Value="8"/>
+          </Style>
+          <Style Selector="ItemsControl > ItemsPresenter">
+            <Setter Property="Margin" Value="0,0,0,4"/>
+          </Style>
+        </ItemsControl.Styles>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <!-- 底部统计 -->
+    <Border Grid.Row="2" Background="#0d0d0d" BorderThickness="1,0,0,0" BorderBrush="#2d2d2d">
+      <TextBlock Text="{Binding FilteredProjects.Count, StringFormat='共 {0} 个项目'}" 
+                 FontSize="11" Foreground="#666666" 
+                 Margin="12,0" VerticalAlignment="Center"/>
+    </Border>
+  </Grid>
+</UserControl>

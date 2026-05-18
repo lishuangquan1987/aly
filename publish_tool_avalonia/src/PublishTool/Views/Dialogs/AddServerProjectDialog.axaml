@@ -1,0 +1,22 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PublishTool.ViewModels"
+        x:Class="PublishTool.Views.Dialogs.AddServerProjectDialog"
+        x:DataType="vm:AddServerProjectDialogViewModel"
+        Title="新建服务器项目" Width="400" SizeToContent="Height"
+        Background="{DynamicResource WindowBackgroundBrush}">
+  <StackPanel Spacing="12" Margin="16">
+    <TextBox PlaceholderText="服务器地址"
+             Text="{Binding ServerUrl}"/>
+    <TextBox PlaceholderText="项目名称"
+             Text="{Binding Name}"/>
+    <TextBox PlaceholderText="显示标题"
+             Text="{Binding Title}"/>
+    <CheckBox Content="强制更新"
+              IsChecked="{Binding IsForceUpdate}"/>
+    <Button Content="创建"
+            Command="{Binding CreateCommand}"
+            IsEnabled="{Binding !IsCreating}"
+            HorizontalAlignment="Right"/>
+  </StackPanel>
+</Window>

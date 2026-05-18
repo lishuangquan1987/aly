@@ -1,0 +1,44 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PublishTool.ViewModels"
+        xmlns:m="using:PublishTool.Models"
+        x:Class="PublishTool.Views.Dialogs.AddProjectDialog"
+        x:DataType="vm:AddProjectDialogViewModel"
+        Title="添加项目" Width="500" SizeToContent="Height"
+        Background="{DynamicResource WindowBackgroundBrush}">
+  <StackPanel Spacing="12" Margin="16">
+    <TextBox PlaceholderText="服务器地址"
+             Text="{Binding ServerUrl}"/>
+    <Button Content="获取项目列表"
+            Command="{Binding FetchProjectsCommand}"/>
+
+    <ListBox ItemsSource="{Binding AvailableProjects}"
+             SelectedItem="{Binding SelectedProject}"
+             Height="200">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="m:ProjectDto">
+          <StackPanel>
+            <TextBlock Text="{Binding Title}" FontWeight="Bold"/>
+            <TextBlock Text="{Binding Name}" Foreground="Gray"/>
+          </StackPanel>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <TextBox Text="{Binding LocalPath}"
+               PlaceholderText="本地文件夹路径" />
+      <Button Content="浏览..." Click="SelectLocalFolder_Click"/>
+    </StackPanel>
+
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <TextBox Text="{Binding ExePath}"
+               PlaceholderText="EXE 路径（可选）" />
+      <Button Content="浏览..." Click="SelectExeFile_Click"/>
+    </StackPanel>
+
+    <Button Content="确认添加"
+            Command="{Binding ConfirmCommand}"
+            HorizontalAlignment="Right"/>
+  </StackPanel>
+</Window>

@@ -1,0 +1,102 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:PublishTool.Views.Controls"
+        xmlns:vm="using:PublishTool.ViewModels"
+        x:Class="PublishTool.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="客户端软件版本发布工具"
+        Width="1400" Height="800"
+        Background="#1a1a1a"
+        WindowStartupLocation="CenterScreen">
+  
+  <Grid RowDefinitions="35,*,25" ColumnDefinitions="260,*">
+    <!-- 顶部标题栏 -->
+    <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#0d0d0d" BorderThickness="0,0,0,1" BorderBrush="#2d2d2d">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" Margin="12,0">
+          <Path Data="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" 
+                Width="20" Height="20" Fill="#00a8ff" Margin="0,2"/>
+          <TextBlock Text="客户端软件版本发布工具" FontSize="14" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+        </StackPanel>
+        
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="0,0,12,0">
+          <TextBox Text="{Binding ServerUrl}" 
+                   PlaceholderText="输入服务器地址..."
+                   Width="280" Height="24"
+                   Background="#252525" Foreground="White"
+                   BorderBrush="#3d3d3d" BorderThickness="1"
+                   CornerRadius="4" Padding="6"/>
+          <Button Content="连接" 
+                  Width="60" Height="24"
+                  Background="#00a8ff" Foreground="White"
+                  BorderThickness="0" CornerRadius="4"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- 左侧项目列表面板 -->
+    <Border Grid.Row="1" Grid.Column="0" Background="#1a1a1a" BorderThickness="0,0,1,0" BorderBrush="#2d2d2d">
+      <controls:ProjectListPanel />
+    </Border>
+
+    <!-- 右侧主内容区 -->
+    <Grid Grid.Row="1" Grid.Column="1" Background="#1e1e1e">
+      <Grid RowDefinitions="Auto,*,Auto">
+        <!-- 标签页栏 -->
+        <Border Grid.Row="0" Background="#1a1a1a" BorderThickness="0,0,0,1" BorderBrush="#2d2d2d">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" Margin="8,4">
+              <TabControl ItemsSource="{Binding OpenTabs}" 
+                          SelectedItem="{Binding SelectedTab}"
+                          Background="Transparent" BorderThickness="0"
+                          TabStripPlacement="Top">
+                <TabControl.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                      <Path Data="M17 20h4v-2h-4v-3l-4 4h3v2l-4-4v3h4v2z" Width="14" Height="14" Fill="#00ff88"/>
+                      <TextBlock Text="{Binding Config.Title}" Foreground="White" FontSize="12"/>
+                      <Button Width="16" Height="16" 
+                              Background="Transparent" BorderThickness="0"
+                              Command="{Binding CloseCommand}">
+                        <Path Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" 
+                              Width="12" Height="12" Fill="#888888"/>
+                      </Button>
+                    </StackPanel>
+                  </DataTemplate>
+                </TabControl.ItemTemplate>
+              </TabControl>
+            </StackPanel>
+            <Button Grid.Column="1" Content="关闭全部" 
+                    Height="22" Width="70"
+                    Background="Transparent" Foreground="#888888"
+                    BorderBrush="#3d3d3d" BorderThickness="1"
+                    CornerRadius="3" FontSize="11"
+                    Command="{Binding CloseAllTabsCommand}"
+                    Margin="0,4,8,4"/>
+          </Grid>
+        </Border>
+
+        <!-- 项目页面内容 -->
+        <ContentControl Grid.Row="1" Content="{Binding SelectedTab}">
+          <ContentControl.Styles>
+            <Style Selector="UserControl">
+              <Setter Property="Background" Value="#1e1e1e"/>
+            </Style>
+          </ContentControl.Styles>
+        </ContentControl>
+      </Grid>
+    </Grid>
+
+    <!-- 底部状态栏 -->
+    <Border Grid.Row="2" Grid.ColumnSpan="2" Background="#0d0d0d" BorderThickness="1,0,0,0" BorderBrush="#2d2d2d">
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <TextBlock Grid.Column="0" Text="长飞客户端软件版本发布工具" 
+                   FontSize="11" Foreground="#666666" Margin="12,4"/>
+        <TextBlock Grid.Column="1" Text="{Binding SelectedTab.StatusMessage, TargetNullValue=''}" 
+                   FontSize="11" Foreground="#00a8ff" Margin="0,4,12,4"/>
+        <TextBlock Grid.Column="2" Text="{Binding CurrentTime}" 
+                   FontSize="11" Foreground="#666666" Margin="0,4,12,4"/>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

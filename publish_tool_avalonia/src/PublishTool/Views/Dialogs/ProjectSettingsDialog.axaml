@@ -1,0 +1,25 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PublishTool.ViewModels"
+        x:Class="PublishTool.Views.Dialogs.ProjectSettingsDialog"
+        x:DataType="vm:ProjectSettingsDialogViewModel"
+        Title="项目设置" Width="400" SizeToContent="Height"
+        Background="{DynamicResource WindowBackgroundBrush}">
+  <StackPanel Spacing="12" Margin="16">
+    <TextBox PlaceholderText="显示标题"
+             Text="{Binding Title}"/>
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <TextBox Text="{Binding ExePath}"
+               PlaceholderText="EXE 路径" />
+      <Button Content="浏览..." Click="SelectExeFile_Click"/>
+    </StackPanel>
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <TextBox Text="{Binding LocalPath}"
+               PlaceholderText="本地文件夹路径" />
+      <Button Content="浏览..." Click="SelectLocalFolder_Click"/>
+    </StackPanel>
+    <Button Content="保存"
+            Command="{Binding SaveCommand}"
+            HorizontalAlignment="Right"/>
+  </StackPanel>
+</Window>

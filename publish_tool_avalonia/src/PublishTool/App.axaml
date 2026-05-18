@@ -1,0 +1,14 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PublishTool.ViewModels"
+             xmlns:controls="using:PublishTool.Views.Controls"
+             x:Class="PublishTool.App">
+  <Application.DataTemplates>
+    <DataTemplate DataType="vm:ProjectPageViewModel">
+      <controls:ProjectPage />
+    </DataTemplate>
+  </Application.DataTemplates>
+  <Application.Styles>
+    <FluentTheme />
+  </Application.Styles>
+</Application>
