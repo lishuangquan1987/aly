@@ -1,1 +1,6 @@
 server/.idea/
+publish_tool_avalonia/src/PublishTool/bin/
+publish_tool_avalonia/src/PublishTool.Tests/bin/
+publish_tool_avalonia/src/PublishTool/obj/
+publish_tool_avalonia/src/PublishTool.Tests/obj/
+publish_tool_avalonia/.idea/
