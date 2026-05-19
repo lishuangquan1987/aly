@@ -7,7 +7,7 @@ namespace PublishTool.Services;
 
 public class FileService
 {
-    public async Task<List<FileInfoDto>> GetAllFilesAsync(string serverUrl, int projectId)
+    public async Task<CommonResponse<List<FileInfoDto>>> GetAllFilesAsync(string serverUrl, int projectId)
     {
         try
         {
@@ -16,7 +16,7 @@ public class FileService
                 .GetJsonAsync<CommonResponse<List<FileInfoDto>>>();
             Log.Debug("获取文件列表成功，项目ID: {ProjectId}, 文件数: {Count}",
                 projectId, response.Data?.Count ?? 0);
-            return response.Data ?? new List<FileInfoDto>();
+            return response;
         }
         catch (FlurlHttpException ex)
         {
@@ -25,7 +25,7 @@ public class FileService
         }
     }
 
-    public async Task UploadFileAsync(string serverUrl, string projectName,
+    public async Task<CommonResponse> UploadFileAsync(string serverUrl, string projectName,
         string relativePath, Stream fileStream)
     {
         try
@@ -38,6 +38,7 @@ public class FileService
                     .AddString("projectName", projectName)
                     .AddString("relativeFileName", relativePath));
             Log.Information("文件上传成功: {Path}", relativePath);
+            return new CommonResponse { IsSuccess = true };
         }
         catch (FlurlHttpException ex)
         {

@@ -1,41 +1,48 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:atom="https://atomui.net"
              xmlns:vm="using:PublishTool.ViewModels"
              xmlns:ml="using:PublishTool.Models.Local"
              x:Class="PublishTool.Views.Controls.LocalFilesPanel"
-             x:DataType="vm:ProjectPageViewModel">
-  <Border BorderBrush="{DynamicResource ControlStrokeColorSecondary}"
-          BorderThickness="1">
+             x:DataType="vm:ProjectPageViewModel"
+             Background="{DynamicResource BgContainer}">
+  <Border BorderThickness="1"
+          BorderBrush="{DynamicResource BorderColor}">
     <Grid RowDefinitions="Auto,Auto,*">
       <!-- 版本号和变更日志 -->
       <StackPanel Grid.Row="0" Margin="8" Spacing="4">
         <TextBlock Text="{Binding ServerVersion, StringFormat='服务器版本: {0}'}"
-                   FontSize="12" FontWeight="Bold"/>
+                   FontSize="12" FontWeight="Bold"
+                   Foreground="{DynamicResource TextBase}"/>
         <TextBlock Text="{Binding LatestChangeLog}"
-                   FontSize="11" Foreground="Gray"
+                   FontSize="11"
+                   Foreground="{DynamicResource TextSecondary}"
                    TextWrapping="Wrap"/>
       </StackPanel>
 
       <!-- 文件过滤框 -->
-      <TextBox Grid.Row="1" Margin="8"
-               PlaceholderText="过滤文件..." />
+      <atom:TextBox Grid.Row="1" Margin="8"
+                    PlaceholderText="过滤文件..."/>
 
       <!-- 本地文件列表 -->
-      <ListBox Grid.Row="2" Margin="8"
-               ItemsSource="{Binding LocalFiles}">
-        <ListBox.ItemTemplate>
+      <atom:ListBox Grid.Row="2" Margin="8"
+                    ItemsSource="{Binding LocalFiles}">
+        <atom:ListBox.ItemTemplate>
           <DataTemplate x:DataType="ml:LocalFileItem">
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <CheckBox IsChecked="{Binding IsChecked}" />
-              <TextBlock Text="{Binding FileName}" />
+              <atom:CheckBox IsChecked="{Binding IsChecked}"/>
+              <TextBlock Text="{Binding FileName}"
+                         Foreground="{DynamicResource TextBase}"/>
               <TextBlock Text="{Binding RelativePath}"
-                         FontSize="10" Foreground="Gray"/>
+                         FontSize="10"
+                         Foreground="{DynamicResource TextSecondary}"/>
               <TextBlock Text="{Binding LastModified, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
-                         FontSize="10" Foreground="Gray"/>
+                         FontSize="10"
+                         Foreground="{DynamicResource TextTertiary}"/>
             </StackPanel>
           </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
+        </atom:ListBox.ItemTemplate>
+      </atom:ListBox>
     </Grid>
   </Border>
 </UserControl>

@@ -1,7 +1,8 @@
+using System;
+using System.Threading.Tasks;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using PublishTool.ViewModels;
-using PublishTool.Views;
+using PublishTool.Views.Dialogs;
 
 namespace PublishTool.Views.Controls;
 
@@ -10,33 +11,25 @@ public partial class ProjectPage : UserControl
     public ProjectPage()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
     }
 
-    private void OpenProjectSettings_Click(object? sender, RoutedEventArgs e)
+    private void OnDataContextChanged(object? sender, EventArgs e)
     {
-        if (DataContext is not ProjectPageViewModel vm) return;
-        if (VisualRoot is TopLevel topLevel && topLevel is Window window
-            && window.Owner is MainWindow mainWindow)
+        if (DataContext is ProjectPageViewModel vm)
         {
-            _ = mainWindow.ShowProjectSettingsDialog(vm);
-        }
-        else if (VisualRoot is MainWindow mainWindow2)
-        {
-            _ = mainWindow2.ShowProjectSettingsDialog(vm);
+            vm.SettingsRequested += () => ShowDialog(dialog =>
+                dialog.ShowProjectSettingsDialog(vm));
+            vm.ConfigEditorRequested += () => ShowDialog(dialog =>
+                dialog.ShowConfigEditorDialog(vm));
         }
     }
 
-    private void OpenConfigEditor_Click(object? sender, RoutedEventArgs e)
+    private async Task ShowDialog(Func<MainWindow, Task> action)
     {
-        if (DataContext is not ProjectPageViewModel vm) return;
-        if (VisualRoot is TopLevel topLevel && topLevel is Window window
-            && window.Owner is MainWindow mainWindow)
+        if (VisualRoot is MainWindow window)
         {
-            _ = mainWindow.ShowConfigEditorDialog(vm);
-        }
-        else if (VisualRoot is MainWindow mainWindow2)
-        {
-            _ = mainWindow2.ShowConfigEditorDialog(vm);
+            await action(window);
         }
     }
 }

@@ -1,44 +1,91 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:PublishTool.ViewModels"
-        xmlns:m="using:PublishTool.Models"
-        x:Class="PublishTool.Views.Dialogs.AddProjectDialog"
-        x:DataType="vm:AddProjectDialogViewModel"
-        Title="添加项目" Width="500" SizeToContent="Height"
-        Background="{DynamicResource WindowBackgroundBrush}">
-  <StackPanel Spacing="12" Margin="16">
-    <TextBox PlaceholderText="服务器地址"
-             Text="{Binding ServerUrl}"/>
-    <Button Content="获取项目列表"
-            Command="{Binding FetchProjectsCommand}"/>
+<atom:Window xmlns="https://github.com/avaloniaui"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:atom="https://atomui.net"
+              xmlns:vm="using:PublishTool.ViewModels"
+              xmlns:m="using:PublishTool.Models"
+              x:Class="PublishTool.Views.Dialogs.AddProjectDialog"
+              x:DataType="vm:AddProjectDialogViewModel"
+              Title="添加客户端项目" Width="520" SizeToContent="Height"
+              WindowStartupLocation="CenterOwner">
+  <Border Padding="20">
+    <StackPanel Spacing="16">
+      <!-- 头部 -->
+      <TextBlock Text="添加客户端项目"
+                 FontSize="16" FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextBase}"/>
+      <Rectangle Height="1" Fill="{DynamicResource BorderColor}"/>
 
-    <ListBox ItemsSource="{Binding AvailableProjects}"
-             SelectedItem="{Binding SelectedProject}"
-             Height="200">
-      <ListBox.ItemTemplate>
-        <DataTemplate x:DataType="m:ProjectDto">
-          <StackPanel>
-            <TextBlock Text="{Binding Title}" FontWeight="Bold"/>
-            <TextBlock Text="{Binding Name}" Foreground="Gray"/>
-          </StackPanel>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
+      <!-- 服务器地址 -->
+      <StackPanel Spacing="4">
+        <TextBlock Text="服务器地址" FontSize="11"
+                   Foreground="{DynamicResource TextSecondary}"/>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <atom:TextBox Grid.Column="0" Text="{Binding ServerUrl}"
+                        PlaceholderText="http://192.168.1.100:8080"
+                        FontSize="12"/>
+          <atom:Button Grid.Column="1" Content="获取项目列表"
+                       Command="{Binding FetchProjectsCommand}"
+                       FontSize="12"/>
+        </Grid>
+      </StackPanel>
 
-    <StackPanel Orientation="Horizontal" Spacing="8">
-      <TextBox Text="{Binding LocalPath}"
-               PlaceholderText="本地文件夹路径" />
-      <Button Content="浏览..." Click="SelectLocalFolder_Click"/>
+      <!-- 项目选择 -->
+      <StackPanel Spacing="4">
+        <TextBlock Text="选择项目" FontSize="11"
+                   Foreground="{DynamicResource TextSecondary}"/>
+        <atom:ListBox ItemsSource="{Binding AvailableProjects}"
+                      SelectedItem="{Binding SelectedProject}"
+                      Height="180"
+                      BorderThickness="1"
+                      BorderBrush="{DynamicResource BorderColor}"
+                      CornerRadius="4">
+          <atom:ListBox.ItemTemplate>
+            <DataTemplate x:DataType="m:ProjectDto">
+              <Border Padding="8,4">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                             FontSize="12"
+                             Foreground="{DynamicResource TextBase}"/>
+                  <TextBlock Text="{Binding Name}" FontSize="10"
+                             Foreground="{DynamicResource TextTertiary}"/>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </atom:ListBox.ItemTemplate>
+        </atom:ListBox>
+      </StackPanel>
+
+      <!-- 本地路径 -->
+      <StackPanel Spacing="4">
+        <TextBlock Text="本地文件夹路径" FontSize="11"
+                   Foreground="{DynamicResource TextSecondary}"/>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <atom:TextBox Grid.Column="0" Text="{Binding LocalPath}"
+                        PlaceholderText="D:\Projects\MyApp" FontSize="12"/>
+          <atom:Button Grid.Column="1" Content="浏览..."
+                       Click="SelectLocalFolder_Click" FontSize="12"/>
+        </Grid>
+      </StackPanel>
+
+      <!-- EXE 路径 -->
+      <StackPanel Spacing="4">
+        <TextBlock Text="可执行文件路径（可选）" FontSize="11"
+                   Foreground="{DynamicResource TextSecondary}"/>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <atom:TextBox Grid.Column="0" Text="{Binding ExePath}"
+                        PlaceholderText="D:\Projects\MyApp\app.exe" FontSize="12"/>
+          <atom:Button Grid.Column="1" Content="浏览..."
+                       Click="SelectExeFile_Click" FontSize="12"/>
+        </Grid>
+      </StackPanel>
+
+      <!-- 操作按钮 -->
+      <StackPanel Orientation="Horizontal" Spacing="8"
+                  HorizontalAlignment="Right">
+        <atom:Button Content="取消" ButtonType="Default" FontSize="12" Click="CancelButton_Click"/>
+        <atom:Button Content="确认添加" ButtonType="Primary"
+                     Command="{Binding ConfirmCommand}" FontSize="12"/>
+      </StackPanel>
     </StackPanel>
-
-    <StackPanel Orientation="Horizontal" Spacing="8">
-      <TextBox Text="{Binding ExePath}"
-               PlaceholderText="EXE 路径（可选）" />
-      <Button Content="浏览..." Click="SelectExeFile_Click"/>
-    </StackPanel>
-
-    <Button Content="确认添加"
-            Command="{Binding ConfirmCommand}"
-            HorizontalAlignment="Right"/>
-  </StackPanel>
-</Window>
+  </Border>
+</atom:Window>

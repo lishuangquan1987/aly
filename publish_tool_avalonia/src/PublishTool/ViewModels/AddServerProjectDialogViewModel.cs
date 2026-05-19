@@ -9,6 +9,8 @@ public partial class AddServerProjectDialogViewModel : ObservableObject
 {
     private readonly ProjectService _projectService;
 
+    public event Action? CloseRequested;
+
     [ObservableProperty]
     private string _serverUrl = string.Empty;
 
@@ -23,6 +25,9 @@ public partial class AddServerProjectDialogViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isCreating;
+
+    [ObservableProperty]
+    private string _statusMessage = string.Empty;
 
     public AddServerProjectDialogViewModel(ProjectService projectService)
     {
@@ -44,7 +49,16 @@ public partial class AddServerProjectDialogViewModel : ObservableObject
                 Title = Title,
                 IsForceUpdate = IsForceUpdate
             };
-            await _projectService.CreateProjectAsync(ServerUrl, dto);
+            var response = await _projectService.CreateProjectAsync(ServerUrl, dto);
+            if (response.IsSuccess)
+            {
+                StatusMessage = "创建成功";
+                CloseRequested?.Invoke();
+            }
+            else
+            {
+                StatusMessage = $"创建失败: {response.ErrorMsg}";
+            }
         }
         finally
         {

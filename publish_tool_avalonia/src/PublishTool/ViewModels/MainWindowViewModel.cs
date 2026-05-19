@@ -12,8 +12,8 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly ConfigService _configService;
     private readonly ProjectService _projectService;
 
-    [ObservableProperty]
-    private string _serverUrl = string.Empty;
+    public event Func<Task>? AddServerProjectRequested;
+    public event Func<Task>? AddClientProjectRequested;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -105,15 +105,19 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void MoveUpProject(int index)
+    private void MoveUpProject(ProjectConfig project)
     {
-        _configService.MoveUp(index);
+        var index = FilteredProjects.IndexOf(project);
+        if (index > 0)
+            _configService.MoveUp(index);
     }
 
     [RelayCommand]
-    private void MoveDownProject(int index)
+    private void MoveDownProject(ProjectConfig project)
     {
-        _configService.MoveDown(index);
+        var index = FilteredProjects.IndexOf(project);
+        if (index >= 0 && index < FilteredProjects.Count - 1)
+            _configService.MoveDown(index);
     }
 
     [RelayCommand]
@@ -124,5 +128,19 @@ public partial class MainWindowViewModel : ObservableObject
             tab.Dispose();
         }
         OpenTabs.Clear();
+    }
+
+    [RelayCommand]
+    private async Task AddServerProject()
+    {
+        if (AddServerProjectRequested != null)
+            await AddServerProjectRequested.Invoke();
+    }
+
+    [RelayCommand]
+    private async Task AddClientProject()
+    {
+        if (AddClientProjectRequested != null)
+            await AddClientProjectRequested.Invoke();
     }
 }

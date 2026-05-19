@@ -4,7 +4,7 @@ namespace PublishTool.Models;
 
 public class ServerOsInfoDto
 {
-    [JsonProperty("OS")]
+    [JsonProperty("os")]
     public string? Os { get; set; }
 
     [JsonProperty("platform")]
@@ -26,13 +26,13 @@ public class ServerOsInfoDto
     public double CpuMhz { get; set; }
 
     [JsonProperty("diskUsed")]
-    public ulong DiskUsed { get; set; }
+    public double DiskUsed { get; set; }
 
     [JsonProperty("diskFree")]
-    public ulong DiskFree { get; set; }
+    public double DiskFree { get; set; }
 
     [JsonProperty("diskTotal")]
-    public ulong DiskTotal { get; set; }
+    public double DiskTotal { get; set; }
 
     [JsonProperty("diskUsedPercent")]
     public double DiskUsedPercent { get; set; }

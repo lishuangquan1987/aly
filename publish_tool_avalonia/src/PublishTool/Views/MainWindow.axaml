@@ -1,102 +1,124 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="using:PublishTool.Views.Controls"
-        xmlns:vm="using:PublishTool.ViewModels"
-        x:Class="PublishTool.Views.MainWindow"
-        x:DataType="vm:MainWindowViewModel"
-        Title="客户端软件版本发布工具"
-        Width="1400" Height="800"
-        Background="#1a1a1a"
-        WindowStartupLocation="CenterScreen">
-  
-  <Grid RowDefinitions="35,*,25" ColumnDefinitions="260,*">
+<atom:Window xmlns="https://github.com/avaloniaui"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:atom="https://atomui.net"
+              xmlns:controls="using:PublishTool.Views.Controls"
+              xmlns:vm="using:PublishTool.ViewModels"
+              x:Class="PublishTool.Views.MainWindow"
+              x:DataType="vm:MainWindowViewModel"
+              Title="客户端软件版本发布工具"
+              Width="1400" Height="850"
+              MinWidth="1000" MinHeight="600"
+              WindowStartupLocation="CenterScreen">
+
+  <Grid RowDefinitions="48,*,28" ColumnDefinitions="280,*">
     <!-- 顶部标题栏 -->
-    <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#0d0d0d" BorderThickness="0,0,0,1" BorderBrush="#2d2d2d">
-      <Grid ColumnDefinitions="Auto,*,Auto">
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" Margin="12,0">
-          <Path Data="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" 
-                Width="20" Height="20" Fill="#00a8ff" Margin="0,2"/>
-          <TextBlock Text="客户端软件版本发布工具" FontSize="14" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+    <Border Grid.Row="0" Grid.ColumnSpan="2"
+            Background="{DynamicResource BgLayout}"
+            BorderThickness="0,0,0,1"
+            BorderBrush="{DynamicResource BorderColor}">
+      <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,12,0">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" Margin="16,0">
+          <Border Background="{DynamicResource PrimaryColor}"
+                  CornerRadius="6" Width="28" Height="28"
+                  VerticalAlignment="Center">
+            <Path Data="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+                  Width="16" Height="16" Stretch="Uniform"
+                  Fill="White" Margin="6"/>
+          </Border>
+          <TextBlock Text="客户端软件版本发布工具"
+                     FontSize="15" FontWeight="SemiBold"
+                     Foreground="{DynamicResource TextBase}"
+                     VerticalAlignment="Center"/>
         </StackPanel>
-        
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="0,0,12,0">
-          <TextBox Text="{Binding ServerUrl}" 
-                   PlaceholderText="输入服务器地址..."
-                   Width="280" Height="24"
-                   Background="#252525" Foreground="White"
-                   BorderBrush="#3d3d3d" BorderThickness="1"
-                   CornerRadius="4" Padding="6"/>
-          <Button Content="连接" 
-                  Width="60" Height="24"
-                  Background="#00a8ff" Foreground="White"
-                  BorderThickness="0" CornerRadius="4"/>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                    VerticalAlignment="Center">
+          <Border Background="{DynamicResource BgContainer}"
+                  CornerRadius="4" Padding="8,4">
+            <TextBlock Text="{Binding FilteredProjects.Count, StringFormat='共 {0} 个项目'}"
+                       FontSize="12"
+                       Foreground="{DynamicResource TextSecondary}"/>
+          </Border>
         </StackPanel>
       </Grid>
     </Border>
 
     <!-- 左侧项目列表面板 -->
-    <Border Grid.Row="1" Grid.Column="0" Background="#1a1a1a" BorderThickness="0,0,1,0" BorderBrush="#2d2d2d">
+    <Border Grid.Row="1" Grid.Column="0"
+            Background="{DynamicResource BgContainer}"
+            BorderThickness="0,0,1,0"
+            BorderBrush="{DynamicResource BorderColor}">
       <controls:ProjectListPanel />
     </Border>
 
     <!-- 右侧主内容区 -->
-    <Grid Grid.Row="1" Grid.Column="1" Background="#1e1e1e">
-      <Grid RowDefinitions="Auto,*,Auto">
+    <Grid Grid.Row="1" Grid.Column="1"
+          Background="{DynamicResource BgContainer}">
+      <Grid RowDefinitions="40,*,28">
         <!-- 标签页栏 -->
-        <Border Grid.Row="0" Background="#1a1a1a" BorderThickness="0,0,0,1" BorderBrush="#2d2d2d">
+        <Border Grid.Row="0"
+                Background="{DynamicResource BgLayout}"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderColor}">
           <Grid ColumnDefinitions="*,Auto">
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" Margin="8,4">
-              <TabControl ItemsSource="{Binding OpenTabs}" 
-                          SelectedItem="{Binding SelectedTab}"
-                          Background="Transparent" BorderThickness="0"
-                          TabStripPlacement="Top">
-                <TabControl.ItemTemplate>
+              <atom:TabControl ItemsSource="{Binding OpenTabs}"
+                               SelectedItem="{Binding SelectedTab}"
+                               TabStripPlacement="Top">
+                <atom:TabControl.ItemTemplate>
                   <DataTemplate>
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                      <Path Data="M17 20h4v-2h-4v-3l-4 4h3v2l-4-4v3h4v2z" Width="14" Height="14" Fill="#00ff88"/>
-                      <TextBlock Text="{Binding Config.Title}" Foreground="White" FontSize="12"/>
-                      <Button Width="16" Height="16" 
-                              Background="Transparent" BorderThickness="0"
-                              Command="{Binding CloseCommand}">
-                        <Path Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" 
-                              Width="12" Height="12" Fill="#888888"/>
-                      </Button>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Border Background="{DynamicResource SuccessColor}"
+                              CornerRadius="3" Width="8" Height="8"
+                              VerticalAlignment="Center"/>
+                      <TextBlock Text="{Binding Config.Title}"
+                                 Foreground="{DynamicResource TextBase}"
+                                 FontSize="12"/>
+                      <atom:Button Width="18" Height="18" ButtonType="Text"
+                                   Command="{Binding CloseCommand}"
+                                   Opacity="0.6">
+                        <Path Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                              Width="10" Height="10"
+                              Fill="{DynamicResource TextTertiary}"/>
+                      </atom:Button>
                     </StackPanel>
                   </DataTemplate>
-                </TabControl.ItemTemplate>
-              </TabControl>
+                </atom:TabControl.ItemTemplate>
+              </atom:TabControl>
             </StackPanel>
-            <Button Grid.Column="1" Content="关闭全部" 
-                    Height="22" Width="70"
-                    Background="Transparent" Foreground="#888888"
-                    BorderBrush="#3d3d3d" BorderThickness="1"
-                    CornerRadius="3" FontSize="11"
-                    Command="{Binding CloseAllTabsCommand}"
-                    Margin="0,4,8,4"/>
+            <atom:Button Grid.Column="1" Content="关闭全部"
+                         ButtonType="Text"
+                         Command="{Binding CloseAllTabsCommand}"
+                         Margin="0,4,12,4" FontSize="12"/>
           </Grid>
         </Border>
 
         <!-- 项目页面内容 -->
-        <ContentControl Grid.Row="1" Content="{Binding SelectedTab}">
-          <ContentControl.Styles>
-            <Style Selector="UserControl">
-              <Setter Property="Background" Value="#1e1e1e"/>
-            </Style>
-          </ContentControl.Styles>
-        </ContentControl>
+        <ContentControl Grid.Row="1" Content="{Binding SelectedTab}" />
       </Grid>
     </Grid>
 
     <!-- 底部状态栏 -->
-    <Border Grid.Row="2" Grid.ColumnSpan="2" Background="#0d0d0d" BorderThickness="1,0,0,0" BorderBrush="#2d2d2d">
-      <Grid ColumnDefinitions="*,Auto,Auto">
-        <TextBlock Grid.Column="0" Text="长飞客户端软件版本发布工具" 
-                   FontSize="11" Foreground="#666666" Margin="12,4"/>
-        <TextBlock Grid.Column="1" Text="{Binding SelectedTab.StatusMessage, TargetNullValue=''}" 
-                   FontSize="11" Foreground="#00a8ff" Margin="0,4,12,4"/>
-        <TextBlock Grid.Column="2" Text="{Binding CurrentTime}" 
-                   FontSize="11" Foreground="#666666" Margin="0,4,12,4"/>
+    <Border Grid.Row="2" Grid.ColumnSpan="2"
+            Background="{DynamicResource BgLayout}"
+            BorderThickness="0,1,0,0"
+            BorderBrush="{DynamicResource BorderColor}">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="12,0">
+        <TextBlock Grid.Column="0" Text="长飞客户端软件版本发布工具 v1.0"
+                   FontSize="11"
+                   Foreground="{DynamicResource TextTertiary}"
+                   VerticalAlignment="Center"/>
+        <TextBlock Grid.Column="2"
+                   Text="{Binding SelectedTab.StatusMessage, TargetNullValue='就绪'}"
+                   FontSize="11"
+                   Foreground="{DynamicResource PrimaryColor}"
+                   VerticalAlignment="Center"/>
+        <TextBlock Grid.Column="3" Text="{Binding CurrentTime}"
+                   FontSize="11"
+                   Foreground="{DynamicResource TextTertiary}"
+                   Margin="16,0,0,0"
+                   VerticalAlignment="Center"/>
       </Grid>
     </Border>
   </Grid>
-</Window>
+</atom:Window>

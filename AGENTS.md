@@ -11,7 +11,7 @@
 ```
 publish_tool_avalonia/
 ├── src/
-│   └── PublishTool/           # 主项目
+│   ── PublishTool/           # 主项目
 │       ├── Models/             # DTO 数据模型（与服务端 JSON 一一对应）
 │       │   └── Local/          # 本地业务模型（ObservableObject 子类）
 │       ├── Services/           # 服务层（HTTP API + 本地服务）
@@ -286,7 +286,7 @@ public override void Initialize()
 }
 ```
 
-> ⚠️ Avalonia 12 移除了 `OnInitialized()`，`UseAtomUI()` 必须放在 `Initialize()` 中调用。
+> ️ Avalonia 12 移除了 `OnInitialized()`，`UseAtomUI()` 必须放在 `Initialize()` 中调用。
 
 #### AtomUI 6.0 拆包
 
@@ -411,4 +411,3 @@ public override void Initialize()
 > **版本**: 1.1\
 > **适用范围**: publish\_tool\_avalonia/ 项目（.NET 8 + Avalonia 12 + CommunityToolkit.Mvvm + AtomUI 6.0）\
 > **兼容服务端**: server/（Go + Gin + Ent + SQLite）保持完全兼容，无需修改
-

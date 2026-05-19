@@ -1,21 +1,24 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:PublishTool.ViewModels"
-        x:Class="PublishTool.Views.Dialogs.ConfigEditorDialog"
-        x:DataType="vm:ConfigEditorDialogViewModel"
-        Title="配置项编辑" Width="400" SizeToContent="Height"
-        Background="{DynamicResource WindowBackgroundBrush}">
+<atom:Window xmlns="https://github.com/avaloniaui"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:atom="https://atomui.net"
+              xmlns:vm="using:PublishTool.ViewModels"
+              x:Class="PublishTool.Views.Dialogs.ConfigEditorDialog"
+              x:DataType="vm:ConfigEditorDialogViewModel"
+              Title="配置项编辑" Width="400" SizeToContent="Height">
   <StackPanel Spacing="12" Margin="16">
-    <TextBlock Text="忽略文件夹（每行一个）" FontSize="12"/>
-    <TextBox AcceptsReturn="True" Height="100"
-             Text="{Binding IgnoreFoldersText}"/>
+    <TextBlock Text="忽略文件夹（每行一个）" FontSize="12"
+               Foreground="{DynamicResource TextBase}"/>
+    <atom:TextBox AcceptsReturn="True" Height="100"
+                  Text="{Binding IgnoreFoldersText}"/>
 
-    <TextBlock Text="忽略文件（每行一个）" FontSize="12"/>
-    <TextBox AcceptsReturn="True" Height="100"
-             Text="{Binding IgnoreFilesText}"/>
+    <TextBlock Text="忽略文件（每行一个）" FontSize="12"
+               Foreground="{DynamicResource TextBase}"/>
+    <atom:TextBox AcceptsReturn="True" Height="100"
+                  Text="{Binding IgnoreFilesText}"/>
 
-    <Button Content="保存"
-            Command="{Binding SaveCommand}"
-            HorizontalAlignment="Right"/>
+    <atom:Button Content="保存"
+                 Command="{Binding SaveCommand}"
+                 ButtonType="Primary"
+                 HorizontalAlignment="Right"/>
   </StackPanel>
-</Window>
+</atom:Window>

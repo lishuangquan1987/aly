@@ -1,22 +1,55 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:PublishTool.ViewModels"
-        x:Class="PublishTool.Views.Dialogs.AddServerProjectDialog"
-        x:DataType="vm:AddServerProjectDialogViewModel"
-        Title="新建服务器项目" Width="400" SizeToContent="Height"
-        Background="{DynamicResource WindowBackgroundBrush}">
-  <StackPanel Spacing="12" Margin="16">
-    <TextBox PlaceholderText="服务器地址"
-             Text="{Binding ServerUrl}"/>
-    <TextBox PlaceholderText="项目名称"
-             Text="{Binding Name}"/>
-    <TextBox PlaceholderText="显示标题"
-             Text="{Binding Title}"/>
-    <CheckBox Content="强制更新"
-              IsChecked="{Binding IsForceUpdate}"/>
-    <Button Content="创建"
-            Command="{Binding CreateCommand}"
-            IsEnabled="{Binding !IsCreating}"
-            HorizontalAlignment="Right"/>
-  </StackPanel>
-</Window>
+<atom:Window xmlns="https://github.com/avaloniaui"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:atom="https://atomui.net"
+              xmlns:vm="using:PublishTool.ViewModels"
+              x:Class="PublishTool.Views.Dialogs.AddServerProjectDialog"
+              x:DataType="vm:AddServerProjectDialogViewModel"
+              Title="新建服务端项目" Width="420" SizeToContent="Height"
+              WindowStartupLocation="CenterOwner">
+  <Border Padding="20">
+    <StackPanel Spacing="16">
+      <!-- 头部 -->
+      <TextBlock Text="新建服务端项目"
+                 FontSize="16" FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextBase}"/>
+      <Rectangle Height="1" Fill="{DynamicResource BorderColor}"/>
+
+      <!-- 表单 -->
+      <StackPanel Spacing="12">
+        <StackPanel Spacing="4">
+          <TextBlock Text="服务器地址" FontSize="11"
+                     Foreground="{DynamicResource TextSecondary}"/>
+          <atom:TextBox Text="{Binding ServerUrl}"
+                        PlaceholderText="http://192.168.1.100:8080"
+                        FontSize="12"/>
+        </StackPanel>
+        <StackPanel Spacing="4">
+          <TextBlock Text="项目名称" FontSize="11"
+                     Foreground="{DynamicResource TextSecondary}"/>
+          <atom:TextBox Text="{Binding Name}"
+                        PlaceholderText="my-project"
+                        FontSize="12"/>
+        </StackPanel>
+        <StackPanel Spacing="4">
+          <TextBlock Text="显示标题" FontSize="11"
+                     Foreground="{DynamicResource TextSecondary}"/>
+          <atom:TextBox Text="{Binding Title}"
+                        PlaceholderText="我的项目"
+                        FontSize="12"/>
+        </StackPanel>
+        <atom:CheckBox Content="强制更新"
+                       IsChecked="{Binding IsForceUpdate}"
+                       FontSize="12"/>
+      </StackPanel>
+
+      <!-- 操作按钮 -->
+      <StackPanel Orientation="Horizontal" Spacing="8"
+                  HorizontalAlignment="Right">
+        <atom:Button Content="取消" ButtonType="Default" FontSize="12" Click="CancelButton_Click"/>
+        <atom:Button Content="创建项目" ButtonType="Primary"
+                     Command="{Binding CreateCommand}"
+                     IsEnabled="{Binding !IsCreating}" FontSize="12"/>
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</atom:Window>

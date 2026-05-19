@@ -1,3 +1,4 @@
+using System;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -10,6 +11,20 @@ public partial class AddProjectDialog : Window
     public AddProjectDialog()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        if (DataContext is AddProjectDialogViewModel vm)
+        {
+            vm.CloseRequested += () => Close();
+        }
+    }
+
+    private void CancelButton_Click(object? sender, RoutedEventArgs e)
+    {
+        Close();
     }
 
     private async void SelectLocalFolder_Click(object? sender, RoutedEventArgs e)

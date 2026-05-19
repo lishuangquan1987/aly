@@ -17,6 +17,9 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _cts;
     private bool _disposed;
 
+    public event Func<Task>? SettingsRequested;
+    public event Func<Task>? ConfigEditorRequested;
+
     [ObservableProperty]
     private ProjectConfig _config;
 
@@ -86,27 +89,30 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
         Log.Information("开始刷新项目状态: {Name}", Config.Name);
         try
         {
-            var osInfo = await _projectService.GetOsInfoAsync(Config.ServerUrl, Config.ServerId);
-            if (osInfo != null)
+            var osResponse = await _projectService.GetOsInfoAsync(Config.ServerUrl, Config.ServerId);
+            if (osResponse.IsSuccess && osResponse.Data != null && osResponse.Data.Count > 0)
             {
-                ServerOsInfo = osInfo;
+                ServerOsInfo = osResponse.Data[0];
             }
 
-            var logs = await _projectService.GetChangeLogsAsync(Config.ServerUrl, Config.ServerId);
-            if (logs.Count > 0)
+            var logsResponse = await _projectService.GetChangeLogsAsync(Config.ServerUrl, Config.ServerId);
+            if (logsResponse.IsSuccess && logsResponse.Data != null && logsResponse.Data.Count > 0)
             {
-                var latest = logs[0];
+                var latest = logsResponse.Data[0];
                 ServerVersion = latest.Version;
                 LatestChangeLog = string.Join("\n", latest.Logs);
             }
 
-            var files = await _fileService.GetAllFilesAsync(Config.ServerUrl, Config.ServerId);
-            var modifiedFiles = _localFileService.GetModifiedFiles(
-                Config.LocalPath, files, Config.IgnoreFolders, Config.IgnoreFiles);
-            LocalFiles = new ObservableCollection<LocalFileItem>(modifiedFiles);
+            var filesResponse = await _fileService.GetAllFilesAsync(Config.ServerUrl, Config.ServerId);
+            if (filesResponse.IsSuccess && filesResponse.Data != null)
+            {
+                var modifiedFiles = _localFileService.GetModifiedFiles(
+                    Config.LocalPath, filesResponse.Data, Config.IgnoreFolders, Config.IgnoreFiles);
+                LocalFiles = new ObservableCollection<LocalFileItem>(modifiedFiles);
+            }
 
             StatusMessage = "刷新完成";
-            Log.Information("刷新完成，文件数: {Count}", modifiedFiles.Count);
+            Log.Information("刷新完成，文件数: {Count}", LocalFiles.Count);
         }
         catch (Exception ex)
         {
@@ -182,11 +188,13 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
         _cts = new CancellationTokenSource();
         try
         {
-            var serverFiles = await _fileService.GetAllFilesAsync(Config.ServerUrl, Config.ServerId);
+            var filesResponse = await _fileService.GetAllFilesAsync(Config.ServerUrl, Config.ServerId);
+            if (!filesResponse.IsSuccess || filesResponse.Data == null) return;
+
             foreach (var item in checkedFiles)
             {
                 _cts.Token.ThrowIfCancellationRequested();
-                var serverFile = serverFiles.FirstOrDefault(f =>
+                var serverFile = filesResponse.Data.FirstOrDefault(f =>
                     f.FileRelativePath == item.RelativePath);
                 if (serverFile == null) continue;
 
@@ -194,10 +202,13 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
                 var dir = Path.GetDirectoryName(localPath);
                 if (dir != null) Directory.CreateDirectory(dir);
 
-                await using var stream = await _fileService.DownloadFileAsync(
+                var stream = await _fileService.DownloadFileAsync(
                     Config.ServerUrl, serverFile.FileAbsolutePath);
-                await using var fs = File.Create(localPath);
-                await stream.CopyToAsync(fs);
+                await using (stream)
+                {
+                    await using var fs = File.Create(localPath);
+                    await stream.CopyToAsync(fs);
+                }
             }
             StatusMessage = "下载完成";
             ScanLocalFiles();
@@ -231,10 +242,16 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
                 StatusMessage = $"正在上传: {item.FileName}";
 
                 await using var stream = File.OpenRead(item.LocalPath);
-                await _fileService.UploadFileAsync(
+                var response = await _fileService.UploadFileAsync(
                     Config.ServerUrl, Config.Name, item.RelativePath, stream);
-
-                item.Status = UploadStatus.Done;
+                if (response.IsSuccess)
+                {
+                    item.Status = UploadStatus.Done;
+                }
+                else
+                {
+                    item.Status = UploadStatus.Failed;
+                }
             }
             StatusMessage = "所有文件上传完成";
         }
@@ -264,20 +281,25 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
         _cts = new CancellationTokenSource();
         try
         {
-            var files = await _fileService.GetAllFilesAsync(Config.ServerUrl, Config.ServerId);
+            var filesResponse = await _fileService.GetAllFilesAsync(Config.ServerUrl, Config.ServerId);
+            if (!filesResponse.IsSuccess || filesResponse.Data == null) return;
+
             _cts.Token.ThrowIfCancellationRequested();
-            StatusMessage = $"正在下载 {files.Count} 个文件...";
-            foreach (var file in files)
+            StatusMessage = $"正在下载 {filesResponse.Data.Count} 个文件...";
+            foreach (var file in filesResponse.Data)
             {
                 _cts.Token.ThrowIfCancellationRequested();
                 var localPath = Path.Combine(Config.LocalPath, file.FileRelativePath);
                 var dir = Path.GetDirectoryName(localPath);
                 if (dir != null) Directory.CreateDirectory(dir);
 
-                await using var stream = await _fileService.DownloadFileAsync(
+                var stream = await _fileService.DownloadFileAsync(
                     Config.ServerUrl, file.FileAbsolutePath);
-                await using var fs = File.Create(localPath);
-                await stream.CopyToAsync(fs);
+                await using (stream)
+                {
+                    await using var fs = File.Create(localPath);
+                    await stream.CopyToAsync(fs);
+                }
             }
             StatusMessage = "全部下载完成";
             ScanLocalFiles();
@@ -303,26 +325,31 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
         _cts = new CancellationTokenSource();
         try
         {
-            var serverFiles = await _fileService.GetAllFilesAsync(Config.ServerUrl, Config.ServerId);
+            var filesResponse = await _fileService.GetAllFilesAsync(Config.ServerUrl, Config.ServerId);
+            if (!filesResponse.IsSuccess || filesResponse.Data == null) return;
+
             _cts.Token.ThrowIfCancellationRequested();
             var modifiedFiles = _localFileService.GetModifiedFiles(
-                Config.LocalPath, serverFiles, Config.IgnoreFolders, Config.IgnoreFiles);
+                Config.LocalPath, filesResponse.Data, Config.IgnoreFolders, Config.IgnoreFiles);
             var toDownload = modifiedFiles.Where(f => f.IsModified).ToList();
 
             StatusMessage = $"发现 {toDownload.Count} 个差异文件，开始下载...";
             foreach (var item in toDownload)
             {
                 _cts.Token.ThrowIfCancellationRequested();
-                var serverFile = serverFiles.First(f =>
+                var serverFile = filesResponse.Data.First(f =>
                     f.FileRelativePath == item.RelativePath);
                 var localPath = Path.Combine(Config.LocalPath, item.RelativePath);
                 var dir = Path.GetDirectoryName(localPath);
                 if (dir != null) Directory.CreateDirectory(dir);
 
-                await using var stream = await _fileService.DownloadFileAsync(
+                var stream = await _fileService.DownloadFileAsync(
                     Config.ServerUrl, serverFile.FileAbsolutePath);
-                await using var fs = File.Create(localPath);
-                await stream.CopyToAsync(fs);
+                await using (stream)
+                {
+                    await using var fs = File.Create(localPath);
+                    await stream.CopyToAsync(fs);
+                }
             }
             StatusMessage = "增量拉取完成";
             ScanLocalFiles();
@@ -412,6 +439,20 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     private void Close()
     {
         Dispose();
+    }
+
+    [RelayCommand]
+    private async Task OpenSettings()
+    {
+        if (SettingsRequested != null)
+            await SettingsRequested.Invoke();
+    }
+
+    [RelayCommand]
+    private async Task OpenConfigEditor()
+    {
+        if (ConfigEditorRequested != null)
+            await ConfigEditorRequested.Invoke();
     }
 
     public void Dispose()

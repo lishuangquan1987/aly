@@ -11,6 +11,8 @@ public partial class AddProjectDialogViewModel : ObservableObject
     private readonly ProjectService _projectService;
     private readonly ConfigService _configService;
 
+    public event Action? CloseRequested;
+
     [ObservableProperty]
     private string _serverUrl = string.Empty;
 
@@ -39,7 +41,8 @@ public partial class AddProjectDialogViewModel : ObservableObject
     private async Task FetchProjects()
     {
         if (string.IsNullOrEmpty(ServerUrl)) return;
-        AvailableProjects = await _projectService.GetAllProjectsAsync(ServerUrl);
+        var response = await _projectService.GetAllProjectsAsync(ServerUrl);
+        AvailableProjects = response.Data ?? new List<ProjectDto>();
     }
 
     [RelayCommand]
@@ -59,5 +62,6 @@ public partial class AddProjectDialogViewModel : ObservableObject
         };
         _configService.AddProject(config);
         IsSaved = true;
+        CloseRequested?.Invoke();
     }
 }
