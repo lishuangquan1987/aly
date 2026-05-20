@@ -25,6 +25,15 @@ public partial class ProjectSettingsDialogViewModel : ObservableObject
     [ObservableProperty]
     private string _localPath = string.Empty;
 
+    [ObservableProperty]
+    private string _titleError = string.Empty;
+
+    [ObservableProperty]
+    private string _localPathError = string.Empty;
+
+    partial void OnTitleChanged(string value) => TitleError = string.Empty;
+    partial void OnLocalPathChanged(string value) => LocalPathError = string.Empty;
+
     public event Func<Task>? OpenIgnoreConfigRequested;
 
     public ProjectSettingsDialogViewModel(ConfigService configService, ProjectConfig config)
@@ -61,6 +70,19 @@ public partial class ProjectSettingsDialogViewModel : ObservableObject
     [RelayCommand]
     private void Save()
     {
+        var valid = true;
+        if (string.IsNullOrWhiteSpace(Title))
+        {
+            TitleError = "显示标题不能为空";
+            valid = false;
+        }
+        if (string.IsNullOrWhiteSpace(LocalPath))
+        {
+            LocalPathError = "本地文件夹路径不能为空";
+            valid = false;
+        }
+        if (!valid) return;
+
         _configService.UpdateProject(_config);
     }
 

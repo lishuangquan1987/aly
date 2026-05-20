@@ -29,4 +29,7 @@ public partial class UploadFileItem : ObservableObject
 
     [ObservableProperty]
     private bool _isChecked;
+
+    [ObservableProperty]
+    private int _uploadProgress;
 }

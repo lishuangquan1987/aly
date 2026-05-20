@@ -15,6 +15,7 @@
       <conv:UploadStatusToFailedConverter x:Key="UploadStatusToFailedConverter" />
       <conv:DiskInfoFormatterConverter x:Key="DiskInfoFormatterConverter" />
       <conv:DiskInfoTooltipConverter x:Key="DiskInfoTooltipConverter" />
+      <conv:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
     </ResourceDictionary>
   </Application.Resources>
   <Application.DataTemplates>

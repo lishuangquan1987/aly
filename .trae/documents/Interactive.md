@@ -125,3 +125,42 @@ public override void OnInitialized()
     });
 }
 ```
+
+---
+
+## 问题 8：UI 完善方向确认
+
+我已经完整读懂了项目。当前项目基于 **Avalonia 12 + CommunityToolkit.Mvvm + AtomUI 6.0**，是一个客户端版本发布工具，功能包括项目管理、文件比对、版本上传、增量拉取等。
+
+### 当前 UI 已完成的优化
+根据 publish_tool_plan.md，已完成：
+- 文件列表：文件大小、差异状态、全选
+- 上传队列：状态图标、进度统计、重试按钮
+- 服务器信息栏：磁盘格式优化
+- 工具栏：分组显示
+- 项目设置：服务器地址显示、忽略配置入口
+- 底部栏：停止按钮
+
+### 我发现的仍有优化空间的点
+
+| # | 问题 | 说明 |
+|---|------|------|
+| 1 | **文件差异状态未显示** | `LocalFileItem.CompareStatus` 和 `StatusToColorConverter` 已存在，但 `ProjectPage.axaml` 文件列表中没有显示差异标签（新增/修改） |
+| 2 | **「添加到上传队列」按钮缺失** | `AddToUploadQueue` 和 `RemoveFromQueue` 命令在 ViewModel 中，但 `ProjectPage.axaml` 中没有对应的触发按钮 |
+| 3 | **服务端信息未展示** | `ServerOsInfo`（CPU、磁盘、OS）已获取但从未在 UI 中展示 |
+| 4 | **硬编码颜色** | `StatusToColorConverter`, `BoolToColorConverter`, `UploadStatusToColorConverter` 使用硬编码颜色而非 `DynamicResource` 主题令牌，影响深色主题兼容性 |
+| 5 | **未使用的 UserControl** | `LocalFilesPanel.axaml` 和 `UploadQueuePanel.axaml` 似乎是旧版产物，已被 ProjectPage 的内联内容替代 |
+| 6 | **上传队列缺少单文件进度** | 每个上传项没有独立的进度条显示 |
+| 7 | **搜索框未绑定过滤逻辑** | `LocalFilesPanel.axaml` 中的过滤 TextBox 未绑定任何命令 |
+| 8 | **输入验证缺失** | 对话框中缺少输入校验提示（如空值、格式错误） |
+
+### 请确认优先处理方向
+
+请回复以下编号，告诉我你希望我优先处理哪些问题（可多选）：
+
+**A. 展示层增强** — 解决 1、2、3（差异状态、添加队列按钮、服务器信息展示）
+**B. 视觉打磨** — 解决 4、6、7、8（主题色、进度条、验证、未使用控件清理）
+**C. 全面优化** — 一次解决所有 8 个问题
+**D. 其他想法** — 你有自己的 UI 改进思路
+
+回答：B

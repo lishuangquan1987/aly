@@ -42,7 +42,7 @@
       <!-- 左侧：文件列表 -->
       <Border Grid.Column="0" Margin="8" CornerRadius="6"
               BorderThickness="1" BorderBrush="{DynamicResource BorderColor}">
-        <Grid RowDefinitions="32,*">
+        <Grid RowDefinitions="32,Auto,*,Auto">
           <!-- 列表头部 -->
           <Border Grid.Row="0" Padding="12,0" BorderThickness="0,0,0,1"
                   BorderBrush="{DynamicResource BorderColor}">
@@ -61,23 +61,42 @@
             </Grid>
           </Border>
 
+          <!-- 文件过滤 -->
+          <Border Grid.Row="1" Padding="8,6" BorderThickness="0,0,0,1"
+                  BorderBrush="{DynamicResource BorderColor}">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+              <atom:TextBox Grid.Column="0" Text="{Binding FileFilterText}"
+                            PlaceholderText="过滤文件..." FontSize="11"/>
+              <atom:Button Grid.Column="1" Content="添加到队列" ButtonType="Default" FontSize="11"
+                           Command="{Binding AddToUploadQueueCommand}"/>
+              <atom:CheckBox Grid.Column="2" Content="全选" FontSize="11"
+                             IsChecked="{Binding IsAllSelected}"/>
+            </Grid>
+          </Border>
+
           <!-- 文件列表 -->
-          <atom:ScrollViewer Grid.Row="1" Margin="8">
+          <atom:ScrollViewer Grid.Row="2" Margin="8">
             <atom:ListBox ItemsSource="{Binding LocalFiles}" BorderThickness="0">
               <atom:ListBox.ItemTemplate>
                 <DataTemplate x:DataType="ml:LocalFileItem">
                   <Border Padding="8,6" Margin="0,1">
-                    <Grid ColumnDefinitions="24,*,60,80">
+                    <Grid ColumnDefinitions="24,*,Auto,60,80">
                       <atom:CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}"
                                      VerticalAlignment="Center"/>
                       <TextBlock Grid.Column="1" Text="{Binding FileName}" FontSize="12"
                                  Foreground="{DynamicResource TextBase}"
                                  TextTrimming="CharacterEllipsis"
                                  VerticalAlignment="Center"/>
-                      <TextBlock Grid.Column="2" Text="{Binding FileSize, Converter={StaticResource BytesToSizeConverter}}"
+                      <Border Grid.Column="2" CornerRadius="3" Padding="4,1"
+                              Margin="4,0" VerticalAlignment="Center"
+                              Background="{Binding CompareStatus, Converter={StaticResource StatusToColorConverter}}">
+                        <TextBlock Text="{Binding CompareStatus, Converter={StaticResource CompareStatusConverter}}"
+                                   FontSize="9" Foreground="White"/>
+                      </Border>
+                      <TextBlock Grid.Column="3" Text="{Binding FileSize, Converter={StaticResource BytesToSizeConverter}}"
                                  FontSize="10" Foreground="{DynamicResource TextSecondary}"
                                  VerticalAlignment="Center"/>
-                      <TextBlock Grid.Column="3" Text="{Binding LastModified, StringFormat='{}{0:MM-dd HH:mm}'}"
+                      <TextBlock Grid.Column="4" Text="{Binding LastModified, StringFormat='{}{0:MM-dd HH:mm}'}"
                                  FontSize="10" Foreground="{DynamicResource TextTertiary}"
                                  HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </Grid>
@@ -86,6 +105,17 @@
               </atom:ListBox.ItemTemplate>
             </atom:ListBox>
           </atom:ScrollViewer>
+
+          <!-- 底部操作栏 -->
+          <Border Grid.Row="3" Padding="8,4" BorderThickness="0,1,0,0"
+                  BorderBrush="{DynamicResource BorderColor}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <atom:Button Content="下载选中" ButtonType="Default" FontSize="11"
+                           Command="{Binding DownloadSelectedCommand}"/>
+              <atom:Button Content="停止" ButtonType="Text" FontSize="11"
+                           Command="{Binding StopCommand}"/>
+            </StackPanel>
+          </Border>
         </Grid>
       </Border>
 
@@ -126,19 +156,32 @@
               <atom:ListBox.ItemTemplate>
                 <DataTemplate x:DataType="ml:UploadFileItem">
                   <Border Padding="4,4" Margin="0,1">
-                    <Grid ColumnDefinitions="*,40">
-                      <StackPanel Grid.Column="0">
-                        <TextBlock Text="{Binding FileName}" FontSize="11"
-                                   Foreground="{DynamicResource TextBase}"
-                                   TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Text="{Binding RelativePath}" FontSize="9"
-                                   Foreground="{DynamicResource TextTertiary}"
-                                   TextTrimming="CharacterEllipsis"/>
-                      </StackPanel>
-                      <TextBlock Grid.Column="1"
-                                 Text="{Binding Status, Converter={StaticResource UploadStatusToTextConverter}}"
-                                 FontSize="9" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                 Foreground="{Binding Status, Converter={StaticResource UploadStatusToColorConverter}}"/>
+                    <Grid RowDefinitions="Auto,Auto" RowSpacing="2">
+                      <Grid Grid.Row="0" ColumnDefinitions="*,Auto,20">
+                        <StackPanel Grid.Column="0">
+                          <TextBlock Text="{Binding FileName}" FontSize="11"
+                                     Foreground="{DynamicResource TextBase}"
+                                     TextTrimming="CharacterEllipsis"/>
+                          <TextBlock Text="{Binding RelativePath}" FontSize="9"
+                                     Foreground="{DynamicResource TextTertiary}"
+                                     TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding Status, Converter={StaticResource UploadStatusToTextConverter}}"
+                                   FontSize="9" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                   Foreground="{Binding Status, Converter={StaticResource UploadStatusToColorConverter}}"/>
+                        <atom:Button Grid.Column="2" Width="18" Height="18" ButtonType="Text"
+                                     Command="{Binding $parent[atom:ListBox].DataContext.RetryUploadCommand}"
+                                     CommandParameter="{Binding}"
+                                     IsVisible="{Binding Status, Converter={StaticResource UploadStatusToFailedConverter}}"
+                                     ToolTip.Tip="重试">
+                          <Path Data="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+                                Width="10" Height="10" Fill="{DynamicResource PrimaryColor}"/>
+                        </atom:Button>
+                      </Grid>
+                      <atom:ProgressBar Grid.Row="1" Height="3"
+                                        Value="{Binding UploadProgress}"
+                                        Minimum="0" Maximum="100"/>
                     </Grid>
                   </Border>
                 </DataTemplate>

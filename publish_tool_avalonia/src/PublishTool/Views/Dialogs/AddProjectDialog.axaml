@@ -27,6 +27,9 @@
                        Command="{Binding FetchProjectsCommand}"
                        FontSize="12"/>
         </Grid>
+        <TextBlock Text="{Binding ServerUrlError}"
+                   FontSize="10" Foreground="{DynamicResource ErrorColor}"
+                   IsVisible="{Binding ServerUrlError, Converter={StaticResource StringNotEmptyConverter}}"/>
       </StackPanel>
 
       <!-- 项目选择 -->
@@ -65,6 +68,9 @@
           <atom:Button Grid.Column="1" Content="浏览..."
                        Click="SelectLocalFolder_Click" FontSize="12"/>
         </Grid>
+        <TextBlock Text="{Binding LocalPathError}"
+                   FontSize="10" Foreground="{DynamicResource ErrorColor}"
+                   IsVisible="{Binding LocalPathError, Converter={StaticResource StringNotEmptyConverter}}"/>
       </StackPanel>
 
       <!-- EXE 路径 -->

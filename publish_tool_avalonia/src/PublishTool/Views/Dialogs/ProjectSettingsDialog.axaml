@@ -24,6 +24,9 @@
     <StackPanel Spacing="4">
       <TextBlock Text="显示标题" FontSize="11" Foreground="{DynamicResource TextTertiary}"/>
       <atom:TextBox Text="{Binding Title}" PlaceholderText="显示标题" FontSize="12"/>
+      <TextBlock Text="{Binding TitleError}"
+                 FontSize="10" Foreground="{DynamicResource ErrorColor}"
+                 IsVisible="{Binding TitleError, Converter={StaticResource StringNotEmptyConverter}}"/>
     </StackPanel>
 
     <!-- EXE 路径 -->
@@ -42,6 +45,9 @@
         <atom:TextBox Grid.Column="0" Text="{Binding LocalPath}" PlaceholderText="本地文件夹路径" FontSize="12"/>
         <atom:Button Grid.Column="1" Content="浏览..." Click="SelectLocalFolder_Click" FontSize="12"/>
       </Grid>
+      <TextBlock Text="{Binding LocalPathError}"
+                 FontSize="10" Foreground="{DynamicResource ErrorColor}"
+                 IsVisible="{Binding LocalPathError, Converter={StaticResource StringNotEmptyConverter}}"/>
     </StackPanel>
 
     <!-- 忽略配置入口 -->

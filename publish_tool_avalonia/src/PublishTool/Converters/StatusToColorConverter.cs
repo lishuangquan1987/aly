@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Data.Converters;
 using PublishTool.Models.Local;
 using System.Globalization;
@@ -11,17 +13,25 @@ public class StatusToColorConverter : IValueConverter
     {
         if (value is FileCompareStatus status)
         {
-            return status switch
+            var key = status switch
             {
-                FileCompareStatus.New => new SolidColorBrush(Color.Parse("#00a8ff")),
-                FileCompareStatus.Modified => new SolidColorBrush(Color.Parse("#ff9500")),
-                FileCompareStatus.Deleted => new SolidColorBrush(Color.Parse("#ff3b30")),
-                _ => new SolidColorBrush(Color.Parse("#8e8e93"))
+                FileCompareStatus.New => "PrimaryColor",
+                FileCompareStatus.Modified => "WarningColor",
+                FileCompareStatus.Deleted => "ErrorColor",
+                _ => "TextTertiary"
             };
+            return ResolveBrush(key, Colors.Gray);
         }
-        return new SolidColorBrush(Color.Parse("#8e8e93"));
+        return ResolveBrush("TextTertiary", Colors.Gray);
     }
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotImplementedException();
+
+    private static SolidColorBrush ResolveBrush(string resourceKey, Color fallback)
+    {
+        if (Application.Current?.TryGetResource(resourceKey, ThemeVariant.Default, out var resource) == true && resource is Color color)
+            return new SolidColorBrush(color);
+        return new SolidColorBrush(fallback);
+    }
 }

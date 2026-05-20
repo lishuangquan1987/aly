@@ -22,6 +22,9 @@
           <atom:TextBox Text="{Binding ServerUrl}"
                         PlaceholderText="http://192.168.1.100:8080"
                         FontSize="12"/>
+          <TextBlock Text="{Binding ServerUrlError}"
+                     FontSize="10" Foreground="{DynamicResource ErrorColor}"
+                     IsVisible="{Binding ServerUrlError, Converter={StaticResource StringNotEmptyConverter}}"/>
         </StackPanel>
         <StackPanel Spacing="4">
           <TextBlock Text="项目名称" FontSize="11"
@@ -29,6 +32,9 @@
           <atom:TextBox Text="{Binding Name}"
                         PlaceholderText="my-project"
                         FontSize="12"/>
+          <TextBlock Text="{Binding NameError}"
+                     FontSize="10" Foreground="{DynamicResource ErrorColor}"
+                     IsVisible="{Binding NameError, Converter={StaticResource StringNotEmptyConverter}}"/>
         </StackPanel>
         <StackPanel Spacing="4">
           <TextBlock Text="显示标题" FontSize="11"
@@ -36,10 +42,16 @@
           <atom:TextBox Text="{Binding Title}"
                         PlaceholderText="我的项目"
                         FontSize="12"/>
+          <TextBlock Text="{Binding TitleError}"
+                     FontSize="10" Foreground="{DynamicResource ErrorColor}"
+                     IsVisible="{Binding TitleError, Converter={StaticResource StringNotEmptyConverter}}"/>
         </StackPanel>
         <atom:CheckBox Content="强制更新"
                        IsChecked="{Binding IsForceUpdate}"
                        FontSize="12"/>
+        <TextBlock Text="{Binding StatusMessage}"
+                   FontSize="11" Foreground="{DynamicResource ErrorColor}"
+                   IsVisible="{Binding StatusMessage, Converter={StaticResource StringNotEmptyConverter}}"/>
       </StackPanel>
 
       <!-- 操作按钮 -->

@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Data.Converters;
 using PublishTool.Models.Local;
 using System.Globalization;
@@ -33,18 +35,26 @@ public class UploadStatusToColorConverter : IValueConverter
     {
         if (value is UploadStatus status)
         {
-            return status switch
+            var key = status switch
             {
-                UploadStatus.Pending => new SolidColorBrush(Color.Parse("#8e8e93")),
-                UploadStatus.Uploading => new SolidColorBrush(Color.Parse("#00a8ff")),
-                UploadStatus.Done => new SolidColorBrush(Color.Parse("#30d158")),
-                UploadStatus.Failed => new SolidColorBrush(Color.Parse("#ff3b30")),
-                _ => new SolidColorBrush(Color.Parse("#8e8e93"))
+                UploadStatus.Pending => "TextTertiary",
+                UploadStatus.Uploading => "PrimaryColor",
+                UploadStatus.Done => "SuccessColor",
+                UploadStatus.Failed => "ErrorColor",
+                _ => "TextTertiary"
             };
+            return ResolveBrush(key, Colors.Gray);
         }
-        return new SolidColorBrush(Color.Parse("#8e8e93"));
+        return ResolveBrush("TextTertiary", Colors.Gray);
     }
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotImplementedException();
+
+    private static SolidColorBrush ResolveBrush(string resourceKey, Color fallback)
+    {
+        if (Application.Current?.TryGetResource(resourceKey, ThemeVariant.Default, out var resource) == true && resource is Color color)
+            return new SolidColorBrush(color);
+        return new SolidColorBrush(fallback);
+    }
 }

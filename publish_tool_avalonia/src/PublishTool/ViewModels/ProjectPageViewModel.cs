@@ -71,6 +71,11 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private int _uploadTotalCount;
 
+    [ObservableProperty]
+    private string _fileFilterText = string.Empty;
+
+    private List<LocalFileItem> _allLocalFiles = new();
+
     public ProjectPageViewModel(
         ProjectConfig config,
         ProjectService projectService,
@@ -95,6 +100,27 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
         foreach (var file in LocalFiles)
         {
             file.IsChecked = value;
+        }
+    }
+
+    partial void OnFileFilterTextChanged(string value)
+    {
+        ApplyFileFilter();
+    }
+
+    private void ApplyFileFilter()
+    {
+        if (string.IsNullOrEmpty(FileFilterText))
+        {
+            LocalFiles = new ObservableCollection<LocalFileItem>(_allLocalFiles);
+        }
+        else
+        {
+            var filtered = _allLocalFiles
+                .Where(f => f.FileName.Contains(FileFilterText, StringComparison.OrdinalIgnoreCase)
+                    || f.RelativePath.Contains(FileFilterText, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            LocalFiles = new ObservableCollection<LocalFileItem>(filtered);
         }
     }
 
@@ -125,7 +151,8 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
             {
                 var modifiedFiles = _localFileService.GetModifiedFiles(
                     Config.LocalPath, filesResponse.Data, Config.IgnoreFolders, Config.IgnoreFiles);
-                LocalFiles = new ObservableCollection<LocalFileItem>(modifiedFiles);
+                _allLocalFiles = modifiedFiles;
+                ApplyFileFilter();
             }
 
             StatusMessage = "刷新完成";
@@ -148,7 +175,8 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
         if (string.IsNullOrEmpty(Config.LocalPath)) return;
         var files = _localFileService.ScanDirectory(
             Config.LocalPath, Config.IgnoreFolders, Config.IgnoreFiles);
-        LocalFiles = new ObservableCollection<LocalFileItem>(files);
+        _allLocalFiles = files;
+        ApplyFileFilter();
         StatusMessage = $"扫描到 {files.Count} 个本地文件";
     }
 
@@ -258,6 +286,7 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
             {
                 _cts.Token.ThrowIfCancellationRequested();
                 item.Status = UploadStatus.Uploading;
+                item.UploadProgress = 50;
                 StatusMessage = $"正在上传: {item.FileName}";
 
                 await using var stream = File.OpenRead(item.LocalPath);
@@ -266,11 +295,13 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
                 if (response.IsSuccess)
                 {
                     item.Status = UploadStatus.Done;
+                    item.UploadProgress = 100;
                     UploadCompletedCount++;
                 }
                 else
                 {
                     item.Status = UploadStatus.Failed;
+                    item.UploadProgress = 0;
                 }
                 UpdateProgress();
             }
@@ -309,6 +340,7 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
         if (item == null || item.Status != UploadStatus.Failed) return;
 
         item.Status = UploadStatus.Uploading;
+        item.UploadProgress = 50;
         StatusMessage = $"正在重试: {item.FileName}";
 
         try
@@ -319,17 +351,20 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
             if (response.IsSuccess)
             {
                 item.Status = UploadStatus.Done;
+                item.UploadProgress = 100;
                 StatusMessage = "重试成功";
             }
             else
             {
                 item.Status = UploadStatus.Failed;
+                item.UploadProgress = 0;
                 StatusMessage = "重试失败";
             }
         }
         catch (Exception ex)
         {
             item.Status = UploadStatus.Failed;
+            item.UploadProgress = 0;
             StatusMessage = $"重试失败: {ex.Message}";
         }
     }
