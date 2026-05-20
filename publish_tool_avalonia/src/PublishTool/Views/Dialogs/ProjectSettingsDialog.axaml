@@ -4,20 +4,58 @@
               xmlns:vm="using:PublishTool.ViewModels"
               x:Class="PublishTool.Views.Dialogs.ProjectSettingsDialog"
               x:DataType="vm:ProjectSettingsDialogViewModel"
-              Title="项目设置" Width="400" SizeToContent="Height">
+              Title="项目设置" Width="420" SizeToContent="Height">
   <StackPanel Spacing="12" Margin="16">
-    <atom:TextBox PlaceholderText="显示标题"
-                  Text="{Binding Title}"/>
-    <StackPanel Orientation="Horizontal" Spacing="8">
-      <atom:TextBox Text="{Binding ExePath}"
-                    PlaceholderText="EXE 路径" />
-      <atom:Button Content="浏览..." Click="SelectExeFile_Click"/>
+    <!-- 服务器信息（只读） -->
+    <StackPanel Spacing="4">
+      <TextBlock Text="服务器地址" FontSize="11" Foreground="{DynamicResource TextTertiary}"/>
+      <atom:TextBox Text="{Binding ServerUrl}" IsReadOnly="True" FontSize="12"
+                    Background="{DynamicResource BgLayout}"/>
     </StackPanel>
-    <StackPanel Orientation="Horizontal" Spacing="8">
-      <atom:TextBox Text="{Binding LocalPath}"
-                    PlaceholderText="本地文件夹路径" />
-      <atom:Button Content="浏览..." Click="SelectLocalFolder_Click"/>
+
+    <!-- 项目名称（只读） -->
+    <StackPanel Spacing="4">
+      <TextBlock Text="项目名称" FontSize="11" Foreground="{DynamicResource TextTertiary}"/>
+      <atom:TextBox Text="{Binding Name}" IsReadOnly="True" FontSize="12"
+                    Background="{DynamicResource BgLayout}"/>
     </StackPanel>
+
+    <!-- 显示标题 -->
+    <StackPanel Spacing="4">
+      <TextBlock Text="显示标题" FontSize="11" Foreground="{DynamicResource TextTertiary}"/>
+      <atom:TextBox Text="{Binding Title}" PlaceholderText="显示标题" FontSize="12"/>
+    </StackPanel>
+
+    <!-- EXE 路径 -->
+    <StackPanel Spacing="4">
+      <TextBlock Text="可执行文件路径" FontSize="11" Foreground="{DynamicResource TextTertiary}"/>
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <atom:TextBox Grid.Column="0" Text="{Binding ExePath}" PlaceholderText="EXE 路径" FontSize="12"/>
+        <atom:Button Grid.Column="1" Content="浏览..." Click="SelectExeFile_Click" FontSize="12"/>
+      </Grid>
+    </StackPanel>
+
+    <!-- 本地路径 -->
+    <StackPanel Spacing="4">
+      <TextBlock Text="本地文件夹路径" FontSize="11" Foreground="{DynamicResource TextTertiary}"/>
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <atom:TextBox Grid.Column="0" Text="{Binding LocalPath}" PlaceholderText="本地文件夹路径" FontSize="12"/>
+        <atom:Button Grid.Column="1" Content="浏览..." Click="SelectLocalFolder_Click" FontSize="12"/>
+      </Grid>
+    </StackPanel>
+
+    <!-- 忽略配置入口 -->
+    <Border Background="{DynamicResource BgLayout}" CornerRadius="4" Padding="8">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0">
+          <TextBlock Text="忽略配置" FontSize="12" Foreground="{DynamicResource TextBase}"/>
+          <TextBlock Text="设置需要忽略的文件夹和文件" FontSize="10" Foreground="{DynamicResource TextTertiary}"/>
+        </StackPanel>
+        <atom:Button Grid.Column="1" Content="编辑" ButtonType="Default"
+                     Command="{Binding OpenIgnoreConfigCommand}" FontSize="12"/>
+      </Grid>
+    </Border>
+
     <atom:Button Content="保存"
                  Command="{Binding SaveCommand}"
                  ButtonType="Primary"

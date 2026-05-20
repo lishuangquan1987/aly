@@ -62,6 +62,15 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _autoRefreshAfterPush;
 
+    [ObservableProperty]
+    private bool _isAllSelected;
+
+    [ObservableProperty]
+    private int _uploadCompletedCount;
+
+    [ObservableProperty]
+    private int _uploadTotalCount;
+
     public ProjectPageViewModel(
         ProjectConfig config,
         ProjectService projectService,
@@ -79,6 +88,14 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     public void RefreshConfig()
     {
         OnPropertyChanged(nameof(Config));
+    }
+
+    partial void OnIsAllSelectedChanged(bool value)
+    {
+        foreach (var file in LocalFiles)
+        {
+            file.IsChecked = value;
+        }
     }
 
     [RelayCommand]
@@ -232,6 +249,8 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     {
         if (UploadFiles.Count == 0) return;
         IsUploading = true;
+        UploadTotalCount = UploadFiles.Count;
+        UploadCompletedCount = 0;
         _cts = new CancellationTokenSource();
         try
         {
@@ -247,11 +266,13 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
                 if (response.IsSuccess)
                 {
                     item.Status = UploadStatus.Done;
+                    UploadCompletedCount++;
                 }
                 else
                 {
                     item.Status = UploadStatus.Failed;
                 }
+                UpdateProgress();
             }
             StatusMessage = "所有文件上传完成";
         }
@@ -271,6 +292,45 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
         {
             IsUploading = false;
             _cts = null;
+        }
+    }
+
+    private void UpdateProgress()
+    {
+        if (UploadTotalCount > 0)
+        {
+            UploadProgress = (int)((double)UploadCompletedCount / UploadTotalCount * 100);
+        }
+    }
+
+    [RelayCommand]
+    private async Task RetryUpload(UploadFileItem item)
+    {
+        if (item == null || item.Status != UploadStatus.Failed) return;
+
+        item.Status = UploadStatus.Uploading;
+        StatusMessage = $"正在重试: {item.FileName}";
+
+        try
+        {
+            await using var stream = File.OpenRead(item.LocalPath);
+            var response = await _fileService.UploadFileAsync(
+                Config.ServerUrl, Config.Name, item.RelativePath, stream);
+            if (response.IsSuccess)
+            {
+                item.Status = UploadStatus.Done;
+                StatusMessage = "重试成功";
+            }
+            else
+            {
+                item.Status = UploadStatus.Failed;
+                StatusMessage = "重试失败";
+            }
+        }
+        catch (Exception ex)
+        {
+            item.Status = UploadStatus.Failed;
+            StatusMessage = $"重试失败: {ex.Message}";
         }
     }
 

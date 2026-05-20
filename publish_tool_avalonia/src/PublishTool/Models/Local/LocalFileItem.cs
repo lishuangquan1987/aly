@@ -21,4 +21,18 @@ public partial class LocalFileItem : ObservableObject
 
     [ObservableProperty]
     private bool _isModified;
+
+    [ObservableProperty]
+    private long _fileSize;
+
+    [ObservableProperty]
+    private FileCompareStatus _compareStatus = FileCompareStatus.Unchanged;
+}
+
+public enum FileCompareStatus
+{
+    Unchanged,
+    Modified,
+    New,
+    Deleted
 }

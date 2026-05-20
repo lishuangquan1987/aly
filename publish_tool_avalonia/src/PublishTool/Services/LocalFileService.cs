@@ -36,14 +36,17 @@ public class LocalFileService
                 if (ShouldIgnore(relativePath, folderSet, fileSet))
                     continue;
 
+                var fileInfo = new FileInfo(file);
                 items.Add(new LocalFileItem
                 {
                     FileName = Path.GetFileName(file),
                     AbsolutePath = fullPath,
                     RelativePath = relativePath,
                     LastModified = File.GetLastWriteTime(file),
+                    FileSize = fileInfo.Length,
                     IsChecked = false,
-                    IsModified = false
+                    IsModified = false,
+                    CompareStatus = FileCompareStatus.Unchanged
                 });
             }
         }
@@ -117,10 +120,12 @@ public class LocalFileService
                 var localMd5 = CalculateMd5(local.AbsolutePath);
                 local.IsModified = !string.Equals(localMd5, serverFile.Md5,
                     StringComparison.OrdinalIgnoreCase);
+                local.CompareStatus = local.IsModified ? FileCompareStatus.Modified : FileCompareStatus.Unchanged;
             }
             else
             {
                 local.IsModified = true;
+                local.CompareStatus = FileCompareStatus.New;
             }
         }
         return localFiles;

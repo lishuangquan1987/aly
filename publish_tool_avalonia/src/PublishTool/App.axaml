@@ -7,6 +7,14 @@
   <Application.Resources>
     <ResourceDictionary>
       <conv:BoolToColorConverter x:Key="BoolToColorConverter" />
+      <conv:BytesToSizeConverter x:Key="BytesToSizeConverter" />
+      <conv:CompareStatusConverter x:Key="CompareStatusConverter" />
+      <conv:StatusToColorConverter x:Key="StatusToColorConverter" />
+      <conv:UploadStatusToTextConverter x:Key="UploadStatusToTextConverter" />
+      <conv:UploadStatusToColorConverter x:Key="UploadStatusToColorConverter" />
+      <conv:UploadStatusToFailedConverter x:Key="UploadStatusToFailedConverter" />
+      <conv:DiskInfoFormatterConverter x:Key="DiskInfoFormatterConverter" />
+      <conv:DiskInfoTooltipConverter x:Key="DiskInfoTooltipConverter" />
     </ResourceDictionary>
   </Application.Resources>
   <Application.DataTemplates>

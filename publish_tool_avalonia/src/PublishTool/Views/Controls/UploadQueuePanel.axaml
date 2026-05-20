@@ -43,33 +43,31 @@
     </Border>
 
     <!-- 文件数量统计 -->
-    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto,Auto">
-      <TextBlock Grid.Column="0" FontSize="11" VerticalAlignment="Center">
-        <Run Text="待上传文件"
-             Foreground="{DynamicResource TextTertiary}"/>
-        <Run Text="{Binding UploadFiles.Count, StringFormat='({0})'}"
-             Foreground="{DynamicResource TextSecondary}"/>
-      </TextBlock>
-      <atom:Button Grid.Column="1" Content="全部移除" ButtonType="Text"
-                   Command="{Binding RemoveFromQueueCommand}"
-                   FontSize="10"/>
-      <atom:Button Grid.Column="2" Content="清空" ButtonType="Text"
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto">
+      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+        <TextBlock Text="待上传" FontSize="11" Foreground="{DynamicResource TextTertiary}"/>
+        <TextBlock Text="{Binding UploadFiles.Count}" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+        <TextBlock Text="|" FontSize="11" Foreground="{DynamicResource TextTertiary}"/>
+        <TextBlock Text="已完成" FontSize="11" Foreground="{DynamicResource SuccessColor}"/>
+        <TextBlock Text="{Binding UploadCompletedCount}" FontSize="11" Foreground="{DynamicResource SuccessColor}"/>
+      </StackPanel>
+      <atom:Button Grid.Column="1" Content="清空" ButtonType="Text"
                    Command="{Binding ClearQueueCommand}"
                    FontSize="10"/>
     </Grid>
 
-    <!-- 待上传文件列表 -->
+<!-- 待上传文件列表 -->
     <atom:ScrollViewer Grid.Row="3"
-                       Background="{DynamicResource BgLayout}"
-                       CornerRadius="4"
-                       BorderThickness="1"
-                       BorderBrush="{DynamicResource BorderColor}">
+                        Background="{DynamicResource BgLayout}"
+                        CornerRadius="4"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource BorderColor}">
       <atom:ListBox ItemsSource="{Binding UploadFiles}"
                     BorderThickness="0">
         <atom:ListBox.ItemTemplate>
           <DataTemplate x:DataType="ml:UploadFileItem">
-            <Border Height="28" Padding="4,0">
-              <Grid ColumnDefinitions="24,*,70">
+            <Border Height="32" Padding="4,0">
+              <Grid ColumnDefinitions="24,*,60,24">
                 <atom:CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}"
                                VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center">
@@ -80,12 +78,20 @@
                              Foreground="{DynamicResource TextTertiary}"
                              TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
-                <TextBlock Grid.Column="2"
-                           Text="{Binding LastModified, StringFormat='{}{0:MM-dd HH:mm}'}"
-                           FontSize="10"
-                           Foreground="{DynamicResource TextTertiary}"
-                           HorizontalAlignment="Right"
-                           VerticalAlignment="Center"/>
+                <Border Grid.Column="2" CornerRadius="3" Padding="4,1"
+                        VerticalAlignment="Center" HorizontalAlignment="Left"
+                        Background="{Binding Status, Converter={StaticResource UploadStatusToColorConverter}}">
+                  <TextBlock Text="{Binding Status, Converter={StaticResource UploadStatusToTextConverter}}"
+                             FontSize="9" Foreground="White"/>
+                </Border>
+                <atom:Button Grid.Column="3" Width="20" Height="20" ButtonType="Text"
+                             Command="{Binding $parent[atom:ListBox].((vm:ProjectPageViewModel)DataContext).RetryUploadCommand}"
+                             CommandParameter="{Binding}"
+                             IsVisible="{Binding Status, Converter={StaticResource UploadStatusToFailedConverter}}"
+                             ToolTip.Tip="重试">
+                  <Path Data="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+                        Width="12" Height="12" Fill="{DynamicResource PrimaryColor}"/>
+                </atom:Button>
               </Grid>
             </Border>
           </DataTemplate>

@@ -1,7 +1,9 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using PublishTool.Services;
 using PublishTool.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace PublishTool.Views.Dialogs;
 
@@ -10,6 +12,26 @@ public partial class ProjectSettingsDialog : Window
     public ProjectSettingsDialog()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        if (DataContext is ProjectSettingsDialogViewModel vm)
+        {
+            vm.OpenIgnoreConfigRequested += async () => await OpenIgnoreConfig();
+        }
+    }
+
+    private async Task OpenIgnoreConfig()
+    {
+        if (DataContext is ProjectSettingsDialogViewModel vm)
+        {
+            var configService = App.Services.GetRequiredService<ConfigService>();
+            var dialogVm = new ConfigEditorDialogViewModel(vm.GetUpdatedConfig(), configService);
+            var dialog = new ConfigEditorDialog { DataContext = dialogVm };
+            await dialog.ShowDialog(this);
+        }
     }
 
     private async void SelectLocalFolder_Click(object? sender, RoutedEventArgs e)

@@ -11,6 +11,12 @@ public partial class ProjectSettingsDialogViewModel : ObservableObject
     private readonly ProjectConfig _config;
 
     [ObservableProperty]
+    private string _serverUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _name = string.Empty;
+
+    [ObservableProperty]
     private string _title = string.Empty;
 
     [ObservableProperty]
@@ -19,10 +25,14 @@ public partial class ProjectSettingsDialogViewModel : ObservableObject
     [ObservableProperty]
     private string _localPath = string.Empty;
 
+    public event Func<Task>? OpenIgnoreConfigRequested;
+
     public ProjectSettingsDialogViewModel(ConfigService configService, ProjectConfig config)
     {
         _configService = configService;
         _config = config;
+        ServerUrl = config.ServerUrl;
+        Name = config.Name;
         Title = config.Title;
         ExePath = config.ExePath;
         LocalPath = config.LocalPath;
@@ -52,5 +62,12 @@ public partial class ProjectSettingsDialogViewModel : ObservableObject
     private void Save()
     {
         _configService.UpdateProject(_config);
+    }
+
+    [RelayCommand]
+    private async Task OpenIgnoreConfig()
+    {
+        if (OpenIgnoreConfigRequested != null)
+            await OpenIgnoreConfigRequested.Invoke();
     }
 }

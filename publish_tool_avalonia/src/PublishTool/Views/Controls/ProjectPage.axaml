@@ -7,167 +7,79 @@
              x:Class="PublishTool.Views.Controls.ProjectPage"
              x:DataType="vm:ProjectPageViewModel"
              Background="{DynamicResource BgContainer}">
-  <Grid RowDefinitions="32,32,*,28" ColumnDefinitions="*,360">
-    <!-- 服务器信息栏 -->
-    <Border Grid.Row="0" Grid.ColumnSpan="2"
+  <Grid RowDefinitions="40,*,36">
+    <!-- 顶部工具栏 -->
+    <Border Grid.Row="0"
             Background="{DynamicResource BgLayout}"
             BorderThickness="0,0,0,1"
             BorderBrush="{DynamicResource BorderColor}">
-      <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,Auto,Auto"
-            Margin="12,0">
-        <TextBlock Grid.Column="0" Text="系统" FontSize="11"
-                   Foreground="{DynamicResource TextTertiary}"
-                   VerticalAlignment="Center"/>
-        <TextBlock Grid.Column="1" Text="{Binding ServerOsInfo.Os, TargetNullValue='-'}"
-                   FontSize="11" FontWeight="SemiBold"
-                   Foreground="{DynamicResource TextBase}"
-                   Margin="6,0,20,0"
-                   VerticalAlignment="Center"/>
-        <TextBlock Grid.Column="2" Text="CPU" FontSize="11"
-                   Foreground="{DynamicResource TextTertiary}"
-                   VerticalAlignment="Center"/>
-        <TextBlock Grid.Column="3" Text="{Binding ServerOsInfo.NumCpu, StringFormat='{}{0}核', TargetNullValue='-'}"
-                   FontSize="11" FontWeight="SemiBold"
-                   Foreground="{DynamicResource TextBase}"
-                   Margin="6,0,20,0"
-                   VerticalAlignment="Center"/>
-        <TextBlock Grid.Column="4" Text="磁盘" FontSize="11"
-                   Foreground="{DynamicResource TextTertiary}"
-                   VerticalAlignment="Center"/>
-        <atom:ProgressBar Grid.Column="5" Width="100" Height="10"
-                          Value="{Binding ServerOsInfo.DiskUsedPercent, TargetNullValue=0}"
-                          Minimum="0" Maximum="1"
-                          VerticalAlignment="Center"/>
-        <TextBlock Grid.Column="6"
-                   Text="{Binding ServerOsInfo.DiskUsedPercent, StringFormat='P0', TargetNullValue='-'}"
-                   FontSize="11"
-                   Foreground="{DynamicResource TextBase}"
-                   Margin="8,0,20,0"
-                   VerticalAlignment="Center"/>
-        <TextBlock Grid.Column="7"
-                   Text="{Binding ServerOsInfo.Version, TargetNullValue='-'}"
-                   FontSize="11"
-                   Foreground="{DynamicResource PrimaryColor}"
-                   VerticalAlignment="Center"
-                   HorizontalAlignment="Right"/>
-        <Border Grid.Column="8" Width="1" Background="{DynamicResource BorderColor}"
-                Margin="12,4"
-                VerticalAlignment="Stretch"/>
-        <StackPanel Grid.Column="9" Orientation="Horizontal" Spacing="4"
-                    VerticalAlignment="Center">
-          <Border Background="{DynamicResource SuccessColor}"
-                  CornerRadius="2" Width="6" Height="6"
-                  VerticalAlignment="Center"/>
-          <TextBlock Text="{Binding ServerVersion, StringFormat='版本 {0}', TargetNullValue='版本 -'}"
-                     FontSize="11"
-                     Foreground="{DynamicResource SuccessColor}"/>
+      <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,0">
+        <!-- 左侧按钮组 -->
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+          <atom:Button Content="刷新" ButtonType="Default"
+                       Command="{Binding RefreshStatusCommand}" FontSize="12"/>
+          <atom:Button Content="启动" ButtonType="Primary"
+                       Command="{Binding StartDefaultCommand}" FontSize="12"/>
+          <Border Width="1" Background="{DynamicResource BorderColor}" Margin="4,4"/>
+          <atom:Button Content="设置" ButtonType="Text"
+                       Command="{Binding OpenSettingsCommand}" FontSize="12"/>
+          <atom:Button Content="目录" ButtonType="Text"
+                       Command="{Binding OpenExplorerCommand}" FontSize="12"/>
+        </StackPanel>
+
+        <!-- 右侧状态 -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+          <TextBlock Text="{Binding ServerVersion, StringFormat='v{0}', TargetNullValue='v-'}"
+                     FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+          <TextBlock Text="{Binding StatusMessage, TargetNullValue='就绪'}"
+                     FontSize="11" Foreground="{DynamicResource PrimaryColor}"/>
         </StackPanel>
       </Grid>
     </Border>
 
-    <!-- 工具栏 -->
-    <Border Grid.Row="1" Grid.ColumnSpan="2"
-            Background="{DynamicResource BgLayout}"
-            BorderThickness="0,0,0,1"
-            BorderBrush="{DynamicResource BorderColor}">
-      <StackPanel Orientation="Horizontal" Spacing="4" Margin="8,0">
-        <atom:Button Content="刷新状态" ButtonType="Default"
-                     Command="{Binding RefreshStatusCommand}" FontSize="12"/>
-        <Border Width="1" Background="{DynamicResource BorderColor}"
-                Margin="4,4"/>
-        <atom:Button Content="项目设置" ButtonType="Text"
-                     Command="{Binding OpenSettingsCommand}" FontSize="12"/>
-        <atom:Button Content="配置项编辑" ButtonType="Text"
-                     Command="{Binding OpenConfigEditorCommand}" FontSize="12"/>
-        <Border Width="1" Background="{DynamicResource BorderColor}"
-                Margin="4,4"/>
-        <atom:Button Content="打包项目" ButtonType="Text"
-                     Command="{Binding BuildCommand}" FontSize="12"/>
-        <atom:Button Content="默认启动" ButtonType="Primary"
-                     Command="{Binding StartDefaultCommand}" FontSize="12"/>
-        <atom:Button Content="自定义启动" ButtonType="Default"
-                     Command="{Binding StartCustomCommand}" FontSize="12"/>
-        <Border Width="1" Background="{DynamicResource BorderColor}"
-                Margin="4,4"/>
-        <atom:Button Content="日志" ButtonType="Text"
-                     Command="{Binding ViewLogsCommand}" FontSize="12"/>
-        <atom:Button Content="打开目录" ButtonType="Text"
-                     Command="{Binding OpenExplorerCommand}" FontSize="12"/>
-      </StackPanel>
-    </Border>
-
-    <!-- 主内容区 -->
-    <Grid Grid.Row="2" ColumnDefinitions="*,40">
-      <!-- 左侧文件列表 -->
-      <Border Grid.Column="0"
-              Background="{DynamicResource BgContainer}"
-              Margin="4,4,2,4" CornerRadius="6"
-              BorderThickness="1"
-              BorderBrush="{DynamicResource BorderColor}">
-        <Grid RowDefinitions="32,Auto,*" Margin="0">
-          <!-- 文件列表标题 -->
-          <Border Grid.Row="0"
-                  BorderThickness="0,0,0,1"
-                  BorderBrush="{DynamicResource BorderColor}"
-                  Padding="12,0">
+    <!-- 主内容区：左右分栏 -->
+    <Grid Grid.Row="1" ColumnDefinitions="*,280">
+      <!-- 左侧：文件列表 -->
+      <Border Grid.Column="0" Margin="8" CornerRadius="6"
+              BorderThickness="1" BorderBrush="{DynamicResource BorderColor}">
+        <Grid RowDefinitions="32,*">
+          <!-- 列表头部 -->
+          <Border Grid.Row="0" Padding="12,0" BorderThickness="0,0,0,1"
+                  BorderBrush="{DynamicResource BorderColor}">
             <Grid ColumnDefinitions="Auto,Auto,*,Auto">
-              <TextBlock Grid.Column="0" Text="本地文件"
-                         FontSize="12" FontWeight="SemiBold"
-                         Foreground="{DynamicResource TextBase}"
-                         VerticalAlignment="Center"/>
-              <TextBlock Grid.Column="1"
-                         Text="{Binding LocalFiles.Count, StringFormat='({0})'}"
-                         FontSize="11"
-                         Foreground="{DynamicResource TextTertiary}"
-                         Margin="6,0,0,0"
-                         VerticalAlignment="Center"/>
-              <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8">
-                <atom:Button Content="扫描本地" ButtonType="Text" FontSize="11"
+              <TextBlock Grid.Column="0" Text="文件" FontSize="12" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TextBase}" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" Text="{Binding LocalFiles.Count, StringFormat=' ({0})'}"
+                         FontSize="11" Foreground="{DynamicResource TextTertiary}"
+                         VerticalAlignment="Center" Margin="4,0,0,0"/>
+              <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
+                <atom:Button Content="扫描" ButtonType="Text" FontSize="11"
                              Command="{Binding ScanLocalFilesCommand}"/>
-                <atom:Button Content="增量拉取" ButtonType="Text" FontSize="11"
+                <atom:Button Content="拉取" ButtonType="Text" FontSize="11"
                              Command="{Binding PullUpdateCommand}"/>
-                <atom:Button Content="全部下载" ButtonType="Text" FontSize="11"
-                             Command="{Binding DownloadAllCommand}"/>
               </StackPanel>
             </Grid>
           </Border>
 
-          <!-- 表头 -->
-          <Grid Grid.Row="1" ColumnDefinitions="40,28,*,120"
-                Margin="12,4,12,0">
-            <TextBlock Grid.Column="1" Text="" FontSize="10"
-                       Foreground="{DynamicResource TextTertiary}"/>
-            <TextBlock Grid.Column="2" Text="文件名称" FontSize="10"
-                       Foreground="{DynamicResource TextTertiary}"/>
-            <TextBlock Grid.Column="3" Text="最后修改" FontSize="10"
-                       Foreground="{DynamicResource TextTertiary}"
-                       HorizontalAlignment="Right"/>
-          </Grid>
-
           <!-- 文件列表 -->
-          <atom:ScrollViewer Grid.Row="2" Margin="12,2,12,8"
-                             Background="{DynamicResource BgLayout}" CornerRadius="4">
+          <atom:ScrollViewer Grid.Row="1" Margin="8">
             <atom:ListBox ItemsSource="{Binding LocalFiles}" BorderThickness="0">
               <atom:ListBox.ItemTemplate>
                 <DataTemplate x:DataType="ml:LocalFileItem">
-                  <Border Height="28"
-                          Background="Transparent"
-                          BorderThickness="0"
-                          Padding="4,0">
-                    <Grid ColumnDefinitions="40,28,*,120">
+                  <Border Padding="8,6" Margin="0,1">
+                    <Grid ColumnDefinitions="24,*,60,80">
                       <atom:CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}"
                                      VerticalAlignment="Center"/>
-                      <Ellipse Grid.Column="1" Width="8" Height="8" VerticalAlignment="Center"
-                               Fill="{Binding IsModified, Converter={StaticResource BoolToColorConverter}}"/>
-                      <TextBlock Grid.Column="2" Text="{Binding FileName}" FontSize="11"
+                      <TextBlock Grid.Column="1" Text="{Binding FileName}" FontSize="12"
                                  Foreground="{DynamicResource TextBase}"
                                  TextTrimming="CharacterEllipsis"
                                  VerticalAlignment="Center"/>
-                      <TextBlock Grid.Column="3" Text="{Binding LastModified, StringFormat='{}{0:MM-dd HH:mm}'}"
-                                 FontSize="10"
-                                 Foreground="{DynamicResource TextTertiary}"
-                                 HorizontalAlignment="Right"
+                      <TextBlock Grid.Column="2" Text="{Binding FileSize, Converter={StaticResource BytesToSizeConverter}}"
+                                 FontSize="10" Foreground="{DynamicResource TextSecondary}"
                                  VerticalAlignment="Center"/>
+                      <TextBlock Grid.Column="3" Text="{Binding LastModified, StringFormat='{}{0:MM-dd HH:mm}'}"
+                                 FontSize="10" Foreground="{DynamicResource TextTertiary}"
+                                 HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </Grid>
                   </Border>
                 </DataTemplate>
@@ -177,69 +89,96 @@
         </Grid>
       </Border>
 
-      <!-- 操作按钮列 -->
-      <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="4" Margin="0,8,4,0">
-        <atom:Button Width="32" Height="32" ButtonType="Primary"
-                     Command="{Binding AddToUploadQueueCommand}"
-                     ToolTip.Tip="添加到队列">
-          <Path Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16"/>
-        </atom:Button>
-        <atom:Button Width="32" Height="32" ButtonType="Default"
-                     Command="{Binding RemoveFromQueueCommand}"
-                     ToolTip.Tip="从队列移除">
-          <Path Data="M19 13H5v-2h14v2z" Width="16" Height="16"/>
-        </atom:Button>
-        <atom:Button Width="32" Height="32" ButtonType="Default"
-                     Command="{Binding ClearQueueCommand}"
-                     ToolTip.Tip="清空队列">
-          <Path Data="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5L14 2h-4L8.5 4H5v2h14V4z" Width="16" Height="16"/>
-        </atom:Button>
-        <atom:Button Width="32" Height="32" ButtonType="Default"
-                     Command="{Binding DownloadSelectedCommand}"
-                     ToolTip.Tip="下载选中">
-          <Path Data="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" Width="16" Height="16"/>
-        </atom:Button>
-      </StackPanel>
+      <!-- 右侧：上传队列 -->
+      <Border Grid.Column="1" Margin="0,8,8,8" CornerRadius="6"
+              BorderThickness="1" BorderBrush="{DynamicResource BorderColor}">
+        <Grid RowDefinitions="32,Auto,*,Auto">
+          <!-- 队列标题 -->
+          <Border Grid.Row="0" Padding="12,0" BorderThickness="0,0,0,1"
+                  BorderBrush="{DynamicResource BorderColor}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Text="上传队列" FontSize="12" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TextBase}" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" Text="{Binding UploadFiles.Count, StringFormat='({0})'}"
+                         FontSize="11" Foreground="{DynamicResource TextTertiary}"/>
+            </Grid>
+          </Border>
+
+          <!-- 版本输入 -->
+          <Border Grid.Row="1" Padding="12,8" BorderThickness="0,0,0,1"
+                  BorderBrush="{DynamicResource BorderColor}">
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
+              <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                <atom:TextBox Grid.Column="0" Text="{Binding NewVersion}"
+                              PlaceholderText="版本号" FontSize="12"/>
+                <atom:Button Grid.Column="1" Content="自动" ButtonType="Text" FontSize="11"
+                             Command="{Binding AutoGenerateVersionCommand}" Margin="4,0,0,0"/>
+              </Grid>
+              <atom:TextBox Grid.Row="1" Text="{Binding ChangeLogText}"
+                            PlaceholderText="更新说明" FontSize="11"
+                            AcceptsReturn="True" Height="50" TextWrapping="Wrap"/>
+            </Grid>
+          </Border>
+
+          <!-- 文件列表 -->
+          <atom:ScrollViewer Grid.Row="2" Margin="8">
+            <atom:ListBox ItemsSource="{Binding UploadFiles}" BorderThickness="0">
+              <atom:ListBox.ItemTemplate>
+                <DataTemplate x:DataType="ml:UploadFileItem">
+                  <Border Padding="4,4" Margin="0,1">
+                    <Grid ColumnDefinitions="*,40">
+                      <StackPanel Grid.Column="0">
+                        <TextBlock Text="{Binding FileName}" FontSize="11"
+                                   Foreground="{DynamicResource TextBase}"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding RelativePath}" FontSize="9"
+                                   Foreground="{DynamicResource TextTertiary}"
+                                   TextTrimming="CharacterEllipsis"/>
+                      </StackPanel>
+                      <TextBlock Grid.Column="1"
+                                 Text="{Binding Status, Converter={StaticResource UploadStatusToTextConverter}}"
+                                 FontSize="9" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                 Foreground="{Binding Status, Converter={StaticResource UploadStatusToColorConverter}}"/>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </atom:ListBox.ItemTemplate>
+            </atom:ListBox>
+          </atom:ScrollViewer>
+
+          <!-- 底部按钮 -->
+          <Border Grid.Row="3" Padding="8" BorderThickness="0,1,0,0"
+                  BorderBrush="{DynamicResource BorderColor}">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+              <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <atom:CheckBox Content="附加版本" IsChecked="{Binding AppendToLatestVersion}" FontSize="10"/>
+              </StackPanel>
+              <atom:Button Grid.Column="1" Content="清空" ButtonType="Default" FontSize="11"
+                           Command="{Binding ClearQueueCommand}" Margin="0,0,4,0"/>
+              <atom:Button Grid.Column="2" Content="推送" ButtonType="Primary" FontSize="11"
+                           Command="{Binding PushAllCommand}"/>
+            </Grid>
+          </Border>
+        </Grid>
+      </Border>
     </Grid>
 
-    <!-- 右侧待推送区 -->
-    <Border Grid.Row="2" Grid.Column="1"
-            Background="{DynamicResource BgContainer}"
-            Margin="2,4,4,4" CornerRadius="6"
-            BorderThickness="1"
-            BorderBrush="{DynamicResource BorderColor}">
-      <controls:UploadQueuePanel />
-    </Border>
-
-    <!-- 底部操作栏 -->
-    <Border Grid.Row="3" Grid.ColumnSpan="2"
+    <!-- 底部状态栏 -->
+    <Border Grid.Row="2"
             Background="{DynamicResource BgLayout}"
             BorderThickness="0,1,0,0"
             BorderBrush="{DynamicResource BorderColor}">
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto" Margin="8,0">
+      <Grid ColumnDefinitions="*,Auto,Auto" Margin="12,0">
         <TextBlock Grid.Column="0" Text="{Binding StatusMessage, TargetNullValue='就绪'}"
-                   FontSize="11"
-                   Foreground="{DynamicResource PrimaryColor}"
+                   FontSize="11" Foreground="{DynamicResource TextSecondary}"
                    VerticalAlignment="Center"/>
-        <atom:ProgressBar Grid.Column="1" Margin="12,2" Height="12" Width="160"
+        <atom:ProgressBar Grid.Column="1" Width="100" Height="6" Margin="8,0"
                           Value="{Binding UploadProgress}" Minimum="0" Maximum="100"
-                          VerticalAlignment="Center"/>
-        <TextBlock Grid.Column="2"
-                   Text="{Binding UploadProgress, StringFormat='{}{0}%'}"
-                   FontSize="10"
-                   Foreground="{DynamicResource TextTertiary}"
-                   Width="32"
-                   VerticalAlignment="Center"/>
-        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="12" Margin="16,0">
-          <atom:CheckBox Content="附加版本号" IsChecked="{Binding AppendToLatestVersion}" FontSize="11"/>
-          <atom:CheckBox Content="完成后刷新" IsChecked="{Binding AutoRefreshAfterPush}" FontSize="11"/>
-        </StackPanel>
-        <atom:Button Grid.Column="4" Content="拉取更新"
-                     Command="{Binding PullUpdateCommand}"
-                     ButtonType="Default" FontSize="12"/>
-        <atom:Button Grid.Column="5" Content="推送更新" ButtonType="Primary"
-                     Command="{Binding PushAllCommand}" FontSize="12"
-                     Margin="8,0"/>
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding IsUploading}"/>
+        <TextBlock Grid.Column="2" Text="{Binding UploadProgress, StringFormat='{}{0}%'}"
+                   FontSize="10" Foreground="{DynamicResource TextTertiary}"
+                   VerticalAlignment="Center" IsVisible="{Binding IsUploading}"/>
       </Grid>
     </Border>
   </Grid>

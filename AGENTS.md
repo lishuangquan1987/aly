@@ -411,3 +411,10 @@ public override void Initialize()
 > **版本**: 1.1\
 > **适用范围**: publish\_tool\_avalonia/ 项目（.NET 8 + Avalonia 12 + CommunityToolkit.Mvvm + AtomUI 6.0）\
 > **兼容服务端**: server/（Go + Gin + Ent + SQLite）保持完全兼容，无需修改
+
+***
+
+## 十三、文档参考
+
+- **Avalonia 12 官方文档**: https://docs.avaloniaui.net/docs/welcome
+- **AtomUI 6.0 使用参考**: https://github.com/AtomUI/AtomUI/tree/release/6.0/controlgallery
