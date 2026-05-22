@@ -27,6 +27,7 @@ public partial class MainWindow : Window
         {
             vm.AddServerProjectRequested += ShowAddServerProjectDialog;
             vm.AddClientProjectRequested += ShowAddClientProjectDialog;
+            vm.DeleteProjectRequested += ShowDeleteConfirmDialog;
         }
     }
 
@@ -63,5 +64,25 @@ public partial class MainWindow : Window
         var dialogVm = new ConfigEditorDialogViewModel(pageVm.Config, configService);
         var dialog = new ConfigEditorDialog { DataContext = dialogVm };
         await dialog.ShowDialog(this);
+    }
+
+    public async Task ShowChangeLogsDialog(ProjectPageViewModel pageVm)
+    {
+        var dialog = new ChangeLogsDialog(pageVm.ChangeLogs);
+        await dialog.ShowDialog(this);
+    }
+
+    public async Task ShowDeleteConfirmDialog()
+    {
+        if (DataContext is MainWindowViewModel vm && vm.SelectedProject != null)
+        {
+            var project = vm.SelectedProject;
+            var dialog = new DeleteConfirmDialog(project.Title);
+            var result = await dialog.ShowDialog<bool>(this);
+            if (result)
+            {
+                vm.ConfirmRemoveProject(project);
+            }
+        }
     }
 }

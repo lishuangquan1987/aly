@@ -1,0 +1,64 @@
+<semi:Window xmlns="https://github.com/avaloniaui"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:semi="https://irihi.tech/semi"
+              xmlns:m="using:PublishTool.Models"
+              x:Class="PublishTool.Views.Dialogs.ChangeLogsDialog"
+              Title="变更日志" Width="520" Height="400"
+              WindowStartupLocation="CenterOwner">
+
+  <Border Padding="24">
+    <Grid RowDefinitions="Auto,*,Auto">
+
+      <TextBlock Grid.Row="0" Text="变更日志"
+                 FontSize="18" FontWeight="SemiBold"
+                 Foreground="{DynamicResource SemiColorText0}"
+                 Margin="0,0,0,16"/>
+
+      <ScrollViewer Grid.Row="1">
+        <StackPanel Spacing="12">
+          <ItemsControl x:Name="LogsList">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="m:ProjectChangeLog">
+                <Border Background="{DynamicResource SemiColorBg0}"
+                        CornerRadius="6" Padding="12">
+                  <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Grid.Column="0"
+                                 FontSize="13" FontWeight="SemiBold"
+                                 Foreground="{DynamicResource SemiColorText0}"
+                                 Text="{Binding Version, StringFormat='📦 v{0}'}"/>
+                      <TextBlock Grid.Column="1"
+                                 FontSize="11"
+                                 Foreground="{DynamicResource SemiColorText2}"
+                                 Text="{Binding CreatedAt}"/>
+                    </Grid>
+                    <Border Background="{DynamicResource SemiColorBg1}"
+                            CornerRadius="4" Padding="8">
+                      <ItemsControl ItemsSource="{Binding Logs}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SemiColorText1}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2"/>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </Border>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+
+      <Button Grid.Row="2" Content="关闭"
+              FontSize="13"
+              HorizontalAlignment="Right" Margin="0,16,0,0"
+              Click="CloseButton_Click"/>
+
+    </Grid>
+  </Border>
+</semi:Window>

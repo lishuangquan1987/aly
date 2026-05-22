@@ -164,3 +164,49 @@ public override void OnInitialized()
 **D. 其他想法** — 你有自己的 UI 改进思路
 
 回答：B
+
+---
+
+## 问题 9：替换 AtomUI → Semi.Avalonia + Ursa.Semi 的兼容性确认
+
+当前项目使用的是 **Avalonia 12.0.3**（较新的预览版）。在替换之前需要确认以下关键问题：
+
+### 9.1 Avalonia 12 兼容性
+
+当前项目使用 Avalonia 12.0.3。据我所知：
+- **Semi.Avalonia**（`irihitech/Semi.Avalonia`）目前主要支持 Avalonia 11.x，不确定是否已支持 Avalonia 12
+- **Ursa**（`Irdafanspace/Ursa`）也是基于 Avalonia 11.x 的控件库
+
+如果这两个库不支持 Avalonia 12，我们可能需要降级 Avalonia 到 11.x，或者寻找替代方案。
+
+**请确认：**
+- [ ] 你知道 Semi.Avalonia/Ursa 目前对 Avalonia 12 的支持情况吗？
+- [ ] 如果只能降级到 Avalonia 11，是否可以接受？
+- [ ] 还是说你希望我先尝试安装，遇到兼容性问题再处理？
+
+回答：Semi.Avalonia 12.0.1已经支持Avalonia 12.0.1以上了
+
+### 9.2 Ursa.Semi 具体指什么？
+
+你提到「Ursa.Semi」，我推测可能是以下之一：
+- **A.** `Ursa.Themes.Semi` — Ursa 框架的 Semi Design 主题包
+- **B.** `Semi.Avalonia` + `Ursa` 两个独立的库一起使用
+- **C.** 其他某个包？
+
+**请确认：** 你具体想要的是哪个组合？
+
+回答：Irihi.Ursa.Themes.Semi 2.0.0版本
+
+### 9.3 Design Token 映射
+
+当前项目大量使用了 AtomUI 的 Design Token（DynamicResource），如：
+- `BgLayout`、`BgContainer`、`TextBase`、`TextSecondary`、`TextTertiary`
+- `PrimaryColor`、`SuccessColor`、`ErrorColor`、`BorderColor`
+
+Semi.Avalonia 使用的是 Semi Design 的 Token 体系，名称完全不同（如 `SemiColorPrimary`、`SemiColorTextPrimary` 等）。
+
+替换后所有的 `{DynamicResource XXX}` 都需要映射到新的 Token 名称。
+
+**请确认：** 是否可以接受全部重新映射？我会尽可能保持视觉效果一致。
+
+回复：接受新的映射，视觉不必保持一直，可以超越它，更好看

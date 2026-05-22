@@ -1,5 +1,4 @@
 using Avalonia;
-using ReactiveUI.Avalonia;
 using Serilog;
 
 namespace PublishTool;
@@ -32,7 +31,6 @@ public static class Program
 
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
-            .UseReactiveUI(_ => { })
             .UsePlatformDetect()
             .WithInterFont()
             .LogToTrace();

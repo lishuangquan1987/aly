@@ -2,9 +2,6 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
-using AtomUI;
-using AtomUI.Desktop.Controls;
-using AtomUI.Theme;
 using Microsoft.Extensions.DependencyInjection;
 using PublishTool.Services;
 using PublishTool.ViewModels;
@@ -20,12 +17,6 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
-        this.UseAtomUI(builder =>
-        {
-            builder.WithDefaultTheme(IThemeManager.DEFAULT_THEME_ID);
-            builder.UseAlibabaSansFont();
-            builder.UseDesktopControls();
-        });
     }
 
     public override void OnFrameworkInitializationCompleted()

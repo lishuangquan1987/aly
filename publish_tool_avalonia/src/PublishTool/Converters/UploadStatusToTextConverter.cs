@@ -37,15 +37,15 @@ public class UploadStatusToColorConverter : IValueConverter
         {
             var key = status switch
             {
-                UploadStatus.Pending => "TextTertiary",
-                UploadStatus.Uploading => "PrimaryColor",
-                UploadStatus.Done => "SuccessColor",
-                UploadStatus.Failed => "ErrorColor",
-                _ => "TextTertiary"
+                UploadStatus.Pending => "SemiColorText2",
+                UploadStatus.Uploading => "SemiColorPrimary",
+                UploadStatus.Done => "SemiColorSuccess",
+                UploadStatus.Failed => "SemiColorDanger",
+                _ => "SemiColorText2"
             };
             return ResolveBrush(key, Colors.Gray);
         }
-        return ResolveBrush("TextTertiary", Colors.Gray);
+        return ResolveBrush("SemiColorText2", Colors.Gray);
     }
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

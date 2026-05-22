@@ -1,0 +1,40 @@
+<semi:Window xmlns="https://github.com/avaloniaui"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:semi="https://irihi.tech/semi"
+              xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+              x:Class="PublishTool.Views.Dialogs.DeleteConfirmDialog"
+              Title="确认删除" Width="400" SizeToContent="Height"
+              WindowStartupLocation="CenterOwner">
+
+  <Border Padding="24">
+    <StackPanel Spacing="20">
+      <StackPanel Spacing="12">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Border Width="40" Height="40" CornerRadius="20"
+                  Background="{DynamicResource SemiColorDanger}">
+            <icons:MaterialIcon Kind="Alert" Foreground="White"></icons:MaterialIcon>
+          </Border>
+          <TextBlock Text="确认删除项目" FontSize="18" FontWeight="SemiBold"
+                     Foreground="{DynamicResource SemiColorDanger}" VerticalAlignment="Center"/>
+        </StackPanel>
+        <TextBlock FontSize="13" Foreground="{DynamicResource SemiColorText1}" TextWrapping="Wrap">
+          <Run Text="确定要删除项目「"/>
+          <Run x:Name="ProjectNameRun" Text=""/>
+          <Run Text="」吗？此操作不可撤销。"/>
+        </TextBlock>
+      </StackPanel>
+
+      <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SemiColorBorder}" Padding="0,16,0,0">
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+          <Button FontSize="13" Click="CancelButton_Click">取消</Button>
+          <Button Classes="Danger" FontSize="13" Click="ConfirmButton_Click">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <icons:MaterialIcon Kind="Delete" Foreground="White"></icons:MaterialIcon>
+              <TextBlock Text="确认删除"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </Border>
+</semi:Window>

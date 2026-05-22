@@ -1,137 +1,144 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:atom="https://atomui.net"
+             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:ml="using:PublishTool.Models.Local"
              xmlns:vm="using:PublishTool.ViewModels"
              x:Class="PublishTool.Views.Controls.ProjectListPanel"
              x:DataType="vm:MainWindowViewModel">
+
   <Grid RowDefinitions="Auto,Auto,*,Auto">
-    <Border Grid.Row="0" Padding="12,12,12,4">
-      <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Grid.Column="0" Text="项目管理"
-                   FontSize="13" FontWeight="SemiBold"
-                   Foreground="{DynamicResource TextBase}"
-                   VerticalAlignment="Center"/>
-      </Grid>
+
+    <Border Grid.Row="0" Padding="14,14,14,10">
+      <TextBlock Text="项目管理" FontSize="14" FontWeight="SemiBold"
+                 Foreground="{DynamicResource SemiColorText0}"/>
     </Border>
 
-    <Border Grid.Row="1" Padding="12,0,12,8">
-      <StackPanel Spacing="8">
-        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-          <atom:TextBox Grid.Column="0"
-                        Text="{Binding SearchText}"
-                        PlaceholderText="搜索项目名称..." FontSize="12"/>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-            <atom:Button Content="+ 服务端" ButtonType="Primary"
-                          Command="{Binding AddServerProjectCommand}"
-                          FontSize="12"/>
-            <atom:Button Content="+ 客户端" ButtonType="Default"
-                          Command="{Binding AddClientProjectCommand}"
-                          FontSize="12"/>
-          </StackPanel>
+    <Border Grid.Row="1" Padding="14,0,14,12"
+            BorderThickness="0,0,0,1"
+            BorderBrush="{DynamicResource SemiColorBorder}">
+      <StackPanel Spacing="10">
+        <Border CornerRadius="6" Padding="1"
+                BorderThickness="1" BorderBrush="{DynamicResource SemiColorBorder}"
+                Background="{DynamicResource SemiColorBg0}">
+          <Grid ColumnDefinitions="28,*">
+            <icons:MaterialIcon Grid.Column="0" Kind="Magnify"
+                                Foreground="{DynamicResource SemiColorText2}"
+                                VerticalAlignment="Center" HorizontalAlignment="Center"></icons:MaterialIcon>
+            <TextBox Grid.Column="1" Text="{Binding SearchText}"
+                     PlaceholderText="搜索项目..." FontSize="12"
+                     BorderThickness="0" Background="Transparent"/>
+          </Grid>
+        </Border>
+
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+          <Button Grid.Column="0" Classes="Primary" FontSize="12"
+                  Command="{Binding AddServerProjectCommand}"
+                  HorizontalContentAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <icons:MaterialIcon Kind="ServerPlus" Foreground="White"></icons:MaterialIcon>
+              <TextBlock Text="服务端项目"/>
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="1" FontSize="12"
+                  Command="{Binding AddClientProjectCommand}"
+                  HorizontalContentAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <icons:MaterialIcon Kind="FolderPlus"
+                                  Foreground="{DynamicResource SemiColorText1}"></icons:MaterialIcon>
+              <TextBlock Text="客户端项目"/>
+            </StackPanel>
+          </Button>
         </Grid>
       </StackPanel>
     </Border>
 
-    <!-- 项目列表 -->
-    <atom:ListBox Grid.Row="2"
-                  ItemsSource="{Binding FilteredProjects}"
-                  SelectedItem="{Binding SelectedProject}"
-                  BorderThickness="0"
-                  Padding="4,0">
-      <atom:ListBox.ItemTemplate>
+    <ListBox Grid.Row="2"
+             ItemsSource="{Binding FilteredProjects}"
+             SelectedItem="{Binding SelectedProject}"
+             BorderThickness="0" Padding="4,4">
+      <ListBox.ItemTemplate>
         <DataTemplate x:DataType="ml:ProjectConfig">
-          <Border Background="{DynamicResource BgContainer}"
-                  CornerRadius="6"
-                  Cursor="Hand"
-                  MinHeight="56"
-                  BorderThickness="1"
-                  BorderBrush="Transparent"
-                  Margin="4,2"
-                  Padding="0">
+          <Border CornerRadius="6" Cursor="Hand" MinHeight="60"
+                  BorderThickness="1" BorderBrush="Transparent"
+                  Margin="4,2" Padding="0" Background="Transparent">
             <Border.Styles>
               <Style Selector="Border:pointerover">
-                <Setter Property="Background" Value="{DynamicResource ControlStrokeColorSecondary}"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource PrimaryColor}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}"/>
+                <Setter Property="Background" Value="{DynamicResource SemiColorFill0}"/>
               </Style>
             </Border.Styles>
 
-            <Grid ColumnDefinitions="36,*,Auto" Margin="8,6,4,6">
-              <Border Grid.Column="0"
-                      Background="{DynamicResource PrimaryColor}"
-                      CornerRadius="6" Width="28" Height="28"
+            <Grid ColumnDefinitions="36,*,Auto" Margin="10,8">
+              <Border Grid.Column="0" CornerRadius="8" Width="34" Height="34"
                       VerticalAlignment="Center"
-                      Opacity="0.85">
-                <Path Data="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                      Width="14" Height="14" Stretch="Uniform"
-                      Fill="White" Margin="7"/>
+                      Background="{DynamicResource SemiColorPrimary}">
+                <icons:MaterialIcon Kind="PackageVariantClosed" Foreground="White"></icons:MaterialIcon>
               </Border>
 
-              <StackPanel Grid.Column="1" Margin="8,0,0,0"
-                          VerticalAlignment="Center">
-                <TextBlock Text="{Binding Title}"
-                           FontSize="13" FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextBase}"
+              <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" Spacing="2">
+                <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{DynamicResource SemiColorText0}"
                            TextTrimming="CharacterEllipsis"/>
                 <TextBlock Text="{Binding LocalPath, TargetNullValue='未设置本地路径'}"
-                           FontSize="10"
-                           Foreground="{DynamicResource TextTertiary}"
-                           TextTrimming="CharacterEllipsis"
-                           Margin="0,2,0,0"/>
+                           FontSize="10" Foreground="{DynamicResource SemiColorText2}"
+                           TextTrimming="CharacterEllipsis"/>
               </StackPanel>
 
-              <StackPanel Grid.Column="2"
-                          Orientation="Horizontal" Spacing="2"
-                          VerticalAlignment="Center" Margin="4,0,0,0">
-                <atom:Button Width="28" Height="28" ButtonType="Text"
-                             ToolTip.Tip="上移"
-                             Command="{Binding $parent[atom:ListBox].DataContext.MoveUpProjectCommand}"
-                             CommandParameter="{Binding}" Opacity="0.5">
-                  <Path Data="M7 14l5-5 5 5H7z" Width="14" Height="14"
-                        Fill="{DynamicResource TextTertiary}"/>
-                </atom:Button>
-                <atom:Button Width="28" Height="28" ButtonType="Text"
-                             ToolTip.Tip="下移"
-                             Command="{Binding $parent[atom:ListBox].DataContext.MoveDownProjectCommand}"
-                             CommandParameter="{Binding}" Opacity="0.5">
-                  <Path Data="M7 10l5 5 5-5H7z" Width="14" Height="14"
-                        Fill="{DynamicResource TextTertiary}"/>
-                </atom:Button>
-                <atom:Button Width="28" Height="28" ButtonType="Text"
-                             ToolTip.Tip="删除项目"
-                             Command="{Binding $parent[atom:ListBox].DataContext.RemoveProjectCommand}"
-                             CommandParameter="{Binding}" Opacity="0.5">
-                  <Path Data="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                        Width="14" Height="14"
-                        Fill="{DynamicResource ErrorColor}"/>
-                </atom:Button>
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2"
+                          VerticalAlignment="Center">
+                <Button Width="26" Height="26" Classes="Tertiary" Padding="0"
+                        ToolTip.Tip="上移"
+                        Command="{Binding $parent[ListBox].DataContext.MoveUpProjectCommand}"
+                        CommandParameter="{Binding}">
+                  <icons:MaterialIcon Kind="ChevronUp"
+                                      Foreground="{DynamicResource SemiColorText2}"></icons:MaterialIcon>
+                </Button>
+                <Button Width="26" Height="26" Classes="Tertiary" Padding="0"
+                        ToolTip.Tip="下移"
+                        Command="{Binding $parent[ListBox].DataContext.MoveDownProjectCommand}"
+                        CommandParameter="{Binding}">
+                  <icons:MaterialIcon Kind="ChevronDown"
+                                      Foreground="{DynamicResource SemiColorText2}"></icons:MaterialIcon>
+                </Button>
+                <Button Width="26" Height="26" Classes="Tertiary" Padding="0"
+                        ToolTip.Tip="删除"
+                        Command="{Binding $parent[ListBox].DataContext.RemoveProjectCommand}"
+                        CommandParameter="{Binding}">
+                  <icons:MaterialIcon Kind="DeleteOutline"
+                                      Foreground="{DynamicResource SemiColorDanger}"></icons:MaterialIcon>
+                </Button>
               </StackPanel>
             </Grid>
           </Border>
         </DataTemplate>
-      </atom:ListBox.ItemTemplate>
+      </ListBox.ItemTemplate>
 
-      <atom:ListBox.Styles>
-        <Style Selector="atom|ListBoxItem">
+      <ListBox.Styles>
+        <Style Selector="ListBoxItem">
           <Setter Property="Padding" Value="0"/>
           <Setter Property="Background" Value="Transparent"/>
         </Style>
-        <Style Selector="atom|ListBoxItem:selected /template/ ContentPresenter">
+        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
           <Setter Property="Background" Value="Transparent"/>
         </Style>
-        <Style Selector="atom|ListBoxItem:pointerover /template/ ContentPresenter">
+        <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
           <Setter Property="Background" Value="Transparent"/>
         </Style>
-      </atom:ListBox.Styles>
-    </atom:ListBox>
+      </ListBox.Styles>
+    </ListBox>
 
-    <!-- 底部统计 -->
     <Border Grid.Row="3" BorderThickness="0,1,0,0"
-            BorderBrush="{DynamicResource BorderColor}"
-            Padding="12,6">
-      <TextBlock Text="{Binding FilteredProjects.Count, StringFormat='共 {0} 个项目'}"
-                 FontSize="11"
-                 Foreground="{DynamicResource TextTertiary}"/>
+            BorderBrush="{DynamicResource SemiColorBorder}" Padding="14,8">
+      <StackPanel Orientation="Horizontal" Spacing="4">
+        <icons:MaterialIcon Kind="FolderMultiple"
+                            Foreground="{DynamicResource SemiColorText2}"></icons:MaterialIcon>
+        <TextBlock FontSize="11" Foreground="{DynamicResource SemiColorText2}">
+          <Run Text="共 "/>
+          <Run Text="{Binding FilteredProjects.Count}"/>
+          <Run Text=" 个项目"/>
+        </TextBlock>
+      </StackPanel>
     </Border>
+
   </Grid>
 </UserControl>

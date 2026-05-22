@@ -15,14 +15,14 @@ public class StatusToColorConverter : IValueConverter
         {
             var key = status switch
             {
-                FileCompareStatus.New => "PrimaryColor",
-                FileCompareStatus.Modified => "WarningColor",
-                FileCompareStatus.Deleted => "ErrorColor",
-                _ => "TextTertiary"
+                FileCompareStatus.New => "SemiColorPrimary",
+                FileCompareStatus.Modified => "SemiColorWarning",
+                FileCompareStatus.Deleted => "SemiColorDanger",
+                _ => "SemiColorText2"
             };
             return ResolveBrush(key, Colors.Gray);
         }
-        return ResolveBrush("TextTertiary", Colors.Gray);
+        return ResolveBrush("SemiColorText2", Colors.Gray);
     }
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

@@ -14,6 +14,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     public event Func<Task>? AddServerProjectRequested;
     public event Func<Task>? AddClientProjectRequested;
+    public event Func<Task>? DeleteProjectRequested;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -99,7 +100,16 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void RemoveProject(ProjectConfig config)
+    private async Task RemoveProject(ProjectConfig config)
+    {
+        if (DeleteProjectRequested != null)
+        {
+            SelectedProject = config;
+            await DeleteProjectRequested.Invoke();
+        }
+    }
+
+    public void ConfirmRemoveProject(ProjectConfig config)
     {
         _configService.RemoveProject(config);
     }

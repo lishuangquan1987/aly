@@ -1,6 +1,7 @@
-<atom:Window xmlns="https://github.com/avaloniaui"
+<semi:Window xmlns="https://github.com/avaloniaui"
               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-              xmlns:atom="https://atomui.net"
+              xmlns:semi="https://irihi.tech/semi"
+              xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
               xmlns:controls="using:PublishTool.Views.Controls"
               xmlns:vm="using:PublishTool.ViewModels"
               x:Class="PublishTool.Views.MainWindow"
@@ -10,115 +11,124 @@
               MinWidth="1000" MinHeight="600"
               WindowStartupLocation="CenterScreen">
 
-  <Grid RowDefinitions="48,*,28" ColumnDefinitions="280,*">
-    <!-- 顶部标题栏 -->
+  <Grid RowDefinitions="48,*,32" ColumnDefinitions="280,*">
+
+    <!-- ===== 顶部栏 ===== -->
     <Border Grid.Row="0" Grid.ColumnSpan="2"
-            Background="{DynamicResource BgLayout}"
+            Background="{DynamicResource SemiColorBg0}"
             BorderThickness="0,0,0,1"
-            BorderBrush="{DynamicResource BorderColor}">
-      <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,12,0">
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" Margin="16,0">
-          <Border Background="{DynamicResource PrimaryColor}"
-                  CornerRadius="6" Width="28" Height="28"
-                  VerticalAlignment="Center">
-            <Path Data="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                  Width="16" Height="16" Stretch="Uniform"
-                  Fill="White" Margin="6"/>
+            BorderBrush="{DynamicResource SemiColorBorder}">
+      <Grid ColumnDefinitions="Auto,*,Auto" Margin="16,0">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <Border Background="{DynamicResource SemiColorPrimary}"
+                  CornerRadius="6" Width="30" Height="30">
+            <icons:MaterialIcon Kind="CloudUpload" Foreground="White"></icons:MaterialIcon>
           </Border>
           <TextBlock Text="客户端软件版本发布工具"
-                     FontSize="15" FontWeight="SemiBold"
-                     Foreground="{DynamicResource TextBase}"
+                     FontSize="14" FontWeight="SemiBold"
+                     Foreground="{DynamicResource SemiColorText0}"
                      VerticalAlignment="Center"/>
         </StackPanel>
 
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
-                    VerticalAlignment="Center">
-          <Border Background="{DynamicResource BgContainer}"
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+          <Border Background="{DynamicResource SemiColorBg1}"
                   CornerRadius="4" Padding="8,4">
-            <TextBlock Text="{Binding FilteredProjects.Count, StringFormat='共 {0} 个项目'}"
-                       FontSize="12"
-                       Foreground="{DynamicResource TextSecondary}"/>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <icons:MaterialIcon Kind="FolderMultiple"
+                                  Foreground="{DynamicResource SemiColorText2}"></icons:MaterialIcon>
+              <TextBlock FontSize="11" Foreground="{DynamicResource SemiColorText1}"
+                         Text="{Binding FilteredProjects.Count, StringFormat='{}{0} 个项目'}"/>
+            </StackPanel>
           </Border>
         </StackPanel>
       </Grid>
     </Border>
 
-    <!-- 左侧项目列表面板 -->
+    <!-- ===== 左侧：项目列表面板 ===== -->
     <Border Grid.Row="1" Grid.Column="0"
-            Background="{DynamicResource BgContainer}"
+            Background="{DynamicResource SemiColorBg1}"
             BorderThickness="0,0,1,0"
-            BorderBrush="{DynamicResource BorderColor}">
+            BorderBrush="{DynamicResource SemiColorBorder}">
       <controls:ProjectListPanel />
     </Border>
 
-    <!-- 右侧主内容区 -->
+    <!-- ===== 右侧：主内容区 ===== -->
     <Grid Grid.Row="1" Grid.Column="1"
-          Background="{DynamicResource BgContainer}">
-      <Grid RowDefinitions="40,*,28">
-        <!-- 标签页栏 -->
+          Background="{DynamicResource SemiColorBg1}">
+      <Grid RowDefinitions="40,*">
+
         <Border Grid.Row="0"
-                Background="{DynamicResource BgLayout}"
+                Background="{DynamicResource SemiColorBg0}"
                 BorderThickness="0,0,0,1"
-                BorderBrush="{DynamicResource BorderColor}">
+                BorderBrush="{DynamicResource SemiColorBorder}">
           <Grid ColumnDefinitions="*,Auto">
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" Margin="8,4">
-              <atom:TabControl ItemsSource="{Binding OpenTabs}"
-                               SelectedItem="{Binding SelectedTab}"
-                               TabStripPlacement="Top">
-                <atom:TabControl.ItemTemplate>
-                  <DataTemplate>
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <Border Background="{DynamicResource SuccessColor}"
-                              CornerRadius="3" Width="8" Height="8"
-                              VerticalAlignment="Center"/>
-                      <TextBlock Text="{Binding Config.Title}"
-                                 Foreground="{DynamicResource TextBase}"
-                                 FontSize="12"/>
-                      <atom:Button Width="18" Height="18" ButtonType="Text"
-                                   Command="{Binding CloseCommand}"
-                                   Opacity="0.6">
-                        <Path Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-                              Width="10" Height="10"
-                              Fill="{DynamicResource TextTertiary}"/>
-                      </atom:Button>
-                    </StackPanel>
-                  </DataTemplate>
-                </atom:TabControl.ItemTemplate>
-              </atom:TabControl>
-            </StackPanel>
-            <atom:Button Grid.Column="1" Content="关闭全部"
-                         ButtonType="Text"
-                         Command="{Binding CloseAllTabsCommand}"
-                         Margin="0,4,12,4" FontSize="12"/>
+            <TabControl Grid.Column="0"
+                        ItemsSource="{Binding OpenTabs}"
+                        SelectedItem="{Binding SelectedTab}"
+                        TabStripPlacement="Top"
+                        Margin="4,4,0,0">
+              <TabControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Border CornerRadius="3" Width="8" Height="8"
+                            VerticalAlignment="Center"
+                            Background="{DynamicResource SemiColorSuccess}"/>
+                    <TextBlock Text="{Binding Config.Title}"
+                               FontSize="12"
+                               Foreground="{DynamicResource SemiColorText0}"
+                               VerticalAlignment="Center"
+                               MaxWidth="160"
+                               TextTrimming="CharacterEllipsis"/>
+                    <Button Width="20" Height="20" Classes="Tertiary" Padding="0"
+                            Command="{Binding $parent[TabControl].DataContext.CloseTabCommand}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="关闭">
+                      <icons:MaterialIcon Kind="Close"
+                                          Foreground="{DynamicResource SemiColorText2}"></icons:MaterialIcon>
+                    </Button>
+                  </StackPanel>
+                </DataTemplate>
+              </TabControl.ItemTemplate>
+            </TabControl>
+
+            <Button Grid.Column="1" Content="关闭全部"
+                    Classes="Tertiary" FontSize="12"
+                    Command="{Binding CloseAllTabsCommand}"
+                    Margin="0,4,12,4"/>
           </Grid>
         </Border>
 
-        <!-- 项目页面内容 -->
         <ContentControl Grid.Row="1" Content="{Binding SelectedTab}" />
       </Grid>
     </Grid>
 
-    <!-- 底部状态栏 -->
+    <!-- ===== 底部状态栏 ===== -->
     <Border Grid.Row="2" Grid.ColumnSpan="2"
-            Background="{DynamicResource BgLayout}"
+            Background="{DynamicResource SemiColorBg0}"
             BorderThickness="0,1,0,0"
-            BorderBrush="{DynamicResource BorderColor}">
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="12,0">
-        <TextBlock Grid.Column="0" Text="长飞客户端软件版本发布工具 v1.0"
-                   FontSize="11"
-                   Foreground="{DynamicResource TextTertiary}"
-                   VerticalAlignment="Center"/>
+            BorderBrush="{DynamicResource SemiColorBorder}">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="14,0">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
+                    VerticalAlignment="Center">
+          <icons:MaterialIcon Kind="InformationOutline"
+                              Foreground="{DynamicResource SemiColorText2}"></icons:MaterialIcon>
+          <TextBlock Text="就绪" FontSize="11"
+                     Foreground="{DynamicResource SemiColorText2}"
+                     VerticalAlignment="Center"/>
+        </StackPanel>
         <TextBlock Grid.Column="2"
                    Text="{Binding SelectedTab.StatusMessage, TargetNullValue='就绪'}"
                    FontSize="11"
-                   Foreground="{DynamicResource PrimaryColor}"
-                   VerticalAlignment="Center"/>
+                   Foreground="{DynamicResource SemiColorPrimary}"
+                   VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" MaxWidth="300"/>
         <TextBlock Grid.Column="3" Text="{Binding CurrentTime}"
                    FontSize="11"
-                   Foreground="{DynamicResource TextTertiary}"
+                   Foreground="{DynamicResource SemiColorText2}"
                    Margin="16,0,0,0"
                    VerticalAlignment="Center"/>
       </Grid>
     </Border>
+
   </Grid>
-</atom:Window>
+</semi:Window>

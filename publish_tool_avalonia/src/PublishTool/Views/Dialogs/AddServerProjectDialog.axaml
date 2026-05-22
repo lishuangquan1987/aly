@@ -1,67 +1,99 @@
-<atom:Window xmlns="https://github.com/avaloniaui"
+<semi:Window xmlns="https://github.com/avaloniaui"
               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-              xmlns:atom="https://atomui.net"
+              xmlns:semi="https://irihi.tech/semi"
+              xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
               xmlns:vm="using:PublishTool.ViewModels"
               x:Class="PublishTool.Views.Dialogs.AddServerProjectDialog"
               x:DataType="vm:AddServerProjectDialogViewModel"
-              Title="新建服务端项目" Width="420" SizeToContent="Height"
+              Title="新建服务端项目" Width="440" SizeToContent="Height"
               WindowStartupLocation="CenterOwner">
-  <Border Padding="20">
-    <StackPanel Spacing="16">
-      <!-- 头部 -->
-      <TextBlock Text="新建服务端项目"
-                 FontSize="16" FontWeight="SemiBold"
-                 Foreground="{DynamicResource TextBase}"/>
-      <Rectangle Height="1" Fill="{DynamicResource BorderColor}"/>
 
-      <!-- 表单 -->
-      <StackPanel Spacing="12">
-        <StackPanel Spacing="4">
-          <TextBlock Text="服务器地址" FontSize="11"
-                     Foreground="{DynamicResource TextSecondary}"/>
-          <atom:TextBox Text="{Binding ServerUrl}"
-                        PlaceholderText="http://192.168.1.100:8080"
-                        FontSize="12"/>
-          <TextBlock Text="{Binding ServerUrlError}"
-                     FontSize="10" Foreground="{DynamicResource ErrorColor}"
+  <Border Padding="24">
+    <StackPanel Spacing="20">
+      <StackPanel Spacing="4">
+        <TextBlock Text="新建服务端项目" FontSize="18" FontWeight="SemiBold"
+                   Foreground="{DynamicResource SemiColorText0}"/>
+        <TextBlock Text="在服务端创建新的发布项目" FontSize="12"
+                   Foreground="{DynamicResource SemiColorText2}"/>
+      </StackPanel>
+
+      <StackPanel Spacing="16">
+        <StackPanel Spacing="6">
+          <TextBlock Text="服务器地址" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+          <Border CornerRadius="6" Padding="1"
+                  BorderThickness="1" BorderBrush="{DynamicResource SemiColorBorder}"
+                  Background="{DynamicResource SemiColorBg0}">
+            <Grid ColumnDefinitions="28,*">
+              <icons:MaterialIcon Kind="Server"
+                                  Foreground="{DynamicResource SemiColorText2}"
+                                  VerticalAlignment="Center" HorizontalAlignment="Center"></icons:MaterialIcon>
+              <TextBox Grid.Column="1" Text="{Binding ServerUrl}"
+                       PlaceholderText="http://192.168.1.100:8080" FontSize="13"
+                       BorderThickness="0" Background="Transparent"/>
+            </Grid>
+          </Border>
+          <TextBlock Text="{Binding ServerUrlError}" FontSize="11"
+                     Foreground="{DynamicResource SemiColorDanger}"
                      IsVisible="{Binding ServerUrlError, Converter={StaticResource StringNotEmptyConverter}}"/>
         </StackPanel>
-        <StackPanel Spacing="4">
-          <TextBlock Text="项目名称" FontSize="11"
-                     Foreground="{DynamicResource TextSecondary}"/>
-          <atom:TextBox Text="{Binding Name}"
-                        PlaceholderText="my-project"
-                        FontSize="12"/>
-          <TextBlock Text="{Binding NameError}"
-                     FontSize="10" Foreground="{DynamicResource ErrorColor}"
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="项目名称" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+          <Border CornerRadius="6" Padding="1"
+                  BorderThickness="1" BorderBrush="{DynamicResource SemiColorBorder}"
+                  Background="{DynamicResource SemiColorBg0}">
+            <Grid ColumnDefinitions="28,*">
+              <icons:MaterialIcon Kind="Tag"
+                                  Foreground="{DynamicResource SemiColorText2}"
+                                  VerticalAlignment="Center" HorizontalAlignment="Center"></icons:MaterialIcon>
+              <TextBox Grid.Column="1" Text="{Binding Name}"
+                       PlaceholderText="my-project（英文标识）" FontSize="13"
+                       BorderThickness="0" Background="Transparent"/>
+            </Grid>
+          </Border>
+          <TextBlock Text="{Binding NameError}" FontSize="11"
+                     Foreground="{DynamicResource SemiColorDanger}"
                      IsVisible="{Binding NameError, Converter={StaticResource StringNotEmptyConverter}}"/>
         </StackPanel>
-        <StackPanel Spacing="4">
-          <TextBlock Text="显示标题" FontSize="11"
-                     Foreground="{DynamicResource TextSecondary}"/>
-          <atom:TextBox Text="{Binding Title}"
-                        PlaceholderText="我的项目"
-                        FontSize="12"/>
-          <TextBlock Text="{Binding TitleError}"
-                     FontSize="10" Foreground="{DynamicResource ErrorColor}"
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="显示标题" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+          <Border CornerRadius="6" Padding="1"
+                  BorderThickness="1" BorderBrush="{DynamicResource SemiColorBorder}"
+                  Background="{DynamicResource SemiColorBg0}">
+            <Grid ColumnDefinitions="28,*">
+              <icons:MaterialIcon Kind="FormatText"
+                                  Foreground="{DynamicResource SemiColorText2}"
+                                  VerticalAlignment="Center" HorizontalAlignment="Center"></icons:MaterialIcon>
+              <TextBox Grid.Column="1" Text="{Binding Title}"
+                       PlaceholderText="我的项目（中文显示名）" FontSize="13"
+                       BorderThickness="0" Background="Transparent"/>
+            </Grid>
+          </Border>
+          <TextBlock Text="{Binding TitleError}" FontSize="11"
+                     Foreground="{DynamicResource SemiColorDanger}"
                      IsVisible="{Binding TitleError, Converter={StaticResource StringNotEmptyConverter}}"/>
         </StackPanel>
-        <atom:CheckBox Content="强制更新"
-                       IsChecked="{Binding IsForceUpdate}"
-                       FontSize="12"/>
-        <TextBlock Text="{Binding StatusMessage}"
-                   FontSize="11" Foreground="{DynamicResource ErrorColor}"
+
+        <CheckBox Content="启用强制更新模式" IsChecked="{Binding IsForceUpdate}" FontSize="12"/>
+
+        <TextBlock Text="{Binding StatusMessage}" FontSize="11"
+                   Foreground="{DynamicResource SemiColorDanger}"
                    IsVisible="{Binding StatusMessage, Converter={StaticResource StringNotEmptyConverter}}"/>
       </StackPanel>
 
-      <!-- 操作按钮 -->
-      <StackPanel Orientation="Horizontal" Spacing="8"
-                  HorizontalAlignment="Right">
-        <atom:Button Content="取消" ButtonType="Default" FontSize="12" Click="CancelButton_Click"/>
-        <atom:Button Content="创建项目" ButtonType="Primary"
-                     Command="{Binding CreateCommand}"
-                     IsEnabled="{Binding !IsCreating}" FontSize="12"/>
-      </StackPanel>
+      <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SemiColorBorder}" Padding="0,16,0,0">
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+          <Button FontSize="13" Click="CancelButton_Click">取消</Button>
+          <Button Classes="Primary" FontSize="13" Command="{Binding CreateCommand}"
+                  IsEnabled="{Binding !IsCreating}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <icons:MaterialIcon Kind="PlusCircle" Foreground="White"></icons:MaterialIcon>
+              <TextBlock Text="创建项目"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Border>
     </StackPanel>
   </Border>
-</atom:Window>
+</semi:Window>

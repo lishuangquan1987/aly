@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.IO.Compression;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Newtonsoft.Json;
 using PublishTool.Models;
 using PublishTool.Models.Local;
 using PublishTool.Services;
@@ -19,6 +21,7 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
 
     public event Func<Task>? SettingsRequested;
     public event Func<Task>? ConfigEditorRequested;
+    public event Func<Task>? ChangeLogsRequested;
 
     [ObservableProperty]
     private ProjectConfig _config;
@@ -31,6 +34,9 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string _latestChangeLog = string.Empty;
+
+    [ObservableProperty]
+    private ObservableCollection<ProjectChangeLog> _changeLogs = new();
 
     [ObservableProperty]
     private ObservableCollection<LocalFileItem> _localFiles = new();
@@ -144,6 +150,7 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
                 var latest = logsResponse.Data[0];
                 ServerVersion = latest.Version;
                 LatestChangeLog = string.Join("\n", latest.Logs);
+                ChangeLogs = new ObservableCollection<ProjectChangeLog>(logsResponse.Data);
             }
 
             var filesResponse = await _fileService.GetAllFilesAsync(Config.ServerUrl, Config.ServerId);
@@ -178,6 +185,17 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
         _allLocalFiles = files;
         ApplyFileFilter();
         StatusMessage = $"扫描到 {files.Count} 个本地文件";
+    }
+
+    [RelayCommand]
+    private void SelectAllChanged()
+    {
+        foreach (var file in LocalFiles)
+        {
+            file.IsChecked = file.CompareStatus is FileCompareStatus.Modified or FileCompareStatus.New;
+        }
+        var count = LocalFiles.Count(f => f.IsChecked);
+        StatusMessage = $"已选中 {count} 个差异文件";
     }
 
     [RelayCommand]
@@ -479,7 +497,53 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Build()
     {
-        StatusMessage = "打包功能开发中...";
+        if (UploadFiles.Count == 0)
+        {
+            StatusMessage = "上传队列为空，请先添加文件";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(NewVersion))
+        {
+            StatusMessage = "请先设置版本号";
+            return;
+        }
+
+        StatusMessage = "正在打包...";
+        try
+        {
+            var buildDir = Path.Combine(Config.LocalPath, "builds");
+            Directory.CreateDirectory(buildDir);
+            var zipPath = Path.Combine(buildDir, $"{Config.Name}_{NewVersion}.zip");
+
+            if (File.Exists(zipPath))
+                File.Delete(zipPath);
+
+            using var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create);
+            foreach (var item in UploadFiles)
+            {
+                zip.CreateEntryFromFile(item.LocalPath, item.RelativePath);
+            }
+
+            var manifestEntry = zip.CreateEntry("version.json");
+            using var writer = new StreamWriter(manifestEntry.Open());
+            var manifest = new
+            {
+                version = NewVersion,
+                changeLog = ChangeLogText,
+                time = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+            };
+            writer.Write(JsonConvert.SerializeObject(manifest, Formatting.Indented));
+
+            StatusMessage = $"打包完成: {Path.GetFileName(zipPath)}";
+            _processService.OpenFolder(buildDir);
+            Log.Information("打包完成: {Path}, 文件数: {Count}", zipPath, UploadFiles.Count);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"打包失败: {ex.Message}";
+            Log.Error(ex, "打包失败");
+        }
     }
 
     [RelayCommand]
@@ -506,6 +570,13 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
         {
             StatusMessage = "未配置 EXE 启动路径";
         }
+    }
+
+    [RelayCommand]
+    private async Task ViewChangeLogs()
+    {
+        if (ChangeLogsRequested != null)
+            await ChangeLogsRequested.Invoke();
     }
 
     [RelayCommand]
