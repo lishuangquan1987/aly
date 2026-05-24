@@ -99,6 +99,21 @@ public class ConfigService
         }
     }
 
+    public async Task SaveAsync()
+    {
+        try
+        {
+            var json = JsonConvert.SerializeObject(_projects, Formatting.Indented);
+            await File.WriteAllTextAsync(_configPath, json);
+            Log.Debug("已异步保存 {Count} 个项目配置", _projects.Count);
+            ProjectsChanged?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "异步保存配置文件失败");
+        }
+    }
+
     public void AddProject(ProjectConfig config)
     {
         config.SortOrder = _projects.Count;
@@ -110,6 +125,7 @@ public class ConfigService
     public void RemoveProject(ProjectConfig config)
     {
         _projects.Remove(config);
+        ReorderProjects();
         Save();
         Log.Information("删除项目: {Title} ({Name})", config.Title, config.Name);
     }
@@ -135,6 +151,7 @@ public class ConfigService
         if (index > 0)
         {
             (_projects[index], _projects[index - 1]) = (_projects[index - 1], _projects[index]);
+            ReorderProjects();
             Save();
         }
     }
@@ -144,7 +161,16 @@ public class ConfigService
         if (index < _projects.Count - 1)
         {
             (_projects[index], _projects[index + 1]) = (_projects[index + 1], _projects[index]);
+            ReorderProjects();
             Save();
+        }
+    }
+
+    private void ReorderProjects()
+    {
+        for (var i = 0; i < _projects.Count; i++)
+        {
+            _projects[i].SortOrder = i;
         }
     }
 }

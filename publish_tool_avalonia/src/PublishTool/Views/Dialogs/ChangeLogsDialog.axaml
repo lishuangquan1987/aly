@@ -2,7 +2,9 @@
               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
               xmlns:semi="https://irihi.tech/semi"
               xmlns:m="using:PublishTool.Models"
+              xmlns:vm="using:PublishTool.ViewModels"
               x:Class="PublishTool.Views.Dialogs.ChangeLogsDialog"
+              x:DataType="vm:ChangeLogsDialogViewModel"
               Title="变更日志" Width="520" Height="400"
               WindowStartupLocation="CenterOwner">
 
@@ -16,9 +18,9 @@
 
       <ScrollViewer Grid.Row="1">
         <StackPanel Spacing="12">
-          <ItemsControl x:Name="LogsList">
+          <ItemsControl ItemsSource="{Binding ChangeLogs}">
             <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="m:ProjectChangeLog">
+              <DataTemplate x:DataType="m:ProjectChangeLogDto">
                 <Border Background="{DynamicResource SemiColorBg0}"
                         CornerRadius="6" Padding="12">
                   <StackPanel Spacing="6">

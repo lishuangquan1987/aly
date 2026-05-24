@@ -1,9 +1,9 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Extensions.DependencyInjection;
 using PublishTool.Models.Local;
 using PublishTool.Services;
+using Serilog;
 
 namespace PublishTool.ViewModels;
 
@@ -11,6 +11,9 @@ public partial class MainWindowViewModel : ObservableObject
 {
     private readonly ConfigService _configService;
     private readonly ProjectService _projectService;
+    private readonly FileService _fileService;
+    private readonly LocalFileService _localFileService;
+    private readonly ProcessService _processService;
 
     public event Func<Task>? AddServerProjectRequested;
     public event Func<Task>? AddClientProjectRequested;
@@ -36,10 +39,16 @@ public partial class MainWindowViewModel : ObservableObject
 
     public MainWindowViewModel(
         ConfigService configService,
-        ProjectService projectService)
+        ProjectService projectService,
+        FileService fileService,
+        LocalFileService localFileService,
+        ProcessService processService)
     {
         _configService = configService;
         _projectService = projectService;
+        _fileService = fileService;
+        _localFileService = localFileService;
+        _processService = processService;
 
         foreach (var project in _configService.Projects)
         {
@@ -51,14 +60,21 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void OnProjectsChanged()
     {
-        FilteredProjects.Clear();
-        foreach (var project in _configService.Projects)
+        try
         {
-            if (string.IsNullOrEmpty(SearchText) ||
-                project.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+            FilteredProjects.Clear();
+            foreach (var project in _configService.Projects)
             {
-                FilteredProjects.Add(project);
+                if (string.IsNullOrEmpty(SearchText) ||
+                    project.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                {
+                    FilteredProjects.Add(project);
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "刷新项目列表失败");
         }
     }
 
@@ -85,9 +101,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         var tab = new ProjectPageViewModel(config, _projectService,
-            App.Services.GetRequiredService<FileService>(),
-            App.Services.GetRequiredService<LocalFileService>(),
-            App.Services.GetRequiredService<ProcessService>());
+            _fileService, _localFileService, _processService);
         OpenTabs.Add(tab);
         SelectedTab = tab;
     }
@@ -117,7 +131,16 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void MoveUpProject(ProjectConfig project)
     {
-        var index = FilteredProjects.IndexOf(project);
+        var projects = _configService.Projects;
+        var index = -1;
+        for (var i = 0; i < projects.Count; i++)
+        {
+            if (ReferenceEquals(projects[i], project))
+            {
+                index = i;
+                break;
+            }
+        }
         if (index > 0)
             _configService.MoveUp(index);
     }
@@ -125,8 +148,17 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void MoveDownProject(ProjectConfig project)
     {
-        var index = FilteredProjects.IndexOf(project);
-        if (index >= 0 && index < FilteredProjects.Count - 1)
+        var projects = _configService.Projects;
+        var index = -1;
+        for (var i = 0; i < projects.Count; i++)
+        {
+            if (ReferenceEquals(projects[i], project))
+            {
+                index = i;
+                break;
+            }
+        }
+        if (index >= 0 && index < projects.Count - 1)
             _configService.MoveDown(index);
     }
 

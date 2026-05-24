@@ -22,7 +22,7 @@ public partial class UploadFileItem : ObservableObject
     private string _relativePath = string.Empty;
 
     [ObservableProperty]
-    private DateTime _lastModified;
+    private DateTime _lastModified = DateTime.MinValue;
 
     [ObservableProperty]
     private UploadStatus _status = UploadStatus.Pending;

@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Flurl.Http;
 using PublishTool.Models;
 using PublishTool.Services;
 
@@ -101,6 +102,14 @@ public partial class AddServerProjectDialogViewModel : ObservableObject
             {
                 StatusMessage = $"创建失败: {response.ErrorMsg}";
             }
+        }
+        catch (FlurlHttpException ex)
+        {
+            StatusMessage = $"网络错误: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"创建失败: {ex.Message}";
         }
         finally
         {

@@ -1,6 +1,3 @@
-using Avalonia;
-using Avalonia.Media;
-using Avalonia.Styling;
 using Avalonia.Data.Converters;
 using PublishTool.Models.Local;
 using System.Globalization;
@@ -15,9 +12,9 @@ public class UploadStatusToTextConverter : IValueConverter
         {
             return status switch
             {
-                UploadStatus.Pending => "等待",
+                UploadStatus.Pending => "待上传",
                 UploadStatus.Uploading => "上传中",
-                UploadStatus.Done => "已完成",
+                UploadStatus.Done => "完成",
                 UploadStatus.Failed => "失败",
                 _ => ""
             };
@@ -27,34 +24,4 @@ public class UploadStatusToTextConverter : IValueConverter
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotImplementedException();
-}
-
-public class UploadStatusToColorConverter : IValueConverter
-{
-    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        if (value is UploadStatus status)
-        {
-            var key = status switch
-            {
-                UploadStatus.Pending => "SemiColorText2",
-                UploadStatus.Uploading => "SemiColorPrimary",
-                UploadStatus.Done => "SemiColorSuccess",
-                UploadStatus.Failed => "SemiColorDanger",
-                _ => "SemiColorText2"
-            };
-            return ResolveBrush(key, Colors.Gray);
-        }
-        return ResolveBrush("SemiColorText2", Colors.Gray);
-    }
-
-    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => throw new NotImplementedException();
-
-    private static SolidColorBrush ResolveBrush(string resourceKey, Color fallback)
-    {
-        if (Application.Current?.TryGetResource(resourceKey, ThemeVariant.Default, out var resource) == true && resource is Color color)
-            return new SolidColorBrush(color);
-        return new SolidColorBrush(fallback);
-    }
 }

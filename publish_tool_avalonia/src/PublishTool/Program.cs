@@ -10,7 +10,7 @@ public static class Program
         Log.Logger = new LoggerConfiguration()
             .WriteTo.Console()
             .WriteTo.File(Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "PublishTool", "logs", "log.log"))
             .MinimumLevel.Debug()
             .CreateLogger();

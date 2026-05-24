@@ -1,14 +1,15 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Microsoft.Extensions.DependencyInjection;
 using PublishTool.Services;
 using PublishTool.ViewModels;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace PublishTool.Views.Dialogs;
 
 public partial class ProjectSettingsDialog : Window
 {
+
     public ProjectSettingsDialog()
     {
         InitializeComponent();
@@ -19,18 +20,18 @@ public partial class ProjectSettingsDialog : Window
     {
         if (DataContext is ProjectSettingsDialogViewModel vm)
         {
-            vm.OpenIgnoreConfigRequested += async () => await OpenIgnoreConfig();
+            vm.OpenIgnoreConfigRequested += OnOpenIgnoreConfigRequested;
         }
     }
 
-    private async Task OpenIgnoreConfig()
+    private async Task OnOpenIgnoreConfigRequested()
     {
         if (DataContext is ProjectSettingsDialogViewModel vm)
         {
-            var configService = App.Services.GetRequiredService<ConfigService>();
-            var dialogVm = new ConfigEditorDialogViewModel(vm.GetUpdatedConfig(), configService);
+            var dialogVm = new ConfigEditorDialogViewModel(vm.Config, App.Services.GetRequiredService<PublishTool.Services.ConfigService>());
             var dialog = new ConfigEditorDialog { DataContext = dialogVm };
             await dialog.ShowDialog(this);
+            vm.RefreshFromConfig();
         }
     }
 
@@ -50,8 +51,6 @@ public partial class ProjectSettingsDialog : Window
     private async void SelectExeFile_Click(object? sender, RoutedEventArgs e)
     {
         var topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel == null) return;
-
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(
             new FilePickerOpenOptions { Title = "选择 EXE 文件", AllowMultiple = false });
 

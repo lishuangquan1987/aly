@@ -16,18 +16,18 @@ public class ProjectDto
     [JsonProperty("version")]
     public string Version { get; set; } = string.Empty;
 
-    [JsonProperty("forceUpdate")]
+    [JsonProperty("force_update")]
     public bool IsForceUpdate { get; set; }
 
-    [JsonProperty("ignoreFolders")]
+    [JsonProperty("ignore_folders")]
     public List<string> IgnoreFolders { get; set; } = new();
 
-    [JsonProperty("ignoreFiles")]
+    [JsonProperty("ignore_files")]
     public List<string> IgnoreFiles { get; set; } = new();
 
-    [JsonProperty("createdAt")]
+    [JsonProperty("created_at")]
     public string? CreatedAt { get; set; }
 
-    [JsonProperty("isDeleted")]
+    [JsonProperty("is_deleted")]
     public bool IsDeleted { get; set; }
 }

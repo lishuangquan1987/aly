@@ -9,8 +9,8 @@ public class LocalFileService
 {
     public List<LocalFileItem> ScanDirectory(
         string directoryPath,
-        List<string>? ignoreFolders = null,
-        List<string>? ignoreFiles = null)
+        IList<string>? ignoreFolders = null,
+        IList<string>? ignoreFiles = null)
     {
         var items = new List<LocalFileItem>();
         if (!Directory.Exists(directoryPath))
@@ -60,13 +60,14 @@ public class LocalFileService
 
     private static bool ShouldIgnore(string relativePath, HashSet<string> folders, HashSet<string> files)
     {
-        var parts = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var normalizedPath = relativePath.Replace('\\', '/');
+        var parts = normalizedPath.Split('/');
         foreach (var part in parts)
         {
             if (folders.Contains(part))
                 return true;
         }
-        var fileName = Path.GetFileName(relativePath);
+        var fileName = Path.GetFileName(normalizedPath);
         if (files.Contains(fileName) || files.Contains("*" + Path.GetExtension(fileName)))
             return true;
         return false;
@@ -107,11 +108,13 @@ public class LocalFileService
     public List<LocalFileItem> GetModifiedFiles(
         string localPath,
         List<FileInfoDto> serverFiles,
-        List<string>? ignoreFolders = null,
-        List<string>? ignoreFiles = null)
+        IList<string>? ignoreFolders = null,
+        IList<string>? ignoreFiles = null)
     {
         var localFiles = ScanDirectory(localPath, ignoreFolders, ignoreFiles);
-        var serverFileDict = serverFiles.ToDictionary(f => f.FileRelativePath);
+        var serverFileDict = serverFiles
+            .GroupBy(f => f.FileRelativePath)
+            .ToDictionary(g => g.Key, g => g.First());
 
         foreach (var local in localFiles)
         {

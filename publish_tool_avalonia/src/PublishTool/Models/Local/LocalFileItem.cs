@@ -14,7 +14,7 @@ public partial class LocalFileItem : ObservableObject
     private string _relativePath = string.Empty;
 
     [ObservableProperty]
-    private DateTime _lastModified;
+    private DateTime _lastModified = DateTime.MinValue;
 
     [ObservableProperty]
     private bool _isChecked;

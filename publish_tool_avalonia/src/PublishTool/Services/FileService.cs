@@ -1,4 +1,3 @@
-using Flurl;
 using Flurl.Http;
 using PublishTool.Models;
 using Serilog;
@@ -23,6 +22,11 @@ public class FileService
             Log.Error(ex, "获取文件列表失败: {Url}", $"{serverUrl}/api/file/get_all_files/{projectId}");
             throw;
         }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "获取文件列表时发生未知错误，项目ID: {ProjectId}", projectId);
+            throw;
+        }
     }
 
     public async Task<CommonResponse> UploadFileAsync(string serverUrl, string projectName,
@@ -31,18 +35,24 @@ public class FileService
         try
         {
             Log.Information("开始上传文件: {Path} 到项目 {Project}", relativePath, projectName);
-            await $"{serverUrl}/api/file/upload_file"
+            var response = await $"{serverUrl}/api/file/upload_file"
                 .WithTimeout(300)
                 .PostMultipartAsync(mp => mp
                     .AddFile("file", fileStream, Path.GetFileName(relativePath))
                     .AddString("projectName", projectName)
-                    .AddString("relativeFileName", relativePath));
+                    .AddString("relativeFileName", relativePath))
+                .ReceiveJson<CommonResponse>();
             Log.Information("文件上传成功: {Path}", relativePath);
-            return new CommonResponse { IsSuccess = true };
+            return response;
         }
         catch (FlurlHttpException ex)
         {
             Log.Error(ex, "文件上传失败: {Path}", relativePath);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "文件上传时发生未知错误: {Path}", relativePath);
             throw;
         }
     }
@@ -62,6 +72,11 @@ public class FileService
         catch (FlurlHttpException ex)
         {
             Log.Error(ex, "文件下载失败: {Path}", filePath);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "文件下载时发生未知错误: {Path}", filePath);
             throw;
         }
     }

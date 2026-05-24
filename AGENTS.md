@@ -4,6 +4,26 @@
 
 ***
 
+## 〇、项目概述与职责边界
+
+本项目包含三个子项目，各自职责如下：
+
+| 子项目 | 目录 | 职责 | 开发状态 |
+| ------ | ---- | ---- | -------- |
+| **server** | `server/` | 服务端（Go + Gin + Ent + SQLite），提供项目管理和文件管理的 REST API | 已开发 |
+| **publish_tool_avalonia** | `publish_tool_avalonia/` | **版本发布客户端**（.NET 8 + Avalonia 12），主要功能是推送文件、新版本到服务端，管理发布流程 | 已开发 |
+| **client** | `client/` | **更新客户端**（暂未开发），主要功能是发现新版本、下载新版本、替换文件实现自动更新，也支持全量下载整个压缩包 | 未开发 |
+
+**关键约束**：
+
+- `publish_tool_avalonia` 是面向**发布者**的工具，负责将文件上传到服务端、管理版本、触发发布
+- `client` 是面向**终端用户**的更新程序，负责从服务端检测新版本、下载更新包、执行文件替换
+- `server` 是两者共同依赖的后端服务，API 路径和数据结构必须与两端保持一致
+- 修改 `server` 的 API 时，必须同步确认 `publish_tool_avalonia` 的 DTO 和 Service 层是否需要调整
+- 开发 `client` 时，应复用 `server` 已有的 API 端点，避免为 client 单独新增接口（除非必要）
+
+***
+
 ## 一、项目结构规则
 
 ### 1.1 目录组织
@@ -140,7 +160,7 @@ public async Task<List<ProjectDto>> GetAllProjectsAsync(string serverUrl)
 
 - 文件路径使用 `Path.Combine` 构建（跨平台兼容）
 - 配置持久化使用 JSON 格式，存储在 `{LocalApplicationData}/PublishTool/`
-- 日志使用 Serilog，输出到 `{ApplicationData}/PublishTool/logs/log.log`
+- 日志使用 Serilog，输出到 `{LocalApplicationData}/PublishTool/logs/log.log`
 - 文件操作（扫描、MD5）在 Service 层封装，ViewModel 不直接使用 `System.IO`
 
 ### 4.3 服务注册
@@ -155,15 +175,25 @@ public async Task<List<ProjectDto>> GetAllProjectsAsync(string serverUrl)
 
 ### 5.1 JSON 字段命名
 
-所有 DTO 属性必须使用 `[JsonProperty("originalName")]` 标注原始小驼峰名称（与 Go 服务端保持一致）。
+所有 DTO 属性必须使用 `[JsonProperty("originalName")]` 标注原始 JSON 字段名称（与 Go 服务端保持一致）。
+
+**重要**：Go 服务端 `ent` 框架生成的 JSON tag 使用 `snake_case`（如 `force_update`、`created_at`），而控制器请求体的自定义字段使用 `camelCase`（如 `isForceUpdate`）。两者不一致，必须逐一核对。
 
 ```csharp
+// GET 响应 DTO（ent 生成 → snake_case）
 public class ProjectDto
 {
     [JsonProperty("id")]
     public int Id { get; set; }
-    
-    [JsonProperty("isForceUpdate")]
+
+    [JsonProperty("force_update")]      // 注意：ent 生成的是 snake_case
+    public bool IsForceUpdate { get; set; }
+}
+
+// POST 请求 DTO（控制器定义 → camelCase）
+public class CreateProjectDto
+{
+    [JsonProperty("isForceUpdate")]      // 注意：控制器期望的是 camelCase
     public bool IsForceUpdate { get; set; }
 }
 ```
@@ -248,104 +278,12 @@ private async Task SomeOperation()
 - 使用 `{Binding Path, Converter={StaticResource MyConverter}}` 处理类型转换
 - 使用 `{x:Static}` 引用枚举和常量
 
-### 7.3 样式规则 — AtomUI 6.0 控件与主题
+### 7.3 样式规则 — Semi.Avalonia 与 Ursa.Avalonia 控件与主题
 
-#### XAML 命名空间
-
-所有使用 AtomUI 控件的 XAML 文件必须添加：
-
-```xml
-xmlns:atom="https://atomui.net"
-```
-
-控件通过 `atom:` 前缀引用，如 `atom:Button`、`atom:TextBox`。
-
-#### 必须移除 FluentTheme
-
-AtomUI 6.0 自带完整的 Ant Design 主题系统，**必须移除** `<FluentTheme />`：
-
-```xml
-<!-- ❌ 删除这部分 -->
-<Application.Styles>
-  <FluentTheme />
-</Application.Styles>
-```
-
-#### App.axaml.cs 初始化（Avalonia 12）
-
-```csharp
-public override void Initialize()
-{
-    AvaloniaXamlLoader.Load(this);
-    this.UseAtomUI(builder =>
-    {
-        builder.WithDefaultTheme(IThemeManager.DEFAULT_THEME_ID);
-        builder.UseAlibabaSansFont();
-        builder.UseDesktopControls();
-    });
-}
-```
-
-> ️ Avalonia 12 移除了 `OnInitialized()`，`UseAtomUI()` 必须放在 `Initialize()` 中调用。
-
-#### AtomUI 6.0 拆包
-
-| NuGet 包 | 用途 |
-|---------|------|
-| `AtomUI.Core` | 核心基础设施（主题系统、Token 系统、动画） |
-| `AtomUI.Controls.Shared` | 共享接口与枚举 |
-| `AtomUI.Desktop.Controls` | 桌面控件库（主要安装包） |
-| `AtomUI.Fonts.AlibabaSans` | 阿里巴巴普惠体字体包 |
-
-#### 控件映射
-
-| 标准 Avalonia 控件 | AtomUI 6.0 等价控件 | 说明 |
-|-------------------|---------------------|------|
-| `Window` | `atom:Window` | Ant Design 风格窗口 |
-| `Button` | `atom:Button` | 使用 `ButtonType`（Primary/Default/Text），不支持 `Size`/`Status` |
-| `TextBox` | `atom:TextBox` | Ant Design 风格输入框 |
-| `TabControl` | `atom:TabControl` | 标签页控件 |
-| `ProgressBar` | `atom:ProgressBar` | 进度条 |
-| `CheckBox` | `atom:CheckBox` | 复选框 |
-| `ListBox` | `atom:ListBox` | 列表控件 |
-| `ScrollViewer` | `atom:ScrollViewer` | 滚动容器 |
-
-#### 主题令牌（Design Tokens）
-
-所有颜色必须通过 `{DynamicResource}` 引用 AtomUI 设计令牌，禁止使用硬编码颜色值：
-
-| 令牌 | 用途 | 典型旧值 |
-|------|------|---------|
-| `BgLayout` | 布局背景（顶栏/底栏/侧栏） | `#0d0d0d` |
-| `BgContainer` | 容器背景（内容区） | `#1a1a1a`、`#1e1e1e`、`#252525` |
-| `TextBase` | 主要文字 | `White`、`#FFFFFF` |
-| `TextSecondary` | 次要文字 | `#87ceeb` |
-| `TextTertiary` | 辅助文字（提示、时间戳） | `#888888`、`#666666` |
-| `PrimaryColor` | 主题色 | `#00a8ff` |
-| `SuccessColor` | 成功/完成色 | `#00ff88` |
-| `BorderColor` | 边框色 | `#2d2d2d`、`#3d3d3d` |
-| `ControlStrokeColorSecondary` | 控件次要描边 | — |
-
-使用示例：
-
-```xml
-<Border Background="{DynamicResource BgContainer}"
-        BorderBrush="{DynamicResource BorderColor}"
-        BorderThickness="1">
-  <TextBlock Text="标题" Foreground="{DynamicResource TextBase}" />
-  <TextBlock Text="备注" Foreground="{DynamicResource TextTertiary}" />
-</Border>
-<atom:Button Content="提交" ButtonType="Primary" />
-<atom:Button Content="取消" ButtonType="Default" />
-```
-
-#### 构建配置
-
-> 由于 AtomUI 6.0 依赖 SkiaSharp，可能遇到因缺少 `.pdb` 文件导致的 MSB3030 错误。
-> 在 `.csproj` 的 `<PropertyGroup>` 中添加：
-> ```xml
-> <AllowedReferenceRelatedFileExtensions>.dll</AllowedReferenceRelatedFileExtensions>
-> ```
+- 窗口使用 `<semi:Window>` 命名空间（`xmlns:semi="https://irihi.tech/semi"`）
+- 主题令牌使用 `SemiColor*` 前缀：`SemiColorPrimary`、`SemiColorSuccess`、`SemiColorDanger`、`SemiColorText0` 等
+- 按钮样式使用 `Classes="Primary"`、`Classes="Tertiary"`、`Classes="Danger"`
+- 主题初始化在 `App.axaml` 中通过 `<semi:SemiTheme>` 和 `<semi:UrsaSemiTheme>` 加载
 
 ***
 
@@ -408,8 +346,8 @@ public override void Initialize()
 
 > <br />
 >
-> **版本**: 1.1\
-> **适用范围**: publish\_tool\_avalonia/ 项目（.NET 8 + Avalonia 12 + CommunityToolkit.Mvvm + AtomUI 6.0）\
+> **版本**: 1.2\
+> **适用范围**: publish\_tool\_avalonia/ 项目（.NET 8 + Avalonia 12 + CommunityToolkit.Mvvm + Semi.Avalonia + Ursa.Avalonia）\
 > **兼容服务端**: server/（Go + Gin + Ent + SQLite）保持完全兼容，无需修改
 
 ***
@@ -417,4 +355,5 @@ public override void Initialize()
 ## 十三、文档参考
 
 - **Avalonia 12 官方文档**: https://docs.avaloniaui.net/docs/welcome
-- **AtomUI 6.0 使用参考**: https://github.com/AtomUI/AtomUI/tree/release/6.0/controlgallery
+- **Semi.Avalonia 使用参考**: https://github.com/irihi/Semi.Avalonia
+- **Ursa.Avalonia 使用参考**: https://github.com/irihi/Ursa

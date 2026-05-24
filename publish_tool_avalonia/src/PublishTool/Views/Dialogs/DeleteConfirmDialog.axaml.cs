@@ -10,11 +10,6 @@ public partial class DeleteConfirmDialog : Window
         InitializeComponent();
     }
 
-    public DeleteConfirmDialog(string projectTitle) : this()
-    {
-        ProjectNameRun.Text = projectTitle;
-    }
-
     private void CancelButton_Click(object? sender, RoutedEventArgs e)
     {
         Close(false);

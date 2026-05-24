@@ -4,17 +4,20 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Microsoft.Extensions.DependencyInjection;
+using PublishTool.Models;
 using PublishTool.Models.Local;
 using PublishTool.Services;
 using PublishTool.ViewModels;
 using PublishTool.Views.Controls;
 using PublishTool.Views.Dialogs;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace PublishTool.Views;
 
 public partial class MainWindow : Window
 {
+    private MainWindowViewModel? _currentVm;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -23,11 +26,46 @@ public partial class MainWindow : Window
 
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
+        if (_currentVm != null)
+        {
+            _currentVm.AddServerProjectRequested -= ShowAddServerProjectDialog;
+            _currentVm.AddClientProjectRequested -= ShowAddClientProjectDialog;
+            _currentVm.DeleteProjectRequested -= ShowDeleteConfirmDialog;
+            _currentVm.OpenTabs.CollectionChanged -= OnTabsChanged;
+            _currentVm.PropertyChanged -= OnVmPropertyChanged;
+        }
+
         if (DataContext is MainWindowViewModel vm)
         {
+            _currentVm = vm;
             vm.AddServerProjectRequested += ShowAddServerProjectDialog;
             vm.AddClientProjectRequested += ShowAddClientProjectDialog;
             vm.DeleteProjectRequested += ShowDeleteConfirmDialog;
+
+            vm.OpenTabs.CollectionChanged += OnTabsChanged;
+            vm.PropertyChanged += OnVmPropertyChanged;
+            UpdateEmptyContentOverlay();
+        }
+    }
+
+    private void OnTabsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        UpdateEmptyContentOverlay();
+    }
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.SelectedTab))
+            UpdateEmptyContentOverlay();
+    }
+
+    private void UpdateEmptyContentOverlay()
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            var overlay = this.FindControl<Panel>("EmptyContentOverlay");
+            if (overlay != null)
+                overlay.IsVisible = vm.SelectedTab == null;
         }
     }
 
@@ -68,7 +106,7 @@ public partial class MainWindow : Window
 
     public async Task ShowChangeLogsDialog(ProjectPageViewModel pageVm)
     {
-        var dialog = new ChangeLogsDialog(pageVm.ChangeLogs);
+        var dialog = new ChangeLogsDialog { DataContext = new ChangeLogsDialogViewModel(pageVm.ChangeLogs) };
         await dialog.ShowDialog(this);
     }
 
@@ -77,7 +115,7 @@ public partial class MainWindow : Window
         if (DataContext is MainWindowViewModel vm && vm.SelectedProject != null)
         {
             var project = vm.SelectedProject;
-            var dialog = new DeleteConfirmDialog(project.Title);
+            var dialog = new DeleteConfirmDialog { DataContext = new DeleteConfirmDialogViewModel(project.Title) };
             var result = await dialog.ShowDialog<bool>(this);
             if (result)
             {

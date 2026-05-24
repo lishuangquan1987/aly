@@ -2,12 +2,14 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PublishTool.Models.Local;
 using PublishTool.Services;
+using Serilog;
 
 namespace PublishTool.ViewModels;
 
 public partial class ProjectSettingsDialogViewModel : ObservableObject
 {
     private readonly ConfigService _configService;
+    internal ProjectConfig Config => _config;
     private readonly ProjectConfig _config;
 
     [ObservableProperty]
@@ -58,13 +60,13 @@ public partial class ProjectSettingsDialogViewModel : ObservableObject
     [RelayCommand]
     private void SelectExeFile()
     {
-        // 在 View 层调用文件选择器
+        // 由 View 层通过文件选择器交互处理
     }
 
     [RelayCommand]
     private void SelectLocalFolder()
     {
-        // 在 View 层调用文件夹选择器
+        // 由 View 层通过文件夹选择器交互处理
     }
 
     [RelayCommand]
@@ -83,7 +85,14 @@ public partial class ProjectSettingsDialogViewModel : ObservableObject
         }
         if (!valid) return;
 
-        _configService.UpdateProject(_config);
+        try
+        {
+            _configService.UpdateProject(_config);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "保存项目设置失败");
+        }
     }
 
     [RelayCommand]
@@ -91,5 +100,12 @@ public partial class ProjectSettingsDialogViewModel : ObservableObject
     {
         if (OpenIgnoreConfigRequested != null)
             await OpenIgnoreConfigRequested.Invoke();
+    }
+
+    public void RefreshFromConfig()
+    {
+        Title = _config.Title;
+        ExePath = _config.ExePath;
+        LocalPath = _config.LocalPath;
     }
 }

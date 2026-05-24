@@ -1,7 +1,9 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PublishTool.Models.Local;
 using PublishTool.Services;
+using Serilog;
 
 namespace PublishTool.ViewModels;
 
@@ -26,17 +28,24 @@ public partial class ConfigEditorDialogViewModel : ObservableObject
 
     public ProjectConfig GetUpdatedConfig()
     {
-        _config.IgnoreFolders = IgnoreFoldersText.Split('\n')
-            .Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
-        _config.IgnoreFiles = IgnoreFilesText.Split('\n')
-            .Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+        _config.IgnoreFolders = new ObservableCollection<string>(
+            IgnoreFoldersText.Split('\n').Where(s => !string.IsNullOrWhiteSpace(s)));
+        _config.IgnoreFiles = new ObservableCollection<string>(
+            IgnoreFilesText.Split('\n').Where(s => !string.IsNullOrWhiteSpace(s)));
         return _config;
     }
 
     [RelayCommand]
     private void Save()
     {
-        GetUpdatedConfig();
-        _configService.UpdateProject(_config);
+        try
+        {
+            GetUpdatedConfig();
+            _configService.UpdateProject(_config);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "保存忽略配置失败");
+        }
     }
 }

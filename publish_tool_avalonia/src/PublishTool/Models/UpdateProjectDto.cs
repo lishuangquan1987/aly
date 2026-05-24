@@ -10,7 +10,7 @@ public class UpdateProjectDto
     [JsonProperty("title")]
     public string Title { get; set; } = string.Empty;
 
-    [JsonProperty("forceUpdate")]
+    [JsonProperty("isForceUpdate")]
     public bool IsForceUpdate { get; set; }
 
     [JsonProperty("ignoreFolders")]

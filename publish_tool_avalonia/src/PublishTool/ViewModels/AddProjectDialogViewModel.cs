@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Flurl.Http;
 using PublishTool.Models;
 using PublishTool.Models.Local;
 using PublishTool.Services;
@@ -37,6 +38,9 @@ public partial class AddProjectDialogViewModel : ObservableObject
     [ObservableProperty]
     private string _localPathError = string.Empty;
 
+    [ObservableProperty]
+    private bool _isFetching;
+
     partial void OnServerUrlChanged(string value) => ServerUrlError = string.Empty;
     partial void OnLocalPathChanged(string value) => LocalPathError = string.Empty;
 
@@ -59,9 +63,33 @@ public partial class AddProjectDialogViewModel : ObservableObject
             ServerUrlError = "地址需以 http:// 或 https:// 开头";
             return;
         }
+
+        IsFetching = true;
         AvailableProjects = new List<ProjectDto>();
-        var response = await _projectService.GetAllProjectsAsync(ServerUrl);
-        AvailableProjects = response.Data ?? new List<ProjectDto>();
+        try
+        {
+            var response = await _projectService.GetAllProjectsAsync(ServerUrl);
+            if (response.IsSuccess)
+            {
+                AvailableProjects = response.Data ?? new List<ProjectDto>();
+            }
+            else
+            {
+                ServerUrlError = response.ErrorMsg ?? "获取项目列表失败";
+            }
+        }
+        catch (FlurlHttpException ex)
+        {
+            ServerUrlError = $"网络错误: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            ServerUrlError = $"获取项目列表失败: {ex.Message}";
+        }
+        finally
+        {
+            IsFetching = false;
+        }
     }
 
     [RelayCommand]

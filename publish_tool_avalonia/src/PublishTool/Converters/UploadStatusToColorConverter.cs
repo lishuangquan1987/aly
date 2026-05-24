@@ -4,17 +4,18 @@ using System.Globalization;
 
 namespace PublishTool.Converters;
 
-public class StatusToColorConverter : IValueConverter
+public class UploadStatusToColorConverter : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is FileCompareStatus status)
+        if (value is UploadStatus status)
         {
             var key = status switch
             {
-                FileCompareStatus.New => "SemiColorPrimary",
-                FileCompareStatus.Modified => "SemiColorWarning",
-                FileCompareStatus.Deleted => "SemiColorDanger",
+                UploadStatus.Pending => "SemiColorText2",
+                UploadStatus.Uploading => "SemiColorPrimary",
+                UploadStatus.Done => "SemiColorSuccess",
+                UploadStatus.Failed => "SemiColorDanger",
                 _ => "SemiColorText2"
             };
             return BrushHelper.ResolveBrush(key, Avalonia.Media.Colors.Gray);

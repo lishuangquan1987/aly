@@ -2,7 +2,9 @@
               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
               xmlns:semi="https://irihi.tech/semi"
               xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+              xmlns:vm="using:PublishTool.ViewModels"
               x:Class="PublishTool.Views.Dialogs.DeleteConfirmDialog"
+              x:DataType="vm:DeleteConfirmDialogViewModel"
               Title="确认删除" Width="400" SizeToContent="Height"
               WindowStartupLocation="CenterOwner">
 
@@ -19,7 +21,7 @@
         </StackPanel>
         <TextBlock FontSize="13" Foreground="{DynamicResource SemiColorText1}" TextWrapping="Wrap">
           <Run Text="确定要删除项目「"/>
-          <Run x:Name="ProjectNameRun" Text=""/>
+          <Run Text="{Binding ProjectTitle}"/>
           <Run Text="」吗？此操作不可撤销。"/>
         </TextBlock>
       </StackPanel>

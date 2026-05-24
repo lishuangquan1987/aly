@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace PublishTool.Models.Local;
@@ -26,8 +27,8 @@ public partial class ProjectConfig : ObservableObject
     private int _sortOrder;
 
     [ObservableProperty]
-    private List<string> _ignoreFolders = new();
+    private ObservableCollection<string> _ignoreFolders = new ObservableCollection<string>();
 
     [ObservableProperty]
-    private List<string> _ignoreFiles = new();
+    private ObservableCollection<string> _ignoreFiles = new ObservableCollection<string>();
 }

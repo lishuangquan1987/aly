@@ -2,8 +2,11 @@ using Newtonsoft.Json;
 
 namespace PublishTool.Models;
 
-public class ProjectChangeLog
+public class ProjectChangeLogDto
 {
+    [JsonProperty("id")]
+    public int Id { get; set; }
+
     [JsonProperty("version")]
     public string Version { get; set; } = string.Empty;
 
@@ -13,9 +16,9 @@ public class ProjectChangeLog
     [JsonProperty("time")]
     public string? Time { get; set; }
 
-    [JsonProperty("createdAt")]
+    [JsonProperty("created_at")]
     public string? CreatedAt { get; set; }
 
-    [JsonProperty("isDeleted")]
+    [JsonProperty("is_deleted")]
     public bool IsDeleted { get; set; }
 }

@@ -72,7 +72,7 @@ public partial class App : Application
     {
         try
         {
-            Log.Warning("显示错误对话框: {Message}", ex.Message);
+            Log.Warning("UI 线程异常: {Message}", ex.Message);
         }
         catch
         {

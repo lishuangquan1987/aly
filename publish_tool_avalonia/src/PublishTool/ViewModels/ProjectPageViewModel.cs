@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO.Compression;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Flurl.Http;
 using Newtonsoft.Json;
 using PublishTool.Models;
 using PublishTool.Models.Local;
@@ -36,7 +37,7 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     private string _latestChangeLog = string.Empty;
 
     [ObservableProperty]
-    private ObservableCollection<ProjectChangeLog> _changeLogs = new();
+    private ObservableCollection<ProjectChangeLogDto> _changeLogs = new();
 
     [ObservableProperty]
     private ObservableCollection<LocalFileItem> _localFiles = new();
@@ -58,6 +59,12 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isRefreshEnabled = true;
+
+    [ObservableProperty]
+    private bool _isDownloadEnabled = true;
+
+    [ObservableProperty]
+    private bool _isPullEnabled = true;
 
     [ObservableProperty]
     private int _uploadProgress;
@@ -118,7 +125,9 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     {
         if (string.IsNullOrEmpty(FileFilterText))
         {
-            LocalFiles = new ObservableCollection<LocalFileItem>(_allLocalFiles);
+            LocalFiles.Clear();
+            foreach (var file in _allLocalFiles)
+                LocalFiles.Add(file);
         }
         else
         {
@@ -126,7 +135,33 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
                 .Where(f => f.FileName.Contains(FileFilterText, StringComparison.OrdinalIgnoreCase)
                     || f.RelativePath.Contains(FileFilterText, StringComparison.OrdinalIgnoreCase))
                 .ToList();
-            LocalFiles = new ObservableCollection<LocalFileItem>(filtered);
+            var filteredSet = new HashSet<LocalFileItem>(filtered);
+
+            for (var i = LocalFiles.Count - 1; i >= 0; i--)
+            {
+                if (!filteredSet.Contains(LocalFiles[i]))
+                    LocalFiles.RemoveAt(i);
+            }
+
+            for (var i = 0; i < filtered.Count; i++)
+            {
+                if (i >= LocalFiles.Count || LocalFiles[i] != filtered[i])
+                {
+                    var existingIndex = LocalFiles.IndexOf(filtered[i]);
+                    if (existingIndex >= 0)
+                    {
+                        if (existingIndex != i)
+                        {
+                            LocalFiles.RemoveAt(existingIndex);
+                            LocalFiles.Insert(i, filtered[i]);
+                        }
+                    }
+                    else
+                    {
+                        LocalFiles.Insert(i, filtered[i]);
+                    }
+                }
+            }
         }
     }
 
@@ -138,7 +173,7 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
         Log.Information("开始刷新项目状态: {Name}", Config.Name);
         try
         {
-            var osResponse = await _projectService.GetOsInfoAsync(Config.ServerUrl, Config.ServerId);
+            var osResponse = await _projectService.GetProjectOsInfoAsync(Config.ServerUrl, Config.ServerId);
             if (osResponse.IsSuccess && osResponse.Data != null && osResponse.Data.Count > 0)
             {
                 ServerOsInfo = osResponse.Data[0];
@@ -150,7 +185,7 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
                 var latest = logsResponse.Data[0];
                 ServerVersion = latest.Version;
                 LatestChangeLog = string.Join("\n", latest.Logs);
-                ChangeLogs = new ObservableCollection<ProjectChangeLog>(logsResponse.Data);
+                ChangeLogs = new ObservableCollection<ProjectChangeLogDto>(logsResponse.Data);
             }
 
             var filesResponse = await _fileService.GetAllFilesAsync(Config.ServerUrl, Config.ServerId);
@@ -247,6 +282,7 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
             StatusMessage = "请先选择要下载的文件";
             return;
         }
+        IsDownloadEnabled = false;
         StatusMessage = $"正在下载 {checkedFiles.Count} 个文件...";
         _cts = new CancellationTokenSource();
         try
@@ -280,12 +316,19 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
         {
             StatusMessage = "下载已取消";
         }
+        catch (FlurlHttpException ex)
+        {
+            StatusMessage = $"网络错误: {ex.Message}";
+            Log.Error(ex, "下载选中文件网络错误");
+        }
         catch (Exception ex)
         {
             StatusMessage = $"下载失败: {ex.Message}";
+            Log.Error(ex, "下载选中文件失败");
         }
         finally
         {
+            IsDownloadEnabled = true;
             _cts = null;
         }
     }
@@ -324,10 +367,20 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
                 UpdateProgress();
             }
             StatusMessage = "所有文件上传完成";
+
+            if (AutoRefreshAfterPush)
+            {
+                await RefreshStatus();
+            }
         }
         catch (OperationCanceledException)
         {
             StatusMessage = "上传已取消";
+        }
+        catch (FlurlHttpException ex)
+        {
+            StatusMessage = $"网络错误: {ex.Message}";
+            Log.Error(ex, "上传文件网络错误");
         }
         catch (Exception ex)
         {
@@ -390,6 +443,7 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task DownloadAll()
     {
+        IsDownloadEnabled = false;
         StatusMessage = "正在获取服务端文件列表...";
         _cts = new CancellationTokenSource();
         try
@@ -421,12 +475,19 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
         {
             StatusMessage = "下载已取消";
         }
+        catch (FlurlHttpException ex)
+        {
+            StatusMessage = $"网络错误: {ex.Message}";
+            Log.Error(ex, "全量下载网络错误");
+        }
         catch (Exception ex)
         {
             StatusMessage = $"下载失败: {ex.Message}";
+            Log.Error(ex, "全量下载失败");
         }
         finally
         {
+            IsDownloadEnabled = true;
             _cts = null;
         }
     }
@@ -450,8 +511,9 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
             foreach (var item in toDownload)
             {
                 _cts.Token.ThrowIfCancellationRequested();
-                var serverFile = filesResponse.Data.First(f =>
+                var serverFile = filesResponse.Data.FirstOrDefault(f =>
                     f.FileRelativePath == item.RelativePath);
+                if (serverFile == null) continue;
                 var localPath = Path.Combine(Config.LocalPath, item.RelativePath);
                 var dir = Path.GetDirectoryName(localPath);
                 if (dir != null) Directory.CreateDirectory(dir);
@@ -562,14 +624,7 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void StartCustom()
     {
-        if (!string.IsNullOrEmpty(Config.ExePath))
-        {
-            _processService.StartProcess(Config.ExePath);
-        }
-        else
-        {
-            StatusMessage = "未配置 EXE 启动路径";
-        }
+        StartDefault();
     }
 
     [RelayCommand]
