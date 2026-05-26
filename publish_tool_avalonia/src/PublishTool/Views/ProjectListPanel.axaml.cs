@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using PublishTool.ViewModels;
 
-namespace PublishTool.Views.Controls;
+namespace PublishTool.Views;
 
 public partial class ProjectListPanel : UserControl
 {

@@ -4,9 +4,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using PublishTool.Models.Local;
 using PublishTool.Services;
+using PublishTool.ViewModels.Pages;
+using PublishTool.Views.Pages;
 using Serilog;
+using Ursa.Controls;
 
 namespace PublishTool.ViewModels;
 
@@ -17,10 +21,6 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly FileService _fileService;
     private readonly LocalFileService _localFileService;
     private readonly ProcessService _processService;
-
-    public event Func<Task>? AddServerProjectRequested;
-    public event Func<Task>? AddClientProjectRequested;
-    public event Func<Task>? DeleteProjectRequested;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -119,10 +119,17 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task RemoveProject(ProjectConfig config)
     {
-        if (DeleteProjectRequested != null)
+        var vm = App.Services.GetRequiredService<DeleteConfirmDialogViewModel>();
+        vm.ProjectTitle = config.Title;
+        var result = await Dialog.ShowStandardAsync<DeleteConfirmDialogView, DeleteConfirmDialogViewModel>(
+            vm, null, new DialogOptions()
+            {
+                Title = "确认删除",
+                Button = DialogButton.YesNo
+            });
+        if (result == DialogResult.Yes)
         {
-            SelectedProject = config;
-            await DeleteProjectRequested.Invoke();
+            ConfirmRemoveProject(config);
         }
     }
 
@@ -178,14 +185,32 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task AddServerProject()
     {
-        if (AddServerProjectRequested != null)
-            await AddServerProjectRequested.Invoke();
+        var vm = App.Services.GetRequiredService<AddServerProjectDialogViewModel>();
+        var result = await Dialog.ShowStandardAsync<AddServerProjectDialogView, AddServerProjectDialogViewModel>(
+            vm, null, new DialogOptions()
+            {
+                Title = "新建服务端项目",
+                Button = DialogButton.OKCancel
+            });
+        if (result == DialogResult.OK)
+        {
+            await vm.TryCreateAsync();
+        }
     }
 
     [RelayCommand]
     private async Task AddClientProject()
     {
-        if (AddClientProjectRequested != null)
-            await AddClientProjectRequested.Invoke();
+        var vm = App.Services.GetRequiredService<AddProjectDialogViewModel>();
+        var result = await Dialog.ShowStandardAsync<AddProjectDialogView, AddProjectDialogViewModel>(
+            vm, null, new DialogOptions()
+            {
+                Title = "添加新项目",
+                Button = DialogButton.OKCancel
+            });
+        if (result == DialogResult.OK)
+        {
+            vm.ConfirmCommand.Execute(null);
+        }
     }
 }

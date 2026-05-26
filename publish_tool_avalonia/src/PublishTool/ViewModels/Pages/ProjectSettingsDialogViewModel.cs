@@ -1,12 +1,18 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using PublishTool.Models.Local;
 using PublishTool.Services;
+using PublishTool.Views.Pages;
 using Serilog;
+using Ursa.Controls;
 
-namespace PublishTool.ViewModels;
+namespace PublishTool.ViewModels.Pages;
 
 public partial class ProjectSettingsDialogViewModel : ObservableObject
 {
@@ -38,8 +44,6 @@ public partial class ProjectSettingsDialogViewModel : ObservableObject
     partial void OnTitleChanged(string value) => TitleError = string.Empty;
     partial void OnLocalPathChanged(string value) => LocalPathError = string.Empty;
 
-    public event Func<Task>? OpenIgnoreConfigRequested;
-
     public ProjectSettingsDialogViewModel(ConfigService configService, ProjectConfig config)
     {
         _configService = configService;
@@ -60,20 +64,52 @@ public partial class ProjectSettingsDialogViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void SelectExeFile()
+    private async Task SelectExeFile()
     {
-        // 由 View 层通过文件选择器交互处理
+        var topLevel = TopLevel.GetTopLevel(App.MainWindow);
+        if (topLevel == null) return;
+
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(
+            new FilePickerOpenOptions
+            {
+                Title = "选择 EXE 文件",
+                AllowMultiple = false,
+                FileTypeFilter = new[]
+                {
+                    new FilePickerFileType("exe文件")
+                    {
+                        Patterns = ["*.exe"]
+                    }
+                }
+            });
+
+        var path = files.FirstOrDefault()?.Path.LocalPath;
+        if (path != null)
+            ExePath = path;
     }
 
     [RelayCommand]
-    private void SelectLocalFolder()
+    private async Task SelectLocalFolder()
     {
-        // 由 View 层通过文件夹选择器交互处理
+        var topLevel = TopLevel.GetTopLevel(App.MainWindow);
+        if (topLevel == null) return;
+
+        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(
+            new FolderPickerOpenOptions
+            {
+                Title = "选择本地文件夹路径",
+                AllowMultiple = false
+            });
+
+        var path = folders.FirstOrDefault()?.Path.LocalPath;
+        if (path != null)
+            LocalPath = path;
     }
 
-    [RelayCommand]
-    private void Save()
+    public void Save()
     {
+        GetUpdatedConfig();
+
         var valid = true;
         if (string.IsNullOrWhiteSpace(Title))
         {
@@ -100,8 +136,18 @@ public partial class ProjectSettingsDialogViewModel : ObservableObject
     [RelayCommand]
     private async Task OpenIgnoreConfig()
     {
-        if (OpenIgnoreConfigRequested != null)
-            await OpenIgnoreConfigRequested.Invoke();
+        var configService = App.Services.GetRequiredService<ConfigService>();
+        var vm = new ConfigEditorDialogViewModel(_config, configService);
+        var result = await Dialog.ShowStandardAsync<ConfigEditorDialogView, ConfigEditorDialogViewModel>(
+            vm, null, new DialogOptions
+            {
+                Title = "忽略配置",
+                Button = DialogButton.OKCancel
+            });
+        if (result == DialogResult.OK)
+        {
+            vm.Save();
+        }
     }
 
     public void RefreshFromConfig()

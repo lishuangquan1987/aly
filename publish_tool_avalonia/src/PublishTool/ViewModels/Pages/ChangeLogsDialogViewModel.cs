@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PublishTool.Models;
 
-namespace PublishTool.ViewModels;
+namespace PublishTool.ViewModels.Pages;
 
 public partial class ChangeLogsDialogViewModel : ObservableObject
 {

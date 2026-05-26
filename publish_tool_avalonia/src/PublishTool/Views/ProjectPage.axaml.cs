@@ -2,9 +2,9 @@ using Avalonia.Controls;
 
 namespace PublishTool.Views;
 
-public partial class MainWindow : Window
+public partial class ProjectPage : UserControl
 {
-    public MainWindow()
+    public ProjectPage()
     {
         InitializeComponent();
     }

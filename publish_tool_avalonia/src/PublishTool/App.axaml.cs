@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using PublishTool.Services;
 using PublishTool.ViewModels;
+using PublishTool.ViewModels.Pages;
 using PublishTool.Views;
 using Serilog;
 
@@ -15,6 +16,7 @@ namespace PublishTool;
 public partial class App : Application
 {
     public static IServiceProvider Services { get; private set; } = null!;
+    public static MainWindow? MainWindow { get; private set; }
 
     public override void Initialize()
     {
@@ -33,10 +35,11 @@ public partial class App : Application
             ConfigureServices(services);
             Services = services.BuildServiceProvider();
 
-            desktop.MainWindow = new MainWindow
+            MainWindow = new MainWindow
             {
                 DataContext = Services.GetRequiredService<MainWindowViewModel>()
             };
+            desktop.MainWindow = MainWindow;
 
             Log.Information("应用程序启动成功");
         }
@@ -96,5 +99,12 @@ public partial class App : Application
 
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<ProjectPageViewModel>();
+
+        services.AddTransient<AddProjectDialogViewModel>();
+        services.AddTransient<AddServerProjectDialogViewModel>();
+        services.AddTransient<ChangeLogsDialogViewModel>();
+        services.AddTransient<ConfigEditorDialogViewModel>();
+        services.AddTransient<DeleteConfirmDialogViewModel>();
+        services.AddTransient<ProjectSettingsDialogViewModel>();
     }
 }

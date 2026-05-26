@@ -1,6 +1,6 @@
 <UserControl
     Background="{DynamicResource SemiColorBg1}"
-    x:Class="PublishTool.Views.Controls.ProjectPage"
+    x:Class="PublishTool.Views.ProjectPage"
     x:DataType="vm:ProjectPageViewModel"
     x:Name="UC"
     xmlns="https://github.com/avaloniaui"

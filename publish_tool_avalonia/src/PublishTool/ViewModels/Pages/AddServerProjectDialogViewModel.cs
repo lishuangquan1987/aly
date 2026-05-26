@@ -1,18 +1,15 @@
 using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using Flurl.Http;
 using PublishTool.Models;
 using PublishTool.Services;
 
-namespace PublishTool.ViewModels;
+namespace PublishTool.ViewModels.Pages;
 
 public partial class AddServerProjectDialogViewModel : ObservableObject
 {
     private readonly ProjectService _projectService;
-
-    public event Action? CloseRequested;
 
     [ObservableProperty]
     private string _serverUrl = string.Empty;
@@ -50,7 +47,7 @@ public partial class AddServerProjectDialogViewModel : ObservableObject
         _projectService = projectService;
     }
 
-    private bool Validate()
+    public bool Validate()
     {
         var valid = true;
         if (string.IsNullOrWhiteSpace(ServerUrl))
@@ -79,10 +76,9 @@ public partial class AddServerProjectDialogViewModel : ObservableObject
         return valid;
     }
 
-    [RelayCommand]
-    private async Task Create()
+    public async Task<bool> TryCreateAsync()
     {
-        if (!Validate()) return;
+        if (!Validate()) return false;
 
         IsCreating = true;
         StatusMessage = string.Empty;
@@ -98,20 +94,23 @@ public partial class AddServerProjectDialogViewModel : ObservableObject
             if (response.IsSuccess)
             {
                 StatusMessage = "创建成功";
-                CloseRequested?.Invoke();
+                return true;
             }
             else
             {
                 StatusMessage = $"创建失败: {response.ErrorMsg}";
+                return false;
             }
         }
         catch (FlurlHttpException ex)
         {
             StatusMessage = $"网络错误: {ex.Message}";
+            return false;
         }
         catch (Exception ex)
         {
             StatusMessage = $"创建失败: {ex.Message}";
+            return false;
         }
         finally
         {

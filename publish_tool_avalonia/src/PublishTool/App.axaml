@@ -1,33 +1,34 @@
-<Application xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:PublishTool.ViewModels"
-             xmlns:controls="using:PublishTool.Views.Controls"
-             xmlns:conv="using:PublishTool.Converters"
-             xmlns:semi="https://irihi.tech/semi"
-             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-             x:Class="PublishTool.App">
-  <Application.Styles>
-      <semi:SemiTheme Locale="zh-CN"></semi:SemiTheme>
-      <semi:UrsaSemiTheme Locale="zh-CN"></semi:UrsaSemiTheme>
-   <icons:MaterialIconStyles ></icons:MaterialIconStyles>
-  </Application.Styles>
-  <Application.Resources>
-    <ResourceDictionary>
-      <conv:BoolToColorConverter x:Key="BoolToColorConverter" />
-      <conv:BytesToSizeConverter x:Key="BytesToSizeConverter" />
-      <conv:CompareStatusConverter x:Key="CompareStatusConverter" />
-      <conv:StatusToColorConverter x:Key="StatusToColorConverter" />
-      <conv:UploadStatusToTextConverter x:Key="UploadStatusToTextConverter" />
-      <conv:UploadStatusToColorConverter x:Key="UploadStatusToColorConverter" />
-      <conv:UploadStatusToFailedConverter x:Key="UploadStatusToFailedConverter" />
-      <conv:DiskInfoFormatterConverter x:Key="DiskInfoFormatterConverter" />
-      <conv:DiskInfoTooltipConverter x:Key="DiskInfoTooltipConverter" />
-      <conv:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
-    </ResourceDictionary>
-  </Application.Resources>
-  <Application.DataTemplates>
-    <DataTemplate DataType="vm:ProjectPageViewModel">
-      <controls:ProjectPage />
-    </DataTemplate>
-  </Application.DataTemplates>
+<Application
+    x:Class="PublishTool.App"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:conv="using:PublishTool.Converters"
+    xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:semi="https://irihi.tech/semi"
+    xmlns:views="clr-namespace:PublishTool.Views"
+    xmlns:vm="using:PublishTool.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Styles>
+        <semi:SemiTheme Locale="zh-CN" />
+        <semi:UrsaSemiTheme Locale="zh-CN" />
+        <icons:MaterialIconStyles />
+    </Application.Styles>
+    <Application.Resources>
+        <ResourceDictionary>
+            <conv:BoolToColorConverter x:Key="BoolToColorConverter" />
+            <conv:BytesToSizeConverter x:Key="BytesToSizeConverter" />
+            <conv:CompareStatusConverter x:Key="CompareStatusConverter" />
+            <conv:StatusToColorConverter x:Key="StatusToColorConverter" />
+            <conv:UploadStatusToTextConverter x:Key="UploadStatusToTextConverter" />
+            <conv:UploadStatusToColorConverter x:Key="UploadStatusToColorConverter" />
+            <conv:UploadStatusToFailedConverter x:Key="UploadStatusToFailedConverter" />
+            <conv:DiskInfoFormatterConverter x:Key="DiskInfoFormatterConverter" />
+            <conv:DiskInfoTooltipConverter x:Key="DiskInfoTooltipConverter" />
+            <conv:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
+        </ResourceDictionary>
+    </Application.Resources>
+    <Application.DataTemplates>
+        <DataTemplate DataType="vm:ProjectPageViewModel">
+            <views:ProjectPage />
+        </DataTemplate>
+    </Application.DataTemplates>
 </Application>

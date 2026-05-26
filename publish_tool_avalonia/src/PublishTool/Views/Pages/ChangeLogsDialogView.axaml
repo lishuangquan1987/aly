@@ -1,19 +1,14 @@
-<Window
-    Height="400"
-    Title="变更日志"
-    Width="520"
-    WindowStartupLocation="CenterOwner"
-    x:Class="PublishTool.Views.Dialogs.ChangeLogsDialog"
-    x:DataType="vm:ChangeLogsDialogViewModel"
+<UserControl
+    x:Class="PublishTool.Views.Pages.ChangeLogsDialogView"
+    x:DataType="pages:ChangeLogsDialogViewModel"
     xmlns="https://github.com/avaloniaui"
     xmlns:m="using:PublishTool.Models"
+    xmlns:pages="clr-namespace:PublishTool.ViewModels.Pages"
     xmlns:semi="https://irihi.tech/semi"
-    xmlns:vm="using:PublishTool.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <Border Padding="24">
-        <Grid RowDefinitions="Auto,*,Auto">
-
+        <Grid RowDefinitions="Auto,*">
             <TextBlock
                 FontSize="18"
                 FontWeight="SemiBold"
@@ -69,15 +64,6 @@
                     </ItemsControl>
                 </StackPanel>
             </ScrollViewer>
-
-            <Button
-                Click="CloseButton_Click"
-                Content="关闭"
-                FontSize="13"
-                Grid.Row="2"
-                HorizontalAlignment="Right"
-                Margin="0,16,0,0" />
-
         </Grid>
     </Border>
-</Window>
+</UserControl>

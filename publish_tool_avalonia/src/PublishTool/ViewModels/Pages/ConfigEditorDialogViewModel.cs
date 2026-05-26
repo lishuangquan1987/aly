@@ -2,12 +2,11 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using PublishTool.Models.Local;
 using PublishTool.Services;
 using Serilog;
 
-namespace PublishTool.ViewModels;
+namespace PublishTool.ViewModels.Pages;
 
 public partial class ConfigEditorDialogViewModel : ObservableObject
 {
@@ -31,14 +30,13 @@ public partial class ConfigEditorDialogViewModel : ObservableObject
     public ProjectConfig GetUpdatedConfig()
     {
         _config.IgnoreFolders = new ObservableCollection<string>(
-            IgnoreFoldersText.Split('\n').Where(s => !string.IsNullOrWhiteSpace(s)));
+            Enumerable.Where<string>(IgnoreFoldersText.Split('\n'), s => !string.IsNullOrWhiteSpace(s)));
         _config.IgnoreFiles = new ObservableCollection<string>(
-            IgnoreFilesText.Split('\n').Where(s => !string.IsNullOrWhiteSpace(s)));
+            Enumerable.Where<string>(IgnoreFilesText.Split('\n'), s => !string.IsNullOrWhiteSpace(s)));
         return _config;
     }
 
-    [RelayCommand]
-    private void Save()
+    public void Save()
     {
         try
         {

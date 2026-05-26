@@ -1,14 +1,10 @@
-<Window
-    SizeToContent="Height"
-    Title="新建服务端项目"
-    Width="440"
-    WindowStartupLocation="CenterOwner"
-    x:Class="PublishTool.Views.Dialogs.AddServerProjectDialog"
-    x:DataType="vm:AddServerProjectDialogViewModel"
+<UserControl
+    x:Class="PublishTool.Views.Pages.AddServerProjectDialogView"
+    x:DataType="pages:AddServerProjectDialogViewModel"
     xmlns="https://github.com/avaloniaui"
     xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:pages="clr-namespace:PublishTool.ViewModels.Pages"
     xmlns:semi="https://irihi.tech/semi"
-    xmlns:vm="using:PublishTool.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <Border Padding="24">
@@ -136,28 +132,6 @@
                     IsVisible="{Binding StatusMessage, Converter={StaticResource StringNotEmptyConverter}}"
                     Text="{Binding StatusMessage}" />
             </StackPanel>
-
-            <Border
-                BorderBrush="{DynamicResource SemiColorBorder}"
-                BorderThickness="0,1,0,0"
-                Padding="0,16,0,0">
-                <StackPanel
-                    HorizontalAlignment="Right"
-                    Orientation="Horizontal"
-                    Spacing="8">
-                    <Button Click="CancelButton_Click" FontSize="13">取消</Button>
-                    <Button
-                        Classes="Primary"
-                        Command="{Binding CreateCommand}"
-                        FontSize="13"
-                        IsEnabled="{Binding !IsCreating}">
-                        <StackPanel Orientation="Horizontal" Spacing="4">
-                            <icons:MaterialIcon Foreground="White" Kind="PlusCircle" />
-                            <TextBlock Text="创建项目" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </Border>
         </StackPanel>
     </Border>
-</Window>
+</UserControl>

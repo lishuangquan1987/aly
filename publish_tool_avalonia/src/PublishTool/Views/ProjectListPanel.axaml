@@ -1,5 +1,5 @@
 <UserControl
-    x:Class="PublishTool.Views.Controls.ProjectListPanel"
+    x:Class="PublishTool.Views.ProjectListPanel"
     x:DataType="vm:MainWindowViewModel"
     x:Name="UC"
     xmlns="https://github.com/avaloniaui"
@@ -84,10 +84,9 @@
                         FontSize="12"
                         Grid.Column="0"
                         HorizontalContentAlignment="Center"
-                        Padding="0,6">
+                        Theme="{DynamicResource SolidButton}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <icons:MaterialIcon
-                                Foreground="White"
                                 Height="16"
                                 Kind="ServerPlus"
                                 Width="16" />
@@ -100,7 +99,7 @@
                         FontSize="12"
                         Grid.Column="1"
                         HorizontalContentAlignment="Center"
-                        Padding="0,6">
+                        Theme="{DynamicResource SolidButton}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <icons:MaterialIcon
                                 Foreground="{DynamicResource SemiColorText1}"
@@ -135,15 +134,17 @@
                 <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
                     <Setter Property="Background" Value="{DynamicResource SemiColorPrimary}" />
                     <Setter Property="CornerRadius" Value="8" />
+                    <Setter Property="Foreground" Value="White" />
                 </Style>
             </ListBox.Styles>
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="ml:ProjectConfig">
                     <Border
+                        Background="Transparent"
                         CornerRadius="8"
                         MinHeight="64"
                         Padding="12,10">
-                        <Grid RowDefinitions="Auto,Auto">
+                        <Grid RowDefinitions="Auto,Auto,Auto">
                             <!--  标题行  -->
                             <Grid
                                 ColumnDefinitions="Auto,*,Auto"
@@ -186,42 +187,41 @@
                                 </Border>
                             </Grid>
 
-                            <!--  信息行  -->
                             <StackPanel
                                 Grid.Row="1"
-                                Margin="40,4,0,0"
+                                Margin="2"
                                 Orientation="Horizontal"
-                                Spacing="12">
-                                <StackPanel Orientation="Horizontal" Spacing="3">
-                                    <icons:MaterialIcon
-                                        Foreground="{DynamicResource SemiColorText2}"
-                                        Height="11"
-                                        Kind="LinkVariant"
-                                        VerticalAlignment="Center"
-                                        Width="11" />
-                                    <TextBlock
-                                        FontSize="10"
-                                        Foreground="{DynamicResource SemiColorText2}"
-                                        MaxWidth="100"
-                                        Text="{Binding ServerUrl, TargetNullValue='未配置'}"
-                                        TextTrimming="CharacterEllipsis"
-                                        VerticalAlignment="Center" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="3">
-                                    <icons:MaterialIcon
-                                        Foreground="{DynamicResource SemiColorText2}"
-                                        Height="11"
-                                        Kind="FolderOutline"
-                                        VerticalAlignment="Center"
-                                        Width="11" />
-                                    <TextBlock
-                                        FontSize="10"
-                                        Foreground="{DynamicResource SemiColorText2}"
-                                        MaxWidth="100"
-                                        Text="{Binding LocalPath, TargetNullValue='未设置'}"
-                                        TextTrimming="CharacterEllipsis"
-                                        VerticalAlignment="Center" />
-                                </StackPanel>
+                                Spacing="3">
+                                <icons:MaterialIcon
+                                    Foreground="{DynamicResource SemiColorText2}"
+                                    Height="11"
+                                    Kind="LinkVariant"
+                                    VerticalAlignment="Center"
+                                    Width="11" />
+                                <TextBlock
+                                    FontSize="10"
+                                    Foreground="{DynamicResource SemiColorText2}"
+                                    Text="{Binding ServerUrl, TargetNullValue='未配置'}"
+                                    TextTrimming="CharacterEllipsis"
+                                    VerticalAlignment="Center" />
+                            </StackPanel>
+                            <StackPanel
+                                Grid.Row="2"
+                                Margin="2"
+                                Orientation="Horizontal"
+                                Spacing="3">
+                                <icons:MaterialIcon
+                                    Foreground="{DynamicResource SemiColorText2}"
+                                    Height="11"
+                                    Kind="FolderOutline"
+                                    VerticalAlignment="Center"
+                                    Width="11" />
+                                <TextBlock
+                                    FontSize="10"
+                                    Foreground="{DynamicResource SemiColorText2}"
+                                    Text="{Binding LocalPath, TargetNullValue='未设置'}"
+                                    TextTrimming="CharacterEllipsis"
+                                    VerticalAlignment="Center" />
                             </StackPanel>
                         </Grid>
 

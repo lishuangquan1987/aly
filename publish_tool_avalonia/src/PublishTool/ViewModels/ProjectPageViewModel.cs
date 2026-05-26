@@ -10,10 +10,14 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Flurl.Http;
 using Newtonsoft.Json;
+using Microsoft.Extensions.DependencyInjection;
 using PublishTool.Models;
 using PublishTool.Models.Local;
 using PublishTool.Services;
+using PublishTool.ViewModels.Pages;
+using PublishTool.Views.Pages;
 using Serilog;
+using Ursa.Controls;
 
 namespace PublishTool.ViewModels;
 
@@ -25,10 +29,6 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     private readonly ProcessService _processService;
     private CancellationTokenSource? _cts;
     private bool _disposed;
-
-    public event Func<Task>? SettingsRequested;
-    public event Func<Task>? ConfigEditorRequested;
-    public event Func<Task>? ChangeLogsRequested;
 
     [ObservableProperty]
     private ProjectConfig _config;
@@ -636,8 +636,13 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task ViewChangeLogs()
     {
-        if (ChangeLogsRequested != null)
-            await ChangeLogsRequested.Invoke();
+        var vm = new ChangeLogsDialogViewModel(ChangeLogs);
+        await Dialog.ShowStandardAsync<ChangeLogsDialogView, ChangeLogsDialogViewModel>(
+            vm, null, new DialogOptions()
+            {
+                Title = "变更日志",
+                Button = DialogButton.OK
+            });
     }
 
     [RelayCommand]
@@ -671,15 +676,36 @@ public partial class ProjectPageViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task OpenSettings()
     {
-        if (SettingsRequested != null)
-            await SettingsRequested.Invoke();
+        var configService = App.Services.GetRequiredService<ConfigService>();
+        var vm = new ProjectSettingsDialogViewModel(configService, Config);
+        var result = await Dialog.ShowStandardAsync<ProjectSettingsDialogView, ProjectSettingsDialogViewModel>(
+            vm, null, new DialogOptions()
+            {
+                Title = "项目设置",
+                Button = DialogButton.OK
+            });
+        if (result == DialogResult.OK)
+        {
+            vm.Save();
+            RefreshConfig();
+        }
     }
 
     [RelayCommand]
     private async Task OpenConfigEditor()
     {
-        if (ConfigEditorRequested != null)
-            await ConfigEditorRequested.Invoke();
+        var configService = App.Services.GetRequiredService<ConfigService>();
+        var vm = new ConfigEditorDialogViewModel(Config, configService);
+        var result = await Dialog.ShowStandardAsync<ConfigEditorDialogView, ConfigEditorDialogViewModel>(
+            vm, null, new DialogOptions()
+            {
+                Title = "忽略配置",
+                Button = DialogButton.OKCancel
+            });
+        if (result == DialogResult.OK)
+        {
+            vm.Save();
+        }
     }
 
     public void Dispose()

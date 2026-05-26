@@ -1,13 +1,9 @@
-<Window
-    SizeToContent="Height"
-    Title="忽略配置编辑"
-    Width="420"
-    WindowStartupLocation="CenterOwner"
-    x:Class="PublishTool.Views.Dialogs.ConfigEditorDialog"
-    x:DataType="vm:ConfigEditorDialogViewModel"
+<UserControl
+    x:Class="PublishTool.Views.Pages.ConfigEditorDialogView"
+    x:DataType="pages:ConfigEditorDialogViewModel"
     xmlns="https://github.com/avaloniaui"
+    xmlns:pages="clr-namespace:PublishTool.ViewModels.Pages"
     xmlns:semi="https://irihi.tech/semi"
-    xmlns:vm="using:PublishTool.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <Border Padding="24">
@@ -57,26 +53,6 @@
                     Text="{Binding IgnoreFilesText}" />
             </StackPanel>
 
-            <Border
-                BorderBrush="{DynamicResource SemiColorBorder}"
-                BorderThickness="0,1,0,0"
-                Padding="0,16,0,0">
-                <StackPanel
-                    HorizontalAlignment="Right"
-                    Orientation="Horizontal"
-                    Spacing="8">
-                    <Button
-                        Click="CancelButton_Click"
-                        Content="取消"
-                        FontSize="13" />
-                    <Button
-                        Classes="Primary"
-                        Command="{Binding SaveCommand}"
-                        Content="保存"
-                        FontSize="13" />
-                </StackPanel>
-            </Border>
-
         </StackPanel>
     </Border>
-</Window>
+</UserControl>

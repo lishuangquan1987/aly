@@ -11,9 +11,9 @@
     x:DataType="vm:MainWindowViewModel"
     x:Name="UC"
     xmlns="https://github.com/avaloniaui"
-    xmlns:controls="using:PublishTool.Views.Controls"
     xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
     xmlns:semi="https://irihi.tech/semi"
+    xmlns:views="clr-namespace:PublishTool.Views"
     xmlns:vm="using:PublishTool.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
@@ -89,7 +89,7 @@
             BorderThickness="0,0,1,0"
             Grid.Column="0"
             Grid.Row="1">
-            <controls:ProjectListPanel />
+            <views:ProjectListPanel />
         </Border>
 
         <!--  ===== 右侧：主内容区 =====  -->
@@ -129,7 +129,7 @@
                             </TabControl.Styles>
                             <TabControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6">
+                                    <Grid ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="6">
                                         <Border
                                             Background="{DynamicResource SemiColorPrimary}"
                                             CornerRadius="3"
@@ -147,18 +147,21 @@
                                             TextTrimming="CharacterEllipsis"
                                             VerticalAlignment="Center" />
                                         <Button
+                                            Background="Transparent"
                                             Classes="Tertiary"
                                             Command="{Binding #UC.((vm:MainWindowViewModel)DataContext).CloseTabCommand}"
                                             CommandParameter="{Binding}"
                                             Grid.Column="2"
-                                            Height="20"
+                                            Height="30"
                                             Padding="0"
                                             VerticalAlignment="Center"
-                                            Width="20">
+                                            Width="30">
                                             <icons:MaterialIcon
                                                 Foreground="{DynamicResource SemiColorText2}"
                                                 Height="14"
+                                                HorizontalAlignment="Center"
                                                 Kind="Close"
+                                                VerticalAlignment="Center"
                                                 Width="14" />
                                         </Button>
                                     </Grid>
