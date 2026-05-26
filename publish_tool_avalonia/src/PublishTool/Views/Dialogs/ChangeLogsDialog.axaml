@@ -1,66 +1,83 @@
-<semi:Window xmlns="https://github.com/avaloniaui"
-              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-              xmlns:semi="https://irihi.tech/semi"
-              xmlns:m="using:PublishTool.Models"
-              xmlns:vm="using:PublishTool.ViewModels"
-              x:Class="PublishTool.Views.Dialogs.ChangeLogsDialog"
-              x:DataType="vm:ChangeLogsDialogViewModel"
-              Title="变更日志" Width="520" Height="400"
-              WindowStartupLocation="CenterOwner">
+<Window
+    Height="400"
+    Title="变更日志"
+    Width="520"
+    WindowStartupLocation="CenterOwner"
+    x:Class="PublishTool.Views.Dialogs.ChangeLogsDialog"
+    x:DataType="vm:ChangeLogsDialogViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:m="using:PublishTool.Models"
+    xmlns:semi="https://irihi.tech/semi"
+    xmlns:vm="using:PublishTool.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <Border Padding="24">
-    <Grid RowDefinitions="Auto,*,Auto">
+    <Border Padding="24">
+        <Grid RowDefinitions="Auto,*,Auto">
 
-      <TextBlock Grid.Row="0" Text="变更日志"
-                 FontSize="18" FontWeight="SemiBold"
-                 Foreground="{DynamicResource SemiColorText0}"
-                 Margin="0,0,0,16"/>
+            <TextBlock
+                FontSize="18"
+                FontWeight="SemiBold"
+                Foreground="{DynamicResource SemiColorText0}"
+                Grid.Row="0"
+                Margin="0,0,0,16"
+                Text="变更日志" />
 
-      <ScrollViewer Grid.Row="1">
-        <StackPanel Spacing="12">
-          <ItemsControl ItemsSource="{Binding ChangeLogs}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="m:ProjectChangeLogDto">
-                <Border Background="{DynamicResource SemiColorBg0}"
-                        CornerRadius="6" Padding="12">
-                  <StackPanel Spacing="6">
-                    <Grid ColumnDefinitions="*,Auto">
-                      <TextBlock Grid.Column="0"
-                                 FontSize="13" FontWeight="SemiBold"
-                                 Foreground="{DynamicResource SemiColorText0}"
-                                 Text="{Binding Version, StringFormat='📦 v{0}'}"/>
-                      <TextBlock Grid.Column="1"
-                                 FontSize="11"
-                                 Foreground="{DynamicResource SemiColorText2}"
-                                 Text="{Binding CreatedAt}"/>
-                    </Grid>
-                    <Border Background="{DynamicResource SemiColorBg1}"
-                            CornerRadius="4" Padding="8">
-                      <ItemsControl ItemsSource="{Binding Logs}">
+            <ScrollViewer Grid.Row="1">
+                <StackPanel Spacing="12">
+                    <ItemsControl ItemsSource="{Binding ChangeLogs}">
                         <ItemsControl.ItemTemplate>
-                          <DataTemplate x:DataType="x:String">
-                            <TextBlock Text="{Binding}"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource SemiColorText1}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,2"/>
-                          </DataTemplate>
+                            <DataTemplate x:DataType="m:ProjectChangeLogDto">
+                                <Border
+                                    Background="{DynamicResource SemiColorBg0}"
+                                    CornerRadius="6"
+                                    Padding="12">
+                                    <StackPanel Spacing="6">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock
+                                                FontSize="13"
+                                                FontWeight="SemiBold"
+                                                Foreground="{DynamicResource SemiColorText0}"
+                                                Grid.Column="0"
+                                                Text="{Binding Version, StringFormat='📦 v{0}'}" />
+                                            <TextBlock
+                                                FontSize="11"
+                                                Foreground="{DynamicResource SemiColorText2}"
+                                                Grid.Column="1"
+                                                Text="{Binding CreatedAt}" />
+                                        </Grid>
+                                        <Border
+                                            Background="{DynamicResource SemiColorBg1}"
+                                            CornerRadius="4"
+                                            Padding="8">
+                                            <ItemsControl ItemsSource="{Binding Logs}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="x:String">
+                                                        <TextBlock
+                                                            FontSize="12"
+                                                            Foreground="{DynamicResource SemiColorText1}"
+                                                            Margin="0,2"
+                                                            Text="{Binding}"
+                                                            TextWrapping="Wrap" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
                         </ItemsControl.ItemTemplate>
-                      </ItemsControl>
-                    </Border>
-                  </StackPanel>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </StackPanel>
-      </ScrollViewer>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
 
-      <Button Grid.Row="2" Content="关闭"
-              FontSize="13"
-              HorizontalAlignment="Right" Margin="0,16,0,0"
-              Click="CloseButton_Click"/>
+            <Button
+                Click="CloseButton_Click"
+                Content="关闭"
+                FontSize="13"
+                Grid.Row="2"
+                HorizontalAlignment="Right"
+                Margin="0,16,0,0" />
 
-    </Grid>
-  </Border>
-</semi:Window>
+        </Grid>
+    </Border>
+</Window>

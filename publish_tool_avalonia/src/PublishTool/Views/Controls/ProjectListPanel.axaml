@@ -1,189 +1,318 @@
-<UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-             xmlns:ml="using:PublishTool.Models.Local"
-             xmlns:vm="using:PublishTool.ViewModels"
-             x:Class="PublishTool.Views.Controls.ProjectListPanel"
-             x:DataType="vm:MainWindowViewModel">
+<UserControl
+    x:Class="PublishTool.Views.Controls.ProjectListPanel"
+    x:DataType="vm:MainWindowViewModel"
+    x:Name="UC"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:ml="using:PublishTool.Models.Local"
+    xmlns:vm="using:PublishTool.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
 
-    <!-- Row 0: 标题区 -->
-    <Border Grid.Row="0" Padding="16,14,16,10"
+        <!--  Row 0: 标题区  -->
+        <Border
+            BorderBrush="{DynamicResource SemiColorBorder}"
             BorderThickness="0,0,0,1"
-            BorderBrush="{DynamicResource SemiColorBorder}">
-      <Grid ColumnDefinitions="Auto,*">
-        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Border CornerRadius="6" Width="26" Height="26"
-                  Background="{DynamicResource SemiColorPrimary}"
-                  VerticalAlignment="Center">
-            <icons:MaterialIcon Kind="FolderStar" Foreground="White" Width="16" Height="16"
-                                VerticalAlignment="Center" HorizontalAlignment="Center"/>
-          </Border>
-          <TextBlock Text="项目管理" FontSize="15" FontWeight="SemiBold"
-                     Foreground="{DynamicResource SemiColorText0}"
-                     VerticalAlignment="Center"/>
-        </StackPanel>
-      </Grid>
-    </Border>
-
-    <!-- Row 1: 操作区 -->
-    <Border Grid.Row="1" Padding="16,10,16,12"
-            BorderThickness="0,0,0,1"
-            BorderBrush="{DynamicResource SemiColorBorder}">
-      <StackPanel Spacing="8">
-        <Border CornerRadius="6" Padding="1"
-                BorderThickness="1" BorderBrush="{DynamicResource SemiColorBorder}"
-                Background="{DynamicResource SemiColorBg0}">
-          <Grid ColumnDefinitions="28,*">
-            <icons:MaterialIcon Grid.Column="0" Kind="Magnify" Width="16" Height="16"
-                                Foreground="{DynamicResource SemiColorText2}"
-                                VerticalAlignment="Center" HorizontalAlignment="Center"/>
-            <TextBox Grid.Column="1" Text="{Binding SearchText, Mode=TwoWay}"
-                     PlaceholderText="搜索项目..." FontSize="13"
-                     BorderThickness="0" Background="Transparent"/>
-          </Grid>
+            Grid.Row="0"
+            Padding="16,14,16,10">
+            <Grid ColumnDefinitions="Auto,*">
+                <StackPanel
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+                    <Border
+                        Background="{DynamicResource SemiColorPrimary}"
+                        CornerRadius="6"
+                        Height="26"
+                        VerticalAlignment="Center"
+                        Width="26">
+                        <icons:MaterialIcon
+                            Foreground="White"
+                            Height="16"
+                            HorizontalAlignment="Center"
+                            Kind="FolderStar"
+                            VerticalAlignment="Center"
+                            Width="16" />
+                    </Border>
+                    <TextBlock
+                        FontSize="15"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource SemiColorText0}"
+                        Text="项目管理"
+                        VerticalAlignment="Center" />
+                </StackPanel>
+            </Grid>
         </Border>
 
-        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-          <Button Grid.Column="0" Classes="Primary" FontSize="12"
-                  Command="{Binding AddServerProjectCommand}"
-                  HorizontalContentAlignment="Center" Padding="0,6">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <icons:MaterialIcon Kind="ServerPlus" Foreground="White" Width="16" Height="16"/>
-              <TextBlock Text="服务端项目" VerticalAlignment="Center"/>
-            </StackPanel>
-          </Button>
-          <Button Grid.Column="1" Classes="Tertiary" FontSize="12"
-                  Command="{Binding AddClientProjectCommand}"
-                  HorizontalContentAlignment="Center" Padding="0,6">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <icons:MaterialIcon Kind="FolderPlus" Width="16" Height="16"
-                                  Foreground="{DynamicResource SemiColorText1}"/>
-              <TextBlock Text="客户端项目" VerticalAlignment="Center"/>
-            </StackPanel>
-          </Button>
-        </Grid>
-      </StackPanel>
-    </Border>
-
-    <!-- Row 2: 项目列表 -->
-    <ListBox Grid.Row="2" ItemsSource="{Binding FilteredProjects}"
-             SelectedItem="{Binding SelectedProject}"
-             BorderThickness="0" Padding="6,8"
-             x:Name="ProjectListBox">
-      <ListBox.Styles>
-        <Style Selector="ListBoxItem">
-          <Setter Property="Padding" Value="0"/>
-          <Setter Property="Margin" Value="0,2"/>
-          <Setter Property="Background" Value="Transparent"/>
-          <Setter Property="CornerRadius" Value="8"/>
-        </Style>
-        <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
-          <Setter Property="Background" Value="{DynamicResource SemiColorFill0}"/>
-        </Style>
-        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-          <Setter Property="Background" Value="{DynamicResource SemiColorPrimary}"/>
-          <Setter Property="CornerRadius" Value="8"/>
-        </Style>
-      </ListBox.Styles>
-      <ListBox.ItemTemplate>
-        <DataTemplate x:DataType="ml:ProjectConfig">
-          <Border CornerRadius="8" Padding="12,10" MinHeight="64">
-            <Grid RowDefinitions="Auto,Auto">
-              <!-- 标题行 -->
-              <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-                <Border Grid.Column="0" CornerRadius="6" Width="32" Height="32"
-                        VerticalAlignment="Center"
-                        Background="{DynamicResource SemiColorPrimary}">
-                  <icons:MaterialIcon Kind="PackageVariantClosed" Foreground="White" Width="18" Height="18"
-                                      VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                </Border>
-                <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
-                           Foreground="{DynamicResource SemiColorText0}"
-                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                <Border Grid.Column="2" CornerRadius="4" Padding="6,2"
-                        Background="{DynamicResource SemiColorFill0}" VerticalAlignment="Center">
-                  <TextBlock Text="{Binding ServerId}" FontSize="10"
-                             Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-                </Border>
-              </Grid>
-
-              <!-- 信息行 -->
-              <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12" Margin="40,4,0,0">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                  <icons:MaterialIcon Kind="LinkVariant" Width="11" Height="11"
-                                      Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-                  <TextBlock Text="{Binding ServerUrl, TargetNullValue='未配置'}"
-                             FontSize="10" Foreground="{DynamicResource SemiColorText2}"
-                             TextTrimming="CharacterEllipsis" MaxWidth="100" VerticalAlignment="Center"/>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                  <icons:MaterialIcon Kind="FolderOutline" Width="11" Height="11"
-                                      Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-                  <TextBlock Text="{Binding LocalPath, TargetNullValue='未设置'}"
-                             FontSize="10" Foreground="{DynamicResource SemiColorText2}"
-                             TextTrimming="CharacterEllipsis" MaxWidth="100" VerticalAlignment="Center"/>
-                </StackPanel>
-              </StackPanel>
-            </Grid>
-
-            <!-- 右键菜单 -->
-            <Border.ContextMenu>
-              <ContextMenu>
-                <MenuItem Command="{Binding $parent[ListBox].DataContext.MoveUpProjectCommand}"
-                          CommandParameter="{Binding}" Header="上移排序">
-                  <MenuItem.Icon>
-                    <icons:MaterialIcon Kind="ChevronUp" Width="16" Height="16"/>
-                  </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Command="{Binding $parent[ListBox].DataContext.MoveDownProjectCommand}"
-                          CommandParameter="{Binding}" Header="下移排序">
-                  <MenuItem.Icon>
-                    <icons:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
-                  </MenuItem.Icon>
-                </MenuItem>
-                <Separator/>
-                <MenuItem Command="{Binding $parent[ListBox].DataContext.RemoveProjectCommand}"
-                          CommandParameter="{Binding}" Header="删除项目">
-                  <MenuItem.Icon>
-                    <icons:MaterialIcon Kind="DeleteOutline" Width="16" Height="16"/>
-                  </MenuItem.Icon>
-                </MenuItem>
-              </ContextMenu>
-            </Border.ContextMenu>
-          </Border>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
-
-    <!-- 空状态覆盖层 -->
-    <Panel x:Name="EmptyOverlay" IsVisible="False">
-      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
-                  Spacing="12" Opacity="0.4">
-        <icons:MaterialIcon Kind="FolderOff" Width="48" Height="48"
+        <!--  Row 1: 操作区  -->
+        <Border
+            BorderBrush="{DynamicResource SemiColorBorder}"
+            BorderThickness="0,0,0,1"
+            Grid.Row="1"
+            Padding="16,10,16,12">
+            <StackPanel Spacing="8">
+                <Border
+                    Background="{DynamicResource SemiColorBg0}"
+                    BorderBrush="{DynamicResource SemiColorBorder}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="1">
+                    <Grid ColumnDefinitions="28,*">
+                        <icons:MaterialIcon
                             Foreground="{DynamicResource SemiColorText2}"
-                            HorizontalAlignment="Center"/>
-        <StackPanel HorizontalAlignment="Center" Spacing="4">
-          <TextBlock Text="暂无项目" FontSize="14" FontWeight="SemiBold"
-                     Foreground="{DynamicResource SemiColorText2}"
-                     HorizontalAlignment="Center"/>
-          <TextBlock Text="点击上方按钮添加项目" FontSize="11"
-                     Foreground="{DynamicResource SemiColorText2}"
-                     HorizontalAlignment="Center"/>
-        </StackPanel>
-      </StackPanel>
-    </Panel>
+                            Grid.Column="0"
+                            Height="16"
+                            HorizontalAlignment="Center"
+                            Kind="Magnify"
+                            VerticalAlignment="Center"
+                            Width="16" />
+                        <TextBox
+                            Background="Transparent"
+                            BorderThickness="0"
+                            FontSize="13"
+                            Grid.Column="1"
+                            PlaceholderText="搜索项目..."
+                            Text="{Binding SearchText, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
 
-    <!-- 底部：快速操作提示 -->
-    <Border Grid.Row="3" BorderThickness="0,1,0,0"
-            BorderBrush="{DynamicResource SemiColorBorder}" Padding="16,8"
-            Background="{DynamicResource SemiColorBg0}">
-      <TextBlock FontSize="10" Foreground="{DynamicResource SemiColorText2}"
-                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
-        <Run Text="右键项目可排序或删除"/>
-      </TextBlock>
-    </Border>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                    <Button
+                        Classes="Primary"
+                        Command="{Binding AddServerProjectCommand}"
+                        FontSize="12"
+                        Grid.Column="0"
+                        HorizontalContentAlignment="Center"
+                        Padding="0,6">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <icons:MaterialIcon
+                                Foreground="White"
+                                Height="16"
+                                Kind="ServerPlus"
+                                Width="16" />
+                            <TextBlock Text="服务端项目" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        Classes="Tertiary"
+                        Command="{Binding AddClientProjectCommand}"
+                        FontSize="12"
+                        Grid.Column="1"
+                        HorizontalContentAlignment="Center"
+                        Padding="0,6">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <icons:MaterialIcon
+                                Foreground="{DynamicResource SemiColorText1}"
+                                Height="16"
+                                Kind="FolderPlus"
+                                Width="16" />
+                            <TextBlock Text="客户端项目" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </StackPanel>
+        </Border>
 
-  </Grid>
+        <!--  Row 2: 项目列表  -->
+        <ListBox
+            BorderThickness="0"
+            Grid.Row="2"
+            ItemsSource="{Binding FilteredProjects}"
+            Padding="6,8"
+            SelectedItem="{Binding SelectedProject}"
+            x:Name="ProjectListBox">
+            <ListBox.Styles>
+                <Style Selector="ListBoxItem">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0,2" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="CornerRadius" Value="8" />
+                </Style>
+                <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+                    <Setter Property="Background" Value="{DynamicResource SemiColorFill0}" />
+                </Style>
+                <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                    <Setter Property="Background" Value="{DynamicResource SemiColorPrimary}" />
+                    <Setter Property="CornerRadius" Value="8" />
+                </Style>
+            </ListBox.Styles>
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="ml:ProjectConfig">
+                    <Border
+                        CornerRadius="8"
+                        MinHeight="64"
+                        Padding="12,10">
+                        <Grid RowDefinitions="Auto,Auto">
+                            <!--  标题行  -->
+                            <Grid
+                                ColumnDefinitions="Auto,*,Auto"
+                                ColumnSpacing="8"
+                                Grid.Row="0">
+                                <Border
+                                    Background="{DynamicResource SemiColorPrimary}"
+                                    CornerRadius="6"
+                                    Grid.Column="0"
+                                    Height="32"
+                                    VerticalAlignment="Center"
+                                    Width="32">
+                                    <icons:MaterialIcon
+                                        Foreground="White"
+                                        Height="18"
+                                        HorizontalAlignment="Center"
+                                        Kind="PackageVariantClosed"
+                                        VerticalAlignment="Center"
+                                        Width="18" />
+                                </Border>
+                                <TextBlock
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource SemiColorText0}"
+                                    Grid.Column="1"
+                                    Text="{Binding Title}"
+                                    TextTrimming="CharacterEllipsis"
+                                    VerticalAlignment="Center" />
+                                <Border
+                                    Background="{DynamicResource SemiColorFill0}"
+                                    CornerRadius="4"
+                                    Grid.Column="2"
+                                    Padding="6,2"
+                                    VerticalAlignment="Center">
+                                    <TextBlock
+                                        FontSize="10"
+                                        Foreground="{DynamicResource SemiColorText2}"
+                                        Text="{Binding ServerId}"
+                                        VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
+
+                            <!--  信息行  -->
+                            <StackPanel
+                                Grid.Row="1"
+                                Margin="40,4,0,0"
+                                Orientation="Horizontal"
+                                Spacing="12">
+                                <StackPanel Orientation="Horizontal" Spacing="3">
+                                    <icons:MaterialIcon
+                                        Foreground="{DynamicResource SemiColorText2}"
+                                        Height="11"
+                                        Kind="LinkVariant"
+                                        VerticalAlignment="Center"
+                                        Width="11" />
+                                    <TextBlock
+                                        FontSize="10"
+                                        Foreground="{DynamicResource SemiColorText2}"
+                                        MaxWidth="100"
+                                        Text="{Binding ServerUrl, TargetNullValue='未配置'}"
+                                        TextTrimming="CharacterEllipsis"
+                                        VerticalAlignment="Center" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="3">
+                                    <icons:MaterialIcon
+                                        Foreground="{DynamicResource SemiColorText2}"
+                                        Height="11"
+                                        Kind="FolderOutline"
+                                        VerticalAlignment="Center"
+                                        Width="11" />
+                                    <TextBlock
+                                        FontSize="10"
+                                        Foreground="{DynamicResource SemiColorText2}"
+                                        MaxWidth="100"
+                                        Text="{Binding LocalPath, TargetNullValue='未设置'}"
+                                        TextTrimming="CharacterEllipsis"
+                                        VerticalAlignment="Center" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+
+                        <!--  右键菜单  -->
+                        <Border.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem
+                                    Command="{Binding #UC.((vm:MainWindowViewModel)DataContext).MoveUpProjectCommand}"
+                                    CommandParameter="{Binding}"
+                                    Header="上移排序">
+                                    <MenuItem.Icon>
+                                        <icons:MaterialIcon
+                                            Height="16"
+                                            Kind="ChevronUp"
+                                            Width="16" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem
+                                    Command="{Binding #UC.((vm:MainWindowViewModel)DataContext).MoveDownProjectCommand}"
+                                    CommandParameter="{Binding}"
+                                    Header="下移排序">
+                                    <MenuItem.Icon>
+                                        <icons:MaterialIcon
+                                            Height="16"
+                                            Kind="ChevronDown"
+                                            Width="16" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator />
+                                <MenuItem
+                                    Command="{Binding #UC.((vm:MainWindowViewModel)DataContext).RemoveProjectCommand}"
+                                    CommandParameter="{Binding}"
+                                    Header="删除项目">
+                                    <MenuItem.Icon>
+                                        <icons:MaterialIcon
+                                            Height="16"
+                                            Kind="DeleteOutline"
+                                            Width="16" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                            </ContextMenu>
+                        </Border.ContextMenu>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!--  空状态覆盖层  -->
+        <Panel IsVisible="False" x:Name="EmptyOverlay">
+            <StackPanel
+                HorizontalAlignment="Center"
+                Opacity="0.4"
+                Spacing="12"
+                VerticalAlignment="Center">
+                <icons:MaterialIcon
+                    Foreground="{DynamicResource SemiColorText2}"
+                    Height="48"
+                    HorizontalAlignment="Center"
+                    Kind="FolderOff"
+                    Width="48" />
+                <StackPanel HorizontalAlignment="Center" Spacing="4">
+                    <TextBlock
+                        FontSize="14"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource SemiColorText2}"
+                        HorizontalAlignment="Center"
+                        Text="暂无项目" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{DynamicResource SemiColorText2}"
+                        HorizontalAlignment="Center"
+                        Text="点击上方按钮添加项目" />
+                </StackPanel>
+            </StackPanel>
+        </Panel>
+
+        <!--  底部：快速操作提示  -->
+        <Border
+            Background="{DynamicResource SemiColorBg0}"
+            BorderBrush="{DynamicResource SemiColorBorder}"
+            BorderThickness="0,1,0,0"
+            Grid.Row="3"
+            Padding="16,8">
+            <TextBlock
+                FontSize="10"
+                Foreground="{DynamicResource SemiColorText2}"
+                TextTrimming="CharacterEllipsis"
+                VerticalAlignment="Center">
+                <Run Text="右键项目可排序或删除" />
+            </TextBlock>
+        </Border>
+
+    </Grid>
 </UserControl>

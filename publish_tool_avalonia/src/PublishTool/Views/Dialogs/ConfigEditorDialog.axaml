@@ -1,59 +1,82 @@
-<semi:Window xmlns="https://github.com/avaloniaui"
-              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-              xmlns:semi="https://irihi.tech/semi"
-              xmlns:vm="using:PublishTool.ViewModels"
-              x:Class="PublishTool.Views.Dialogs.ConfigEditorDialog"
-              x:DataType="vm:ConfigEditorDialogViewModel"
-              Title="忽略配置编辑" Width="420" SizeToContent="Height"
-              WindowStartupLocation="CenterOwner">
+<Window
+    SizeToContent="Height"
+    Title="忽略配置编辑"
+    Width="420"
+    WindowStartupLocation="CenterOwner"
+    x:Class="PublishTool.Views.Dialogs.ConfigEditorDialog"
+    x:DataType="vm:ConfigEditorDialogViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:semi="https://irihi.tech/semi"
+    xmlns:vm="using:PublishTool.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <Border Padding="24">
-    <StackPanel Spacing="20">
+    <Border Padding="24">
+        <StackPanel Spacing="20">
 
-      <TextBlock Text="忽略配置"
-                 FontSize="18" FontWeight="SemiBold"
-                 Foreground="{DynamicResource SemiColorText0}"/>
+            <TextBlock
+                FontSize="18"
+                FontWeight="SemiBold"
+                Foreground="{DynamicResource SemiColorText0}"
+                Text="忽略配置" />
 
-      <StackPanel Spacing="6">
-        <StackPanel Spacing="2">
-          <TextBlock Text="忽略文件夹" FontSize="12"
-                     Foreground="{DynamicResource SemiColorText0}"/>
-          <TextBlock Text="每行一个文件夹名称，扫描时将跳过这些目录"
-                     FontSize="11"
-                     Foreground="{DynamicResource SemiColorText2}"/>
+            <StackPanel Spacing="6">
+                <StackPanel Spacing="2">
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{DynamicResource SemiColorText0}"
+                        Text="忽略文件夹" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{DynamicResource SemiColorText2}"
+                        Text="每行一个文件夹名称，扫描时将跳过这些目录" />
+                </StackPanel>
+                <TextBox
+                    AcceptsReturn="True"
+                    FontSize="12"
+                    Height="100"
+                    PlaceholderText="bin&#xA;obj&#xA;.git"
+                    Text="{Binding IgnoreFoldersText}" />
+            </StackPanel>
+
+            <StackPanel Spacing="6">
+                <StackPanel Spacing="2">
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{DynamicResource SemiColorText0}"
+                        Text="忽略文件" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{DynamicResource SemiColorText2}"
+                        Text="每行一个文件名或扩展名（如 *.log），扫描时将跳过这些文件" />
+                </StackPanel>
+                <TextBox
+                    AcceptsReturn="True"
+                    FontSize="12"
+                    Height="100"
+                    PlaceholderText="thumbs.db&#xA;*.tmp&#xA;*.log"
+                    Text="{Binding IgnoreFilesText}" />
+            </StackPanel>
+
+            <Border
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="0,1,0,0"
+                Padding="0,16,0,0">
+                <StackPanel
+                    HorizontalAlignment="Right"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <Button
+                        Click="CancelButton_Click"
+                        Content="取消"
+                        FontSize="13" />
+                    <Button
+                        Classes="Primary"
+                        Command="{Binding SaveCommand}"
+                        Content="保存"
+                        FontSize="13" />
+                </StackPanel>
+            </Border>
+
         </StackPanel>
-        <TextBox AcceptsReturn="True" Height="100"
-                 Text="{Binding IgnoreFoldersText}"
-                 PlaceholderText="bin&#xA;obj&#xA;.git"
-                 FontSize="12"/>
-      </StackPanel>
-
-      <StackPanel Spacing="6">
-        <StackPanel Spacing="2">
-          <TextBlock Text="忽略文件" FontSize="12"
-                     Foreground="{DynamicResource SemiColorText0}"/>
-          <TextBlock Text="每行一个文件名或扩展名（如 *.log），扫描时将跳过这些文件"
-                     FontSize="11"
-                     Foreground="{DynamicResource SemiColorText2}"/>
-        </StackPanel>
-        <TextBox AcceptsReturn="True" Height="100"
-                 Text="{Binding IgnoreFilesText}"
-                 PlaceholderText="thumbs.db&#xA;*.tmp&#xA;*.log"
-                 FontSize="12"/>
-      </StackPanel>
-
-      <Border BorderThickness="0,1,0,0"
-              BorderBrush="{DynamicResource SemiColorBorder}"
-              Padding="0,16,0,0">
-        <StackPanel Orientation="Horizontal" Spacing="8"
-                    HorizontalAlignment="Right">
-          <Button Content="取消" FontSize="13"
-                  Click="CancelButton_Click"/>
-          <Button Content="保存" Classes="Primary" FontSize="13"
-                  Command="{Binding SaveCommand}"/>
-        </StackPanel>
-      </Border>
-
-    </StackPanel>
-  </Border>
-</semi:Window>
+    </Border>
+</Window>

@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 using Flurl.Http;
 using PublishTool.Models;
 using Serilog;

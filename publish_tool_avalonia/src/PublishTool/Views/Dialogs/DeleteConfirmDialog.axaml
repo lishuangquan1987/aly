@@ -1,42 +1,64 @@
-<semi:Window xmlns="https://github.com/avaloniaui"
-              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-              xmlns:semi="https://irihi.tech/semi"
-              xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-              xmlns:vm="using:PublishTool.ViewModels"
-              x:Class="PublishTool.Views.Dialogs.DeleteConfirmDialog"
-              x:DataType="vm:DeleteConfirmDialogViewModel"
-              Title="确认删除" Width="400" SizeToContent="Height"
-              WindowStartupLocation="CenterOwner">
+<Window
+    SizeToContent="Height"
+    Title="确认删除"
+    Width="400"
+    WindowStartupLocation="CenterOwner"
+    x:Class="PublishTool.Views.Dialogs.DeleteConfirmDialog"
+    x:DataType="vm:DeleteConfirmDialogViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:semi="https://irihi.tech/semi"
+    xmlns:vm="using:PublishTool.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <Border Padding="24">
-    <StackPanel Spacing="20">
-      <StackPanel Spacing="12">
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <Border Width="40" Height="40" CornerRadius="20"
-                  Background="{DynamicResource SemiColorDanger}">
-            <icons:MaterialIcon Kind="Alert" Foreground="White"></icons:MaterialIcon>
-          </Border>
-          <TextBlock Text="确认删除项目" FontSize="18" FontWeight="SemiBold"
-                     Foreground="{DynamicResource SemiColorDanger}" VerticalAlignment="Center"/>
-        </StackPanel>
-        <TextBlock FontSize="13" Foreground="{DynamicResource SemiColorText1}" TextWrapping="Wrap">
-          <Run Text="确定要删除项目「"/>
-          <Run Text="{Binding ProjectTitle}"/>
-          <Run Text="」吗？此操作不可撤销。"/>
-        </TextBlock>
-      </StackPanel>
-
-      <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SemiColorBorder}" Padding="0,16,0,0">
-        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-          <Button FontSize="13" Click="CancelButton_Click">取消</Button>
-          <Button Classes="Danger" FontSize="13" Click="ConfirmButton_Click">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-              <icons:MaterialIcon Kind="Delete" Foreground="White"></icons:MaterialIcon>
-              <TextBlock Text="确认删除"/>
+    <Border Padding="24">
+        <StackPanel Spacing="20">
+            <StackPanel Spacing="12">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Border
+                        Background="{DynamicResource SemiColorDanger}"
+                        CornerRadius="20"
+                        Height="40"
+                        Width="40">
+                        <icons:MaterialIcon Foreground="White" Kind="Alert" />
+                    </Border>
+                    <TextBlock
+                        FontSize="18"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource SemiColorDanger}"
+                        Text="确认删除项目"
+                        VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock
+                    FontSize="13"
+                    Foreground="{DynamicResource SemiColorText1}"
+                    TextWrapping="Wrap">
+                    <Run Text="确定要删除项目「" />
+                    <Run Text="{Binding ProjectTitle}" />
+                    <Run Text="」吗？此操作不可撤销。" />
+                </TextBlock>
             </StackPanel>
-          </Button>
+
+            <Border
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="0,1,0,0"
+                Padding="0,16,0,0">
+                <StackPanel
+                    HorizontalAlignment="Right"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <Button Click="CancelButton_Click" FontSize="13">取消</Button>
+                    <Button
+                        Classes="Danger"
+                        Click="ConfirmButton_Click"
+                        FontSize="13">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <icons:MaterialIcon Foreground="White" Kind="Delete" />
+                            <TextBlock Text="确认删除" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Border>
         </StackPanel>
-      </Border>
-    </StackPanel>
-  </Border>
-</semi:Window>
+    </Border>
+</Window>

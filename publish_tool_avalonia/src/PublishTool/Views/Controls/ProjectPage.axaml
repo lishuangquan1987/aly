@@ -1,412 +1,820 @@
-<UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:PublishTool.ViewModels"
-             xmlns:ml="using:PublishTool.Models.Local"
-             x:Class="PublishTool.Views.Controls.ProjectPage"
-             x:DataType="vm:ProjectPageViewModel"
-             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-             Background="{DynamicResource SemiColorBg1}">
+<UserControl
+    Background="{DynamicResource SemiColorBg1}"
+    x:Class="PublishTool.Views.Controls.ProjectPage"
+    x:DataType="vm:ProjectPageViewModel"
+    x:Name="UC"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:ml="using:PublishTool.Models.Local"
+    xmlns:vm="using:PublishTool.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <Grid RowDefinitions="44,*,28">
+    <Grid RowDefinitions="44,*,28">
 
-    <!-- ===== 工具栏 ===== -->
-    <Border Grid.Row="0" Background="{DynamicResource SemiColorBg0}"
-            BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SemiColorBorder}" Padding="12,0">
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" VerticalAlignment="Center">
-        <!-- 刷新 -->
-        <Button Grid.Column="0" FontSize="12" Padding="10,4"
-                Command="{Binding RefreshStatusCommand}" IsEnabled="{Binding IsRefreshEnabled}"
-                ToolTip.Tip="对比本地与服务器文件差异">
-          <StackPanel Orientation="Horizontal" Spacing="5">
-            <icons:MaterialIcon Kind="Refresh" Width="16" Height="16"/>
-            <TextBlock Text="刷新对比"/>
-          </StackPanel>
-        </Button>
+        <!--  ===== 工具栏 =====  -->
+        <Border
+            Background="{DynamicResource SemiColorBg0}"
+            BorderBrush="{DynamicResource SemiColorBorder}"
+            BorderThickness="0,0,0,1"
+            Grid.Row="0"
+            Padding="12,0">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" VerticalAlignment="Center">
+                <!--  刷新  -->
+                <Button
+                    Command="{Binding RefreshStatusCommand}"
+                    FontSize="12"
+                    Grid.Column="0"
+                    IsEnabled="{Binding IsRefreshEnabled}"
+                    Padding="10,4"
+                    ToolTip.Tip="对比本地与服务器文件差异">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <icons:MaterialIcon
+                            Height="16"
+                            Kind="Refresh"
+                            Width="16" />
+                        <TextBlock Text="刷新对比" />
+                    </StackPanel>
+                </Button>
 
-        <!-- 推送 (主操作) -->
-        <Button Grid.Column="1" Classes="Primary" FontSize="12" Padding="10,4" Margin="8,0,0,0"
-                Command="{Binding PushAllCommand}" IsEnabled="{Binding !IsUploading}"
-                ToolTip.Tip="将上传队列中的文件推送到服务器">
-          <StackPanel Orientation="Horizontal" Spacing="5">
-            <icons:MaterialIcon Kind="CloudUpload" Foreground="White" Width="16" Height="16"/>
-            <TextBlock Text="推送更新" Foreground="White"/>
-          </StackPanel>
-        </Button>
+                <!--  推送 (主操作)  -->
+                <Button
+                    Classes="Primary"
+                    Command="{Binding PushAllCommand}"
+                    FontSize="12"
+                    Grid.Column="1"
+                    IsEnabled="{Binding !IsUploading}"
+                    Margin="8,0,0,0"
+                    Padding="10,4"
+                    ToolTip.Tip="将上传队列中的文件推送到服务器">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <icons:MaterialIcon
+                            Foreground="White"
+                            Height="16"
+                            Kind="CloudUpload"
+                            Width="16" />
+                        <TextBlock Foreground="White" Text="推送更新" />
+                    </StackPanel>
+                </Button>
 
-        <!-- 版本信息 -->
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
-                    HorizontalAlignment="Center" VerticalAlignment="Center">
-          <Border CornerRadius="4" Padding="6,2" Background="{DynamicResource SemiColorFill0}">
-            <StackPanel Orientation="Horizontal" Spacing="3">
-              <icons:MaterialIcon Kind="TagOutline" Width="13" Height="13"
-                                  Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
-              <TextBlock FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"
-                         Text="{Binding ServerVersion, StringFormat='v{0}', TargetNullValue='-'}"
-                         VerticalAlignment="Center"/>
-            </StackPanel>
-          </Border>
-          <Border CornerRadius="4" Padding="6,2" Background="{DynamicResource SemiColorFill0}"
-                  ToolTip.Tip="{Binding ServerOsInfo, Converter={StaticResource DiskInfoTooltipConverter}}">
-            <StackPanel Orientation="Horizontal" Spacing="3">
-              <icons:MaterialIcon Kind="Harddisk" Width="13" Height="13"
-                                  Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-              <TextBlock FontSize="11" Foreground="{DynamicResource SemiColorText2}"
-                         Text="{Binding ServerOsInfo.DiskUsedPercent, StringFormat='{}{0:F0}%', TargetNullValue='-'}"
-                         VerticalAlignment="Center"/>
-            </StackPanel>
-          </Border>
-        </StackPanel>
+                <!--  版本信息  -->
+                <StackPanel
+                    Grid.Column="2"
+                    HorizontalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="6"
+                    VerticalAlignment="Center">
+                    <Border
+                        Background="{DynamicResource SemiColorFill0}"
+                        CornerRadius="4"
+                        Padding="6,2">
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <icons:MaterialIcon
+                                Foreground="{DynamicResource SemiColorPrimary}"
+                                Height="13"
+                                Kind="TagOutline"
+                                VerticalAlignment="Center"
+                                Width="13" />
+                            <TextBlock
+                                FontSize="11"
+                                Foreground="{DynamicResource SemiColorPrimary}"
+                                Text="{Binding ServerVersion, StringFormat='v{0}', TargetNullValue='-'}"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                    <Border
+                        Background="{DynamicResource SemiColorFill0}"
+                        CornerRadius="4"
+                        Padding="6,2"
+                        ToolTip.Tip="{Binding ServerOsInfo, Converter={StaticResource DiskInfoTooltipConverter}}">
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <icons:MaterialIcon
+                                Foreground="{DynamicResource SemiColorText2}"
+                                Height="13"
+                                Kind="Harddisk"
+                                VerticalAlignment="Center"
+                                Width="13" />
+                            <TextBlock
+                                FontSize="11"
+                                Foreground="{DynamicResource SemiColorText2}"
+                                Text="{Binding ServerOsInfo.DiskUsedPercent, StringFormat='{}{0:F0}%', TargetNullValue='-'}"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
 
-        <!-- 工具按钮组 -->
-        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2">
-          <Border Width="1" Height="20" Background="{DynamicResource SemiColorBorder}" Margin="4,0"/>
-          <Button Width="32" Height="32" Classes="Tertiary" Padding="0"
-                  HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                  Command="{Binding OpenSettingsCommand}" ToolTip.Tip="项目设置">
-            <icons:MaterialIcon Kind="Cog" Width="18" Height="18"/>
-          </Button>
-          <Button Width="32" Height="32" Classes="Tertiary" Padding="0"
-                  HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                  Command="{Binding ViewChangeLogsCommand}" ToolTip.Tip="变更日志">
-            <icons:MaterialIcon Kind="History" Width="18" Height="18"/>
-          </Button>
-          <Button Width="32" Height="32" Classes="Tertiary" Padding="0"
-                  HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                  Command="{Binding BuildCommand}" ToolTip.Tip="打包为 zip">
-            <icons:MaterialIcon Kind="Archive" Width="18" Height="18"/>
-          </Button>
-          <Button Width="32" Height="32" Classes="Tertiary" Padding="0"
-                  HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                  Command="{Binding OpenExplorerCommand}" ToolTip.Tip="打开项目目录">
-            <icons:MaterialIcon Kind="FolderOpen" Width="18" Height="18"/>
-          </Button>
-          <Button Width="32" Height="32" Classes="Tertiary" Padding="0"
-                  HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                  Command="{Binding OpenConfigEditorCommand}" ToolTip.Tip="忽略配置">
-            <icons:MaterialIcon Kind="FilterVariant" Width="18" Height="18"/>
-          </Button>
-        </StackPanel>
+                <!--  工具按钮组  -->
+                <StackPanel
+                    Grid.Column="3"
+                    Orientation="Horizontal"
+                    Spacing="2">
+                    <Border
+                        Background="{DynamicResource SemiColorBorder}"
+                        Height="20"
+                        Margin="4,0"
+                        Width="1" />
+                    <Button
+                        Classes="Tertiary"
+                        Command="{Binding OpenSettingsCommand}"
+                        Height="32"
+                        HorizontalContentAlignment="Center"
+                        Padding="0"
+                        ToolTip.Tip="项目设置"
+                        VerticalContentAlignment="Center"
+                        Width="32">
+                        <icons:MaterialIcon
+                            Height="18"
+                            Kind="Cog"
+                            Width="18" />
+                    </Button>
+                    <Button
+                        Classes="Tertiary"
+                        Command="{Binding ViewChangeLogsCommand}"
+                        Height="32"
+                        HorizontalContentAlignment="Center"
+                        Padding="0"
+                        ToolTip.Tip="变更日志"
+                        VerticalContentAlignment="Center"
+                        Width="32">
+                        <icons:MaterialIcon
+                            Height="18"
+                            Kind="History"
+                            Width="18" />
+                    </Button>
+                    <Button
+                        Classes="Tertiary"
+                        Command="{Binding BuildCommand}"
+                        Height="32"
+                        HorizontalContentAlignment="Center"
+                        Padding="0"
+                        ToolTip.Tip="打包为 zip"
+                        VerticalContentAlignment="Center"
+                        Width="32">
+                        <icons:MaterialIcon
+                            Height="18"
+                            Kind="Archive"
+                            Width="18" />
+                    </Button>
+                    <Button
+                        Classes="Tertiary"
+                        Command="{Binding OpenExplorerCommand}"
+                        Height="32"
+                        HorizontalContentAlignment="Center"
+                        Padding="0"
+                        ToolTip.Tip="打开项目目录"
+                        VerticalContentAlignment="Center"
+                        Width="32">
+                        <icons:MaterialIcon
+                            Height="18"
+                            Kind="FolderOpen"
+                            Width="18" />
+                    </Button>
+                    <Button
+                        Classes="Tertiary"
+                        Command="{Binding OpenConfigEditorCommand}"
+                        Height="32"
+                        HorizontalContentAlignment="Center"
+                        Padding="0"
+                        ToolTip.Tip="忽略配置"
+                        VerticalContentAlignment="Center"
+                        Width="32">
+                        <icons:MaterialIcon
+                            Height="18"
+                            Kind="FilterVariant"
+                            Width="18" />
+                    </Button>
+                </StackPanel>
 
-        <!-- Loading 指示器 -->
-        <Border Grid.Column="4" CornerRadius="4" Padding="6,2"
-                Background="{DynamicResource SemiColorFill0}"
-                IsVisible="{Binding !IsRefreshEnabled}"
-                VerticalAlignment="Center" Margin="8,0,0,0">
-          <StackPanel Orientation="Horizontal" Spacing="4">
-            <icons:MaterialIcon Kind="Loading" Foreground="{DynamicResource SemiColorPrimary}"
-                                Width="14" Height="14" VerticalAlignment="Center"/>
-            <TextBlock Text="加载中..." FontSize="11"
-                       Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
-          </StackPanel>
+                <!--  Loading 指示器  -->
+                <Border
+                    Background="{DynamicResource SemiColorFill0}"
+                    CornerRadius="4"
+                    Grid.Column="4"
+                    IsVisible="{Binding !IsRefreshEnabled}"
+                    Margin="8,0,0,0"
+                    Padding="6,2"
+                    VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <icons:MaterialIcon
+                            Foreground="{DynamicResource SemiColorPrimary}"
+                            Height="14"
+                            Kind="Loading"
+                            VerticalAlignment="Center"
+                            Width="14" />
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{DynamicResource SemiColorPrimary}"
+                            Text="加载中..."
+                            VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+            </Grid>
         </Border>
-      </Grid>
-    </Border>
 
-    <!-- ===== 主内容区 ===== -->
-    <Grid Grid.Row="1" ColumnDefinitions="3*,2*" ColumnSpacing="0">
+        <!--  ===== 主内容区 =====  -->
+        <Grid
+            ColumnDefinitions="3*,2*"
+            ColumnSpacing="0"
+            Grid.Row="1">
 
-      <!-- 左栏：文件对比面板 -->
-      <Border Grid.Column="0" Margin="12,10,6,10" CornerRadius="8"
-              BorderThickness="1" BorderBrush="{DynamicResource SemiColorBorder}"
-              Background="{DynamicResource SemiColorBg1}">
-        <Grid RowDefinitions="Auto,Auto,*,Auto">
+            <!--  左栏：文件对比面板  -->
+            <Border
+                Background="{DynamicResource SemiColorBg1}"
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Grid.Column="0"
+                Margin="12,10,6,10">
+                <Grid RowDefinitions="Auto,Auto,*,Auto">
 
-          <!-- 标题区 -->
-          <Border Grid.Row="0" Padding="14,10" BorderThickness="0,0,0,1"
-                  BorderBrush="{DynamicResource SemiColorBorder}">
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                <icons:MaterialIcon Kind="FileCompare" Foreground="{DynamicResource SemiColorPrimary}"
-                                    Width="18" Height="18"/>
-                <TextBlock Text="文件对比" FontSize="14" FontWeight="SemiBold"
-                           Foreground="{DynamicResource SemiColorText0}"/>
-                <Border CornerRadius="8" Padding="6,1" Background="{DynamicResource SemiColorFill0}">
-                  <TextBlock Text="{Binding LocalFiles.Count, StringFormat='{}{0}'}"
-                             FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
-                </Border>
-              </StackPanel>
-            </Grid>
-          </Border>
-
-          <!-- 图例 + 操作栏 -->
-          <Border Grid.Row="1" Padding="14,8" BorderThickness="0,0,0,1"
-                  BorderBrush="{DynamicResource SemiColorBorder}">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-              <!-- 图例 -->
-              <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                  <Border Width="8" Height="8" CornerRadius="2" Background="{DynamicResource SemiColorSuccess}"/>
-                  <TextBlock FontSize="10" Foreground="{DynamicResource SemiColorText2}" Text="无变化"/>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                  <Border Width="8" Height="8" CornerRadius="2" Background="{DynamicResource SemiColorWarning}"/>
-                  <TextBlock FontSize="10" Foreground="{DynamicResource SemiColorText2}" Text="已修改"/>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                  <Border Width="8" Height="8" CornerRadius="2" Background="{DynamicResource SemiColorPrimary}"/>
-                  <TextBlock FontSize="10" Foreground="{DynamicResource SemiColorText2}" Text="新增"/>
-                </StackPanel>
-              </StackPanel>
-              <!-- 操作按钮 -->
-              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                <Border CornerRadius="6" Padding="1" BorderThickness="1" BorderBrush="{DynamicResource SemiColorBorder}"
-                        Background="{DynamicResource SemiColorBg0}">
-                  <Grid ColumnDefinitions="24,*">
-                    <icons:MaterialIcon Kind="Magnify" Width="14" Height="14"
+                    <!--  标题区  -->
+                    <Border
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="0,0,0,1"
+                        Grid.Row="0"
+                        Padding="14,10">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                            <StackPanel
+                                Orientation="Horizontal"
+                                Spacing="6"
+                                VerticalAlignment="Center">
+                                <icons:MaterialIcon
+                                    Foreground="{DynamicResource SemiColorPrimary}"
+                                    Height="18"
+                                    Kind="FileCompare"
+                                    Width="18" />
+                                <TextBlock
+                                    FontSize="14"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource SemiColorText0}"
+                                    Text="文件对比" />
+                                <Border
+                                    Background="{DynamicResource SemiColorFill0}"
+                                    CornerRadius="8"
+                                    Padding="6,1">
+                                    <TextBlock
+                                        FontSize="10"
                                         Foreground="{DynamicResource SemiColorText2}"
-                                        VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                    <TextBox Grid.Column="1" Text="{Binding FileFilterText}" PlaceholderText="搜索..."
-                             FontSize="11" BorderThickness="0" Background="Transparent" Padding="0,2"/>
-                  </Grid>
-                </Border>
-                <CheckBox Content="全选" FontSize="11" IsChecked="{Binding IsAllSelected}" VerticalAlignment="Center"/>
-                <Button FontSize="11" Classes="Primary" Padding="8,3"
-                        Command="{Binding SelectAllChangedCommand}" ToolTip.Tip="选中所有差异文件">
-                  <StackPanel Orientation="Horizontal" Spacing="3">
-                    <icons:MaterialIcon Kind="SelectAll" Width="14" Height="14" Foreground="White"/>
-                    <TextBlock Text="选中差异" Foreground="White"/>
-                  </StackPanel>
-                </Button>
-                <Button FontSize="11" Classes="Primary" Padding="8,3"
-                        Command="{Binding AddToUploadQueueCommand}" ToolTip.Tip="将选中文件加入上传队列">
-                  <StackPanel Orientation="Horizontal" Spacing="3">
-                    <icons:MaterialIcon Kind="ArrowRightBold" Width="14" Height="14" Foreground="White"/>
-                    <TextBlock Text="加入队列" Foreground="White"/>
-                  </StackPanel>
-                </Button>
-              </StackPanel>
-            </Grid>
-          </Border>
+                                        Text="{Binding LocalFiles.Count, StringFormat='{}{0}'}" />
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
 
-          <!-- 列表区 -->
-          <ScrollViewer Grid.Row="2">
-            <ItemsControl ItemsSource="{Binding LocalFiles}" Padding="4">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="ml:LocalFileItem">
-                  <Border Padding="12,6" Margin="2,1" CornerRadius="4"
-                          Background="Transparent">
-                    <Border.Styles>
-                      <Style Selector="Border:pointerover">
-                        <Setter Property="Background" Value="{DynamicResource SemiColorFill0}"/>
-                      </Style>
-                    </Border.Styles>
-                    <Grid ColumnDefinitions="24,Auto,*,Auto,Auto" ColumnSpacing="8">
-                      <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}" VerticalAlignment="Center"/>
-                      <Border Grid.Column="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center"
-                              Background="{Binding CompareStatus, Converter={StaticResource StatusToColorConverter}}">
-                        <TextBlock FontSize="9" Foreground="White"
-                                   Text="{Binding CompareStatus, Converter={StaticResource CompareStatusConverter}}"/>
-                      </Border>
-                      <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="0">
-                        <TextBlock Text="{Binding FileName}" FontSize="12.5"
-                                   Foreground="{DynamicResource SemiColorText0}" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Text="{Binding RelativePath}" FontSize="10"
-                                   Foreground="{DynamicResource SemiColorText2}"
-                                   TextTrimming="CharacterEllipsis"/>
-                      </StackPanel>
-                      <TextBlock Grid.Column="3"
-                                 Text="{Binding FileSize, Converter={StaticResource BytesToSizeConverter}}"
-                                 FontSize="10" Foreground="{DynamicResource SemiColorText2}"
-                                 VerticalAlignment="Center" HorizontalAlignment="Right" MinWidth="48"/>
-                      <TextBlock Grid.Column="4"
-                                 Text="{Binding LastModified, StringFormat='{}{0:MM-dd HH:mm}'}"
-                                 FontSize="10" Foreground="{DynamicResource SemiColorText2}"
-                                 VerticalAlignment="Center" HorizontalAlignment="Right" MinWidth="72"/>
-                    </Grid>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </ScrollViewer>
-
-          <!-- 底部操作栏 -->
-          <Border Grid.Row="3" Padding="14,6" BorderThickness="0,1,0,0"
-                  BorderBrush="{DynamicResource SemiColorBorder}" Background="{DynamicResource SemiColorBg0}">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button FontSize="11" Command="{Binding ScanLocalFilesCommand}" Padding="8,4">
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                  <icons:MaterialIcon Kind="FolderSearch" Width="14" Height="14"/>
-                  <TextBlock Text="重新扫描"/>
-                </StackPanel>
-              </Button>
-              <Button Classes="Tertiary" FontSize="11" Command="{Binding StopCommand}" Padding="8,4"
-                      Foreground="{DynamicResource SemiColorDanger}">
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                  <icons:MaterialIcon Kind="Stop" Foreground="{DynamicResource SemiColorDanger}" Width="14" Height="14"/>
-                  <TextBlock Text="停止" Foreground="{DynamicResource SemiColorDanger}"/>
-                </StackPanel>
-              </Button>
-            </StackPanel>
-          </Border>
-        </Grid>
-      </Border>
-
-      <!-- 右栏：上传面板 -->
-      <Border Grid.Column="1" Margin="6,10,12,10" CornerRadius="8"
-              BorderThickness="1" BorderBrush="{DynamicResource SemiColorBorder}"
-              Background="{DynamicResource SemiColorBg1}"
-              MinWidth="280">
-        <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
-
-          <!-- 标题区 -->
-          <Border Grid.Row="0" Padding="14,10" BorderThickness="0,0,0,1"
-                  BorderBrush="{DynamicResource SemiColorBorder}">
-            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-              <icons:MaterialIcon Kind="Upload" Width="18" Height="18"
-                                  Foreground="{DynamicResource SemiColorPrimary}"/>
-              <TextBlock Text="上传队列" FontSize="14" FontWeight="SemiBold"
-                         Foreground="{DynamicResource SemiColorText0}"/>
-              <Border CornerRadius="8" Padding="6,1" Background="{DynamicResource SemiColorFill0}">
-                <TextBlock Text="{Binding UploadFiles.Count, StringFormat='{}{0}'}"
-                           FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
-              </Border>
-            </StackPanel>
-          </Border>
-
-          <!-- 版本 & 日志区 -->
-          <Border Grid.Row="1" Padding="14,10" BorderThickness="0,0,0,1"
-                  BorderBrush="{DynamicResource SemiColorBorder}">
-            <StackPanel Spacing="8">
-              <!-- 版本输入 -->
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
-                <Border Grid.Column="0" CornerRadius="6" Padding="1"
-                        BorderThickness="1" BorderBrush="{DynamicResource SemiColorBorder}">
-                  <Grid ColumnDefinitions="28,*">
-                    <icons:MaterialIcon Kind="TagOutline" Width="14" Height="14"
+                    <!--  图例 + 操作栏  -->
+                    <Border
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="0,0,0,1"
+                        Grid.Row="1"
+                        Padding="14,8">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <!--  图例  -->
+                            <StackPanel
+                                Grid.Column="0"
+                                Orientation="Horizontal"
+                                Spacing="10"
+                                VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="3">
+                                    <Border
+                                        Background="{DynamicResource SemiColorSuccess}"
+                                        CornerRadius="2"
+                                        Height="8"
+                                        Width="8" />
+                                    <TextBlock
+                                        FontSize="10"
                                         Foreground="{DynamicResource SemiColorText2}"
-                                        VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                    <TextBox Grid.Column="1" Text="{Binding NewVersion}" PlaceholderText="版本号 (如: 2.1.0)"
-                             FontSize="12" BorderThickness="0" Background="Transparent" Padding="0,4"/>
-                  </Grid>
-                </Border>
-                <Button Grid.Column="1" FontSize="11" Padding="6,4" Command="{Binding AutoGenerateVersionCommand}"
-                        ToolTip.Tip="自动生成版本号">
-                  <StackPanel Orientation="Horizontal" Spacing="3">
-                    <icons:MaterialIcon Kind="ClockOutline" Width="14" Height="14"/>
-                    <TextBlock Text="自动"/>
-                  </StackPanel>
-                </Button>
-              </Grid>
-              <!-- 更新日志 -->
-              <Border CornerRadius="6" Padding="1"
-                      BorderThickness="1" BorderBrush="{DynamicResource SemiColorBorder}">
-                <TextBox Text="{Binding ChangeLogText}" PlaceholderText="描述本次更新内容..."
-                         FontSize="11" AcceptsReturn="True" TextWrapping="Wrap" Height="48"
-                         BorderThickness="0" Background="Transparent" Padding="8,4"/>
-              </Border>
-              <CheckBox Content="追加到最新版本" FontSize="11" IsChecked="{Binding AppendToLatestVersion}"/>
-              <CheckBox Content="推送后自动刷新" FontSize="11" IsChecked="{Binding AutoRefreshAfterPush}"/>
-            </StackPanel>
-          </Border>
+                                        Text="无变化" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="3">
+                                    <Border
+                                        Background="{DynamicResource SemiColorWarning}"
+                                        CornerRadius="2"
+                                        Height="8"
+                                        Width="8" />
+                                    <TextBlock
+                                        FontSize="10"
+                                        Foreground="{DynamicResource SemiColorText2}"
+                                        Text="已修改" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="3">
+                                    <Border
+                                        Background="{DynamicResource SemiColorPrimary}"
+                                        CornerRadius="2"
+                                        Height="8"
+                                        Width="8" />
+                                    <TextBlock
+                                        FontSize="10"
+                                        Foreground="{DynamicResource SemiColorText2}"
+                                        Text="新增" />
+                                </StackPanel>
+                            </StackPanel>
+                            <!--  操作按钮  -->
+                            <StackPanel
+                                Grid.Column="1"
+                                Orientation="Horizontal"
+                                Spacing="6">
+                                <Border
+                                    Background="{DynamicResource SemiColorBg0}"
+                                    BorderBrush="{DynamicResource SemiColorBorder}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="1">
+                                    <Grid ColumnDefinitions="24,*">
+                                        <icons:MaterialIcon
+                                            Foreground="{DynamicResource SemiColorText2}"
+                                            Height="14"
+                                            HorizontalAlignment="Center"
+                                            Kind="Magnify"
+                                            VerticalAlignment="Center"
+                                            Width="14" />
+                                        <TextBox
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            FontSize="11"
+                                            Grid.Column="1"
+                                            Padding="0,2"
+                                            PlaceholderText="搜索..."
+                                            Text="{Binding FileFilterText}" />
+                                    </Grid>
+                                </Border>
+                                <CheckBox
+                                    Content="全选"
+                                    FontSize="11"
+                                    IsChecked="{Binding IsAllSelected}"
+                                    VerticalAlignment="Center" />
+                                <Button
+                                    Classes="Primary"
+                                    Command="{Binding SelectAllChangedCommand}"
+                                    FontSize="11"
+                                    Padding="8,3"
+                                    ToolTip.Tip="选中所有差异文件">
+                                    <StackPanel Orientation="Horizontal" Spacing="3">
+                                        <icons:MaterialIcon
+                                            Foreground="White"
+                                            Height="14"
+                                            Kind="SelectAll"
+                                            Width="14" />
+                                        <TextBlock Foreground="White" Text="选中差异" />
+                                    </StackPanel>
+                                </Button>
+                                <Button
+                                    Classes="Primary"
+                                    Command="{Binding AddToUploadQueueCommand}"
+                                    FontSize="11"
+                                    Padding="8,3"
+                                    ToolTip.Tip="将选中文件加入上传队列">
+                                    <StackPanel Orientation="Horizontal" Spacing="3">
+                                        <icons:MaterialIcon
+                                            Foreground="White"
+                                            Height="14"
+                                            Kind="ArrowRightBold"
+                                            Width="14" />
+                                        <TextBlock Foreground="White" Text="加入队列" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
 
-          <!-- 上传进度 -->
-          <Border Grid.Row="2" Padding="10,8" Margin="14,6,14,0" CornerRadius="6"
-                  Background="{DynamicResource SemiColorBg0}"
-                  IsVisible="{Binding IsUploading}">
-            <StackPanel Spacing="4">
-              <Grid ColumnDefinitions="Auto,Auto,Auto">
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
-                  <icons:MaterialIcon Kind="CloudUpload" Foreground="{DynamicResource SemiColorPrimary}"
-                                      Width="14" Height="14" VerticalAlignment="Center"/>
-                  <TextBlock FontSize="11" Foreground="{DynamicResource SemiColorText1}"
-                             Text="{Binding UploadCompletedCount, StringFormat='已完成 {0}'}"
-                             VerticalAlignment="Center"/>
-                </StackPanel>
-                <TextBlock Grid.Column="1" FontSize="11" Foreground="{DynamicResource SemiColorText2}"
-                           Text="/" VerticalAlignment="Center" Margin="2,0"/>
-                <TextBlock Grid.Column="2" FontSize="11" Foreground="{DynamicResource SemiColorText2}"
-                           Text="{Binding UploadTotalCount}" VerticalAlignment="Center"/>
-              </Grid>
-              <ProgressBar Height="4" Value="{Binding UploadProgress}" Minimum="0" Maximum="100"/>
-            </StackPanel>
-          </Border>
+                    <!--  列表区  -->
+                    <ScrollViewer Grid.Row="2">
+                        <ItemsControl ItemsSource="{Binding LocalFiles}" Padding="4">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="ml:LocalFileItem">
+                                    <Border
+                                        Background="Transparent"
+                                        CornerRadius="4"
+                                        Margin="2,1"
+                                        Padding="12,6">
+                                        <Border.Styles>
+                                            <Style Selector="Border:pointerover">
+                                                <Setter Property="Background" Value="{DynamicResource SemiColorFill0}" />
+                                            </Style>
+                                        </Border.Styles>
+                                        <Grid ColumnDefinitions="24,Auto,*,Auto,Auto" ColumnSpacing="8">
+                                            <CheckBox
+                                                Grid.Column="0"
+                                                IsChecked="{Binding IsChecked}"
+                                                VerticalAlignment="Center" />
+                                            <Border
+                                                Background="{Binding CompareStatus, Converter={StaticResource StatusToColorConverter}}"
+                                                CornerRadius="4"
+                                                Grid.Column="1"
+                                                Padding="6,2"
+                                                VerticalAlignment="Center">
+                                                <TextBlock
+                                                    FontSize="9"
+                                                    Foreground="White"
+                                                    Text="{Binding CompareStatus, Converter={StaticResource CompareStatusConverter}}" />
+                                            </Border>
+                                            <StackPanel
+                                                Grid.Column="2"
+                                                Spacing="0"
+                                                VerticalAlignment="Center">
+                                                <TextBlock
+                                                    FontSize="12.5"
+                                                    Foreground="{DynamicResource SemiColorText0}"
+                                                    Text="{Binding FileName}"
+                                                    TextTrimming="CharacterEllipsis" />
+                                                <TextBlock
+                                                    FontSize="10"
+                                                    Foreground="{DynamicResource SemiColorText2}"
+                                                    Text="{Binding RelativePath}"
+                                                    TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <TextBlock
+                                                FontSize="10"
+                                                Foreground="{DynamicResource SemiColorText2}"
+                                                Grid.Column="3"
+                                                HorizontalAlignment="Right"
+                                                MinWidth="48"
+                                                Text="{Binding FileSize, Converter={StaticResource BytesToSizeConverter}}"
+                                                VerticalAlignment="Center" />
+                                            <TextBlock
+                                                FontSize="10"
+                                                Foreground="{DynamicResource SemiColorText2}"
+                                                Grid.Column="4"
+                                                HorizontalAlignment="Right"
+                                                MinWidth="72"
+                                                Text="{Binding LastModified, StringFormat='{}{0:MM-dd HH:mm}'}"
+                                                VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
 
-          <!-- 上传文件列表 -->
-          <ScrollViewer Grid.Row="3">
-            <ItemsControl ItemsSource="{Binding UploadFiles}" Padding="4">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="ml:UploadFileItem">
-                  <Border Padding="10,6" Margin="2,1" CornerRadius="4">
-                    <Grid ColumnDefinitions="20,Auto,*,Auto" ColumnSpacing="6">
-                      <Border Grid.Column="1" Width="10" Height="10" CornerRadius="5"
-                              VerticalAlignment="Center"
-                              Background="{Binding Status, Converter={StaticResource UploadStatusToColorConverter}}"/>
-                      <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="0">
-                        <TextBlock Text="{Binding FileName}" FontSize="12"
-                                   Foreground="{DynamicResource SemiColorText0}" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Text="{Binding RelativePath}" FontSize="9"
-                                   Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
-                      </StackPanel>
-                      <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Status, Converter={StaticResource UploadStatusToTextConverter}}"
-                                   FontSize="10"
-                                   Foreground="{Binding Status, Converter={StaticResource UploadStatusToColorConverter}}"/>
-                        <Button Width="22" Height="22" Classes="Tertiary" Padding="0"
-                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Command="{Binding $parent[ItemsControl].DataContext.RetryUploadCommand}"
-                                CommandParameter="{Binding}"
-                                IsVisible="{Binding Status, Converter={StaticResource UploadStatusToFailedConverter}}"
-                                ToolTip.Tip="重试上传">
-                          <icons:MaterialIcon Kind="Refresh" Width="14" Height="14"
-                                              Foreground="{DynamicResource SemiColorPrimary}"/>
-                        </Button>
-                      </StackPanel>
-                    </Grid>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </ScrollViewer>
+                    <!--  底部操作栏  -->
+                    <Border
+                        Background="{DynamicResource SemiColorBg0}"
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="0,1,0,0"
+                        Grid.Row="3"
+                        Padding="14,6">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button
+                                Command="{Binding ScanLocalFilesCommand}"
+                                FontSize="11"
+                                Padding="8,4">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <icons:MaterialIcon
+                                        Height="14"
+                                        Kind="FolderSearch"
+                                        Width="14" />
+                                    <TextBlock Text="重新扫描" />
+                                </StackPanel>
+                            </Button>
+                            <Button
+                                Classes="Tertiary"
+                                Command="{Binding StopCommand}"
+                                FontSize="11"
+                                Foreground="{DynamicResource SemiColorDanger}"
+                                Padding="8,4">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <icons:MaterialIcon
+                                        Foreground="{DynamicResource SemiColorDanger}"
+                                        Height="14"
+                                        Kind="Stop"
+                                        Width="14" />
+                                    <TextBlock Foreground="{DynamicResource SemiColorDanger}" Text="停止" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
 
-          <!-- 底部操作栏 -->
-          <Border Grid.Row="4" Padding="14,6" BorderThickness="0,1,0,0"
-                  BorderBrush="{DynamicResource SemiColorBorder}" Background="{DynamicResource SemiColorBg0}">
-            <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
-              <Button Grid.Column="0" Classes="Tertiary" FontSize="11" Command="{Binding ClearQueueCommand}" Padding="8,4">
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                  <icons:MaterialIcon Kind="DeleteSweep" Width="14" Height="14"/>
-                  <TextBlock Text="清空"/>
-                </StackPanel>
-              </Button>
-              <Button Grid.Column="1" Classes="Tertiary" FontSize="11" Command="{Binding RemoveFromQueueCommand}" Padding="8,4">
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                  <icons:MaterialIcon Kind="Close" Width="14" Height="14"/>
-                  <TextBlock Text="移除选中"/>
-                </StackPanel>
-              </Button>
-              <Button Grid.Column="3" Classes="Primary" FontSize="13" Padding="12,6"
-                      IsEnabled="{Binding !IsUploading}" Command="{Binding PushAllCommand}"
-                      HorizontalAlignment="Stretch">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <icons:MaterialIcon Kind="CloudUpload" Foreground="White" Width="16" Height="16"/>
-                  <TextBlock Text="推送到服务器" Foreground="White"/>
-                </StackPanel>
-              </Button>
-            </Grid>
-          </Border>
+            <!--  右栏：上传面板  -->
+            <Border
+                Background="{DynamicResource SemiColorBg1}"
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Grid.Column="1"
+                Margin="6,10,12,10"
+                MinWidth="280">
+                <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+
+                    <!--  标题区  -->
+                    <Border
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="0,0,0,1"
+                        Grid.Row="0"
+                        Padding="14,10">
+                        <StackPanel
+                            Orientation="Horizontal"
+                            Spacing="6"
+                            VerticalAlignment="Center">
+                            <icons:MaterialIcon
+                                Foreground="{DynamicResource SemiColorPrimary}"
+                                Height="18"
+                                Kind="Upload"
+                                Width="18" />
+                            <TextBlock
+                                FontSize="14"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource SemiColorText0}"
+                                Text="上传队列" />
+                            <Border
+                                Background="{DynamicResource SemiColorFill0}"
+                                CornerRadius="8"
+                                Padding="6,1">
+                                <TextBlock
+                                    FontSize="10"
+                                    Foreground="{DynamicResource SemiColorText2}"
+                                    Text="{Binding UploadFiles.Count, StringFormat='{}{0}'}" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!--  版本 & 日志区  -->
+                    <Border
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="0,0,0,1"
+                        Grid.Row="1"
+                        Padding="14,10">
+                        <StackPanel Spacing="8">
+                            <!--  版本输入  -->
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <Border
+                                    BorderBrush="{DynamicResource SemiColorBorder}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Grid.Column="0"
+                                    Padding="1">
+                                    <Grid ColumnDefinitions="28,*">
+                                        <icons:MaterialIcon
+                                            Foreground="{DynamicResource SemiColorText2}"
+                                            Height="14"
+                                            HorizontalAlignment="Center"
+                                            Kind="TagOutline"
+                                            VerticalAlignment="Center"
+                                            Width="14" />
+                                        <TextBox
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            FontSize="12"
+                                            Grid.Column="1"
+                                            Padding="0,4"
+                                            PlaceholderText="版本号 (如: 2.1.0)"
+                                            Text="{Binding NewVersion}" />
+                                    </Grid>
+                                </Border>
+                                <Button
+                                    Command="{Binding AutoGenerateVersionCommand}"
+                                    FontSize="11"
+                                    Grid.Column="1"
+                                    Padding="6,4"
+                                    ToolTip.Tip="自动生成版本号">
+                                    <StackPanel Orientation="Horizontal" Spacing="3">
+                                        <icons:MaterialIcon
+                                            Height="14"
+                                            Kind="ClockOutline"
+                                            Width="14" />
+                                        <TextBlock Text="自动" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                            <!--  更新日志  -->
+                            <Border
+                                BorderBrush="{DynamicResource SemiColorBorder}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="1">
+                                <TextBox
+                                    AcceptsReturn="True"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    FontSize="11"
+                                    Height="48"
+                                    Padding="8,4"
+                                    PlaceholderText="描述本次更新内容..."
+                                    Text="{Binding ChangeLogText}"
+                                    TextWrapping="Wrap" />
+                            </Border>
+                            <CheckBox
+                                Content="追加到最新版本"
+                                FontSize="11"
+                                IsChecked="{Binding AppendToLatestVersion}" />
+                            <CheckBox
+                                Content="推送后自动刷新"
+                                FontSize="11"
+                                IsChecked="{Binding AutoRefreshAfterPush}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!--  上传进度  -->
+                    <Border
+                        Background="{DynamicResource SemiColorBg0}"
+                        CornerRadius="6"
+                        Grid.Row="2"
+                        IsVisible="{Binding IsUploading}"
+                        Margin="14,6,14,0"
+                        Padding="10,8">
+                        <StackPanel Spacing="4">
+                            <Grid ColumnDefinitions="Auto,Auto,Auto">
+                                <StackPanel
+                                    Grid.Column="0"
+                                    Orientation="Horizontal"
+                                    Spacing="4">
+                                    <icons:MaterialIcon
+                                        Foreground="{DynamicResource SemiColorPrimary}"
+                                        Height="14"
+                                        Kind="CloudUpload"
+                                        VerticalAlignment="Center"
+                                        Width="14" />
+                                    <TextBlock
+                                        FontSize="11"
+                                        Foreground="{DynamicResource SemiColorText1}"
+                                        Text="{Binding UploadCompletedCount, StringFormat='已完成 {0}'}"
+                                        VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="{DynamicResource SemiColorText2}"
+                                    Grid.Column="1"
+                                    Margin="2,0"
+                                    Text="/"
+                                    VerticalAlignment="Center" />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="{DynamicResource SemiColorText2}"
+                                    Grid.Column="2"
+                                    Text="{Binding UploadTotalCount}"
+                                    VerticalAlignment="Center" />
+                            </Grid>
+                            <ProgressBar
+                                Height="4"
+                                Maximum="100"
+                                Minimum="0"
+                                Value="{Binding UploadProgress}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!--  上传文件列表  -->
+                    <ScrollViewer Grid.Row="3">
+                        <ItemsControl ItemsSource="{Binding UploadFiles}" Padding="4">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="ml:UploadFileItem">
+                                    <Border
+                                        CornerRadius="4"
+                                        Margin="2,1"
+                                        Padding="10,6">
+                                        <Grid ColumnDefinitions="20,Auto,*,Auto" ColumnSpacing="6">
+                                            <Border
+                                                Background="{Binding Status, Converter={StaticResource UploadStatusToColorConverter}}"
+                                                CornerRadius="5"
+                                                Grid.Column="1"
+                                                Height="10"
+                                                VerticalAlignment="Center"
+                                                Width="10" />
+                                            <StackPanel
+                                                Grid.Column="2"
+                                                Spacing="0"
+                                                VerticalAlignment="Center">
+                                                <TextBlock
+                                                    FontSize="12"
+                                                    Foreground="{DynamicResource SemiColorText0}"
+                                                    Text="{Binding FileName}"
+                                                    TextTrimming="CharacterEllipsis" />
+                                                <TextBlock
+                                                    FontSize="9"
+                                                    Foreground="{DynamicResource SemiColorText2}"
+                                                    Text="{Binding RelativePath}"
+                                                    TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <StackPanel
+                                                Grid.Column="3"
+                                                Orientation="Horizontal"
+                                                Spacing="4"
+                                                VerticalAlignment="Center">
+                                                <TextBlock
+                                                    FontSize="10"
+                                                    Foreground="{Binding Status, Converter={StaticResource UploadStatusToColorConverter}}"
+                                                    Text="{Binding Status, Converter={StaticResource UploadStatusToTextConverter}}" />
+                                                <Button
+                                                    Classes="Tertiary"
+                                                    Command="{Binding #UC.((vm:ProjectPageViewModel)DataContext).RetryUploadCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    Height="22"
+                                                    HorizontalContentAlignment="Center"
+                                                    IsVisible="{Binding Status, Converter={StaticResource UploadStatusToFailedConverter}}"
+                                                    Padding="0"
+                                                    ToolTip.Tip="重试上传"
+                                                    VerticalContentAlignment="Center"
+                                                    Width="22">
+                                                    <icons:MaterialIcon
+                                                        Foreground="{DynamicResource SemiColorPrimary}"
+                                                        Height="14"
+                                                        Kind="Refresh"
+                                                        Width="14" />
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!--  底部操作栏  -->
+                    <Border
+                        Background="{DynamicResource SemiColorBg0}"
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="0,1,0,0"
+                        Grid.Row="4"
+                        Padding="14,6">
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
+                            <Button
+                                Classes="Tertiary"
+                                Command="{Binding ClearQueueCommand}"
+                                FontSize="11"
+                                Grid.Column="0"
+                                Padding="8,4">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <icons:MaterialIcon
+                                        Height="14"
+                                        Kind="DeleteSweep"
+                                        Width="14" />
+                                    <TextBlock Text="清空" />
+                                </StackPanel>
+                            </Button>
+                            <Button
+                                Classes="Tertiary"
+                                Command="{Binding RemoveFromQueueCommand}"
+                                FontSize="11"
+                                Grid.Column="1"
+                                Padding="8,4">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <icons:MaterialIcon
+                                        Height="14"
+                                        Kind="Close"
+                                        Width="14" />
+                                    <TextBlock Text="移除选中" />
+                                </StackPanel>
+                            </Button>
+                            <Button
+                                Classes="Primary"
+                                Command="{Binding PushAllCommand}"
+                                FontSize="13"
+                                Grid.Column="3"
+                                HorizontalAlignment="Stretch"
+                                IsEnabled="{Binding !IsUploading}"
+                                Padding="12,6">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <icons:MaterialIcon
+                                        Foreground="White"
+                                        Height="16"
+                                        Kind="CloudUpload"
+                                        Width="16" />
+                                    <TextBlock Foreground="White" Text="推送到服务器" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
         </Grid>
-      </Border>
+
+        <!--  ===== 状态栏 =====  -->
+        <Border
+            Background="{DynamicResource SemiColorBg0}"
+            BorderBrush="{DynamicResource SemiColorBorder}"
+            BorderThickness="0,1,0,0"
+            Grid.Row="2"
+            Padding="12,0">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                <TextBlock
+                    FontSize="11"
+                    Foreground="{DynamicResource SemiColorText1}"
+                    Grid.Column="0"
+                    MaxWidth="500"
+                    Text="{Binding StatusMessage, TargetNullValue='就绪'}"
+                    TextTrimming="CharacterEllipsis"
+                    VerticalAlignment="Center" />
+                <StackPanel
+                    Grid.Column="2"
+                    IsVisible="{Binding IsUploading}"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+                    <ProgressBar
+                        Height="4"
+                        Maximum="100"
+                        Minimum="0"
+                        Value="{Binding UploadProgress}"
+                        Width="80" />
+                    <TextBlock
+                        FontSize="10"
+                        Foreground="{DynamicResource SemiColorText2}"
+                        VerticalAlignment="Center">
+                        <Run Text="{Binding UploadCompletedCount}" />
+                        <Run Text="/" />
+                        <Run Text="{Binding UploadTotalCount}" />
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+
     </Grid>
-
-    <!-- ===== 状态栏 ===== -->
-    <Border Grid.Row="2" Background="{DynamicResource SemiColorBg0}"
-            BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SemiColorBorder}" Padding="12,0">
-      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-        <TextBlock Grid.Column="0" Text="{Binding StatusMessage, TargetNullValue='就绪'}"
-                   FontSize="11" Foreground="{DynamicResource SemiColorText1}"
-                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="500"/>
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
-                    VerticalAlignment="Center" IsVisible="{Binding IsUploading}">
-          <ProgressBar Width="80" Height="4" Value="{Binding UploadProgress}" Minimum="0" Maximum="100"/>
-          <TextBlock FontSize="10" Foreground="{DynamicResource SemiColorText2}"
-                     VerticalAlignment="Center">
-            <Run Text="{Binding UploadCompletedCount}"/>
-            <Run Text="/"/>
-            <Run Text="{Binding UploadTotalCount}"/>
-          </TextBlock>
-        </StackPanel>
-      </Grid>
-    </Border>
-
-  </Grid>
 </UserControl>

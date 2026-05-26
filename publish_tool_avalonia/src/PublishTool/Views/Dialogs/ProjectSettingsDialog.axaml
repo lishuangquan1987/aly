@@ -1,99 +1,146 @@
-<semi:Window xmlns="https://github.com/avaloniaui"
-              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-              xmlns:semi="https://irihi.tech/semi"
-              xmlns:vm="using:PublishTool.ViewModels"
-              x:Class="PublishTool.Views.Dialogs.ProjectSettingsDialog"
-              x:DataType="vm:ProjectSettingsDialogViewModel"
-              Title="项目设置" Width="460" SizeToContent="Height"
-              WindowStartupLocation="CenterOwner">
+<Window
+    SizeToContent="Height"
+    Title="项目设置"
+    Width="460"
+    WindowStartupLocation="CenterOwner"
+    x:Class="PublishTool.Views.Dialogs.ProjectSettingsDialog"
+    x:DataType="vm:ProjectSettingsDialogViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:semi="https://irihi.tech/semi"
+    xmlns:vm="using:PublishTool.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <Border Padding="24">
-    <StackPanel Spacing="20">
+    <Border Padding="24">
+        <StackPanel Spacing="20">
 
-      <TextBlock Text="项目设置"
-                 FontSize="18" FontWeight="SemiBold"
-                 Foreground="{DynamicResource SemiColorText0}"/>
+            <TextBlock
+                FontSize="18"
+                FontWeight="SemiBold"
+                Foreground="{DynamicResource SemiColorText0}"
+                Text="项目设置" />
 
-      <Border Background="{DynamicResource SemiColorBg0}"
-              CornerRadius="6" Padding="12">
-        <StackPanel Spacing="10">
-          <StackPanel Spacing="4">
-            <TextBlock Text="服务器地址" FontSize="11"
-                       Foreground="{DynamicResource SemiColorText2}"/>
-            <TextBlock Text="{Binding ServerUrl}" FontSize="12"
-                       Foreground="{DynamicResource SemiColorText1}"
-                       TextTrimming="CharacterEllipsis"/>
-          </StackPanel>
-          <Border BorderThickness="0,0,0,1"
-                  BorderBrush="{DynamicResource SemiColorBorder}"/>
-          <StackPanel Spacing="4">
-            <TextBlock Text="项目名称" FontSize="11"
-                       Foreground="{DynamicResource SemiColorText2}"/>
-            <TextBlock Text="{Binding Name}" FontSize="12"
-                       Foreground="{DynamicResource SemiColorText1}"/>
-          </StackPanel>
+            <Border
+                Background="{DynamicResource SemiColorBg0}"
+                CornerRadius="6"
+                Padding="12">
+                <StackPanel Spacing="10">
+                    <StackPanel Spacing="4">
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{DynamicResource SemiColorText2}"
+                            Text="服务器地址" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{DynamicResource SemiColorText1}"
+                            Text="{Binding ServerUrl}"
+                            TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Border BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1" />
+                    <StackPanel Spacing="4">
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{DynamicResource SemiColorText2}"
+                            Text="项目名称" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{DynamicResource SemiColorText1}"
+                            Text="{Binding Name}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <StackPanel Spacing="16">
+                <StackPanel Spacing="6">
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{DynamicResource SemiColorText1}"
+                        Text="显示标题" />
+                    <TextBox
+                        FontSize="13"
+                        PlaceholderText="显示标题"
+                        Text="{Binding Title}" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{DynamicResource SemiColorDanger}"
+                        IsVisible="{Binding TitleError, Converter={StaticResource StringNotEmptyConverter}}"
+                        Text="{Binding TitleError}" />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{DynamicResource SemiColorText1}"
+                        Text="可执行文件路径" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBox
+                            FontSize="13"
+                            Grid.Column="0"
+                            PlaceholderText="D:\Projects\MyApp\app.exe"
+                            Text="{Binding ExePath}" />
+                        <Button
+                            Click="SelectExeFile_Click"
+                            Content="浏览..."
+                            FontSize="12"
+                            Grid.Column="1" />
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{DynamicResource SemiColorText1}"
+                        Text="本地文件夹路径" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBox
+                            FontSize="13"
+                            Grid.Column="0"
+                            PlaceholderText="D:\Projects\MyApp"
+                            Text="{Binding LocalPath}" />
+                        <Button
+                            Click="SelectLocalFolder_Click"
+                            Content="浏览..."
+                            FontSize="12"
+                            Grid.Column="1" />
+                    </Grid>
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{DynamicResource SemiColorDanger}"
+                        IsVisible="{Binding LocalPathError, Converter={StaticResource StringNotEmptyConverter}}"
+                        Text="{Binding LocalPathError}" />
+                </StackPanel>
+            </StackPanel>
+
+            <Border
+                Background="{DynamicResource SemiColorBg0}"
+                CornerRadius="6"
+                Padding="12">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Spacing="2">
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{DynamicResource SemiColorText0}"
+                            Text="忽略配置" />
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{DynamicResource SemiColorText2}"
+                            Text="设置需要忽略的文件夹和文件规则" />
+                    </StackPanel>
+                    <Button
+                        Command="{Binding OpenIgnoreConfigCommand}"
+                        Content="编辑"
+                        FontSize="12"
+                        Grid.Column="1"
+                        VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <Button
+                Classes="Primary"
+                Command="{Binding SaveCommand}"
+                Content="保存"
+                FontSize="13"
+                HorizontalAlignment="Right" />
+
         </StackPanel>
-      </Border>
-
-      <StackPanel Spacing="16">
-        <StackPanel Spacing="6">
-          <TextBlock Text="显示标题" FontSize="12"
-                     Foreground="{DynamicResource SemiColorText1}"/>
-          <TextBox Text="{Binding Title}"
-                   PlaceholderText="显示标题" FontSize="13"/>
-          <TextBlock Text="{Binding TitleError}"
-                     FontSize="11" Foreground="{DynamicResource SemiColorDanger}"
-                     IsVisible="{Binding TitleError, Converter={StaticResource StringNotEmptyConverter}}"/>
-        </StackPanel>
-
-        <StackPanel Spacing="6">
-          <TextBlock Text="可执行文件路径" FontSize="12"
-                     Foreground="{DynamicResource SemiColorText1}"/>
-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-            <TextBox Grid.Column="0" Text="{Binding ExePath}"
-                     PlaceholderText="D:\Projects\MyApp\app.exe" FontSize="13"/>
-            <Button Grid.Column="1" Content="浏览..."
-                    Click="SelectExeFile_Click" FontSize="12"/>
-          </Grid>
-        </StackPanel>
-
-        <StackPanel Spacing="6">
-          <TextBlock Text="本地文件夹路径" FontSize="12"
-                     Foreground="{DynamicResource SemiColorText1}"/>
-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-            <TextBox Grid.Column="0" Text="{Binding LocalPath}"
-                     PlaceholderText="D:\Projects\MyApp" FontSize="13"/>
-            <Button Grid.Column="1" Content="浏览..."
-                    Click="SelectLocalFolder_Click" FontSize="12"/>
-          </Grid>
-          <TextBlock Text="{Binding LocalPathError}"
-                     FontSize="11" Foreground="{DynamicResource SemiColorDanger}"
-                     IsVisible="{Binding LocalPathError, Converter={StaticResource StringNotEmptyConverter}}"/>
-        </StackPanel>
-      </StackPanel>
-
-      <Border Background="{DynamicResource SemiColorBg0}"
-              CornerRadius="6" Padding="12">
-        <Grid ColumnDefinitions="*,Auto">
-          <StackPanel Grid.Column="0" Spacing="2">
-            <TextBlock Text="忽略配置" FontSize="12"
-                       Foreground="{DynamicResource SemiColorText0}"/>
-            <TextBlock Text="设置需要忽略的文件夹和文件规则"
-                       FontSize="11"
-                       Foreground="{DynamicResource SemiColorText2}"/>
-          </StackPanel>
-          <Button Grid.Column="1" Content="编辑"
-                  FontSize="12"
-                  Command="{Binding OpenIgnoreConfigCommand}"
-                  VerticalAlignment="Center"/>
-        </Grid>
-      </Border>
-
-      <Button Content="保存"
-              Command="{Binding SaveCommand}"
-              Classes="Primary" FontSize="13"
-              HorizontalAlignment="Right"/>
-
-    </StackPanel>
-  </Border>
-</semi:Window>
+    </Border>
+</Window>
