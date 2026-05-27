@@ -77,26 +77,56 @@ func closeProcessesGracefully(names []string, timeout time.Duration) {
 // atomicReplace atomically replaces mainFolder with its update/{version} directory
 func atomicReplace(mainFolder string, version string) error {
 	oldDir := mainFolder + "_old"
-	updateVersionDir := filepath.Join(mainFolder, "update", version)
-
-	// 1. 清理之前的 _old
+	mainParentDir := filepath.Dir(mainFolder)
+	tempUpdateDir := filepath.Join(mainParentDir, ".temp_update_"+version)
+	
+	// 1. 清理之前的 _old 和临时目录
 	os.RemoveAll(oldDir)
-
-	// 2. 将当前目录重命名为 _old
+	os.RemoveAll(tempUpdateDir)
+	
+	updateDir := filepath.Join(mainFolder, "update")
+	updateVersionDir := filepath.Join(updateDir, version)
+	
+	// 2. 先将整个 update 目录移到临时位置（保留所有备份版本）
+	tempWholeUpdateDir := filepath.Join(mainParentDir, ".temp_whole_update")
+	os.RemoveAll(tempWholeUpdateDir)
+	if err := os.Rename(updateDir, tempWholeUpdateDir); err != nil {
+		return fmt.Errorf("move whole update dir to temp failed: %v", err)
+	}
+	
+	// 3. 将目标版本目录移出来
+	tempVersionDir := filepath.Join(mainParentDir, ".temp_version_"+version)
+	if err := os.Rename(filepath.Join(tempWholeUpdateDir, version), tempVersionDir); err != nil {
+		// 失败时将 update 目录移回去
+		os.Rename(tempWholeUpdateDir, updateDir)
+		return fmt.Errorf("move version dir failed: %v", err)
+	}
+	
+	// 4. 将当前目录重命名为 _old
 	if err := os.Rename(mainFolder, oldDir); err != nil {
+		// 失败时回滚
+		os.Rename(tempVersionDir, filepath.Join(tempWholeUpdateDir, version))
+		os.Rename(tempWholeUpdateDir, updateDir)
 		return fmt.Errorf("rename current to _old failed: %v", err)
 	}
-
-	// 3. 尝试将版本目录重命名为主目录
-	if err := os.Rename(updateVersionDir, mainFolder); err != nil {
-		// 跨卷重命名可能失败，回滚后使用复制方案
-		if rollbackErr := os.Rename(oldDir, mainFolder); rollbackErr != nil {
-			return fmt.Errorf("rollback failed after rename error: %v", rollbackErr)
-		}
-		return fmt.Errorf("rename version dir failed, rolled back: %v", err)
+	
+	// 5. 将临时版本目录重命名为主目录
+	if err := os.Rename(tempVersionDir, mainFolder); err != nil {
+		// 失败时回滚
+		os.Rename(oldDir, mainFolder)
+		os.Rename(tempVersionDir, filepath.Join(tempWholeUpdateDir, version))
+		os.Rename(tempWholeUpdateDir, updateDir)
+		return fmt.Errorf("rename temp version dir to main failed: %v", err)
 	}
-
-	// 4. 清理 _old
+	
+	// 6. 将整个 update 目录（包含所有备份）移回新的 mainFolder
+	newUpdateDir := filepath.Join(mainFolder, "update")
+	if err := os.Rename(tempWholeUpdateDir, newUpdateDir); err != nil {
+		// 即使这步失败也没关系，只是备份版本丢失，但更新已成功
+		fmt.Fprintf(os.Stderr, "warning: failed to move backup versions: %v\n", err)
+	}
+	
+	// 7. 清理 _old
 	os.RemoveAll(oldDir)
 	return nil
 }

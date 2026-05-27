@@ -81,6 +81,7 @@ func CopyFile(src, dst string, overwrite bool) error {
 }
 
 // CopyDir 复制整个目录，overwrite 控制是否覆盖已存在的文件
+// 自动排除 update/ 目录
 func CopyDir(srcDir, dstDir string, overwrite bool) error {
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -90,6 +91,14 @@ func CopyDir(srcDir, dstDir string, overwrite bool) error {
 		relPath, err := filepath.Rel(srcDir, path)
 		if err != nil {
 			return err
+		}
+
+		// 排除 update/ 目录
+		if relPath == "update" || hasPrefix(relPath, "update"+string(filepath.Separator)) || hasPrefix(relPath, "update/") {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 
 		dstPath := filepath.Join(dstDir, relPath)
