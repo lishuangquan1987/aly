@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	apiclient "clientupdator/client/client"
+	apiclient "clientupdator/client/http_client"
 	"clientupdator/client/config"
 	"clientupdator/client/model"
 	"clientupdator/client/util"

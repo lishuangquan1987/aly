@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"clientupdator/client/config"
@@ -69,12 +70,12 @@ func ApplyUpdate() {
 	// 执行更新后脚本
 	if cfg.PostUpdateScript != "" {
 		scriptPath := cfg.PostUpdateScript
-		// 如果脚本路径是相对路径，则相对于 ExeDir 解析
+		// 如果脚本路径是相对路径，则相对于 mainExeFolder 解析（主程序根目录）
 		if len(scriptPath) > 0 && (scriptPath[0] == '.' || (len(scriptPath) >= 2 && scriptPath[1] != ':')) {
-			exeDir, _ := config.ExeDir()
-			scriptPath = exeDir + string(os.PathSeparator) + scriptPath
+			scriptPath = filepath.Join(mainFolder, scriptPath)
 		}
-		runScript(scriptPath)
+		logPath := filepath.Join(mainFolder, "update.log")
+		runScript(scriptPath, logPath)
 	}
 
 	// 启动主程序

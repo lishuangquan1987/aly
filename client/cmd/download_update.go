@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	apiclient "clientupdator/client/client"
+	apiclient "clientupdator/client/http_client"
 	"clientupdator/client/config"
 	"clientupdator/client/model"
 	"clientupdator/client/util"
@@ -92,64 +92,68 @@ func DownloadUpdate() {
 		fmt.Fprintf(os.Stderr, "progress:%d files to download\n", totalFiles)
 	}
 
+	failLogPath := filepath.Join(updateDir, fmt.Sprintf("update_%s_fail.log", newVersion))
 	var failedFiles []string
 
 	for idx, serverFile := range diffFiles {
-		localPath := filepath.Join(updateDir, filepath.FromSlash(normalizePath(serverFile.FileRelativePath)))
+		relPath := normalizePath(serverFile.FileRelativePath)
+		localPath := filepath.Join(updateDir, filepath.FromSlash(relPath))
 
 		if !*silentFlag {
 			fmt.Fprintf(os.Stderr, "progress:%d/%d files\n", idx+1, totalFiles)
-			fmt.Fprintf(os.Stderr, "progress:downloading %s\n", serverFile.FileRelativePath)
+			fmt.Fprintf(os.Stderr, "progress:downloading %s\n", relPath)
 		}
 
-		if err := apiclient.DownloadFileWithResume(cfg.URL, serverFile.FileAbsolutePath, localPath, serverFile.FileSize, largeFileThreshold); err != nil {
-			failedFiles = append(failedFiles, fmt.Sprintf("download %s: %v", serverFile.FileRelativePath, err))
-			continue
-		}
-
-		// Verify MD5 + SHA256 with retry
-		verified := false
+		// 下载并校验，最多重试3次
+		var downloadSuccess bool
 		for retry := 0; retry < 3; retry++ {
+			if retry > 0 && !*silentFlag {
+				fmt.Fprintf(os.Stderr, "progress:retrying %s (%d/3)\n", relPath, retry+1)
+			}
+
+			// 清理可能存在的旧文件
+			os.Remove(localPath)
+			os.Remove(localPath + ".part")
+
+			if err := apiclient.DownloadFileWithResume(cfg.URL, serverFile.FileAbsolutePath, localPath, serverFile.FileSize, largeFileThreshold); err != nil {
+				if retry == 2 {
+					failedFiles = append(failedFiles, fmt.Sprintf("download %s failed: %v", relPath, err))
+				}
+				continue
+			}
+
+			// 校验 MD5 和 SHA256
 			localMD5, md5Err := util.FileMD5(localPath)
 			localSHA256, shaErr := util.FileSHA256(localPath)
 
 			if md5Err != nil || shaErr != nil {
-				if retry < 2 {
-					os.Remove(localPath)
-					apiclient.DownloadFileWithResume(cfg.URL, serverFile.FileAbsolutePath, localPath, serverFile.FileSize, largeFileThreshold)
-					continue
+				if retry == 2 {
+					failedFiles = append(failedFiles, fmt.Sprintf("hash compute %s failed: md5=%v, sha256=%v", relPath, md5Err, shaErr))
 				}
-				failedFiles = append(failedFiles, fmt.Sprintf("hash compute %s: md5err=%v shaerr=%v", serverFile.FileRelativePath, md5Err, shaErr))
-				break
+				continue
 			}
 
 			if localMD5 != serverFile.MD5 || localSHA256 != serverFile.SHA256 {
-				if retry < 2 {
-					if !*silentFlag {
-						fmt.Fprintf(os.Stderr, "progress:verify %s failed, retry %d\n", serverFile.FileRelativePath, retry+1)
-					}
-					os.Remove(localPath)
-					apiclient.DownloadFileWithResume(cfg.URL, serverFile.FileAbsolutePath, localPath, serverFile.FileSize, largeFileThreshold)
-					continue
+				if retry == 2 {
+					failedFiles = append(failedFiles, fmt.Sprintf("verify %s failed: md5=%s vs %s, sha256=%s vs %s", relPath, localMD5, serverFile.MD5, localSHA256, serverFile.SHA256))
 				}
-				failedFiles = append(failedFiles, fmt.Sprintf("verify %s failed after 3 retries", serverFile.FileRelativePath))
-				break
+				continue
 			}
 
 			if !*silentFlag {
-				fmt.Fprintf(os.Stderr, "progress:verifying %s sha256 ok\n", serverFile.FileRelativePath)
+				fmt.Fprintf(os.Stderr, "progress:verifying %s sha256 ok\n", relPath)
 			}
-			verified = true
+			downloadSuccess = true
 			break
 		}
 
-		if !verified {
+		if !downloadSuccess {
 			continue
 		}
 	}
 
 	if len(failedFiles) > 0 {
-		failLogPath := filepath.Join(updateDir, fmt.Sprintf("update_%s_fail.log", newVersion))
+		// 写入失败日志
 		f, _ := os.Create(failLogPath)
 		if f != nil {
 			for _, msg := range failedFiles {
@@ -161,13 +165,16 @@ func DownloadUpdate() {
 		return
 	}
 
-	// Copy local files to update dir (don't overwrite already-downloaded server files)
+	// 5. 将 main_exe_relative_path_folder 中的所有文件复制到 update/{new_version}/，已存在的文件不覆盖
 	if !*silentFlag {
 		fmt.Fprintf(os.Stderr, "progress:copying local files to update dir\n")
 	}
-	util.CopyDir(mainFolder, updateDir, false)
+	if err := util.CopyDir(mainFolder, updateDir, false); err != nil {
+		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("copy local files failed: %v", err)})
+		return
+	}
 
-	// Backup current version
+	// 6. 将 main_exe_relative_path_folder 中所有文件备份到 update/{current_version}/
 	currentVersionDir := filepath.Join(mainFolder, "update", currentVersion)
 	if !*silentFlag {
 		fmt.Fprintf(os.Stderr, "progress:backing up current version\n")
@@ -177,7 +184,7 @@ func DownloadUpdate() {
 		return
 	}
 
-	// Update version.json
+	// 7. 更新 version.json
 	versionInfo.Version = newVersion
 	versionInfo.VersionStatus = config.VersionStatusDownloaded
 	if err := config.WriteVersion(versionInfo); err != nil {

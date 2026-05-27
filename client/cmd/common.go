@@ -79,24 +79,24 @@ func atomicReplace(mainFolder string, version string) error {
 	oldDir := mainFolder + "_old"
 	updateVersionDir := filepath.Join(mainFolder, "update", version)
 
-	// Clean previous _old
+	// 1. 清理之前的 _old
 	os.RemoveAll(oldDir)
 
-	// Rename current to _old
+	// 2. 将当前目录重命名为 _old
 	if err := os.Rename(mainFolder, oldDir); err != nil {
-		return fmt.Errorf("rename current to _old: %v", err)
+		return fmt.Errorf("rename current to _old failed: %v", err)
 	}
 
-	// Try rename version dir to main folder
+	// 3. 尝试将版本目录重命名为主目录
 	if err := os.Rename(updateVersionDir, mainFolder); err != nil {
-		// Cross-volume rename may fail, fallback to copy
-		os.Rename(oldDir, mainFolder)
-		if err2 := util.CopyDir(updateVersionDir, mainFolder, true); err2 != nil {
-			return fmt.Errorf("copy version dir failed: %v", err2)
+		// 跨卷重命名可能失败，回滚后使用复制方案
+		if rollbackErr := os.Rename(oldDir, mainFolder); rollbackErr != nil {
+			return fmt.Errorf("rollback failed after rename error: %v", rollbackErr)
 		}
+		return fmt.Errorf("rename version dir failed, rolled back: %v", err)
 	}
 
-	// Clean up _old
+	// 4. 清理 _old
 	os.RemoveAll(oldDir)
 	return nil
 }
@@ -112,11 +112,30 @@ func launchMainExe(cfg *config.Config) {
 	cmd.Start()
 }
 
-// runScript executes a post-update script
-func runScript(scriptPath string) {
+// runScript executes a post-update script, logs to update.log
+func runScript(scriptPath, logPath string) {
 	if _, err := os.Stat(scriptPath); err != nil {
+		logToFile(logPath, fmt.Sprintf("script not found: %s", scriptPath))
 		return
 	}
+
+	logToFile(logPath, fmt.Sprintf("executing script: %s", scriptPath))
+
 	cmd := exec.Command("cmd", "/c", scriptPath)
-	cmd.Start()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		logToFile(logPath, fmt.Sprintf("script failed: %v, output: %s", err, string(output)))
+	} else {
+		logToFile(logPath, fmt.Sprintf("script succeeded, output: %s", string(output)))
+	}
+}
+
+func logToFile(logPath, message string) {
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	f.WriteString(fmt.Sprintf("[%s] %s\n", timestamp, message))
 }
