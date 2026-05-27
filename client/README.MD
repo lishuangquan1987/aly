@@ -7,6 +7,7 @@
 - **兼容性**：Windows XP 及以上
 - **构建**：`set GOARCH=386 && set GO111MODULE=off && go build -ldflags="-s -w"`
 - **退出码约定**：0 = 成功，1 = 失败，2 = 参数错误
+- **输出约定**：所有命令的标准输出（stdout）均为 JSON 格式；进度、日志信息输出到标准错误流（stderr）
 
 ---
 
@@ -32,12 +33,9 @@
 
 ### client.yaml
 
-默认配置文件，位于 `client-updator.exe` 同级目录下：
-
 ```yaml
 project_name: "otdr_client"
 url: "http://127.0.0.1:2000"
-mirror_url: ""
 main_exe_relative_path: "../Langtian.DCS.UI.exe"
 must_close_process_name:
   - Langtian.DCS.UI
@@ -53,13 +51,12 @@ post_update_script: ""
 
 | 字段 | 说明 |
 | --- | --- |
-| `url` | 服务器地址 |
-| `mirror_url` | 备用服务器地址（可选，下载失败时自动切换） |
+| `url` | 服务器地址（内网 HTTP） |
 | `main_exe_relative_path` | 主程序相对路径（相对于 `client-updator.exe` 所在目录） |
 | `must_close_process_name` | 更新时必须关闭的进程名列表 |
 | `post_update_script` | 更新完成后执行的脚本路径（可选，相对于主程序根目录） |
 
-**优先级**：命令行参数 > client.yaml 配置值。`url`、`mirror_url`、`main_exe_relative_path`、`must_close_process_name` 均支持命令行覆盖。
+**优先级**：命令行参数 > client.yaml 配置值。
 
 ---
 
@@ -97,11 +94,11 @@ client/
     └── diff.go                # 文件差异结构
 ```
 
-### 依赖库选择
+### 依赖库
 
 | 用途 | 库 | 说明 |
 | --- | --- | --- |
-| CLI 参数解析 | 标准库 `flag` | Go 1.10 内置，无需额外依赖 |
+| CLI 参数解析 | 标准库 `flag` | Go 1.10 内置 |
 | YAML 解析 | `gopkg.in/yaml.v2` | 兼容 Go 1.10 |
 | HTTP 请求 | 标准库 `net/http` | Go 1.10 内置 |
 | JSON 序列化 | 标准库 `encoding/json` | Go 1.10 内置 |
@@ -109,27 +106,11 @@ client/
 | MD5 计算 | 标准库 `crypto/md5` | Go 1.10 内置 |
 | 进程管理 | `golang.org/x/sys/windows` | Windows 进程操作 |
 
-**哈希策略**：下载文件后同时校验 MD5 和 SHA-256。MD5 用于快速比对文件级差异；SHA-256 用于下载完成后的完整性校验，防止篡改。
-
----
-
-## 安全设计
-
-### 传输安全
-
-- `url` 为 `http://` 时标准错误流输出警告，但允许继续（兼容内网环境）
-- 建议生产环境使用 `https://`，服务端证书校验默认开启（可通过 `--insecure` 跳过）
-
 ### 文件完整性
 
 - 服务端返回文件列表时附带每个文件的 MD5 和 SHA-256
-- 客户端下载后**同时校验 MD5 和 SHA-256**，任一不匹配则重试（最多 3 次）
-- 所有校验失败的文件记录到 `update_{version}_fail.log`，便于排查
-
-### 版本防降级
-
-- 不自动安装低于当前版本号的更新（可由 `--allow-downgrade` 覆盖）
-- 读取服务端 `force_update` 字段，强制更新时跳过用户确认
+- 下载后**同时校验 MD5 和 SHA-256**，任一不匹配则重试（最多 3 次）
+- 所有校验失败的文件记录到 `update_{version}_fail.log`
 
 ---
 
@@ -143,7 +124,7 @@ client/
 | check_diff | `/api/file/get_all_files/{id}` | GET |
 | download_update | `/api/file/get_all_files/{id}` + `/api/file/download_file?path=` | GET |
 
-服务端文件列表返回的每个文件需包含 `sha256` 字段用于完整性校验。
+服务端文件列表返回的每个文件需包含 `sha256` 字段用于完整性校验。check_update 的变更日志条目需包含 `force_update` 字段。
 
 ---
 
@@ -157,15 +138,34 @@ client-updator.exe check_update [--url <url>] [--project-name <name>]
 
 **调用接口**：`GET {url}/api/project/get_project_change_logs/{project_id}`
 
-**返回值**：
-- 有更新：`true:new_version [force]`（`[force]` 仅强制更新时出现）
-- 无更新：`false:`（版本一致时冒号后为空）
-- 错误：`false:错误信息`
+**比对方法**：读取本地 version.json 的版本号与服务端最新变更日志的版本号比较，不一致则视为有更新。使用语义化版本比较（`major.minor.patch`）。
 
-**比对方法**：
-- 读取本地 version.json 的版本号与服务端最新变更日志的版本号比较
-- 使用语义化版本比较（`major.minor.patch`），兼容纯数字三段式（`1.0.0`）和带 `v` 前缀（`v1.0.0`）
-- 检查服务端 `force_update` 字段，输出中标注是否为强制更新
+**返回值**（stdout JSON）：
+
+有更新：
+```json
+{"has_update":true,"current_version":"1.0.0","new_version":"1.0.1","force_update":false}
+```
+
+无更新：
+```json
+{"has_update":false,"current_version":"1.0.0"}
+```
+
+错误：
+```json
+{"has_update":false,"error":"连接服务器失败: dial tcp: connect refused"}
+```
+
+**字段说明**：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `has_update` | bool | 是否有新版本 |
+| `current_version` | string | 本地当前版本号 |
+| `new_version` | string（可选） | 新版本号，仅 `has_update=true` 时出现 |
+| `force_update` | bool（可选） | 是否强制更新（来自服务端 `force_update` 字段），仅 `has_update=true` 时出现 |
+| `error` | string（可选） | 错误信息，仅失败时出现 |
 
 ---
 
@@ -177,52 +177,78 @@ client-updator.exe check_diff [--url <url>] [--project-name <name>]
 
 **调用接口**：`GET {url}/api/file/get_all_files/{project_id}`
 
-**功能**：列出客户端文件与服务端文件的差异。
+**功能**：列出需要从服务端下载的文件列表。只返回服务端存在且与本地 MD5 不同的文件（包括本地不存在的文件）。**不列出**仅本地存在、服务端不存在的文件。
 
-**输出格式**（tab 分隔，每行一条）：
+**返回值**（stdout JSON Array）：
 
+```json
+{
+  "new_version": "1.0.1",
+  "files": [
+    {"path":"app.exe","status":"modified","local_md5":"abc123","server_md5":"def456","server_size":5242880},
+    {"path":"new.dll","status":"new","local_md5":"","server_md5":"xyz789","server_size":102400}
+  ]
+}
 ```
-relative/path/to/file	local_size	server_size	local_md5	server_md5
-```
 
-- 如果文件仅存在于本地（服务端无对应文件），`server_size` 和 `server_md5` 显示为 `-`
-- 如果文件仅存在于服务端（本地无对应文件），`local_size` 和 `local_md5` 显示为 `-`
+**字段说明**：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `new_version` | string | 服务端最新版本号 |
+| `files` | array | 差异文件列表 |
+| `files[].path` | string | 文件相对路径 |
+| `files[].status` | string | `modified`（已修改）或 `new`（本地不存在） |
+| `files[].local_md5` | string | 本地文件 MD5（`new` 时为空） |
+| `files[].server_md5` | string | 服务端文件 MD5 |
+| `files[].server_size` | int | 服务端文件大小（字节） |
 
 ---
 
 ### 3. 下载更新
 
 ```bash
-client-updator.exe download_update [--url <url>] [--mirror-url <url>] [--project-name <name>] [--main-exe-path <path>] [--silent]
+client-updator.exe download_update [--url <url>] [--project-name <name>] [--main-exe-path <path>] [--silent]
 ```
 
 **调用接口**：
 - `GET {url}/api/file/get_all_files/{project_id}` 获取文件列表
-- `GET {url}/api/file/download_file?path={file_path}` 逐文件下载（支持 `Range` 头断点续传）
+- `GET {url}/api/file/download_file?path={file_path}` 逐文件下载
 
 **执行步骤**：
 
 1. 获取服务端文件详情列表（服务端自动忽略配置中排除的文件夹和文件）
 2. 对比服务端文件与本地文件的 MD5 差异
 3. 将差异文件下载至 `{main_exe_relative_path_folder}/update/{new_version}/` 文件夹中
-   - 支持断点续传：下载中断后再次执行，已下载完整的文件跳过，未完成的从断点继续
-   - 主地址下载失败时自动切换 `mirror_url`（如已配置）
-4. 下载完成后逐文件校验 MD5 + SHA-256，与服务器返回值不一致则重试（最多 3 次），仍未通过则中止并报错
+   - **大文件断点续传**：文件 > 100MB 时，下载前检查本地是否存在同名文件或 `.part` 临时文件
+     - 若存在且大小 < 服务端大小，发送 `Range: bytes={size}-` 从断点继续下载
+     - 下载中写入 `.part` 临时文件，完成后重命名为正式文件名
+   - 文件 ≤ 100MB 直接全量下载
+4. 下载完成后逐文件校验 MD5 + SHA-256，与服务器返回值不一致则重试（最多 3 次），仍未通过则中止
 5. 将 `main_exe_relative_path_folder` 中的所有文件复制到 `{main_exe_relative_path_folder}/update/{new_version}/`，已存在的文件不覆盖，确保新版本目录是完整可运行的
 6. 将 `main_exe_relative_path_folder` 中所有文件备份到 `{main_exe_relative_path_folder}/update/{current_version}/`
 7. 更新 version.json：`version` 设为新版本号，`version_status` 设为 `downloaded`
-8. 退出码 0 表示成功，1 表示失败
 
-**进度输出**：
+**返回值**（stdout JSON）：
 
-非 `--silent` 模式下，标准输出逐行打印进度（便于调用方解析）：
+成功：
+```json
+{"success":true,"version":"1.0.1"}
+```
+
+失败：
+```json
+{"success":false,"error":"app.exe 校验失败，已重试 3 次"}
+```
+
+**进度输出**（stderr，非 `--silent` 模式）：
+
 ```
 progress:12/45 files
 progress:downloading app.exe 25%
 progress:verifying app.exe sha256 ok
 progress:45/45 files complete
 ```
-`--silent` 模式下不输出任何内容，仅靠退出码判断成功/失败。
 
 ---
 
@@ -234,20 +260,33 @@ client-updator.exe apply_update [--main-exe-path <path>] [--must-close-process-n
 
 **执行步骤**：
 
-1. 读取 version.json，如果 `version_status` 不为 `downloaded`，退出码 1
+1. 读取 version.json，如果 `version_status` 不为 `downloaded`，返回错误
 2. 关闭 `must_close_process_name` 中列出的所有进程：
    - 先发送 `WM_CLOSE` 消息请求正常退出
    - 等待超时（默认 30 秒，可通过 `--close-timeout` 配置）
    - 超时后调用 `TerminateProcess` 强制终止
 3. **原子替换**：
-   - 将 `{main_exe_relative_path_folder}/update/{version}/` 中的所有文件复制到临时目录 `{main_exe_relative_path_folder}_swap/`
-   - 复制完成后，将 `{main_exe_relative_path_folder}` 重命名为 `{main_exe_relative_path_folder}_old/`
-   - 将 `{main_exe_relative_path_folder}_swap/` 重命名为 `{main_exe_relative_path_folder}`
-   - 清理 `{main_exe_relative_path_folder}_old/`
-   - 如任一步失败，回滚：将 `{main_exe_relative_path_folder}_old/` 重命名回来，保证主程序目录不被损坏
+   - 将 `{main_exe_relative_path_folder}_old/`（上次残留）清理
+   - 将 `{main_exe_relative_path_folder}` 重命名为 `{main_exe_relative_path_folder}_old/`
+   - 将 `{main_exe_relative_path_folder}/update/{version}/` 重命名为 `{main_exe_relative_path_folder}`
+     - 注意：跨目录 rename 可能在不同盘符上失败，此时回退为复制 + 删除方案
+   - 如任一步失败，将 `_old/` 重命名回来，保证主程序目录完整
+   - 清理 `_old/`
 4. 更新 version.json：`version_status` 设为 `applied`
 5. 执行 `post_update_script`（如已配置），脚本失败不影响更新结果，仅记录日志到 `update.log`
-6. 退出码 0 表示成功，1 表示失败
+6. **启动主程序**：以 `main_exe_relative_path` 为路径启动主程序 exe
+
+**返回值**（stdout JSON）：
+
+成功：
+```json
+{"success":true}
+```
+
+失败：
+```json
+{"success":false,"error":"原子替换失败，已回滚"}
+```
 
 ---
 
@@ -259,11 +298,10 @@ client-updator.exe list_rollback_versions [--main-exe-path <path>]
 
 **功能**：扫描本地 `{main_exe_relative_path_folder}/update/` 目录，列出所有可用的回滚版本号。
 
-**输出格式**（每行一个版本号）：
+**返回值**（stdout JSON）：
 
-```
-1.0.0
-1.0.1
+```json
+{"current_version":"1.0.1","versions":["1.0.0","1.0.1"]}
 ```
 
 ---
@@ -276,11 +314,23 @@ client-updator.exe rollback --version 1.0.1 [--main-exe-path <path>] [--must-clo
 
 **执行步骤**：
 
-1. 校验 `{main_exe_relative_path_folder}/update/{rollback_version}/` 目录存在且所有文件 MD5 完整，否则退出码 1
+1. 校验 `{main_exe_relative_path_folder}/update/{rollback_version}/` 目录存在且所有文件 MD5 完整，否则返回错误
 2. 关闭 `must_close_process_name` 中列出的所有进程（同 apply_update 的两阶段关闭策略）
-3. 将目录内所有文件以**原子替换**方式复制到 `{main_exe_relative_path_folder}/`（同 apply_update 步骤 3）
+3. 将目录内所有文件以**原子替换**方式应用到 `{main_exe_relative_path_folder}/`（同 apply_update 步骤 3）
 4. 更新 version.json：`version` 设为回滚目标版本号，`version_status` 设为 `applied`
-5. 退出码 0 表示成功，1 表示失败
+5. 启动主程序
+
+**返回值**（stdout JSON）：
+
+成功：
+```json
+{"success":true,"version":"1.0.1"}
+```
+
+失败：
+```json
+{"success":false,"error":"回滚目标版本目录不存在"}
+```
 
 ---
 
