@@ -52,7 +52,7 @@ type CheckUpdateOutput struct {
 	HasUpdate      bool   `json:"has_update"`
 	CurrentVersion string `json:"current_version,omitempty"`
 	NewVersion     string `json:"new_version,omitempty"`
-	ForceUpdate    *bool  `json:"force_update,omitempty"`
+	ForceUpdate    bool   `json:"force_update,omitempty"`
 	Error          string `json:"error,omitempty"`
 }
 
