@@ -7,49 +7,48 @@ import (
 
 	apiclient "clientupdator/client/client"
 	"clientupdator/client/config"
+	"clientupdator/client/model"
 )
 
-// CheckUpdate 检查更新
+// CheckUpdate checks for new version
 func CheckUpdate() {
 	fs := flag.NewFlagSet("check_update", flag.ExitOnError)
-	urlFlag := fs.String("url", "", "服务器地址")
-	projectNameFlag := fs.String("project-name", "", "项目名称")
+	urlFlag := fs.String("url", "", "server url")
+	projectNameFlag := fs.String("project-name", "", "project name")
 	fs.Parse(os.Args[2:])
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Printf("false:%v\n", err)
+		printJSON(model.CheckUpdateOutput{HasUpdate: false, Error: fmt.Sprintf("load config: %v", err)})
 		return
 	}
 	cfg.MergeFlags(*urlFlag, *projectNameFlag, "", "")
 
 	if cfg.URL == "" {
-		fmt.Println("false:未配置服务器地址")
+		printJSON(model.CheckUpdateOutput{HasUpdate: false, Error: "no server url configured"})
 		return
 	}
 	if cfg.ProjectName == "" {
-		fmt.Println("false:未配置项目名称")
+		printJSON(model.CheckUpdateOutput{HasUpdate: false, Error: "no project name configured"})
 		return
 	}
 
 	project, err := apiclient.FindProjectByName(cfg.URL, cfg.ProjectName)
 	if err != nil {
-		fmt.Printf("false:%v\n", err)
+		printJSON(model.CheckUpdateOutput{HasUpdate: false, Error: err.Error()})
 		return
 	}
 
 	logs, err := apiclient.GetProjectChangeLogs(cfg.URL, project.ID)
 	if err != nil {
-		fmt.Printf("false:%v\n", err)
+		printJSON(model.CheckUpdateOutput{HasUpdate: false, Error: err.Error()})
 		return
 	}
-
 	if len(logs) == 0 {
-		fmt.Println("false:服务端无变更日志")
+		printJSON(model.CheckUpdateOutput{HasUpdate: false, CurrentVersion: ""})
 		return
 	}
 
-	// 找到最新版本（ID 最大的变更日志）
 	latestLog := logs[0]
 	for i := 1; i < len(logs); i++ {
 		if logs[i].ID > latestLog.ID {
@@ -57,20 +56,36 @@ func CheckUpdate() {
 		}
 	}
 
-	// 读取本地版本信息
 	versionInfo, err := config.ReadVersion()
 	if err != nil {
-		fmt.Printf("false:读取版本信息失败: %v\n", err)
+		printJSON(model.CheckUpdateOutput{HasUpdate: false, Error: fmt.Sprintf("read version: %v", err)})
 		return
 	}
 
-	// 去掉前缀 V 进行比较（服务端版本可能是 "V1.0.0"，本地版本可能是 "1.0.0"）
 	serverVersion := stripVPrefix(latestLog.Version)
 	localVersion := stripVPrefix(versionInfo.Version)
 
-	if serverVersion != localVersion {
-		fmt.Printf("true:%s\n", serverVersion)
+	if compareVersion(serverVersion, localVersion) > 0 {
+		forceUpdate := false
+		projects, perr := apiclient.GetAllProjects(cfg.URL)
+		if perr == nil {
+			for _, p := range projects {
+				if p.ID == project.ID {
+					forceUpdate = p.ForceUpdate
+					break
+				}
+			}
+		}
+		printJSON(model.CheckUpdateOutput{
+			HasUpdate:      true,
+			CurrentVersion: localVersion,
+			NewVersion:     serverVersion,
+			ForceUpdate:    forceUpdate,
+		})
 	} else {
-		fmt.Println("false:")
+		printJSON(model.CheckUpdateOutput{
+			HasUpdate:      false,
+			CurrentVersion: localVersion,
+		})
 	}
 }

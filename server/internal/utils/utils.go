@@ -2,6 +2,7 @@ package utils
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -23,4 +24,19 @@ func GetFileMD5(filename string) (string, error) {
 
 	md5str := fmt.Sprintf("%x", md) //将 []byte 转为 string
 	return md5str, nil
+}
+
+func GetFileSHA256(filename string) (string, error) {
+	f, err := os.Open(filename)
+	if nil != err {
+		return "", err
+	}
+	defer f.Close()
+
+	sha256Handle := sha256.New()
+	_, err = io.Copy(sha256Handle, f)
+	if nil != err {
+		return "", err
+	}
+	return fmt.Sprintf("%x", sha256Handle.Sum(nil)), nil
 }

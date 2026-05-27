@@ -42,4 +42,44 @@ type FileInfo struct {
 	LastUpdateTime   time.Time `json:"lastUpdateTime"`
 	FileSize         int64     `json:"fileSize"`
 	MD5              string    `json:"md5"`
+	SHA256           string    `json:"sha256"`
+}
+
+// --- 命令行输出模型 ---
+
+// CheckUpdateOutput 是 check_update 命令的 JSON 输出
+type CheckUpdateOutput struct {
+	HasUpdate      bool   `json:"has_update"`
+	CurrentVersion string `json:"current_version,omitempty"`
+	NewVersion     string `json:"new_version,omitempty"`
+	ForceUpdate    *bool  `json:"force_update,omitempty"`
+	Error          string `json:"error,omitempty"`
+}
+
+// DiffFile 表示 check_diff 输出中的单个差异文件
+type DiffFile struct {
+	Path       string `json:"path"`
+	Status     string `json:"status"`
+	LocalMD5   string `json:"local_md5"`
+	ServerMD5  string `json:"server_md5"`
+	ServerSize int64  `json:"server_size"`
+}
+
+// CheckDiffOutput 是 check_diff 命令的 JSON 输出
+type CheckDiffOutput struct {
+	NewVersion string     `json:"new_version"`
+	Files      []DiffFile `json:"files"`
+}
+
+// SuccessOutput 是通用成功/错误输出
+type SuccessOutput struct {
+	Success bool   `json:"success"`
+	Version string `json:"version,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+// RollbackListOutput 是 list_rollback_versions 命令的 JSON 输出
+type RollbackListOutput struct {
+	CurrentVersion string   `json:"current_version"`
+	Versions       []string `json:"versions"`
 }

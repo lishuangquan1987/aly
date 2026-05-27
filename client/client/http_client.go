@@ -170,6 +170,114 @@ func DownloadFile(serverURL string, serverFilePath string, localPath string) err
 	return nil
 }
 
+// DownloadFileWithResume downloads a file, resuming from partial download if a .part file exists.
+// largeFileThreshold is the size in bytes above which resume is attempted (e.g., 100*1024*1024 for 100MB).
+func DownloadFileWithResume(serverURL string, serverFilePath string, localPath string, serverFileSize int64, largeFileThreshold int64) error {
+	requestURL := fmt.Sprintf("%s/api/file/download_file?path=%s",
+		strings.TrimRight(serverURL, "/"),
+		urlEncodePath(serverFilePath))
+
+	// Ensure parent directory exists
+	dir := filepath.Dir(localPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("create directory failed: %v", err)
+	}
+
+	// For files larger than threshold, check for existing partial download
+	partPath := localPath + ".part"
+	if serverFileSize > largeFileThreshold {
+		// Check if completed file already exists
+		if localInfo, localErr := os.Stat(localPath); localErr == nil && localInfo.Size() == serverFileSize {
+			return nil
+		}
+
+		// Check if partial .part file exists for resume
+		if partInfo, partErr := os.Stat(partPath); partErr == nil && partInfo.Size() > 0 && partInfo.Size() < serverFileSize {
+			// Resume from .part file
+			f, err := os.OpenFile(partPath, os.O_APPEND|os.O_WRONLY, 0644)
+			if err != nil {
+				return fmt.Errorf("open part file failed: %v", err)
+			}
+
+			req, err := http.NewRequest("GET", requestURL, nil)
+			if err != nil {
+				f.Close()
+				return fmt.Errorf("create request failed: %v", err)
+			}
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", partInfo.Size()))
+
+			resp, err := httpClient.Do(req)
+			if err != nil {
+				f.Close()
+				return fmt.Errorf("resume request failed: %v", err)
+			}
+
+			if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
+				resp.Body.Close()
+				f.Close()
+				// Server doesn't support resume, remove .part and start over
+				os.Remove(partPath)
+				return DownloadFile(serverURL, serverFilePath, localPath)
+			}
+
+			_, copyErr := io.Copy(f, resp.Body)
+			resp.Body.Close()
+			f.Close()
+
+			if copyErr != nil {
+				return fmt.Errorf("resume write failed: %v", copyErr)
+			}
+
+			// Verify download is complete before renaming
+			if checkInfo, checkErr := os.Stat(partPath); checkErr == nil && checkInfo.Size() >= serverFileSize {
+				if err := os.Rename(partPath, localPath); err != nil {
+					return fmt.Errorf("rename part file failed: %v", err)
+				}
+				return nil
+			}
+			// Download not complete after resume, fall through to fresh download
+			os.Remove(partPath)
+		}
+
+		// No valid .part file or resume didn't complete - remove any leftover .part
+		os.Remove(partPath)
+	}
+
+	// Download to .part file, then rename atomically
+	f, err := os.Create(partPath)
+	if err != nil {
+		return fmt.Errorf("create file failed: %v", err)
+	}
+
+	resp, err := httpClient.Get(requestURL)
+	if err != nil {
+		f.Close()
+		os.Remove(partPath)
+		return fmt.Errorf("download failed: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		f.Close()
+		os.Remove(partPath)
+		return fmt.Errorf("download failed, status: %d", resp.StatusCode)
+	}
+
+	_, copyErr := io.Copy(f, resp.Body)
+	resp.Body.Close()
+	f.Close()
+
+	if copyErr != nil {
+		os.Remove(partPath)
+		return fmt.Errorf("write file failed: %v", copyErr)
+	}
+
+	if err := os.Rename(partPath, localPath); err != nil {
+		return fmt.Errorf("rename part file failed: %v", err)
+	}
+	return nil
+}
+
 func urlEncodePath(s string) string {
 	// 将反斜杠替换为正斜杠
 	s = strings.Replace(s, "\\", "/", -1)

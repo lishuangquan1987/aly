@@ -18,4 +18,7 @@ public class FileInfoDto
 
     [JsonProperty("md5")]
     public string Md5 { get; set; } = string.Empty;
+
+    [JsonProperty("sha256")]
+    public string SHA256 { get; set; } = string.Empty;
 }

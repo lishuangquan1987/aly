@@ -4,69 +4,81 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"clientupdator/client/config"
-	"clientupdator/client/util"
+	"clientupdator/client/model"
 )
 
 // ApplyUpdate 执行更新
 func ApplyUpdate() {
 	fs := flag.NewFlagSet("apply_update", flag.ExitOnError)
-	mainExePathFlag := fs.String("main-exe-path", "", "主程序相对路径")
-	mustCloseFlag := fs.String("must-close-process-name", "", "必须关闭的进程名（逗号分隔）")
+	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
+	mustCloseFlag := fs.String("must-close-process-name", "", "process names to close (comma separated)")
+	closeTimeoutFlag := fs.Int("close-timeout", 30, "timeout seconds for process close")
+	silentFlag := fs.Bool("silent", false, "silent mode")
 	fs.Parse(os.Args[2:])
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Printf("false:%v\n", err)
+		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("load config: %v", err)})
 		return
 	}
 	cfg.MergeFlags("", "", *mainExePathFlag, *mustCloseFlag)
 
-	// 1. 读取 version.json，检查状态
 	versionInfo, err := config.ReadVersion()
 	if err != nil {
-		fmt.Printf("false:读取版本信息失败: %v\n", err)
+		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("read version: %v", err)})
 		return
 	}
-
 	if versionInfo.VersionStatus != config.VersionStatusDownloaded {
-		fmt.Println("false:当前没有待应用的更新")
+		printJSON(model.SuccessOutput{Success: false, Error: "no pending update to apply"})
 		return
 	}
 
 	mainFolder, err := cfg.MainExeFolderPath()
 	if err != nil {
-		fmt.Printf("false:%v\n", err)
+		printJSON(model.SuccessOutput{Success: false, Error: err.Error()})
 		return
 	}
 
-	// 2. 关闭必须关闭的进程
+	// 关闭必须关闭的进程
 	if len(cfg.MustCloseProcessName) > 0 {
-		fmt.Fprintf(os.Stderr, "正在关闭进程...\n")
-		if err := util.KillProcessesAndWait(cfg.MustCloseProcessName, 10*time.Second); err != nil {
-			fmt.Printf("false:关闭进程失败: %v\n", err)
-			return
+		if !*silentFlag {
+			fmt.Fprintf(os.Stderr, "closing processes...\n")
 		}
+		closeProcessesGracefully(cfg.MustCloseProcessName, time.Duration(*closeTimeoutFlag)*time.Second)
 	}
 
-	// 3. 将 update/{version}/ 中的文件复制到主程序目录
-	versionDir := filepath.Join(mainFolder, "update", versionInfo.Version)
-	fmt.Fprintf(os.Stderr, "从 %s 复制文件到 %s\n", versionDir, mainFolder)
-
-	if err := util.CopyDir(versionDir, mainFolder, true); err != nil {
-		fmt.Printf("false:复制更新文件失败: %v\n", err)
+	// 原子替换
+	if !*silentFlag {
+		fmt.Fprintf(os.Stderr, "applying update...\n")
+	}
+	if err := atomicReplace(mainFolder, versionInfo.Version); err != nil {
+		printJSON(model.SuccessOutput{Success: false, Error: err.Error()})
 		return
 	}
 
-	// 4. 更新 version.json
+	// 更新 version.json
 	versionInfo.VersionStatus = config.VersionStatusApplied
 	if err := config.WriteVersion(versionInfo); err != nil {
-		fmt.Printf("false:更新版本信息失败: %v\n", err)
+		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("write version: %v", err)})
 		return
 	}
 
-	fmt.Println("true")
+	// 执行更新后脚本
+	if cfg.PostUpdateScript != "" {
+		scriptPath := cfg.PostUpdateScript
+		// 如果脚本路径是相对路径，则相对于 ExeDir 解析
+		if len(scriptPath) > 0 && (scriptPath[0] == '.' || (len(scriptPath) >= 2 && scriptPath[1] != ':')) {
+			exeDir, _ := config.ExeDir()
+			scriptPath = exeDir + string(os.PathSeparator) + scriptPath
+		}
+		runScript(scriptPath)
+	}
+
+	// 启动主程序
+	launchMainExe(cfg)
+
+	printJSON(model.SuccessOutput{Success: true})
 }

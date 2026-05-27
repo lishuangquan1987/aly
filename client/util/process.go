@@ -11,14 +11,19 @@ import (
 
 var (
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
+	user32   = syscall.NewLazyDLL("user32.dll")
 
 	procCreateToolhelp32Snapshot = kernel32.NewProc("CreateToolhelp32Snapshot")
-	procProcess32FirstW           = kernel32.NewProc("Process32FirstW")
-	procProcess32NextW            = kernel32.NewProc("Process32NextW")
-	procOpenProcess               = kernel32.NewProc("OpenProcess")
-	procTerminateProcess           = kernel32.NewProc("TerminateProcess")
-	procWaitForSingleObject        = kernel32.NewProc("WaitForSingleObject")
-	procCloseHandle                = kernel32.NewProc("CloseHandle")
+	procProcess32FirstW          = kernel32.NewProc("Process32FirstW")
+	procProcess32NextW           = kernel32.NewProc("Process32NextW")
+	procOpenProcess              = kernel32.NewProc("OpenProcess")
+	procTerminateProcess         = kernel32.NewProc("TerminateProcess")
+	procWaitForSingleObject      = kernel32.NewProc("WaitForSingleObject")
+	procCloseHandle              = kernel32.NewProc("CloseHandle")
+	procEnumWindows              = user32.NewProc("EnumWindows")
+	procGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
+	procSendMessageW             = user32.NewProc("SendMessageW")
+	procIsWindowVisible          = user32.NewProc("IsWindowVisible")
 )
 
 const (
@@ -30,6 +35,8 @@ const (
 
 	WAIT_OBJECT_0 = 0
 	WAIT_TIMEOUT  = 0x00000102
+
+	WM_CLOSE = 0x0010
 
 	MAX_PATH = 260
 )
@@ -193,6 +200,22 @@ func IsProcessRunning(name string) (bool, error) {
 		return false, err
 	}
 	return len(pids) > 0, nil
+}
+
+// SendCloseMessageToProcess 向指定 PID 的所有可见顶层窗口发送 WM_CLOSE 消息
+func SendCloseMessageToProcess(pid uint32) {
+	pidPtr := pid
+	procEnumWindows.Call(syscall.NewCallback(func(hwnd syscall.Handle, lParam uintptr) uintptr {
+		var windowPid uint32
+		procGetWindowThreadProcessId.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&windowPid)))
+		if windowPid == pidPtr {
+			visible, _, _ := procIsWindowVisible.Call(uintptr(hwnd))
+			if visible != 0 {
+				procSendMessageW.Call(uintptr(hwnd), uintptr(WM_CLOSE), 0, 0)
+			}
+		}
+		return 1 // 继续枚举
+	}), 0)
 }
 
 // toLower 简单的字符串转小写（仅处理 ASCII）

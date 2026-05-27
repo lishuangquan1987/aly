@@ -10,6 +10,7 @@ type FileInfo struct {
 	LastUpdateTime   time.Time `json:"lastUpdateTime"`
 	FileSize         int64     `json:"fileSize"`
 	MD5              string    `json:"md5"`
+	SHA256           string    `json:"sha256"`
 }
 
 type CommonResponse struct {

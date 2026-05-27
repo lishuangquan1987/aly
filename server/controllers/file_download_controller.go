@@ -70,12 +70,18 @@ func GetAllFilesByProjectId(ctx *gin.Context) {
 			ctx.JSON(200, models.NGWithError(err))
 			return
 		}
+		sha256Str, err := utils.GetFileSHA256(f)
+		if err != nil {
+			ctx.JSON(200, models.NGWithError(err))
+			return
+		}
 		fileInfo := models.FileInfo{
 			FileAbsolutePath: f,
 			FileRelativePath: relPath,
 			LastUpdateTime:   info.LastWriteTime,
 			FileSize:         info.Length,
 			MD5:              md5Str,
+			SHA256:           sha256Str,
 		}
 
 		result.Add(fileInfo)

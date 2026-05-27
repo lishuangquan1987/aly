@@ -8,71 +8,68 @@ import (
 	"time"
 
 	"clientupdator/client/config"
-	"clientupdator/client/util"
+	"clientupdator/client/model"
 )
 
-// Rollback 版本回滚
+// Rollback reverts to a previous version
 func Rollback() {
 	fs := flag.NewFlagSet("rollback", flag.ExitOnError)
-	versionFlag := fs.String("version", "", "回滚目标版本号")
-	mainExePathFlag := fs.String("main-exe-path", "", "主程序相对路径")
-	mustCloseFlag := fs.String("must-close-process-name", "", "必须关闭的进程名（逗号分隔）")
+	versionFlag := fs.String("version", "", "target version to rollback to")
+	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
+	mustCloseFlag := fs.String("must-close-process-name", "", "process names to close")
+	closeTimeoutFlag := fs.Int("close-timeout", 30, "timeout seconds")
 	fs.Parse(os.Args[2:])
 
 	if *versionFlag == "" {
-		fmt.Println("false:请指定回滚目标版本号 (--version)")
+		printJSON(model.SuccessOutput{Success: false, Error: "--version is required"})
 		return
 	}
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Printf("false:%v\n", err)
+		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("load config: %v", err)})
 		return
 	}
 	cfg.MergeFlags("", "", *mainExePathFlag, *mustCloseFlag)
 
 	mainFolder, err := cfg.MainExeFolderPath()
 	if err != nil {
-		fmt.Printf("false:%v\n", err)
+		printJSON(model.SuccessOutput{Success: false, Error: err.Error()})
 		return
 	}
 
-	// 检查回滚版本目录是否存在
 	rollbackDir := filepath.Join(mainFolder, "update", *versionFlag)
-	info, err := os.Stat(rollbackDir)
-	if err != nil || !info.IsDir() {
-		fmt.Printf("false:回滚版本 %s 不存在\n", *versionFlag)
+	if info, err := os.Stat(rollbackDir); err != nil || !info.IsDir() {
+		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("version %s not found", *versionFlag)})
 		return
 	}
 
-	// 1. 关闭必须关闭的进程
+	// Close processes
 	if len(cfg.MustCloseProcessName) > 0 {
-		fmt.Fprintf(os.Stderr, "正在关闭进程...\n")
-		if err := util.KillProcessesAndWait(cfg.MustCloseProcessName, 10*time.Second); err != nil {
-			fmt.Printf("false:关闭进程失败: %v\n", err)
-			return
-		}
+		closeProcessesGracefully(cfg.MustCloseProcessName, time.Duration(*closeTimeoutFlag)*time.Second)
 	}
 
-	// 2. 将回滚版本目录中的文件复制到主程序目录
-	fmt.Fprintf(os.Stderr, "从 %s 复制文件到 %s\n", rollbackDir, mainFolder)
-	if err := util.CopyDir(rollbackDir, mainFolder, true); err != nil {
-		fmt.Printf("false:复制回滚文件失败: %v\n", err)
+	// Atomic replace
+	if err := atomicReplace(mainFolder, *versionFlag); err != nil {
+		printJSON(model.SuccessOutput{Success: false, Error: err.Error()})
 		return
 	}
 
-	// 3. 更新 version.json
+	// Update version.json
 	versionInfo, err := config.ReadVersion()
 	if err != nil {
-		fmt.Printf("false:读取版本信息失败: %v\n", err)
+		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("read version: %v", err)})
 		return
 	}
 	versionInfo.Version = *versionFlag
 	versionInfo.VersionStatus = config.VersionStatusApplied
 	if err := config.WriteVersion(versionInfo); err != nil {
-		fmt.Printf("false:更新版本信息失败: %v\n", err)
+		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("write version: %v", err)})
 		return
 	}
 
-	fmt.Println("true")
+	// Launch main exe
+	launchMainExe(cfg)
+
+	printJSON(model.SuccessOutput{Success: true, Version: *versionFlag})
 }

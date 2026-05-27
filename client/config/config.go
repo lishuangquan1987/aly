@@ -15,6 +15,7 @@ type Config struct {
 	URL                  string   `yaml:"url"`
 	MainExeRelativePath  string   `yaml:"main_exe_relative_path"`
 	MustCloseProcessName []string `yaml:"must_close_process_name"`
+	PostUpdateScript     string   `yaml:"post_update_script"`
 }
 
 // ExeDir 返回可执行文件所在目录

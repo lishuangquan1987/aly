@@ -2,6 +2,7 @@ package util
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -18,6 +19,22 @@ func FileMD5(path string) (string, error) {
 	defer f.Close()
 
 	hash := md5.New()
+	if _, err := io.Copy(hash, f); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// FileSHA256 计算文件的 SHA-256 哈希值
+func FileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	hash := sha256.New()
 	if _, err := io.Copy(hash, f); err != nil {
 		return "", err
 	}
