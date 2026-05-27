@@ -12,7 +12,7 @@
 | ------ | ---- | ---- | -------- |
 | **server** | `server/` | 服务端（Go + Gin + Ent + SQLite），提供项目管理和文件管理的 REST API | 已开发 |
 | **publish_tool_avalonia** | `publish_tool_avalonia/` | **版本发布客户端**（.NET 8 + Avalonia 12），主要功能是推送文件、新版本到服务端，管理发布流程 | 已开发 |
-| **client** | `client/` | **更新客户端**（暂未开发），主要功能是发现新版本、下载新版本、替换文件实现自动更新，也支持全量下载整个压缩包 | 未开发 |
+| **client** | `client/` | 见./client/README.MD|
 
 **关键约束**：
 
