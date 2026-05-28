@@ -78,12 +78,13 @@ jobs:
           mkdir "%GOPATH%\src\clientupdator"
           xcopy /e /i /y client "%GOPATH%\src\clientupdator\client"
 
-      - name: Build (32-bit, XP compatible)
+      - name: Install deps & Build (32-bit, XP compatible)
         shell: cmd
         run: |
           set GOOS=windows
           set GOARCH=386
           set GO111MODULE=off
+          go get gopkg.in/yaml.v2
           go build -ldflags="-s -w" -o client-updator.exe clientupdator/client
 
       - name: Copy artifact into client/
