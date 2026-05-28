@@ -38,7 +38,7 @@ func GetAllFilesByProjectId(ctx *gin.Context) {
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
-	files, err := directory.GetFiles(workDir, "*,*", true)
+	files, err := directory.GetFiles(workDir, "*", true)
 	//查询文件
 	if err != nil {
 		ctx.JSON(200, models.NGWithError(err))
@@ -47,8 +47,8 @@ func GetAllFilesByProjectId(ctx *gin.Context) {
 
 	result := generic.NewList[models.FileInfo]()
 	for i := 0; i < len(files); i++ {
-		//f是全路径
-		f := files[i]
+		// GetFiles 只返回文件名，拼接为完整路径
+		f := path.Combine(workDir, files[i])
 		//获取相对路径
 		relPath, _ := path.GetRelativePath(workDir, f)
 		if linq.From(p.IgnoreFolders).Where(func(ignoreFolder string) bool {

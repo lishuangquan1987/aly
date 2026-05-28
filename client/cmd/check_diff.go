@@ -53,9 +53,9 @@ func CheckDiff() {
 	}
 
 	// Get new version from change logs
-	logs, _ := apiclient.GetProjectChangeLogs(cfg.URL, project.ID)
+	logs, logsErr := apiclient.GetProjectChangeLogs(cfg.URL, project.ID)
 	newVersion := ""
-	if len(logs) > 0 {
+	if logsErr == nil && len(logs) > 0 {
 		latestLog := logs[0]
 		for i := 1; i < len(logs); i++ {
 			if logs[i].ID > latestLog.ID {

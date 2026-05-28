@@ -191,7 +191,8 @@ func CopyDirWithExclude(srcDir, dstDir string, shouldSkipFile func(relPath strin
 		}
 
 		dstPath := filepath.Join(dstDir, relPath)
-		return CopyFile(path, dstPath, true)
+		// overwrite=false: don't overwrite files already in dstDir (e.g. newly downloaded files)
+		return CopyFile(path, dstPath, false)
 	})
 }
 
