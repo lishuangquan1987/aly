@@ -54,14 +54,15 @@ jobs:
         run: |
           cd server
           set EXT=
-          if "%GOOS%"=="windows" set EXT=.exe
-          go build -ldflags="-s -w" -o server%EXT% ./cmd
+          if /I "%GOOS%"=="windows" set EXT=.exe
+          set OUT=server-%GOOS%-%GOARCH%%EXT%
+          go build -ldflags="-s -w" -o %OUT% ./cmd
 
       - name: Upload server artifact
         uses: actions/upload-artifact@v4
         with:
           name: server-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: server/server${{ matrix.goos == 'windows' && '.exe' || '' }}
+          path: server/server-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
 
   build-client:
     name: Build Client (Windows XP / 32-bit)
@@ -128,6 +129,9 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
 
+      - name: List downloaded artifacts
+        run: ls -laR
+
       - name: Resolve tag
         id: tag
         run: |
@@ -143,10 +147,10 @@ jobs:
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           gh release upload "$TAG" \
-            server-windows-amd64/server.exe \
-            server-linux-amd64/server \
-            server-linux-arm64/server \
-            server-darwin-amd64/server \
-            server-darwin-arm64/server \
+            server-windows-amd64/server-windows-amd64.exe \
+            server-linux-amd64/server-linux-amd64 \
+            server-linux-arm64/server-linux-arm64 \
+            server-darwin-amd64/server-darwin-amd64 \
+            server-darwin-arm64/server-darwin-arm64 \
             client-updator-win-xp/client-updator.exe \
             --clobber

@@ -27,11 +27,11 @@ ClientUpdator/
 | macOS Apple Silicon | `server-darwin-arm64` |
 
 ```bash
-# 默认端口 2000
-./server
+# Windows
+server-windows-amd64.exe -p 2000
 
-# 指定端口
-./server -p 8080
+# Linux / macOS
+./server-linux-amd64 -p 2000
 ```
 
 首次启动会自动创建 SQLite 数据库（`configs/clientupdator.db`）并建表。
@@ -175,18 +175,21 @@ PackageFolder/
 
 ```bash
 cd server
-go build -ldflags="-s -w" -o server ./cmd
+go build -ldflags="-s -w" -o server.exe ./cmd
 ```
 
-交叉编译：
+交叉编译（`CGO_ENABLED=0` 纯静态编译）：
 
 ```bash
-# Linux
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o server ./cmd
-
-# macOS
-CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o server ./cmd
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o server ./cmd
+cd server
+# Linux amd64
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o server-linux-amd64 ./cmd
+# Linux arm64
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o server-linux-arm64 ./cmd
+# macOS amd64
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o server-darwin-amd64 ./cmd
+# macOS arm64
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o server-darwin-arm64 ./cmd
 ```
 
 ### 客户端
