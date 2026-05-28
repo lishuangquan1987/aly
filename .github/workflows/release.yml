@@ -3,7 +3,6 @@ name: Release Build
 on:
   release:
     types: [published]
-  workflow_dispatch:
 
 jobs:
   build-server:
@@ -46,6 +45,8 @@ jobs:
   build-client:
     name: Build Client (Go 1.10 / XP)
     runs-on: windows-latest
+    env:
+      GOPATH: C:\Users\runneradmin\go
 
     steps:
       - name: Checkout
