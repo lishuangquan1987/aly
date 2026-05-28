@@ -18,7 +18,7 @@ import (
 
 func GetAllFilesByProjectId(ctx *gin.Context) {
 	var projectIdDto struct {
-		ProjectId int `json:"projectId"`
+		ProjectId int `uri:"projectId" json:"projectId"`
 	}
 	if err := ctx.BindUri(&projectIdDto); err != nil {
 		ctx.JSON(200, models.NGWithError(err))

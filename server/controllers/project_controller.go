@@ -120,7 +120,7 @@ func UpdateProject(ctx *gin.Context) {
 
 func DeleteProject(ctx *gin.Context) {
 	var projectIdDto struct {
-		ProjectId int `json:"projectId"`
+		ProjectId int `uri:"projectId" json:"projectId"`
 	}
 	if err := ctx.BindUri(&projectIdDto); err != nil {
 		ctx.JSON(200, models.NGWithError(err))
@@ -136,7 +136,7 @@ func GetAllProjects(ctx *gin.Context) {
 
 func GetProjectChangeLogs(ctx *gin.Context) {
 	var projectIdDto struct {
-		ProjectId int `json:"projectId"`
+		ProjectId int `uri:"projectId" json:"projectId"`
 	}
 	if err := ctx.BindUri(&projectIdDto); err != nil {
 		ctx.JSON(200, models.NGWithError(err))
@@ -153,7 +153,7 @@ func GetProjectChangeLogs(ctx *gin.Context) {
 
 func GetProjectOSInfo(ctx *gin.Context) {
 	var projectIdUrl struct {
-		ProjectId int `json:"projectId"`
+		ProjectId int `uri:"projectId" json:"projectId"`
 	}
 	if err := ctx.BindUri(&projectIdUrl); err != nil {
 		ctx.JSON(200, models.NGWithError(err))
