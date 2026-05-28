@@ -12,8 +12,17 @@ on:
 
 jobs:
   build-server:
-    name: Build Server
+    name: Build Server (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: windows-latest
+    strategy:
+      matrix:
+        goos: [windows, linux, darwin]
+        goarch: [amd64]
+        include:
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: arm64
 
     steps:
       - name: Checkout
@@ -38,18 +47,24 @@ jobs:
 
       - name: Build server
         shell: cmd
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
         run: |
           cd server
-          go build -ldflags="-s -w" -o server.exe ./cmd
+          set EXT=
+          if "%GOOS%"=="windows" set EXT=.exe
+          go build -ldflags="-s -w" -o server%EXT% ./cmd
 
       - name: Upload server artifact
         uses: actions/upload-artifact@v4
         with:
-          name: server-windows-amd64
-          path: server/server.exe
+          name: server-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: server/server${{ matrix.goos == 'windows' && '.exe' || '' }}
 
   build-client:
-    name: Build Client (Go 1.10 / XP)
+    name: Build Client (Windows XP / 32-bit)
     runs-on: windows-latest
     env:
       GOPATH: C:\Users\runneradmin\go
@@ -93,16 +108,11 @@ jobs:
           go get gopkg.in/yaml.v2
           go build -ldflags="-s -w" -o client-updator.exe clientupdator/client
 
-      - name: Copy artifact into client/
-        shell: cmd
-        run: |
-          copy /y client-updator.exe client\client-updator.exe
-
       - name: Upload client artifact
         uses: actions/upload-artifact@v4
         with:
-          name: client-updator-xp
-          path: client/client-updator.exe
+          name: client-updator-win-xp
+          path: client-updator.exe
 
   upload-release-assets:
     name: Upload to Release
@@ -131,7 +141,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload ${{ steps.tag.outputs.tag }} \
+          TAG="${{ steps.tag.outputs.tag }}"
+          gh release upload "$TAG" \
             server-windows-amd64/server.exe \
-            client-updator-xp/client-updator.exe \
+            server-linux-amd64/server \
+            server-linux-arm64/server \
+            server-darwin-amd64/server \
+            server-darwin-arm64/server \
+            client-updator-win-xp/client-updator.exe \
             --clobber
