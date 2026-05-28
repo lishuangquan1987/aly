@@ -1,13 +1,6 @@
 name: Build Client (Go 1.10 / XP)
 
 on:
-  push:
-    paths:
-      - 'client/**'
-      - '.github/workflows/build-client.yml'
-  pull_request:
-    paths:
-      - 'client/**'
   workflow_dispatch:
 
 jobs:
