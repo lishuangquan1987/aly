@@ -1,0 +1,120 @@
+name: Release Build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build-server:
+    name: Build Server
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+        continue-on-error: true
+
+      - name: Fallback — download Go
+        if: failure()
+        shell: cmd
+        run: |
+          echo "setup-go could not resolve Go version from go.mod, using latest..."
+          powershell -Command "& {$(Invoke-WebRequest -Uri 'https://go.dev/dl/go1.23.0.windows-amd64.zip' -OutFile 'C:\go.zip'); Expand-Archive -Path 'C:\go.zip' -DestinationPath 'C:\go' -Force}"
+          echo "C:\go\bin" >> %GITHUB_PATH%
+
+      - name: Verify Go version
+        run: go version
+
+      - name: Build server
+        shell: cmd
+        run: |
+          cd server
+          go build -ldflags="-s -w" -o server.exe ./cmd
+
+      - name: Upload server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-windows-amd64
+          path: server/server.exe
+
+  build-client:
+    name: Build Client (Go 1.10 / XP)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go 1.10
+        id: setup-go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.10.8'
+        continue-on-error: true
+
+      - name: Fallback — manual Go 1.10 install
+        if: steps.setup-go.outcome == 'failure'
+        shell: cmd
+        run: |
+          echo "setup-go could not find Go 1.10, downloading manually..."
+          curl -fsSL -o go1.10.8.windows-amd64.zip https://go.dev/dl/go1.10.8.windows-amd64.zip
+          powershell -Command "Expand-Archive -Path go1.10.8.windows-amd64.zip -DestinationPath C:\go110"
+          echo "C:\go110\bin" >> %GITHUB_PATH%
+          if "%GOPATH%"=="" setx GOPATH C:\Users\runneradmin\go
+
+      - name: Verify Go version
+        run: go version
+
+      - name: Setup GOPATH structure
+        shell: cmd
+        run: |
+          mkdir "%GOPATH%\src\clientupdator"
+          xcopy /e /i /y client "%GOPATH%\src\clientupdator\client"
+
+      - name: Build (32-bit, XP compatible)
+        shell: cmd
+        run: |
+          set GOOS=windows
+          set GOARCH=386
+          set GO111MODULE=off
+          go build -ldflags="-s -w" -o client-updator.exe clientupdator/client
+
+      - name: Copy artifact into client/
+        shell: cmd
+        run: |
+          copy /y client-updator.exe client\client-updator.exe
+
+      - name: Upload client artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-updator-xp
+          path: client/client-updator.exe
+
+  upload-release-assets:
+    name: Upload to Release
+    needs: [build-server, build-client]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: List artifacts
+        run: ls -laR
+
+      - name: Upload to Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload ${{ github.event.release.tag_name }} \
+            server-windows-amd64/server.exe \
+            client-updator-xp/client-updator.exe \
+            --clobber
