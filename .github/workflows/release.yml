@@ -3,6 +3,12 @@ name: Release Build
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号 (例如 v0.0.1)'
+        required: true
+        type: string
 
 jobs:
   build-server:
@@ -98,9 +104,30 @@ jobs:
           name: client-updator-xp
           path: client/client-updator.exe
 
+  create-release:
+    name: Create Release (手动触发时)
+    if: github.event_name == 'workflow_dispatch'
+    needs: [build-server, build-client]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ inputs.version }} \
+            --title "${{ inputs.version }}" \
+            --generate-notes
+
   upload-release-assets:
     name: Upload to Release
-    needs: [build-server, build-client]
+    needs: [build-server, build-client, create-release]
+    if: always() && !failure() && !cancelled()
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -112,14 +139,20 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
 
-      - name: List artifacts
-        run: ls -laR
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Upload to Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload ${{ github.event.release.tag_name }} \
+          gh release upload ${{ steps.tag.outputs.tag }} \
             server-windows-amd64/server.exe \
             client-updator-xp/client-updator.exe \
             --clobber
