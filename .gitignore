@@ -7,6 +7,10 @@ publish_tool_avalonia/.idea/
 .learnings/LEARNINGS.md
 publish_tool_avalonia/.vs/
 
+# server build artifacts
+server/server.exe
+server/server-*
+
 # client build artifacts
 client/client-updator.exe
 client/test/temp_test/
