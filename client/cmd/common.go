@@ -11,25 +11,31 @@ import (
 	"time"
 
 	"clientupdator/client/config"
+	"clientupdator/client/model"
 	"clientupdator/client/util"
 )
 
-// printJSON outputs value as JSON to stdout
-func printJSON(v interface{}) {
-	data, err := json.Marshal(v)
+// printOutput 按 is_success/err_msg/data 格式输出 JSON 到 stdout
+func printOutput(success bool, errMsg string, data interface{}) {
+	out := model.Output{
+		IsSuccess: success,
+		ErrMsg:    errMsg,
+		Data:      data,
+	}
+	bytes, err := json.Marshal(out)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "JSON marshal error: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println(string(data))
+	fmt.Println(string(bytes))
 }
 
-// normalizePath converts backslashes to forward slashes
+// normalizePath 将反斜杠转为正斜杠
 func normalizePath(p string) string {
 	return strings.Replace(p, "\\", "/", -1)
 }
 
-// stripVPrefix removes leading V/v from version string
+// stripVPrefix 去除版本号前导的 V/v
 func stripVPrefix(v string) string {
 	if len(v) > 0 && (v[0] == 'V' || v[0] == 'v') {
 		return v[1:]
@@ -37,7 +43,7 @@ func stripVPrefix(v string) string {
 	return v
 }
 
-// compareVersion returns 1 if v1>v2, -1 if v1<v2, 0 if equal
+// compareVersion 按 . 分割逐段数值比较：v1 > v2 返回 1，v1 < v2 返回 -1，相等返回 0
 func compareVersion(v1, v2 string) int {
 	parts1 := strings.Split(v1, ".")
 	parts2 := strings.Split(v2, ".")
@@ -63,7 +69,7 @@ func compareVersion(v1, v2 string) int {
 	return 0
 }
 
-// closeProcessesGracefully sends WM_CLOSE then waits, then force kills
+// closeProcessesGracefully 优雅关闭进程：先 WM_CLOSE，超时后强杀
 func closeProcessesGracefully(names []string, timeout time.Duration) {
 	for _, name := range names {
 		pids, _ := util.FindProcessesByName(name)
@@ -74,34 +80,7 @@ func closeProcessesGracefully(names []string, timeout time.Duration) {
 	util.KillProcessesAndWait(names, timeout)
 }
 
-// atomicReplace atomically replaces mainFolder with its update/{version} directory
-func atomicReplace(mainFolder string, version string) error {
-	oldDir := mainFolder + "_old"
-	updateVersionDir := filepath.Join(mainFolder, "update", version)
-
-	// Clean previous _old
-	os.RemoveAll(oldDir)
-
-	// Rename current to _old
-	if err := os.Rename(mainFolder, oldDir); err != nil {
-		return fmt.Errorf("rename current to _old: %v", err)
-	}
-
-	// Try rename version dir to main folder
-	if err := os.Rename(updateVersionDir, mainFolder); err != nil {
-		// Cross-volume rename may fail, fallback to copy
-		os.Rename(oldDir, mainFolder)
-		if err2 := util.CopyDir(updateVersionDir, mainFolder, true); err2 != nil {
-			return fmt.Errorf("copy version dir failed: %v", err2)
-		}
-	}
-
-	// Clean up _old
-	os.RemoveAll(oldDir)
-	return nil
-}
-
-// launchMainExe starts the main executable
+// launchMainExe 启动主程序
 func launchMainExe(cfg *config.Config) {
 	exeDir, err := config.ExeDir()
 	if err != nil {
@@ -112,11 +91,50 @@ func launchMainExe(cfg *config.Config) {
 	cmd.Start()
 }
 
-// runScript executes a post-update script
+// filepathFromSlash converts forward-slash paths to OS-specific separators.
+// Replaces Go 1.17+ filepath.FromSlash for Go 1.10 compatibility.
+func filepathFromSlash(path string) string {
+	if os.PathSeparator == '/' {
+		return path
+	}
+	result := make([]byte, len(path))
+	for i := 0; i < len(path); i++ {
+		if path[i] == '/' {
+			result[i] = os.PathSeparator
+		} else {
+			result[i] = path[i]
+		}
+	}
+	return string(result)
+}
+
+// runScript 执行 post-update 脚本，异步等待完成并记录结果到 update.log
 func runScript(scriptPath string) {
-	if _, err := os.Stat(scriptPath); err != nil {
+	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
 		return
 	}
 	cmd := exec.Command("cmd", "/c", scriptPath)
-	cmd.Start()
+	if err := cmd.Start(); err != nil {
+		exeDir, dirErr := config.ExeDir()
+		if dirErr == nil {
+			util.AppendToLog(exeDir, "update.log",
+				fmt.Sprintf("script start failed: %s %v", scriptPath, err))
+		}
+		return
+	}
+	// Wait asynchronously so we don't block main exe launch
+	go func() {
+		err := cmd.Wait()
+		exeDir, dirErr := config.ExeDir()
+		if dirErr != nil {
+			return
+		}
+		if err != nil {
+			util.AppendToLog(exeDir, "update.log",
+				fmt.Sprintf("script failed: %s %v", scriptPath, err))
+		} else {
+			util.AppendToLog(exeDir, "update.log",
+				fmt.Sprintf("script completed: %s", scriptPath))
+		}
+	}()
 }

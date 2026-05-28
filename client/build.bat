@@ -9,7 +9,8 @@ REM   2. 运行 build.bat
 echo 正在构建 client-updator.exe (GOARCH=386, 兼容 XP) ...
 set GOOS=windows
 set GOARCH=386
-go build -o client-updator.exe .
+set GO111MODULE=off
+go build -ldflags="-s -w" -o client-updator.exe .
 if %errorlevel% neq 0 (
     echo 构建失败！
     exit /b %errorlevel%

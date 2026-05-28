@@ -4,12 +4,13 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"clientupdator/client/config"
 	"clientupdator/client/model"
 )
 
-// ListRollbackVersions 列出可回滚版本
+// ListRollbackVersions lists available rollback versions
 func ListRollbackVersions() {
 	fs := flag.NewFlagSet("list_rollback_versions", flag.ExitOnError)
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
@@ -17,30 +18,37 @@ func ListRollbackVersions() {
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		printJSON(model.RollbackListOutput{})
+		printOutput(false, err.Error(), nil)
 		return
 	}
 	cfg.MergeFlags("", "", *mainExePathFlag, "")
 
-	updateDir, err := cfg.UpdateDir()
+	pkgDir, err := config.PackageDir()
 	if err != nil {
-		printJSON(model.RollbackListOutput{})
+		printOutput(false, err.Error(), nil)
 		return
 	}
 
-	dir, err := os.Open(updateDir)
+	folderName, err := cfg.MainExeFolderName()
 	if err != nil {
-		printJSON(model.RollbackListOutput{})
+		printOutput(false, err.Error(), nil)
+		return
+	}
+
+	dir, err := os.Open(pkgDir)
+	if err != nil {
+		printOutput(false, err.Error(), nil)
 		return
 	}
 	defer dir.Close()
 
 	names, err := dir.Readdirnames(0)
 	if err != nil {
-		printJSON(model.RollbackListOutput{})
+		printOutput(false, err.Error(), nil)
 		return
 	}
 
+	prefix := folderName + "_"
 	versionInfo, _ := config.ReadVersion()
 	currentVersion := ""
 	if versionInfo != nil {
@@ -49,14 +57,26 @@ func ListRollbackVersions() {
 
 	var versions []string
 	for _, name := range names {
-		subDirPath := filepath.Join(updateDir, name)
-		if info, err := os.Stat(subDirPath); err == nil && info.IsDir() {
-			versions = append(versions, name)
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		version := strings.TrimPrefix(name, prefix)
+		if !isLikelyVersion(version) {
+			continue
+		}
+		subDirPath := filepath.Join(pkgDir, name)
+		if info, statErr := os.Stat(subDirPath); statErr == nil && info.IsDir() {
+			versions = append(versions, version)
 		}
 	}
 
-	printJSON(model.RollbackListOutput{
+	printOutput(true, "", &model.RollbackListData{
 		CurrentVersion: currentVersion,
 		Versions:       versions,
 	})
+}
+
+// isLikelyVersion checks if a string looks like a version number (contains dots)
+func isLikelyVersion(s string) bool {
+	return strings.Contains(s, ".")
 }

@@ -27,6 +27,8 @@ func main() {
 		cmd.ListRollbackVersions()
 	case "rollback":
 		cmd.Rollback()
+	case "check_self_update":
+		cmd.CheckSelfUpdate()
 	default:
 		fmt.Fprintf(os.Stderr, "未知命令: %s\n", command)
 		printUsage()
@@ -44,6 +46,7 @@ func printUsage() {
 	fmt.Println("  apply_update              执行更新")
 	fmt.Println("  list_rollback_versions    列出可回滚版本")
 	fmt.Println("  rollback                  版本回滚")
+	fmt.Println("  check_self_update         自更新检查")
 	fmt.Println()
 	fmt.Println("使用 -h 查看各命令的选项")
 }

@@ -161,3 +161,51 @@ func FileSize(path string) (int64, error) {
 	}
 	return info.Size(), nil
 }
+
+// CopyDirWithExclude copies all files from srcDir to dstDir,
+// skipping files/folders for which shouldSkipFile or shouldSkipFolder returns true.
+// The skip predicates receive paths relative to srcDir.
+func CopyDirWithExclude(srcDir, dstDir string, shouldSkipFile func(relPath string) bool, shouldSkipFolder func(relPath string) bool) error {
+	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			// Check if this directory should be skipped
+			// Top-level "." is never skipped so we can still walk into subdirs
+			if relPath != "." && shouldSkipFolder != nil && shouldSkipFolder(relPath) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Check if this file should be skipped
+		if shouldSkipFile != nil && shouldSkipFile(relPath) {
+			return nil
+		}
+
+		dstPath := filepath.Join(dstDir, relPath)
+		return CopyFile(path, dstPath, true)
+	})
+}
+
+// AppendToLog appends a line to a log file (creates it if needed).
+// logDir is the directory where the log file is created.
+func AppendToLog(logDir, filename, line string) {
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return
+	}
+	logPath := filepath.Join(logDir, filename)
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	f.WriteString(line + "\n")
+}

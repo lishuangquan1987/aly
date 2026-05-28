@@ -9,13 +9,15 @@ import (
 
 const (
 	VersionStatusDownloaded = "downloaded"
-	VersionStatusApplied   = "applied"
+	VersionStatusApplying   = "applying"
+	VersionStatusApplied    = "applied"
 )
 
 // VersionInfo 对应 version.json 的结构
 type VersionInfo struct {
-	Version       string `json:"version"`
-	VersionStatus string `json:"version_status"`
+	VersionPreviouse string `json:"version_previouse"`
+	Version          string `json:"version"`
+	VersionStatus    string `json:"version_status"`
 }
 
 func versionPath() (string, error) {
@@ -26,7 +28,7 @@ func versionPath() (string, error) {
 	return filepath.Join(dir, "version.json"), nil
 }
 
-// ReadVersion 读取 version.json
+// ReadVersion 读取 version.json，文件不存在时返回空结构体（首次部署）
 func ReadVersion() (*VersionInfo, error) {
 	path, err := versionPath()
 	if err != nil {
@@ -35,6 +37,9 @@ func ReadVersion() (*VersionInfo, error) {
 
 	data, err := ioutilReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return &VersionInfo{}, nil
+		}
 		return nil, fmt.Errorf("读取 version.json 失败: %v", err)
 	}
 
@@ -46,7 +51,7 @@ func ReadVersion() (*VersionInfo, error) {
 	return &info, nil
 }
 
-// WriteVersion 写入 version.json
+// WriteVersion 写入 version.json（先写临时文件再 rename，保证原子性）
 func WriteVersion(info *VersionInfo) error {
 	path, err := versionPath()
 	if err != nil {
@@ -58,7 +63,6 @@ func WriteVersion(info *VersionInfo) error {
 		return fmt.Errorf("序列化 version.json 失败: %v", err)
 	}
 
-	// 写入临时文件再重命名，保证原子性
 	tmpPath := path + ".tmp"
 	f, err := os.Create(tmpPath)
 	if err != nil {

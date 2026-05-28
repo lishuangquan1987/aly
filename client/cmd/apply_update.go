@@ -4,81 +4,153 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"clientupdator/client/config"
-	"clientupdator/client/model"
+	"clientupdator/client/util"
 )
 
-// ApplyUpdate 执行更新
+// ApplyUpdate applies a downloaded update with atomic replacement
 func ApplyUpdate() {
 	fs := flag.NewFlagSet("apply_update", flag.ExitOnError)
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
 	mustCloseFlag := fs.String("must-close-process-name", "", "process names to close (comma separated)")
 	closeTimeoutFlag := fs.Int("close-timeout", 30, "timeout seconds for process close")
-	silentFlag := fs.Bool("silent", false, "silent mode")
 	fs.Parse(os.Args[2:])
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("load config: %v", err)})
+		printOutput(false, fmt.Sprintf("load config: %v", err), nil)
 		return
 	}
 	cfg.MergeFlags("", "", *mainExePathFlag, *mustCloseFlag)
 
 	versionInfo, err := config.ReadVersion()
 	if err != nil {
-		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("read version: %v", err)})
-		return
-	}
-	if versionInfo.VersionStatus != config.VersionStatusDownloaded {
-		printJSON(model.SuccessOutput{Success: false, Error: "no pending update to apply"})
+		printOutput(false, fmt.Sprintf("read version: %v", err), nil)
 		return
 	}
 
 	mainFolder, err := cfg.MainExeFolderPath()
 	if err != nil {
-		printJSON(model.SuccessOutput{Success: false, Error: err.Error()})
+		printOutput(false, err.Error(), nil)
 		return
 	}
 
-	// 关闭必须关闭的进程
-	if len(cfg.MustCloseProcessName) > 0 {
-		if !*silentFlag {
-			fmt.Fprintf(os.Stderr, "closing processes...\n")
+	// Check version_status
+	switch versionInfo.VersionStatus {
+	case config.VersionStatusApplied:
+		printOutput(false, "no pending update to apply", nil)
+		return
+
+	case config.VersionStatusApplying:
+		// Crash recovery
+		if _, statErr := os.Stat(mainFolder); statErr == nil {
+			// Main folder exists and is complete -> redo replacement steps (fall through)
+		} else {
+			// Main folder doesn't exist, check if version dir exists
+			versionDir, verDirErr := cfg.AppVersionDir(versionInfo.Version)
+			if verDirErr != nil {
+				printOutput(false, verDirErr.Error(), nil)
+				return
+			}
+			if _, statErr := os.Stat(versionDir); statErr == nil {
+				// Rename AppVersionDir to MainExeFolderPath
+				if err := os.Rename(versionDir, mainFolder); err != nil {
+					printOutput(false, fmt.Sprintf("crash recovery failed: %v", err), nil)
+					return
+				}
+				// Update status to applied
+				versionInfo.VersionStatus = config.VersionStatusApplied
+				config.WriteVersion(versionInfo)
+				// Run post-update script and launch main exe
+				if cfg.PostUpdateScript != "" {
+					runScript(filepath.Join(mainFolder, cfg.PostUpdateScript))
+				}
+				launchMainExe(cfg)
+				printOutput(true, "", nil)
+				return
+			}
+			printOutput(false, "crash recovery failed: neither main folder nor version folder exists", nil)
+			return
 		}
+
+	case config.VersionStatusDownloaded:
+		// Normal flow, continue
+	}
+
+	// Set version_status = "applying"
+	versionInfo.VersionStatus = config.VersionStatusApplying
+	if err := config.WriteVersion(versionInfo); err != nil {
+		printOutput(false, fmt.Sprintf("write version: %v", err), nil)
+		return
+	}
+
+	// Close processes gracefully
+	if len(cfg.MustCloseProcessName) > 0 {
 		closeProcessesGracefully(cfg.MustCloseProcessName, time.Duration(*closeTimeoutFlag)*time.Second)
 	}
 
-	// 原子替换
-	if !*silentFlag {
-		fmt.Fprintf(os.Stderr, "applying update...\n")
-	}
-	if err := atomicReplace(mainFolder, versionInfo.Version); err != nil {
-		printJSON(model.SuccessOutput{Success: false, Error: err.Error()})
+	// Atomic replacement
+	versionDir, err := cfg.AppVersionDir(versionInfo.Version)
+	if err != nil {
+		printOutput(false, err.Error(), nil)
 		return
 	}
 
-	// 更新 version.json
+	// Step 6c: Copy current mainFolder content to versionDir (excluding un_copy_files and un_copy_folders)
+	// Ensures versionDir is a complete runnable app
+	if err := util.CopyDirWithExclude(mainFolder, versionDir, cfg.ShouldSkipFile, cfg.ShouldSkipFolder); err != nil {
+		versionInfo.VersionStatus = config.VersionStatusDownloaded
+		config.WriteVersion(versionInfo)
+		printOutput(false, fmt.Sprintf("copy to version dir: %v", err), nil)
+		return
+	}
+
+	// Step 6d: Remove previous version dir if exists
+	prevVersionDir, err := cfg.AppVersionDir(versionInfo.VersionPreviouse)
+	if err != nil {
+		versionInfo.VersionStatus = config.VersionStatusDownloaded
+		config.WriteVersion(versionInfo)
+		printOutput(false, err.Error(), nil)
+		return
+	}
+	os.RemoveAll(prevVersionDir)
+
+	// Step 6e: Rename mainFolder -> prevVersionDir (backup)
+	if err := os.Rename(mainFolder, prevVersionDir); err != nil {
+		versionInfo.VersionStatus = config.VersionStatusDownloaded
+		config.WriteVersion(versionInfo)
+		printOutput(false, fmt.Sprintf("backup rename failed: %v", err), nil)
+		return
+	}
+
+	// Step 6f: Rename versionDir -> mainFolder
+	if err := os.Rename(versionDir, mainFolder); err != nil {
+		// Attempt rollback: rename prevVersionDir back to mainFolder
+		os.Rename(prevVersionDir, mainFolder)
+		versionInfo.VersionStatus = config.VersionStatusDownloaded
+		config.WriteVersion(versionInfo)
+		printOutput(false, fmt.Sprintf("apply rename failed: %v", err), nil)
+		return
+	}
+
+	// Step 7: Update version.json
 	versionInfo.VersionStatus = config.VersionStatusApplied
 	if err := config.WriteVersion(versionInfo); err != nil {
-		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("write version: %v", err)})
+		printOutput(false, fmt.Sprintf("write version: %v", err), nil)
 		return
 	}
 
-	// 执行更新后脚本
+	// Step 8: Run post_update_script if configured
 	if cfg.PostUpdateScript != "" {
-		scriptPath := cfg.PostUpdateScript
-		// 如果脚本路径是相对路径，则相对于 ExeDir 解析
-		if len(scriptPath) > 0 && (scriptPath[0] == '.' || (len(scriptPath) >= 2 && scriptPath[1] != ':')) {
-			exeDir, _ := config.ExeDir()
-			scriptPath = exeDir + string(os.PathSeparator) + scriptPath
-		}
-		runScript(scriptPath)
+		runScript(filepath.Join(mainFolder, cfg.PostUpdateScript))
 	}
 
-	// 启动主程序
+	// Step 9: Launch main exe
 	launchMainExe(cfg)
 
-	printJSON(model.SuccessOutput{Success: true})
+	// Step 10: Output success
+	printOutput(true, "", nil)
 }

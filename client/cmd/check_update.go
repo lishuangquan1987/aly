@@ -19,47 +19,61 @@ func CheckUpdate() {
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		printJSON(model.CheckUpdateOutput{HasUpdate: false, Error: fmt.Sprintf("load config: %v", err)})
+		printOutput(false, fmt.Sprintf("load config: %v", err), nil)
 		return
 	}
 	cfg.MergeFlags(*urlFlag, *projectNameFlag, "", "")
 
 	if cfg.URL == "" {
-		printJSON(model.CheckUpdateOutput{HasUpdate: false, Error: "no server url configured"})
+		printOutput(false, "no server url configured", nil)
 		return
 	}
 	if cfg.ProjectName == "" {
-		printJSON(model.CheckUpdateOutput{HasUpdate: false, Error: "no project name configured"})
+		printOutput(false, "no project name configured", nil)
+		return
+	}
+
+	// Read version.json. Handle downloaded/applying status first.
+	versionInfo, err := config.ReadVersion()
+	if err != nil {
+		printOutput(false, fmt.Sprintf("read version: %v", err), nil)
+		return
+	}
+
+	if versionInfo.VersionStatus == config.VersionStatusDownloaded ||
+		versionInfo.VersionStatus == config.VersionStatusApplying {
+		printOutput(true, "", &model.CheckUpdateData{
+			HasUpdate:      true,
+			CurrentVersion: versionInfo.Version,
+		})
 		return
 	}
 
 	project, err := apiclient.FindProjectByName(cfg.URL, cfg.ProjectName)
 	if err != nil {
-		printJSON(model.CheckUpdateOutput{HasUpdate: false, Error: err.Error()})
+		printOutput(false, err.Error(), nil)
 		return
 	}
 
 	logs, err := apiclient.GetProjectChangeLogs(cfg.URL, project.ID)
 	if err != nil {
-		printJSON(model.CheckUpdateOutput{HasUpdate: false, Error: err.Error()})
+		printOutput(false, err.Error(), nil)
 		return
 	}
 	if len(logs) == 0 {
-		printJSON(model.CheckUpdateOutput{HasUpdate: false, CurrentVersion: ""})
+		printOutput(true, "", &model.CheckUpdateData{
+			HasUpdate:      false,
+			CurrentVersion: stripVPrefix(versionInfo.Version),
+		})
 		return
 	}
 
+	// Find latest log (highest ID)
 	latestLog := logs[0]
 	for i := 1; i < len(logs); i++ {
 		if logs[i].ID > latestLog.ID {
 			latestLog = logs[i]
 		}
-	}
-
-	versionInfo, err := config.ReadVersion()
-	if err != nil {
-		printJSON(model.CheckUpdateOutput{HasUpdate: false, Error: fmt.Sprintf("read version: %v", err)})
-		return
 	}
 
 	serverVersion := stripVPrefix(latestLog.Version)
@@ -76,14 +90,14 @@ func CheckUpdate() {
 				}
 			}
 		}
-		printJSON(model.CheckUpdateOutput{
+		printOutput(true, "", &model.CheckUpdateData{
 			HasUpdate:      true,
 			CurrentVersion: localVersion,
 			NewVersion:     serverVersion,
-			ForceUpdate:    forceUpdate,
+			ForceUpdate:    &forceUpdate,
 		})
 	} else {
-		printJSON(model.CheckUpdateOutput{
+		printOutput(true, "", &model.CheckUpdateData{
 			HasUpdate:      false,
 			CurrentVersion: localVersion,
 		})

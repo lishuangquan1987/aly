@@ -20,41 +20,39 @@ func CheckDiff() {
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "load config error: %v\n", err)
-		printJSON(model.CheckDiffOutput{})
+		printOutput(false, fmt.Sprintf("load config: %v", err), nil)
 		return
 	}
 	cfg.MergeFlags(*urlFlag, *projectNameFlag, "", "")
 
+	if cfg.URL == "" {
+		printOutput(false, "no server url configured", nil)
+		return
+	}
+	if cfg.ProjectName == "" {
+		printOutput(false, "no project name configured", nil)
+		return
+	}
+
 	project, err := apiclient.FindProjectByName(cfg.URL, cfg.ProjectName)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		printJSON(model.CheckDiffOutput{})
+		printOutput(false, err.Error(), nil)
 		return
 	}
 
 	serverFiles, err := apiclient.GetAllFiles(cfg.URL, project.ID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "get server files error: %v\n", err)
-		printJSON(model.CheckDiffOutput{})
+		printOutput(false, fmt.Sprintf("get server files: %v", err), nil)
 		return
 	}
 
 	mainFolder, err := cfg.MainExeFolderPath()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "main folder error: %v\n", err)
-		printJSON(model.CheckDiffOutput{})
+		printOutput(false, err.Error(), nil)
 		return
 	}
 
-	localMD5Map, err := util.LocalFileMD5Map(mainFolder)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "local md5 error: %v\n", err)
-		printJSON(model.CheckDiffOutput{})
-		return
-	}
-
-	// Get new version
+	// Get new version from change logs
 	logs, _ := apiclient.GetProjectChangeLogs(cfg.URL, project.ID)
 	newVersion := ""
 	if len(logs) > 0 {
@@ -67,31 +65,47 @@ func CheckDiff() {
 		newVersion = stripVPrefix(latestLog.Version)
 	}
 
-	var diffFiles []model.DiffFile
+	// Build local file info maps
+	localMD5Map, _ := util.LocalFileMD5Map(mainFolder)
+
+	var diffFiles []model.DiffFileItem
 	for i := range serverFiles {
 		relPath := normalizePath(serverFiles[i].FileRelativePath)
+		localFullPath := mainFolder + string(os.PathSeparator) + filepathFromSlash(relPath)
 		localMD5, localExists := localMD5Map[relPath]
+
 		if !localExists {
-			diffFiles = append(diffFiles, model.DiffFile{
-				Path:       relPath,
-				Status:     "new",
-				LocalMD5:   "",
-				ServerMD5:  serverFiles[i].MD5,
-				ServerSize: serverFiles[i].FileSize,
+			diffFiles = append(diffFiles, model.DiffFileItem{
+				Path:         relPath,
+				LocalMD5:     "",
+				LocalSize:    0,
+				LocalSHA256:  "",
+				ServerMD5:    serverFiles[i].MD5,
+				ServerSize:   serverFiles[i].FileSize,
+				ServerSHA256: serverFiles[i].SHA256,
 			})
 		} else if localMD5 != serverFiles[i].MD5 {
-			diffFiles = append(diffFiles, model.DiffFile{
-				Path:       relPath,
-				Status:     "modified",
-				LocalMD5:   localMD5,
-				ServerMD5:  serverFiles[i].MD5,
-				ServerSize: serverFiles[i].FileSize,
+			localSize := int64(0)
+			if info, err := os.Stat(localFullPath); err == nil {
+				localSize = info.Size()
+			}
+			localSHA256, _ := util.FileSHA256(localFullPath)
+			diffFiles = append(diffFiles, model.DiffFileItem{
+				Path:         relPath,
+				LocalMD5:     localMD5,
+				LocalSize:    localSize,
+				LocalSHA256:  localSHA256,
+				ServerMD5:    serverFiles[i].MD5,
+				ServerSize:   serverFiles[i].FileSize,
+				ServerSHA256: serverFiles[i].SHA256,
 			})
 		}
 	}
 
-	printJSON(model.CheckDiffOutput{
+	printOutput(true, "", &model.CheckDiffData{
 		NewVersion: newVersion,
 		Files:      diffFiles,
 	})
 }
+
+

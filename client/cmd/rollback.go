@@ -11,7 +11,7 @@ import (
 	"clientupdator/client/model"
 )
 
-// Rollback reverts to a previous version
+// Rollback reverts to a previous version (same procedure as apply_update)
 func Rollback() {
 	fs := flag.NewFlagSet("rollback", flag.ExitOnError)
 	versionFlag := fs.String("version", "", "target version to rollback to")
@@ -21,55 +21,130 @@ func Rollback() {
 	fs.Parse(os.Args[2:])
 
 	if *versionFlag == "" {
-		printJSON(model.SuccessOutput{Success: false, Error: "--version is required"})
+		printOutput(false, "--version is required", nil)
 		return
 	}
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("load config: %v", err)})
+		printOutput(false, fmt.Sprintf("load config: %v", err), nil)
 		return
 	}
 	cfg.MergeFlags("", "", *mainExePathFlag, *mustCloseFlag)
 
 	mainFolder, err := cfg.MainExeFolderPath()
 	if err != nil {
-		printJSON(model.SuccessOutput{Success: false, Error: err.Error()})
+		printOutput(false, err.Error(), nil)
 		return
 	}
 
-	rollbackDir := filepath.Join(mainFolder, "update", *versionFlag)
-	if info, err := os.Stat(rollbackDir); err != nil || !info.IsDir() {
-		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("version %s not found", *versionFlag)})
+	versionDir, err := cfg.AppVersionDir(*versionFlag)
+	if err != nil {
+		printOutput(false, err.Error(), nil)
 		return
 	}
 
-	// Close processes
+	if info, statErr := os.Stat(versionDir); statErr != nil || !info.IsDir() {
+		printOutput(false, fmt.Sprintf("version %s not found", *versionFlag), nil)
+		return
+	}
+
+	versionInfo, err := config.ReadVersion()
+	if err != nil {
+		printOutput(false, fmt.Sprintf("read version: %v", err), nil)
+		return
+	}
+	oldVersion := versionInfo.Version
+
+	// Check version_status for crash recovery
+	switch versionInfo.VersionStatus {
+	case config.VersionStatusApplying:
+		// Crash recovery
+		if _, statErr := os.Stat(mainFolder); statErr == nil {
+			// Main folder exists, redo replacement steps (fall through)
+		} else {
+			// Main folder doesn't exist, check if target version dir exists
+			if _, statErr := os.Stat(versionDir); statErr == nil {
+				if err := os.Rename(versionDir, mainFolder); err != nil {
+					printOutput(false, fmt.Sprintf("crash recovery failed: %v", err), nil)
+					return
+				}
+				versionInfo.Version = *versionFlag
+				versionInfo.VersionPreviouse = oldVersion
+				versionInfo.VersionStatus = config.VersionStatusApplied
+				config.WriteVersion(versionInfo)
+				if cfg.PostUpdateScript != "" {
+					runScript(filepath.Join(mainFolder, cfg.PostUpdateScript))
+				}
+				launchMainExe(cfg)
+				printOutput(true, "", nil)
+				return
+			}
+			printOutput(false, "crash recovery failed: neither main folder nor target version folder exists", nil)
+			return
+		}
+	}
+
+	// Set version_status = "applying" (mark start of rollback)
+	versionInfo.VersionStatus = config.VersionStatusApplying
+	if err := config.WriteVersion(versionInfo); err != nil {
+		printOutput(false, fmt.Sprintf("write version: %v", err), nil)
+		return
+	}
+
+	// Close processes gracefully
 	if len(cfg.MustCloseProcessName) > 0 {
 		closeProcessesGracefully(cfg.MustCloseProcessName, time.Duration(*closeTimeoutFlag)*time.Second)
 	}
 
-	// Atomic replace
-	if err := atomicReplace(mainFolder, *versionFlag); err != nil {
-		printJSON(model.SuccessOutput{Success: false, Error: err.Error()})
+	// Rollback target version dir already has complete files from when it was active.
+	// Unlike apply_update (which needs CopyDirWithExclude to fill in unchanged files
+	// from the current folder), rollback only needs atomic rename.
+
+	// Remove previous version backup dir if exists
+	prevVersionDir, err := cfg.AppVersionDir(oldVersion)
+	if err != nil {
+		versionInfo.VersionStatus = config.VersionStatusApplied
+		config.WriteVersion(versionInfo)
+		printOutput(false, err.Error(), nil)
+		return
+	}
+	os.RemoveAll(prevVersionDir)
+
+	// Rename mainFolder -> prevVersionDir (backup current)
+	if err := os.Rename(mainFolder, prevVersionDir); err != nil {
+		versionInfo.VersionStatus = config.VersionStatusApplied
+		config.WriteVersion(versionInfo)
+		printOutput(false, fmt.Sprintf("backup rename failed: %v", err), nil)
+		return
+	}
+
+	// Rename versionDir -> mainFolder (activate rollback target)
+	if err := os.Rename(versionDir, mainFolder); err != nil {
+		// Attempt rollback: rename prevVersionDir back to mainFolder
+		os.Rename(prevVersionDir, mainFolder)
+		versionInfo.VersionStatus = config.VersionStatusApplied
+		config.WriteVersion(versionInfo)
+		printOutput(false, fmt.Sprintf("apply rename failed: %v", err), nil)
 		return
 	}
 
 	// Update version.json
-	versionInfo, err := config.ReadVersion()
-	if err != nil {
-		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("read version: %v", err)})
-		return
-	}
+	versionInfo.VersionPreviouse = oldVersion
 	versionInfo.Version = *versionFlag
 	versionInfo.VersionStatus = config.VersionStatusApplied
 	if err := config.WriteVersion(versionInfo); err != nil {
-		printJSON(model.SuccessOutput{Success: false, Error: fmt.Sprintf("write version: %v", err)})
+		printOutput(false, fmt.Sprintf("write version: %v", err), nil)
 		return
+	}
+
+	// Run post_update_script if configured
+	if cfg.PostUpdateScript != "" {
+		runScript(filepath.Join(mainFolder, cfg.PostUpdateScript))
 	}
 
 	// Launch main exe
 	launchMainExe(cfg)
 
-	printJSON(model.SuccessOutput{Success: true, Version: *versionFlag})
+	printOutput(true, "", &model.RollbackData{Version: *versionFlag})
 }

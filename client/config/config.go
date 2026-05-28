@@ -14,21 +14,32 @@ type Config struct {
 	ProjectName          string   `yaml:"project_name"`
 	URL                  string   `yaml:"url"`
 	MainExeRelativePath  string   `yaml:"main_exe_relative_path"`
+	UnCopyFiles          []string `yaml:"un_copy_files"`
+	UnCopyFolders        []string `yaml:"un_copy_folders"`
 	MustCloseProcessName []string `yaml:"must_close_process_name"`
 	PostUpdateScript     string   `yaml:"post_update_script"`
 }
 
-// ExeDir 返回可执行文件所在目录
+// ExeDir 返回 client_updator.exe 所在目录 (UpdateFolder/)
 func ExeDir() (string, error) {
 	exePath, err := os.Executable()
 	if err != nil {
-		return "", fmt.Errorf("获取可执行文件路径失败: %v", err)
+		return "", fmt.Errorf("get executable path failed: %v", err)
 	}
 	resolved, err := filepath.EvalSymlinks(exePath)
 	if err != nil {
 		resolved = exePath
 	}
 	return filepath.Dir(resolved), nil
+}
+
+// PackageDir 返回包根目录 (PackageFolder/)，即 ExeDir 的父目录
+func PackageDir() (string, error) {
+	exeDir, err := ExeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Dir(exeDir), nil
 }
 
 func configPath() (string, error) {
@@ -48,12 +59,12 @@ func LoadConfig() (*Config, error) {
 
 	data, err := ioutilReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("读取配置文件 %s 失败: %v", path, err)
+		return nil, fmt.Errorf("read config file %s failed: %v", path, err)
 	}
 
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("解析配置文件失败: %v", err)
+		return nil, fmt.Errorf("parse config file failed: %v", err)
 	}
 
 	return &cfg, nil
@@ -75,23 +86,73 @@ func (c *Config) MergeFlags(url string, projectName string, mainExePath string, 
 	}
 }
 
-// MainExeFolderPath 返回主程序所在的文件夹路径
+// MainExeFolderPath 返回主程序根目录的绝对路径 (PackageFolder/ApplicationFolder/)
+// main_exe_relative_path 相对于 ExeDir（即 UpdateFolder/），如 "../ApplicationFolder/main_application.exe"
 func (c *Config) MainExeFolderPath() (string, error) {
 	exeDir, err := ExeDir()
 	if err != nil {
 		return "", err
 	}
-	mainExePath := filepath.Join(exeDir, c.MainExeRelativePath)
-	return filepath.Dir(mainExePath), nil
+	mainExeAbsPath := filepath.Join(exeDir, c.MainExeRelativePath)
+	return filepath.Dir(mainExeAbsPath), nil
 }
 
-// UpdateDir 返回 update 目录的路径
-func (c *Config) UpdateDir() (string, error) {
-	folder, err := c.MainExeFolderPath()
+// MainExeFolderName 返回主程序文件夹名称（如 "ApplicationFolder"）
+func (c *Config) MainExeFolderName() (string, error) {
+	folderPath, err := c.MainExeFolderPath()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(folder, "update"), nil
+	return filepath.Base(folderPath), nil
+}
+
+// AppVersionDir 返回指定版本的应用目录路径 (PackageFolder/ApplicationFolder_{version}/)
+func (c *Config) AppVersionDir(version string) (string, error) {
+	pkgDir, err := PackageDir()
+	if err != nil {
+		return "", err
+	}
+	mainExeFolderName, err := c.MainExeFolderName()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(pkgDir, mainExeFolderName+"_"+version), nil
+}
+
+// CheckUpdaterPath 返回 ApplicationFolder/check-updator.exe 的绝对路径
+func (c *Config) CheckUpdaterPath() (string, error) {
+	mainFolder, err := c.MainExeFolderPath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(mainFolder, "check-updator.exe"), nil
+}
+
+// ShouldSkipFile 判断文件是否在排除列表中
+func (c *Config) ShouldSkipFile(relPath string) bool {
+	base := filepath.Base(relPath)
+	for _, pattern := range c.UnCopyFiles {
+		if match, _ := filepath.Match(pattern, base); match {
+			return true
+		}
+		if strings.EqualFold(pattern, base) {
+			return true
+		}
+	}
+	return false
+}
+
+// ShouldSkipFolder 判断文件夹是否在排除列表中
+func (c *Config) ShouldSkipFolder(relPath string) bool {
+	for _, pattern := range c.UnCopyFolders {
+		if match, _ := filepath.Match(pattern, relPath); match {
+			return true
+		}
+		if strings.EqualFold(pattern, relPath) {
+			return true
+		}
+	}
+	return false
 }
 
 func splitProcessNames(s string) []string {

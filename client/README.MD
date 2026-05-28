@@ -3,13 +3,50 @@
 ## 基本信息
 
 - **定位**：命令行工具，方便与其他客户端应用集成
+
 - **语言**：Go 1.10（兼容 XP，不使用 go modules）
+
 - **兼容性**：Windows XP 及以上
+
 - **构建**：`set GOARCH=386 && set GO111MODULE=off && go build -ldflags="-s -w"`
-- **退出码约定**：0 = 成功，1 = 失败，2 = 参数错误
-- **输出约定**：所有命令的标准输出（stdout）均为 JSON 格式；进度、日志信息输出到标准错误流（stderr）
+
+- **输出约定**：标准json，禁止流式输出，执行完之后，一次性输出
+
+  ```json
+  {
+  	"is_success":true,
+  	"err_msg":"",
+  	"data":...
+  }
+  ```
+
+- 更新程序与主程序的目录关系
+
+  ```
+  PackageFolder/
+  ├── ApplicationFolder    #主程序文件夹
+  |    └── main_application.exe
+  |    └── ...   
+  ├── UpdateFolder         #更新程序文件夹
+  |    └── client_updator.exe
+  |    └── version.json    #记录当前版本 比如是0.0.4
+  |    └── client.yml      #配置文件
+  |── ApplicationFolder_0.0.1    #主程序文件夹 0.0.1版本
+  |    └── main_application.exe
+  |    └── ...
+  |── ApplicationFolder_0.0.2    #主程序文件夹 0.0.2版本
+  |    └── main_application.exe
+  |    └── ...
+  |── ApplicationFolder_0.0.3    #主程序文件夹 0.0.3版本
+  |    └── main_application.exe
+  |    └── ...
+  ```
+
+  
 
 ---
+
+ 
 
 ## 配置文件
 
@@ -19,7 +56,8 @@
 
 ```json
 {
-  "version": "1.0.0",
+  "version_previouse":"0.0.9", //上一个版本的版本号,用于备份
+  "version": "1.0.0", // 当前版本的版本号
   "version_status": "applied"
 }
 ```
@@ -29,6 +67,7 @@
 | 值 | 含义 |
 | --- | --- |
 | `downloaded` | 已下载，待应用 |
+| `applying` | 正在应用更新（崩溃后用于恢复） |
 | `applied` | 已应用 |
 
 ### client.yaml
@@ -36,14 +75,14 @@
 ```yaml
 project_name: "otdr_client"
 url: "http://127.0.0.1:2000"
-main_exe_relative_path: "../Langtian.DCS.UI.exe"
+main_exe_relative_path: "../ApplicationFolder/main_application.exe"  # main_exe相对于client-updator.exe的目录
+un_copy_files:
+  - xxx.log
+un_copy_folders:
+  - Logs
+  - x86
 must_close_process_name:
-  - Langtian.DCS.UI
-  - Langtian.DCS.FlowSetting
-  - Langtian.DCS.EChartsDataDisplay
-  - Langtian.DCS.Selection
-  - langtian.dcs.login
-  - langtian.dcs.tcpplugin_go
+  - main_application
 post_update_script: ""
 ```
 
@@ -55,6 +94,8 @@ post_update_script: ""
 | `main_exe_relative_path` | 主程序相对路径（相对于 `client-updator.exe` 所在目录） |
 | `must_close_process_name` | 更新时必须关闭的进程名列表 |
 | `post_update_script` | 更新完成后执行的脚本路径（可选，相对于主程序根目录） |
+| un_copy_files | 执行更新时，不用复制的文件（相对于ApplicationFolder） |
+| un_copy_folders | 执行更新时，不用复制的文件夹（相对于ApplicationFolder） |
 
 **优先级**：命令行参数 > client.yaml 配置值。
 
@@ -62,9 +103,8 @@ post_update_script: ""
 
 ## 约定
 
-- 所有相对路径均相对于 `client-updator.exe` 所在目录解析
 - `main_exe_relative_path_folder` = `main_exe_relative_path` 所在的文件夹（即主程序根目录）
-- `update/` 目录位于 `main_exe_relative_path_folder` 下，用于存放各版本文件
+- `main_exe_folder_name` = main_exe_relative_path_folder 的文件夹名称，即主程序文件夹名称
 
 ---
 
@@ -85,7 +125,8 @@ client/
 │   ├── download_update.go     # 下载更新
 │   ├── apply_update.go        # 执行更新
 │   ├── list_rollback.go       # 列出可回滚版本
-│   └── rollback.go            # 版本回滚
+│   ├── rollback.go            # 版本回滚
+│   └── check_self_update.go   # 自更新检查
 ├── util/
 │   ├── file.go                # 文件操作（复制、SHA-256、MD5、遍历）
 │   └── process.go             # 进程管理（查找、关闭、等待）
@@ -123,6 +164,7 @@ client/
 | check_update | `/api/project/get_project_change_logs/{id}` | GET |
 | check_diff | `/api/file/get_all_files/{id}` | GET |
 | download_update | `/api/file/get_all_files/{id}` + `/api/file/download_file?path=` | GET |
+| check_self_update | 无（纯本地 SHA-256 比对） | — |
 
 服务端文件列表返回的每个文件需包含 `sha256` 字段用于完整性校验。check_update 的变更日志条目需包含 `force_update` 字段。
 
@@ -132,29 +174,43 @@ client/
 
 ### 1. 检查更新
 
+注意：此步骤需检查 version.json 中的 status 状态。如果为 `downloaded` 或 `applying`，则直接返回有更新，版本为当前 version.json 中记录的版本号。
+
 ```bash
 client-updator.exe check_update [--url <url>] [--project-name <name>]
 ```
 
 **调用接口**：`GET {url}/api/project/get_project_change_logs/{project_id}`
 
-**比对方法**：读取本地 version.json 的版本号与服务端最新变更日志的版本号比较，不一致则视为有更新。使用语义化版本比较（`major.minor.patch`）。
+**比对方法**：读取本地 version.json 的版本号与服务端最新变更日志的版本号比较，不一致则视为有更新。**若本地不存在 version.json**，能获取到服务端新版本信息则认为有更新（`current_version` 返回空字符串）。
 
 **返回值**（stdout JSON）：
 
 有更新：
 ```json
-{"has_update":true,"current_version":"1.0.0","new_version":"1.0.1","force_update":false}
+{
+	"is_success":true,
+	"err_msg":"",
+	"data":{"has_update":true,"current_version":"1.0.0","new_version":"1.0.1","force_update":false}
+}
 ```
 
 无更新：
 ```json
-{"has_update":false,"current_version":"1.0.0"}
+{
+	"is_success":true,
+	"err_msg":"",
+	"data":{"has_update":false,"current_version":"1.0.0"}
+}
 ```
 
 错误：
 ```json
-{"has_update":false,"error":"连接服务器失败: dial tcp: connect refused"}
+{
+	"is_success":false,
+	"err_msg":"连接服务器失败: dial tcp: connect refused",
+	"data":null
+}
 ```
 
 **字段说明**：
@@ -164,12 +220,13 @@ client-updator.exe check_update [--url <url>] [--project-name <name>]
 | `has_update` | bool | 是否有新版本 |
 | `current_version` | string | 本地当前版本号 |
 | `new_version` | string（可选） | 新版本号，仅 `has_update=true` 时出现 |
-| `force_update` | bool（可选） | 是否强制更新（来自服务端 `force_update` 字段），仅 `has_update=true` 时出现 |
-| `error` | string（可选） | 错误信息，仅失败时出现 |
+| `force_update` | bool（可选） | 是否强制更新（来自服务端最新版本的 `force_update` 字段），仅 `has_update=true` 时出现。`true` 时调用方应自动下载更新并提示重启；`false` 时由用户确认是否更新 |
 
 ---
 
 ### 2. 文件比对
+
+注意：此步骤调用者可跳过，当调用者检测到有新版本时，可以直接调用第3步进行更新。此步骤只是为了让设计可视化更新客户端查看差异文件
 
 ```bash
 client-updator.exe check_diff [--url <url>] [--project-name <name>]
@@ -177,17 +234,36 @@ client-updator.exe check_diff [--url <url>] [--project-name <name>]
 
 **调用接口**：`GET {url}/api/file/get_all_files/{project_id}`
 
-**功能**：列出需要从服务端下载的文件列表。只返回服务端存在且与本地 MD5 不同的文件（包括本地不存在的文件）。**不列出**仅本地存在、服务端不存在的文件。
+**功能**：列出需要从服务端下载的文件列表。只返回服务端存在且与本地 MD5不同的文件（包括本地不存在的文件）。**不列出**仅本地存在、服务端不存在的文件。
 
 **返回值**（stdout JSON Array）：
 
 ```json
 {
-  "new_version": "1.0.1",
-  "files": [
-    {"path":"app.exe","status":"modified","local_md5":"abc123","server_md5":"def456","server_size":5242880},
-    {"path":"new.dll","status":"new","local_md5":"","server_md5":"xyz789","server_size":102400}
-  ]
+	"is_success": true,
+	"err_msg": "",
+	"data": {
+		"new_version": "1.0.1",
+		"files": [{
+				"path": "app.exe",
+				"local_md5": "abc123",
+				"local_size": 43284,
+				"local_sha256": "849384",
+				"server_md5": "def456",
+				"server_size": 5242880,
+				"server_sha256": "884374"
+			},
+			{
+				"path": "new.dll",
+				"local_md5": "",
+				"local_size": 0,
+				"local_sha256": "",
+				"server_md5": "xyz789",
+				"server_size": 102400,
+				"server_sha256": "88437486"
+			}
+		]
+	}
 }
 ```
 
@@ -198,17 +274,21 @@ client-updator.exe check_diff [--url <url>] [--project-name <name>]
 | `new_version` | string | 服务端最新版本号 |
 | `files` | array | 差异文件列表 |
 | `files[].path` | string | 文件相对路径 |
-| `files[].status` | string | `modified`（已修改）或 `new`（本地不存在） |
 | `files[].local_md5` | string | 本地文件 MD5（`new` 时为空） |
+| files[].local_size | int | 本地文件大小，不存在则为0 |
+| files[].local_sha256 | string | 本地文件的sha256,不存在则为"" |
 | `files[].server_md5` | string | 服务端文件 MD5 |
 | `files[].server_size` | int | 服务端文件大小（字节） |
+| files[].server_sha256 | string | 服务端文件的sha256，不存在则为”“ |
 
 ---
 
 ### 3. 下载更新
 
+注意：此步骤只下载更新，不复制文件。当本地文件夹`./{main_exe_folder_name}_{new_version}`中存在要下载的文件，md5和sha256校验通过（可能是以前下载了部分文件），则跳过此文件下载。
+
 ```bash
-client-updator.exe download_update [--url <url>] [--project-name <name>] [--main-exe-path <path>] [--silent]
+client-updator.exe download_update [--url <url>] [--project-name <name>] [--main-exe-path <path>]
 ```
 
 **调用接口**：
@@ -218,74 +298,101 @@ client-updator.exe download_update [--url <url>] [--project-name <name>] [--main
 **执行步骤**：
 
 1. 获取服务端文件详情列表（服务端自动忽略配置中排除的文件夹和文件）
-2. 对比服务端文件与本地文件的 MD5 差异
-3. 将差异文件下载至 `{main_exe_relative_path_folder}/update/{new_version}/` 文件夹中
-   - **大文件断点续传**：文件 > 100MB 时，下载前检查本地是否存在同名文件或 `.part` 临时文件
+
+2. 对比服务端文件与**本地 ApplicationFolder** 中文件的 MD5 差异，得出需要下载的文件列表（diff 基准为当前运行的 ApplicationFolder，而非 `ApplicationFolder_{version}` 半成品目录）
+
+3. 遍历差异文件列表，逐文件下载至 `./{main_exe_folder_name}_{new_version}` 文件夹中(与UpdateFolder是平级文件夹)：
+   - **下载前先检查目标目录**：若 `ApplicationFolder_{version}` 中已存在同名文件且 MD5/SHA-256 与服务端一致，则跳过此文件
+   - **大文件断点续传**：文件 > 100MB 时，下载前检查目标目录是否存在同名文件或 `.part` 临时文件
      - 若存在且大小 < 服务端大小，发送 `Range: bytes={size}-` 从断点继续下载
-     - 下载中写入 `.part` 临时文件，完成后重命名为正式文件名
+     - 下载中写入 `.part` 临时文件（在目标目录中），完成后重命名为正式文件名
    - 文件 ≤ 100MB 直接全量下载
-4. 下载完成后逐文件校验 MD5 + SHA-256，与服务器返回值不一致则重试（最多 3 次），仍未通过则中止
-5. 将 `main_exe_relative_path_folder` 中的所有文件复制到 `{main_exe_relative_path_folder}/update/{new_version}/`，已存在的文件不覆盖，确保新版本目录是完整可运行的
-6. 将 `main_exe_relative_path_folder` 中所有文件备份到 `{main_exe_relative_path_folder}/update/{current_version}/`
-7. 更新 version.json：`version` 设为新版本号，`version_status` 设为 `downloaded`
+   
+4. 下载完成后逐文件校验 MD5 + SHA-256，与服务器返回值不一致则重试（最多 3 次），仍未通过则中止，并返回错误
+
+5. 更新 version.json（**仅在 status 非 `downloaded` 时执行，防止重复调用覆盖 `version_previouse`**）：
+
+   - `version_previouse` 设为当前 `version` 的值（记录本次更新前的版本号）
+   - `version` 设为新版本号（从接口中获取）
+   - `version_status` 设为 `downloaded`
 
 **返回值**（stdout JSON）：
 
 成功：
 ```json
-{"success":true,"version":"1.0.1"}
+{
+	"is_success":true,
+	"err_msg":"",
+	"data":{"version":"1.0.1"}
+}
 ```
 
 失败：
 ```json
-{"success":false,"error":"app.exe 校验失败，已重试 3 次"}
-```
-
-**进度输出**（stderr，非 `--silent` 模式）：
-
-```
-progress:12/45 files
-progress:downloading app.exe 25%
-progress:verifying app.exe sha256 ok
-progress:45/45 files complete
+{
+	"is_success":false,
+	"err_msg":"app.exe 校验失败，已重试 3 次",
+	"data":null
+}
 ```
 
 ---
 
-### 4. 执行更新
+### 4. 应用更新
 
 ```bash
-client-updator.exe apply_update [--main-exe-path <path>] [--must-close-process-name <name1,name2>] [--close-timeout <seconds>] [--silent]
+client-updator.exe apply_update [--main-exe-path <path>] [--must-close-process-name <name1,name2>] [--close-timeout <seconds>]
 ```
 
 **执行步骤**：
 
-1. 读取 version.json，如果 `version_status` 不为 `downloaded`，返回错误
-2. 关闭 `must_close_process_name` 中列出的所有进程：
+1. 读取 version.json，检查 `version_status`：
+   - 若为 `applied`：返回错误（没有待应用的更新）
+   - 若为 `applying`：说明上次应用中途崩溃，尝试恢复——检查当前文件系统状态
+     - 若 `ApplicationFolder`（主程序目录）存在且完整：说明步骤 3 尚未执行到重命名，重新执行步骤 3
+     - 若 `ApplicationFolder` 不存在但 `ApplicationFolder_{version}` 存在：说明旧目录已被重命名走、新目录尚未改过来，直接将 `ApplicationFolder_{version}` 重命名为 `ApplicationFolder`，然后执行步骤 4
+   - 若为 `downloaded`：正常执行后续步骤
+
+2. 将 `version_status` 设为 `applying`（标记开始应用）
+
+3. 关闭 `must_close_process_name` 中列出的所有进程：
    - 先发送 `WM_CLOSE` 消息请求正常退出
    - 等待超时（默认 30 秒，可通过 `--close-timeout` 配置）
    - 超时后调用 `TerminateProcess` 强制终止
-3. **原子替换**：
-   - 将 `{main_exe_relative_path_folder}_old/`（上次残留）清理
-   - 将 `{main_exe_relative_path_folder}` 重命名为 `{main_exe_relative_path_folder}_old/`
-   - 将 `{main_exe_relative_path_folder}/update/{version}/` 重命名为 `{main_exe_relative_path_folder}`
-     - 注意：跨目录 rename 可能在不同盘符上失败，此时回退为复制 + 删除方案
-   - 如任一步失败，将 `_old/` 重命名回来，保证主程序目录完整
-   - 清理 `_old/`
-4. 更新 version.json：`version_status` 设为 `applied`
-5. 执行 `post_update_script`（如已配置），脚本失败不影响更新结果，仅记录日志到 `update.log`
-6. **启动主程序**：以 `main_exe_relative_path` 为路径启动主程序 exe
+   
+4. **原子替换**：
+
+   - 将./{main_exe_relative_path_folder}的内容全部（除去un_copy_files/un_copy_folders）复制到`./{main_exe_folder_name}_{version}`中，确保`./{main_exe_folder_name}_{version}`中是一个完整可以运行的程序
+
+   - 将./{main_exe_folder_name}重命名为./{main_exe_folder_name}_{version_previouse}
+   - 将`./{main_exe_folder_name}_{version}`重命名为./{main_exe_folder_name}
+
+   **若任一步失败**：将 `version_status` 回设为 `downloaded`（允许重试），返回错误。
+
+5. 更新 version.json：`version` 设为新版本号，`version_previouse` 设为旧版本号，`version_status` 设为 `applied`
+
+6. 执行 `post_update_script`（如已配置），脚本失败不影响更新结果，仅记录日志到 `update.log`
+
+7. **启动主程序**：以 `main_exe_relative_path` 为路径启动主程序 exe
 
 **返回值**（stdout JSON）：
 
 成功：
 ```json
-{"success":true}
+{
+	"is_success":true,
+	"err_msg":"",
+	"data":null
+}
 ```
 
 失败：
 ```json
-{"success":false,"error":"原子替换失败，已回滚"}
+{
+	"is_success":false,
+	"err_msg":"原子替换失败，已回滚",
+	"data":null
+}
 ```
 
 ---
@@ -296,12 +403,16 @@ client-updator.exe apply_update [--main-exe-path <path>] [--must-close-process-n
 client-updator.exe list_rollback_versions [--main-exe-path <path>]
 ```
 
-**功能**：扫描本地 `{main_exe_relative_path_folder}/update/` 目录，列出所有可用的回滚版本号。
+**功能**：扫描本地 `{main_exe_folder_name}`同级 目录，列出所有可用的回滚版本号。
 
 **返回值**（stdout JSON）：
 
 ```json
-{"current_version":"1.0.1","versions":["1.0.0","1.0.1"]}
+{
+	"is_success":true,
+	"err_msg":"",
+	"data":{"current_version":"1.0.1","versions":["1.0.0","1.0.1"]}
+}
 ```
 
 ---
@@ -314,43 +425,131 @@ client-updator.exe rollback --version 1.0.1 [--main-exe-path <path>] [--must-clo
 
 **执行步骤**：
 
-1. 校验 `{main_exe_relative_path_folder}/update/{rollback_version}/` 目录存在且所有文件 MD5 完整，否则返回错误
-2. 关闭 `must_close_process_name` 中列出的所有进程（同 apply_update 的两阶段关闭策略）
-3. 将目录内所有文件以**原子替换**方式应用到 `{main_exe_relative_path_folder}/`（同 apply_update 步骤 3）
-4. 更新 version.json：`version` 设为回滚目标版本号，`version_status` 设为 `applied`
-5. 启动主程序
+同步骤4（应用更新）一样操作
 
 **返回值**（stdout JSON）：
 
 成功：
 ```json
-{"success":true,"version":"1.0.1"}
+{
+	"is_success":true,
+	"err_msg":"",
+	"data":"version":"1.0.1"
+}
 ```
 
 失败：
 ```json
-{"success":false,"error":"回滚目标版本目录不存在"}
+{
+	"is_success":false,
+	"err_msg":"回滚目标版本目录不存在",
+	"data":null
+}
 ```
+
+### 7. 自更新检查
+
+```bash
+client-updator.exe check_self_update [--main-exe-path <path>]
+```
+
+**功能**：比对自身与 ApplicationFolder/check-updator.exe 的 SHA-256，判断 updator 是否需要更新。
+
+**原理**：发布者每次打包时，将当前版本的 client_updator.exe 复制一份放入主程序目录，命名为 check-updator.exe。当主程序更新后，check-updator.exe 变成了新版，而 UpdateFolder/client_updator.exe 仍是旧版，比对不一致即为需要更新。
+
+**行为**：
+
+- 若 ApplicationFolder/check-updator.exe 不存在（首次部署），视为不需要更新
+- 若存在且 SHA-256 一致，不需要更新
+- 若存在且 SHA-256 不一致，需要更新
+
+**返回值**（stdout JSON）：
+
+需要更新：
+```json
+{
+  "is_success": true,
+  "err_msg": "",
+  "data": { "need_update": true }
+}
+```
+
+不需要更新：
+```json
+{
+  "is_success": true,
+  "err_msg": "",
+  "data": { "need_update": false }
+}
+```
+
+**调用方（main app）后续动作**：
+
+收到 need_update: true 后，将 ApplicationFolder/check-updator.exe 复制到 UpdateFolder/client_updator.exe 覆盖旧版（此时 updator 已退出，文件锁释放，可安全覆盖）。
 
 ---
 
 ## 目录结构示例
 
 ```
-Langtian.DCS/                        # main_exe_relative_path_folder（主程序根目录）
-├── Langtian.DCS.UI.exe              # 主程序
-├── config/
-├── libs/
-└── update/
-    ├── 1.0.0/                        # v1.0.0 备份（download_update 时备份生成）
-    │   ├── Langtian.DCS.UI.exe
-    │   └── ...
-    └── 1.0.1/                        # v1.0.1 完整版本（download_update 时生成）
-        ├── Langtian.DCS.UI.exe
-        └── ...
-
-updater/                              # client-updator.exe 所在目录
-├── client-updator.exe
-├── client.yaml
-└── version.json
+PackageFolder/
+├── ApplicationFolder          #主程序文件夹
+|    └── main_application.exe
+|    └── check-updator.exe     #updator 副本，用于自更新比对
+|    └── ...
+├── UpdateFolder               #更新程序文件夹
+|    └── client_updator.exe
+|    └── version.json
+|    └── client.yml
+|── ApplicationFolder_0.0.1    #主程序文件夹 0.0.1版本
+|    └── main_application.exe
+|    └── ...
+|── ApplicationFolder_0.0.2    #主程序文件夹 0.0.2版本
+|    └── main_application.exe
+|    └── ...
+|── ApplicationFolder_0.0.3    #主程序文件夹 0.0.3版本
+|    └── main_application.exe
+|    └── ...
 ```
+
+---
+
+## 待优化项 (Future Improvements)
+
+以下为设计方案评审中识别的问题，当前暂不处理，留待后续迭代优化。
+
+### 文件与目录管理
+
+| # | 问题 | 说明 |
+|---|------|------|
+| 1 | 已删除文件无法被更新掉 | check_diff / download_update 只下载服务端有而本地 MD5 不同的文件，不处理服务端已删除、本地仍残留的文件。这会导致废弃 DLL / 配置文件一直残留，可能引发版本冲突或安全漏洞 |
+| 2 | 无旧版本清理机制 | list_rollback_versions 只能列出，没有对应的删除/清理命令。长期使用后 ApplicationFolder_0.0.x 会无限积累，浪费磁盘空间 |
+| 3 | 回滚无文件完整性校验 | rollback 只扫描目录名，不校验目标目录内文件的 MD5/SHA-256。如果用户手动删除了某个版本目录中的文件，回滚后会得到一个残缺的应用 |
+| 4 | 非版本目录可能被误识别 | list_rollback_versions 扫描 ApplicationFolder_* 时，如果用户创建了 ApplicationFolder_backup 等非版本目录，也会被当成版本号列出。应加版本号格式校验 |
+| 5 | version.json 写入非原子 | 直接写文件而非先写临时文件再 rename，中途崩溃可能导致文件损坏或为空 |
+
+### 安全与签名
+
+| # | 问题 | 说明 |
+|---|------|------|
+| 6 | 纯 HTTP + 无签名校验 | 只校验 MD5/SHA-256，无数字签名或代码签名。如果攻击者控制了服务器或实施 MITM，可以同时替换文件和对应的哈希值，校验形同虚设。建议至少加 RSA/ECDSA 签名校验（服务端私钥签名文件哈希，客户端内置公钥验签） |
+
+### 进程与并发
+
+| # | 问题 | 说明 |
+|---|------|------|
+| 7 | WM_CLOSE 对控制台程序无效 | 只发 WM_CLOSE 消息，对无消息循环的控制台程序 / Windows 服务无效，只能等超时后强杀。建议对控制台进程使用 AttachConsole + CTRL_C_EVENT |
+| 8 | 无并发锁/互斥机制 | 没有文件锁、Mutex 等机制防止同时运行两个 client_updator.exe 实例，可能破坏 version.json 和文件系统状态 |
+| 9 | 关闭进程后可能被看门狗重启 | 关闭进程后、文件操作前的时间窗口内，如果有守护进程或服务自动重启了目标进程，后续重命名会因文件被占用而失败 |
+
+### 下载安全
+
+| # | 问题 | 说明 |
+|---|------|------|
+| 10 | 无文件大小 / 总下载量上限 | 没有对单个文件大小和总下载量做限制。如果服务端被入侵返回伪造的巨大文件列表，客户端磁盘会被写满 |
+
+### 自更新
+
+| # | 问题 | 说明 |
+|---|------|------|
+| ~~11~~ | ~~更新程序自身不能更新~~ | ✅ 已通过 `check_self_update` 命令解决（详见功能 7） |
