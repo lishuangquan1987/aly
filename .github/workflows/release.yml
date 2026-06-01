@@ -64,6 +64,59 @@ jobs:
           name: server-${{ matrix.goos }}-${{ matrix.goarch }}
           path: server/server-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
 
+  build-publish-cli:
+    name: Build publish-cli (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        goos: [windows, linux, darwin]
+        goarch: [amd64]
+        include:
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: publish-cli/go.mod
+        continue-on-error: true
+
+      - name: Fallback — download Go
+        if: failure()
+        shell: cmd
+        run: |
+          echo "setup-go could not resolve Go version from go.mod, using latest..."
+          powershell -Command "& {$(Invoke-WebRequest -Uri 'https://go.dev/dl/go1.23.0.windows-amd64.zip' -OutFile 'C:\go.zip'); Expand-Archive -Path 'C:\go.zip' -DestinationPath 'C:\go' -Force}"
+          echo "C:\go\bin" >> %GITHUB_PATH%
+
+      - name: Verify Go version
+        run: go version
+
+      - name: Build publish-cli
+        shell: cmd
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          cd publish-cli
+          set EXT=
+          if /I "%GOOS%"=="windows" set EXT=.exe
+          set OUT=publish-cli-%GOOS%-%GOARCH%%EXT%
+          go build -ldflags="-s -w" -o %OUT% ./cmd/publish-cli
+
+      - name: Upload publish-cli artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: publish-cli/publish-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+
   build-client:
     name: Build Client (Windows XP / 32-bit)
     runs-on: windows-latest
@@ -117,7 +170,7 @@ jobs:
 
   upload-release-assets:
     name: Upload to Release
-    needs: [build-server, build-client]
+    needs: [build-server, build-publish-cli, build-client]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -152,5 +205,10 @@ jobs:
             server-linux-arm64/server-linux-arm64 \
             server-darwin-amd64/server-darwin-amd64 \
             server-darwin-arm64/server-darwin-arm64 \
+            publish-cli-windows-amd64/publish-cli-windows-amd64.exe \
+            publish-cli-linux-amd64/publish-cli-linux-amd64 \
+            publish-cli-linux-arm64/publish-cli-linux-arm64 \
+            publish-cli-darwin-amd64/publish-cli-darwin-amd64 \
+            publish-cli-darwin-arm64/publish-cli-darwin-arm64 \
             client-updator-win-xp/client-updator.exe \
             --clobber
