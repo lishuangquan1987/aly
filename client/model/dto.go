@@ -44,12 +44,12 @@ type FileInfo struct {
 	SHA256           string `json:"sha256"`
 }
 
-// --- 命令行输出模型（匹配 README 约定的 is_success/err_msg/data 格式）---
+// --- 命令行输出模型（camelCase，server/client/publish-cli 三端统一）---
 
-// Output 是所有命令的标准输出包装
+// Output 是所有命令的标准输出包装（camelCase，三端统一）
 type Output struct {
-	IsSuccess bool        `json:"is_success"`
-	ErrMsg    string      `json:"err_msg"`
+	IsSuccess bool        `json:"isSuccess"`
+	ErrMsg    string      `json:"errorMsg"`
 	Data      interface{} `json:"data"`
 }
 

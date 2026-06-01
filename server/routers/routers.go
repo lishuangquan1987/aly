@@ -16,6 +16,7 @@ func InitRouter(r *gin.Engine) {
 			projectGroup.GET("get_all_projects", controllers.GetAllProjects)
 			projectGroup.GET("get_project_change_logs/:projectId", controllers.GetProjectChangeLogs)
 			projectGroup.POST("delete_project/:projectId", controllers.DeleteProject)
+			projectGroup.POST("publish_version", controllers.PublishVersion)
 			projectGroup.GET("get_project_os_info/:projectId", controllers.GetProjectOSInfo)
 		}
 		fileGroup := group.Group("file")

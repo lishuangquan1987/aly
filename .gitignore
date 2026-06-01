@@ -16,3 +16,6 @@ client/client-updator.exe
 client/test/temp_test/
 client/test/*.exe
 test_data/
+
+# publish-cli build artifacts
+publish-cli/publish-cli.exe

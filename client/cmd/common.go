@@ -15,7 +15,7 @@ import (
 	"clientupdator/client/util"
 )
 
-// printOutput 按 is_success/err_msg/data 格式输出 JSON 到 stdout
+// printOutput 按 isSuccess/errorMsg/data 格式输出 JSON 到 stdout
 func printOutput(success bool, errMsg string, data interface{}) {
 	out := model.Output{
 		IsSuccess: success,

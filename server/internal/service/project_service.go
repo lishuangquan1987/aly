@@ -116,6 +116,39 @@ func GetProjectById(projectId int) models.CommonResponse {
 	return models.OKWithData(p)
 }
 
+func PublishVersion(projectId int, version string, logs []string, time string) models.CommonResponse {
+	ctx := context.Background()
+	var changelog *ent.ProjectChangeLog
+	err := db.WithTx(ctx, func(tx *ent.Tx) error {
+		// 获取项目实体（用于关联变更日志）
+		p, err := tx.Project.Get(ctx, projectId)
+		if err != nil {
+			return err
+		}
+		// 更新项目版本号
+		_, err = tx.Project.Update().
+			Where(project.IDEQ(projectId)).
+			SetVersion(version).
+			Save(ctx)
+		if err != nil {
+			return err
+		}
+		// 创建变更日志记录
+		changelog, err = tx.ProjectChangeLog.Create().
+			SetProject(p).
+			SetVersion(version).
+			SetLogs(logs).
+			SetTime(time).
+			Save(ctx)
+		return err
+	})
+	if err != nil {
+		return models.NGWithError(err)
+	}
+
+	return models.OKWithData(changelog)
+}
+
 func DeleteProject(projectId int) models.CommonResponse {
 	ctx := context.Background()
 	_, err := db.Client.Project.Update().Where(project.IDEQ(projectId)).

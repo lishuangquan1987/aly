@@ -118,6 +118,29 @@ func UpdateProject(ctx *gin.Context) {
 	ctx.JSON(200, result)
 }
 
+func PublishVersion(ctx *gin.Context) {
+	var publishDto struct {
+		ProjectId int      `json:"projectId"`
+		Version   string   `json:"version"`
+		Logs      []string `json:"logs"`
+		Time      string   `json:"time"`
+	}
+	if err := ctx.ShouldBindJSON(&publishDto); err != nil {
+		ctx.JSON(200, models.NGWithError(err))
+		return
+	}
+	if publishDto.ProjectId <= 0 {
+		ctx.JSON(200, models.NG("项目ID不能为空"))
+		return
+	}
+	if publishDto.Version == "" {
+		ctx.JSON(200, models.NG("版本号不能为空"))
+		return
+	}
+
+	ctx.JSON(200, service.PublishVersion(publishDto.ProjectId, publishDto.Version, publishDto.Logs, publishDto.Time))
+}
+
 func DeleteProject(ctx *gin.Context) {
 	var projectIdDto struct {
 		ProjectId int `uri:"projectId" json:"projectId"`
