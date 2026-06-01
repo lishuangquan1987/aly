@@ -27,3 +27,4 @@ server/data/
 server/server.exe~
 *~
 server/configs/clientupdator.db
+server/release-server.exe
