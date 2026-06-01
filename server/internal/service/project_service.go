@@ -8,16 +8,18 @@ import (
 	"clientupdator/server/models"
 	"context"
 	"os"
+	"path/filepath"
 
 	"github.com/utils-go/ngo/datetime"
 	"github.com/utils-go/ngo/io/path"
 )
 
 func GetProjectWorkPath(projectName string) (string, error) {
-	dir, err := os.Getwd()
+	exe, err := os.Executable()
 	if err != nil {
 		return "", err
 	}
+	dir := filepath.Dir(exe)
 
 	return path.Combine(dir, "data", projectName), nil
 }

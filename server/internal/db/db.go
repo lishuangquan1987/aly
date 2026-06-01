@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 
 	"clientupdator/server/ent"
 
@@ -39,9 +41,14 @@ func WithTx(ctx context.Context, fn func(tx *ent.Tx) error) error {
 }
 
 func InitDB() {
-	//初始化数据库
-	var err error
-	db, err := sql.Open("sqlite", "./configs/clientupdator.db?_fk=1")
+	//初始化数据库 — 基于可执行文件路径解析 db 路径
+	exe, err := os.Executable()
+	if err != nil {
+		log.Fatalf("failed to get executable path: %v", err)
+	}
+	exeDir := filepath.Dir(exe)
+	dbPath := filepath.Join(exeDir, "configs", "clientupdator.db")
+	db, err := sql.Open("sqlite", dbPath+"?_fk=1")
 	if err != nil {
 		log.Fatalf("failed opening connection to sqlite: %v", err)
 	}
