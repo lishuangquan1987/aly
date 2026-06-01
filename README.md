@@ -531,6 +531,27 @@ CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o server-darwi
 CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o server-darwin-arm64 ./cmd
 ```
 
+### publish-cli
+
+```bash
+cd publish-cli
+go build -ldflags="-s -w" -o publish-cli.exe ./cmd/publish-cli
+```
+
+交叉编译（`CGO_ENABLED=0`）：
+
+```bash
+cd publish-cli
+# Linux amd64
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o publish-cli-linux-amd64 ./cmd/publish-cli
+# Linux arm64
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o publish-cli-linux-arm64 ./cmd/publish-cli
+# macOS amd64
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o publish-cli-darwin-amd64 ./cmd/publish-cli
+# macOS arm64
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o publish-cli-darwin-arm64 ./cmd/publish-cli
+```
+
 ### 客户端
 
 需要 Go 1.10（兼容 Windows XP），不使用 Go Modules：

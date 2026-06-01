@@ -11,8 +11,9 @@
 | 子项目 | 目录 | 职责 | 开发状态 |
 | ------ | ---- | ---- | -------- |
 | **server** | `server/` | 服务端（Go + Gin + Ent + SQLite），提供项目管理和文件管理的 REST API | 已开发 |
-| **publish_tool_avalonia** | `publish_tool_avalonia/` | **版本发布客户端**（.NET 8 + Avalonia 12），主要功能是推送文件、新版本到服务端，管理发布流程 | 已开发 |
-| **client** | `client/` | 见./client/README.MD|
+| **publish_tool_avalonia** | `publish_tool_avalonia/` | 版本发布 GUI 工具（.NET 8 + Avalonia 12），管理项目、上传文件、发布版本 | 已开发 |
+| **publish-cli** | `publish-cli/` | 版本发布 CLI 工具（Go 1.25 + cobra），命令行发布管理，类 git 工作流 | 已开发 |
+| **client** | `client/` | 终端用户更新程序（Go 1.10），检查更新、下载更新、应用更新 | 已开发 |
 
 **关键约束**：
 
@@ -29,6 +30,20 @@
 ### 1.1 目录组织
 
 ```
+ClientUpdator/                     # 项目根目录
+├── server/                        # Go 服务端
+├── client/                        # Go 客户端（终端用户更新）
+├── publish_tool_avalonia/         # C# GUI 发布工具
+├── publish-cli/                   # Go CLI 发布工具
+│   ├── cmd/publish-cli/main.go    # 入口
+│   ├── internal/cmd/              # cobra 命令定义
+│   ├── internal/api/              # HTTP 客户端
+│   ├── internal/config/           # 配置管理
+│   ├── internal/diff/             # 文件扫描 + 差异比对
+│   ├── internal/staging/          # 暂存区管理
+│   └── pkg/models/                # DTO 数据模型
+└── README.md
+
 publish_tool_avalonia/
 ├── src/
 │   ── PublishTool/           # 主项目
@@ -179,6 +194,8 @@ public async Task<List<ProjectDto>> GetAllProjectsAsync(string serverUrl)
 
 **重要**：Go 服务端 `ent` 框架生成的 JSON tag 使用 `snake_case`（如 `force_update`、`created_at`），而控制器请求体的自定义字段使用 `camelCase`（如 `isForceUpdate`）。两者不一致，必须逐一核对。
 
+**统一约定**：server/client/publish-cli 三端 CLI 输出的外层包装（`isSuccess`/`errorMsg`）统一使用 **camelCase**。server 的 `CommonResponse` 本身已是 camelCase；client 和 publish-cli 的 `Output` 结构体也使用 camelCase，与 server 保持一致。
+
 ```csharp
 // GET 响应 DTO（ent 生成 → snake_case）
 public class ProjectDto
@@ -203,13 +220,14 @@ public class CreateProjectDto
 | 方法   | 路径                                          | 用途              |
 | ---- | ------------------------------------------- | --------------- |
 | GET  | `/api/project/get_all_projects`             | 获取所有项目          |
-| POST | `/api/project/create_project`               | 创建项目            |
-| POST | `/api/project/update_project`               | 更新项目            |
-| POST | `/api/project/delete_project/{id}`          | 删除项目            |
-| GET  | `/api/project/get_project_change_logs/{id}` | 获取变更日志          |
-| GET  | `/api/project/get_project_os_info/{id}`     | 获取服务器信息         |
+| POST | `/api/project/create_project`               | 创建项目 + 初始版本 V1.0.0 |
+| POST | `/api/project/update_project`               | 更新项目配置          |
+| POST | `/api/project/delete_project/{projectId}`   | 软删除项目            |
+| GET  | `/api/project/get_project_change_logs/{projectId}` | 获取变更日志    |
+| GET  | `/api/project/get_project_os_info/{projectId}` | 获取服务端系统信息   |
+| POST | `/api/project/publish_version`              | 发布新版本（更新版本号 + 创建变更日志） |
 | POST | `/api/file/upload_file`                     | 上传文件（multipart） |
-| GET  | `/api/file/get_all_files/{id}`              | 获取文件列表          |
+| GET  | `/api/file/get_all_files/{projectId}`       | 获取文件列表（含 MD5/SHA256） |
 | GET  | `/api/file/download_file?path=`             | 下载文件            |
 
 ### 5.3 上传格式
