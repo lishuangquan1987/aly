@@ -23,3 +23,7 @@ publish-cli/publish-cli.exe
 # test artifacts
 test_e2e/
 .publish-cli/
+server/data/
+server/server.exe~
+*~
+server/configs/clientupdator.db
