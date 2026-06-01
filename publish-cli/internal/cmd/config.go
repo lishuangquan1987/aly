@@ -106,14 +106,13 @@ func runConfigSet(cmd *cobra.Command, args []string) {
 	value := args[1]
 	cfg, _ := resolveConfig()
 	applyConfigSet(&cfg, key, value)
-	if err := config.SaveProject(projectPath, cfg); err != nil {
-		if projectPath == "" {
-			// 尝试保存全局
-			if err := config.SaveGlobal(cfg); err != nil {
-				outputResult(false, err.Error(), nil)
-				return
-			}
-		} else {
+	if projectPath != "" {
+		if err := config.SaveProject(projectPath, cfg); err != nil {
+			outputResult(false, err.Error(), nil)
+			return
+		}
+	} else {
+		if err := config.SaveGlobal(cfg); err != nil {
 			outputResult(false, err.Error(), nil)
 			return
 		}
@@ -136,15 +135,16 @@ func runConfigSetArray(cmd *cobra.Command, args []string) {
 		config.LoadProject(projectPath) // ensure project config exists
 	}
 	applyArrayOp(&cfg, key, setArrayAdd, setArrayRemove, setArrayClear)
-	var saveErr error
 	if projectPath != "" {
-		saveErr = config.SaveProject(projectPath, cfg)
+		if err := config.SaveProject(projectPath, cfg); err != nil {
+			outputResult(false, err.Error(), nil)
+			return
+		}
 	} else {
-		saveErr = config.SaveGlobal(cfg)
-	}
-	if saveErr != nil {
-		outputResult(false, saveErr.Error(), nil)
-		return
+		if err := config.SaveGlobal(cfg); err != nil {
+			outputResult(false, err.Error(), nil)
+			return
+		}
 	}
 	if jsonOutput {
 		printOutput(true, "", nil)
