@@ -19,3 +19,7 @@ test_data/
 
 # publish-cli build artifacts
 publish-cli/publish-cli.exe
+
+# test artifacts
+test_e2e/
+.publish-cli/
