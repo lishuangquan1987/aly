@@ -1,0 +1,33 @@
+﻿<Window x:Class="PublishGui.Views.Dialogs.CreateProjectDialog"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="新建项目"
+        Width="500"
+        Height="400"
+        WindowStartupLocation="CenterOwner">
+    <StackPanel Margin="16" Spacing="12">
+        <TextBlock Text="在服务端创建新项目" FontWeight="Bold" FontSize="16" />
+
+        <TextBlock Text="服务端地址" />
+        <TextBox x:Name="ServerUrlBox" Watermark="例如: http://localhost:2000" />
+
+        <TextBlock Text="项目名称（英文，用于标识）" />
+        <TextBox x:Name="ProjectNameBox" Watermark="例如: my-app" />
+
+        <TextBlock Text="项目标题（中文，显示用）" />
+        <TextBox x:Name="ProjectTitleBox" Watermark="例如: 我的应用" />
+
+        <CheckBox x:Name="ForceUpdateCheckBox" Content="强制更新" Margin="0,8,0,0" />
+
+        <TextBlock Text="本地路径（用于后续发布）" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBox x:Name="LocalPathBox" Watermark="选择项目本地路径" Width="300" />
+            <Button Content="浏览..." x:Name="BrowseButton" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="取消" x:Name="CancelButton" Classes="Tertiary" />
+            <Button Content="创建项目" x:Name="CreateButton" Classes="Primary" />
+        </StackPanel>
+    </StackPanel>
+</Window>

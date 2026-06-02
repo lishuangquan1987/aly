@@ -119,8 +119,60 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task AddNewProjectAsync()
     {
-        // TODO: Show wizard for creating new project on server
-        StatusMessage = "新建项目向导待实现";
+        var dialog = new CreateProjectDialog();
+        var mainWindow = GetMainWindow();
+        if (mainWindow == null) return;
+
+        var result = await dialog.ShowDialog<(string ServerUrl, string Name, string Title, bool ForceUpdate, string Path)?>(mainWindow);
+        if (result == null) return;
+
+        var serverUrl = result.Value.ServerUrl;
+        var name = result.Value.Name;
+        var title = result.Value.Title;
+        var forceUpdate = result.Value.ForceUpdate;
+        var path = result.Value.Path;
+
+        StatusMessage = "正在创建项目...";
+
+        try
+        {
+            // Create project on server
+            var createResult = await _cliService.ProjectCreateAsync(serverUrl, name, title, forceUpdate);
+            if (createResult == null || !createResult.IsSuccess)
+            {
+                StatusMessage = $"创建项目失败: {createResult?.ErrorMsg ?? "未知错误"}";
+                return;
+            }
+
+            var projectId = createResult.Data?.Id ?? 0;
+
+            // Init local config
+            var initResult = await _cliService.ConfigInitAsync(path, serverUrl, name, projectId);
+            if (initResult == null || !initResult.IsSuccess)
+            {
+                StatusMessage = $"初始化本地配置失败: {initResult?.ErrorMsg ?? "未知错误"}";
+                return;
+            }
+
+            var config = new ProjectConfig
+            {
+                ProjectName = name,
+                ServerUrl = serverUrl,
+                ProjectPath = path,
+                ProjectId = projectId
+            };
+
+            _configService.AddProject(config);
+            var vm = new ProjectViewModel(config, _cliService, _configService);
+            Projects.Add(vm);
+            SelectedProject = vm;
+            StatusMessage = $"项目创建成功: {name} (ID: {projectId})";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"创建项目失败: {ex.Message}";
+            Log.Error(ex, "Failed to create project");
+        }
     }
 
     [RelayCommand]
