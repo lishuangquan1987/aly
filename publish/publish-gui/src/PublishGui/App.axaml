@@ -9,5 +9,6 @@
     </Application.Styles>
     <Application.Resources>
         <converters:BytesToSizeConverter x:Key="BytesToSizeConverter" />
+        <converters:StatusToColorConverter x:Key="StatusToColorConverter" />
     </Application.Resources>
 </Application>

@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -89,7 +90,7 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task AddExistingProjectAsync()
     {
         var dialog = new AddProjectDialog();
-        var mainWindow = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        var mainWindow = GetMainWindow();
         if (mainWindow == null) return;
 
         var result = await dialog.ShowDialog<(string Name, string ServerUrl, string Path, int Id)?>(mainWindow);
@@ -162,7 +163,25 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task OpenProjectSettingsAsync()
     {
-        // TODO: Show project settings dialog
-        StatusMessage = "项目设置功能待实现";
+        if (SelectedProject == null) return;
+
+        var dialog = new ProjectSettingsDialog();
+        dialog.LoadConfig(SelectedProject.Config);
+
+        var mainWindow = GetMainWindow();
+        if (mainWindow == null) return;
+
+        var result = await dialog.ShowDialog<ProjectConfig?>(mainWindow);
+        if (result == null) return;
+
+        // Update config
+        _configService.UpdateProject(result);
+        SelectedProject.Config = result;
+        StatusMessage = $"已更新项目设置: {result.ProjectName}";
+    }
+
+    private Window? GetMainWindow()
+    {
+        return (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
     }
 }
