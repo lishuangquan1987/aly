@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -176,5 +176,5 @@ func ioutilReadFile(path string) ([]byte, error) {
 		return nil, err
 	}
 	defer f.Close()
-	return io.ReadAll(f)
+	return ioutil.ReadAll(f)
 }
