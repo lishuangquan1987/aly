@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using PublishGui.Constants;
 using PublishGui.Models.Cli;
 using PublishGui.Models.Local;
 using PublishGui.Services;
@@ -11,35 +12,48 @@ using System.Threading.Tasks;
 
 namespace PublishGui.ViewModels;
 
+/// <summary>
+/// 项目页面 ViewModel
+/// 负责管理单个项目的文件状态、暂存区、发布和版本日志
+/// </summary>
 public partial class ProjectViewModel : ObservableObject
 {
     private readonly CliService _cliService;
     private readonly ConfigService _configService;
 
+    /// <summary>项目配置</summary>
     [ObservableProperty]
     private ProjectConfig _config;
 
+    /// <summary>已暂存文件列表</summary>
     [ObservableProperty]
     private ObservableCollection<FileItem> _stagedFiles = new();
 
+    /// <summary>未暂存文件列表</summary>
     [ObservableProperty]
     private ObservableCollection<FileItem> _unstagedFiles = new();
 
+    /// <summary>状态消息</summary>
     [ObservableProperty]
     private string _statusMessage = string.Empty;
 
+    /// <summary>是否正在执行操作</summary>
     [ObservableProperty]
     private bool _isBusy;
 
+    /// <summary>当前版本号</summary>
     [ObservableProperty]
     private string _currentVersion = string.Empty;
 
+    /// <summary>新版本号（用户输入）</summary>
     [ObservableProperty]
     private string _newVersion = string.Empty;
 
+    /// <summary>变更说明（用户输入）</summary>
     [ObservableProperty]
     private string _commitMessage = string.Empty;
 
+    /// <summary>版本变更日志列表</summary>
     [ObservableProperty]
     private ObservableCollection<ChangeLog> _changeLogs = new();
 
@@ -50,59 +64,34 @@ public partial class ProjectViewModel : ObservableObject
         _configService = configService;
     }
 
+    /// <summary>
+    /// 刷新文件状态
+    /// </summary>
     [RelayCommand]
     private async Task RefreshStatusAsync()
     {
         if (IsBusy) return;
+        
         IsBusy = true;
-        StatusMessage = "正在刷新状态...";
+        StatusMessage = UiTexts.RefreshingStatus;
 
         try
         {
             var result = await _cliService.GetStatusAsync(Config.ProjectPath);
+            
             if (result == null || !result.IsSuccess)
             {
-                StatusMessage = $"刷新失败: {result?.ErrorMsg ?? "未知错误"}";
+                StatusMessage = $"{UiTexts.RefreshFailed}: {result?.ErrorMsg ?? "未知错误"}";
                 return;
             }
 
-            StagedFiles.Clear();
-            UnstagedFiles.Clear();
-
-            if (result.Data?.Staged != null)
-            {
-                foreach (var item in result.Data.Staged)
-                {
-                    StagedFiles.Add(new FileItem
-                    {
-                        RelativePath = item.RelativePath,
-                        Status = item.Status,
-                        LocalSize = item.LocalSize,
-                        ServerSize = item.ServerSize
-                    });
-                }
-            }
-
-            if (result.Data?.Unstaged != null)
-            {
-                foreach (var item in result.Data.Unstaged)
-                {
-                    UnstagedFiles.Add(new FileItem
-                    {
-                        RelativePath = item.RelativePath,
-                        Status = item.Status,
-                        LocalSize = item.LocalSize,
-                        ServerSize = item.ServerSize
-                    });
-                }
-            }
-
+            UpdateFileLists(result.Data);
             StatusMessage = $"已刷新: {StagedFiles.Count} 个暂存文件, {UnstagedFiles.Count} 个未暂存文件";
         }
         catch (Exception ex)
         {
-            StatusMessage = $"刷新失败: {ex.Message}";
-            Log.Error(ex, "Failed to refresh status");
+            StatusMessage = $"{UiTexts.RefreshFailed}: {ex.Message}";
+            Log.Error(ex, "刷新状态失败");
         }
         finally
         {
@@ -110,29 +99,34 @@ public partial class ProjectViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 添加所有变更到暂存区
+    /// </summary>
     [RelayCommand]
     private async Task AddAllAsync()
     {
         if (IsBusy) return;
+        
         IsBusy = true;
-        StatusMessage = "正在添加所有变更...";
+        StatusMessage = UiTexts.AddingAllChanges;
 
         try
         {
             var result = await _cliService.AddAllAsync(Config.ProjectPath);
+            
             if (result == null || !result.IsSuccess)
             {
-                StatusMessage = $"添加失败: {result?.ErrorMsg ?? "未知错误"}";
+                StatusMessage = $"{UiTexts.AddFailed}: {result?.ErrorMsg ?? "未知错误"}";
                 return;
             }
 
-            StatusMessage = "已添加所有变更到暂存区";
+            StatusMessage = UiTexts.AddedAllSuccess;
             await RefreshStatusAsync();
         }
         catch (Exception ex)
         {
-            StatusMessage = $"添加失败: {ex.Message}";
-            Log.Error(ex, "Failed to add all");
+            StatusMessage = $"{UiTexts.AddFailed}: {ex.Message}";
+            Log.Error(ex, "添加变更失败");
         }
         finally
         {
@@ -140,29 +134,34 @@ public partial class ProjectViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 清空暂存区
+    /// </summary>
     [RelayCommand]
     private async Task ResetAllAsync()
     {
         if (IsBusy) return;
+        
         IsBusy = true;
-        StatusMessage = "正在清空暂存区...";
+        StatusMessage = UiTexts.ClearingStaging;
 
         try
         {
             var result = await _cliService.ResetAllAsync(Config.ProjectPath);
+            
             if (result == null || !result.IsSuccess)
             {
-                StatusMessage = $"清空失败: {result?.ErrorMsg ?? "未知错误"}";
+                StatusMessage = $"{UiTexts.ClearFailed}: {result?.ErrorMsg ?? "未知错误"}";
                 return;
             }
 
-            StatusMessage = "暂存区已清空";
+            StatusMessage = UiTexts.StagingCleared;
             await RefreshStatusAsync();
         }
         catch (Exception ex)
         {
-            StatusMessage = $"清空失败: {ex.Message}";
-            Log.Error(ex, "Failed to reset all");
+            StatusMessage = $"{UiTexts.ClearFailed}: {ex.Message}";
+            Log.Error(ex, "清空暂存区失败");
         }
         finally
         {
@@ -170,52 +169,60 @@ public partial class ProjectViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 发布新版本
+    /// </summary>
     [RelayCommand]
     private async Task PublishAsync()
     {
         if (IsBusy) return;
+        
+        // 验证输入
         if (string.IsNullOrWhiteSpace(NewVersion))
         {
-            StatusMessage = "请输入版本号";
+            StatusMessage = UiTexts.EnterVersion;
             return;
         }
+        
         if (string.IsNullOrWhiteSpace(CommitMessage))
         {
-            StatusMessage = "请输入变更说明";
+            StatusMessage = UiTexts.EnterCommitMessage;
             return;
         }
 
         IsBusy = true;
-        StatusMessage = "正在发布...";
+        StatusMessage = UiTexts.Publishing;
 
         try
         {
-            // First add all changes
+            // 1. 先添加所有变更
             var addResult = await _cliService.AddAllAsync(Config.ProjectPath);
             if (addResult == null || !addResult.IsSuccess)
             {
-                StatusMessage = $"添加失败: {addResult?.ErrorMsg ?? "未知错误"}";
+                StatusMessage = $"{UiTexts.AddFailed}: {addResult?.ErrorMsg ?? "未知错误"}";
                 return;
             }
 
-            // Then publish
+            // 2. 发布
             var result = await _cliService.PublishAsync(Config.ProjectPath, NewVersion, CommitMessage);
             if (result == null || !result.IsSuccess)
             {
-                StatusMessage = $"发布失败: {result?.ErrorMsg ?? "未知错误"}";
+                StatusMessage = $"{UiTexts.PublishFailed}: {result?.ErrorMsg ?? "未知错误"}";
                 return;
             }
 
-            StatusMessage = $"发布成功: {NewVersion}";
+            // 3. 成功后清理输入并刷新
+            StatusMessage = $"{UiTexts.PublishSuccess}: {NewVersion}";
             NewVersion = string.Empty;
             CommitMessage = string.Empty;
+            
             await RefreshStatusAsync();
             await RefreshLogAsync();
         }
         catch (Exception ex)
         {
-            StatusMessage = $"发布失败: {ex.Message}";
-            Log.Error(ex, "Failed to publish");
+            StatusMessage = $"{UiTexts.PublishFailed}: {ex.Message}";
+            Log.Error(ex, "发布失败");
         }
         finally
         {
@@ -223,29 +230,73 @@ public partial class ProjectViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 刷新版本日志
+    /// </summary>
     [RelayCommand]
     private async Task RefreshLogAsync()
     {
         try
         {
             var result = await _cliService.GetLogAsync(Config.ProjectPath);
+            
             if (result?.Data != null)
             {
                 ChangeLogs.Clear();
-                foreach (var log in result.Data)
+                
+                // 按版本号倒序排列
+                var sortedLogs = result.Data.OrderByDescending(l => l.Id);
+                foreach (var log in sortedLogs)
                 {
                     ChangeLogs.Add(log);
                 }
 
+                // 更新当前版本号
                 if (result.Data.Count > 0)
                 {
-                    CurrentVersion = result.Data[0].Version;
+                    CurrentVersion = result.Data.OrderByDescending(l => l.Id).First().Version;
                 }
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to refresh log");
+            Log.Error(ex, "刷新版本日志失败");
         }
     }
+
+    /// <summary>
+    /// 更新文件列表
+    /// </summary>
+    private void UpdateFileLists(StatusData? data)
+    {
+        StagedFiles.Clear();
+        UnstagedFiles.Clear();
+
+        if (data?.Staged != null)
+        {
+            foreach (var item in data.Staged)
+            {
+                StagedFiles.Add(CreateFileItem(item));
+            }
+        }
+
+        if (data?.Unstaged != null)
+        {
+            foreach (var item in data.Unstaged)
+            {
+                UnstagedFiles.Add(CreateFileItem(item));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 创建文件列表项
+    /// </summary>
+    private static FileItem CreateFileItem(FileStatusItem item) => new()
+    {
+        RelativePath = item.RelativePath,
+        Status = item.Status,
+        LocalSize = item.LocalSize,
+        ServerSize = item.ServerSize
+    };
 }

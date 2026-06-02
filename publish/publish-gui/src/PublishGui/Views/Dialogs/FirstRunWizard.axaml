@@ -1,0 +1,182 @@
+﻿<Window x:Class="PublishGui.Views.Dialogs.FirstRunWizard"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="欢迎使用 Publish GUI"
+        Width="600"
+        Height="500"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- Header -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource SemiColorPrimary}"
+                Padding="24,20">
+            <StackPanel>
+                <TextBlock Text="欢迎使用 Publish GUI"
+                           FontSize="24"
+                           FontWeight="Bold"
+                           Foreground="White" />
+                <TextBlock Text="让我们一起设置您的第一个项目"
+                           FontSize="14"
+                           Foreground="White"
+                           Opacity="0.9"
+                           Margin="0,8,0,0" />
+            </StackPanel>
+        </Border>
+
+        <!-- Content -->
+        <TabControl Grid.Row="1" x:Name="StepsTabControl" Margin="24,16">
+            <!-- Step 1: Choose mode -->
+            <TabItem Header="选择模式" IsSelected="True">
+                <StackPanel Margin="16,24" Spacing="16">
+                    <TextBlock Text="请选择您要进行的操作："
+                               FontSize="16"
+                               FontWeight="SemiBold" />
+                    
+                    <Border BorderBrush="{DynamicResource SemiColorBorder}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="16"
+                            Cursor="Hand"
+                            x:Name="AddExistingOption">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <PathIcon Data="{DynamicResource SemiIconFolder}"
+                                      Width="32" Height="32" />
+                            <StackPanel>
+                                <TextBlock Text="添加已有项目"
+                                           FontSize="16"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="项目已在服务端创建，本地已执行 publish-cli init"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource SemiColorText2}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border BorderBrush="{DynamicResource SemiColorBorder}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="16"
+                            Cursor="Hand"
+                            x:Name="CreateNewOption">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <PathIcon Data="{DynamicResource SemiIconPlus}"
+                                      Width="32" Height="32" />
+                            <StackPanel>
+                                <TextBlock Text="新建项目"
+                                           FontSize="16"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="在服务端创建新项目并初始化本地配置"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource SemiColorText2}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </TabItem>
+
+            <!-- Step 2: Add existing project -->
+            <TabItem Header="添加项目" x:Name="AddExistingTab">
+                <StackPanel Margin="16,24" Spacing="16">
+                    <TextBlock Text="请输入项目信息："
+                               FontSize="16"
+                               FontWeight="SemiBold" />
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="项目名称" />
+                        <TextBox x:Name="ProjectNameBox"
+                                 Watermark="输入项目名称" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="服务端地址" />
+                        <TextBox x:Name="ServerUrlBox"
+                                 Watermark="例如: http://localhost:2000"
+                                 Text="http://localhost:2000" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="本地路径" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox x:Name="LocalPathBox"
+                                     Watermark="选择项目本地路径"
+                                     Width="380" />
+                            <Button Content="浏览..."
+                                    x:Name="BrowsePathButton" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="项目 ID（可选）" />
+                        <TextBox x:Name="ProjectIdBox"
+                                 Watermark="如果已知，请填写项目 ID" />
+                    </StackPanel>
+                </StackPanel>
+            </TabItem>
+
+            <!-- Step 3: Create new project -->
+            <TabItem Header="新建项目" x:Name="CreateNewTab">
+                <StackPanel Margin="16,24" Spacing="16">
+                    <TextBlock Text="请填写项目信息："
+                               FontSize="16"
+                               FontWeight="SemiBold" />
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="服务端地址" />
+                        <TextBox x:Name="NewServerUrlBox"
+                                 Watermark="例如: http://localhost:2000"
+                                 Text="http://localhost:2000" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="项目名称（英文标识）" />
+                        <TextBox x:Name="NewProjectNameBox"
+                                 Watermark="例如: my-app" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="项目标题（中文显示）" />
+                        <TextBox x:Name="NewProjectTitleBox"
+                                 Watermark="例如: 我的应用" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="本地路径" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox x:Name="NewLocalPathBox"
+                                     Watermark="选择项目本地路径"
+                                     Width="380" />
+                            <Button Content="浏览..."
+                                    x:Name="NewBrowsePathButton" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <CheckBox x:Name="ForceUpdateCheckBox"
+                              Content="强制更新客户端"
+                              Margin="0,8,0,0" />
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+
+        <!-- Footer -->
+        <Border Grid.Row="2"
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="0,1,0,0"
+                Padding="24,12">
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="12">
+                <Button Content="跳过"
+                        x:Name="SkipButton"
+                        Classes="Tertiary" />
+                <Button Content="上一步"
+                        x:Name="BackButton"
+                        Classes="Tertiary"
+                        IsVisible="False" />
+                <Button Content="下一步"
+                        x:Name="NextButton"
+                        Classes="Primary" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
