@@ -4,158 +4,231 @@
         xmlns:vm="using:PublishGui.ViewModels"
         xmlns:local="using:PublishGui.Models.Local"
         xmlns:cli="using:PublishGui.Models.Cli"
-        Title="Publish GUI"
-        Width="1200"
-        Height="800"
-        MinWidth="800"
+        xmlns:conv="using:PublishGui.Converters"
+        Title="Publish GUI - 版本发布工具"
+        Width="1280"
+        Height="860"
+        MinWidth="900"
         MinHeight="600"
         WindowStartupLocation="CenterScreen">
     <Design.DataContext>
         <vm:MainWindowViewModel />
     </Design.DataContext>
 
+    <Window.Resources>
+        <conv:BytesToSizeConverter x:Key="BytesToSize" />
+        <conv:StatusToColorConverter x:Key="StatusColor" />
+    </Window.Resources>
+
     <Grid RowDefinitions="Auto,*,Auto">
-        <!-- Toolbar -->
-        <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground}"
+        <!-- Top Toolbar -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource SemiColorBackground}"
                 BorderBrush="{DynamicResource SemiColorBorder}"
                 BorderThickness="0,0,0,1"
-                Padding="8">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="添加已有项目"
-                        Command="{Binding AddExistingProjectCommand}"
-                        Classes="Tertiary" />
-                <Button Content="新建项目"
-                        Command="{Binding AddNewProjectCommand}"
-                        Classes="Primary" />
-                <Button Content="移除项目"
-                        Command="{Binding RemoveProjectCommand}"
-                        Classes="Danger" />
-                <Border Width="1" Background="{DynamicResource SemiColorBorder}" Margin="4,0" />
-                <Button Content="服务器信息"
-                        Command="{Binding RefreshServerInfoCommand}"
-                        Classes="Tertiary" />
-                <Button Content="项目设置"
-                        Command="{Binding OpenProjectSettingsCommand}"
-                        Classes="Tertiary" />
-            </StackPanel>
+                Padding="12,8">
+            <DockPanel>
+                <!-- CLI Status -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                    <Ellipse Width="8" Height="8"
+                             Fill="{DynamicResource SemiColorSuccess}"
+                             IsVisible="{Binding IsCliFound}" />
+                    <Ellipse Width="8" Height="8"
+                             Fill="{DynamicResource SemiColorDanger}"
+                             IsVisible="{Binding IsCliFound, Converter={x:Static BoolConverters.Not}}" />
+                    <TextBlock Text="{Binding CliPath}"
+                               FontSize="11"
+                               Foreground="{DynamicResource SemiColorText2}" />
+                </StackPanel>
+
+                <!-- Main Buttons -->
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="添加已有项目"
+                            Command="{Binding AddExistingProjectCommand}"
+                            Classes="Tertiary" />
+                    <Button Content="新建项目"
+                            Command="{Binding AddNewProjectCommand}"
+                            Classes="Primary" />
+                    <Separator Width="1" Height="20" Margin="4,0" />
+                    <Button Content="服务器信息"
+                            Command="{Binding RefreshServerInfoCommand}"
+                            Classes="Tertiary" />
+                    <Button Content="项目设置"
+                            Command="{Binding OpenProjectSettingsCommand}"
+                            Classes="Tertiary" />
+                    <Button Content="移除项目"
+                            Command="{Binding RemoveProjectCommand}"
+                            Classes="Danger" />
+                </StackPanel>
+            </DockPanel>
         </Border>
 
-        <!-- Main Content -->
-        <Grid Grid.Row="1" ColumnDefinitions="250,*,350">
-            <!-- Left Panel: Project List -->
+        <!-- Main Content Area -->
+        <Grid Grid.Row="1" ColumnDefinitions="260,*,360">
+
+            <!-- Left Panel: Project List + Server Info -->
             <Border Grid.Column="0"
                     Background="{DynamicResource SemiColorBackground}"
                     BorderBrush="{DynamicResource SemiColorBorder}"
                     BorderThickness="0,0,1,0">
                 <DockPanel>
-                    <TextBlock Text="项目列表"
-                               FontWeight="Bold"
-                               Margin="12,8"
-                               DockPanel.Dock="Top" />
+                    <!-- Project List Header -->
+                    <Border DockPanel.Dock="Top"
+                            Padding="12,10"
+                            BorderBrush="{DynamicResource SemiColorBorder}"
+                            BorderThickness="0,0,0,1">
+                        <TextBlock Text="项目列表" FontWeight="SemiBold" FontSize="14" />
+                    </Border>
+
+                    <!-- Server Info Panel -->
+                    <Border DockPanel.Dock="Bottom"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}"
+                            BorderThickness="0,1,0,0"
+                            Padding="12">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="服务器信息" FontWeight="SemiBold" FontSize="12" />
+                            <StackPanel Spacing="2">
+                                <TextBlock FontSize="11"
+                                           Foreground="{DynamicResource SemiColorText2}">
+                                    <Run Text="CPU: " /><Run Text="{Binding ServerInfo.CpuName, FallbackValue='未知'}" />
+                                </TextBlock>
+                                <TextBlock FontSize="11"
+                                           Foreground="{DynamicResource SemiColorText2}">
+                                    <Run Text="磁盘: " />
+                                    <Run Text="{Binding ServerInfo.DiskUsed, StringFormat={}{0:F1}}" />
+                                    <Run Text=" / " />
+                                    <Run Text="{Binding ServerInfo.DiskTotal, StringFormat={}{0:F1}}" />
+                                    <Run Text=" GB (" />
+                                    <Run Text="{Binding ServerInfo.DiskUsedPercent, StringFormat={}{0:F1}}" />
+                                    <Run Text="%)" />
+                                </TextBlock>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Project List -->
                     <ListBox ItemsSource="{Binding Projects}"
                              SelectedItem="{Binding SelectedProject}"
-                             Margin="4">
+                             Margin="0,4">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Margin="4">
+                                <StackPanel Margin="12,6">
                                     <TextBlock Text="{Binding Config.ProjectName}"
-                                               FontWeight="SemiBold" />
+                                               FontWeight="SemiBold"
+                                               FontSize="13" />
                                     <TextBlock Text="{Binding Config.ServerUrl}"
                                                FontSize="11"
-                                               Foreground="{DynamicResource SemiColorText2}" />
+                                               Foreground="{DynamicResource SemiColorText2}"
+                                               Margin="0,2,0,0" />
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
-
-                    <!-- Server Info -->
-                    <Border DockPanel.Dock="Bottom"
-                            Background="{DynamicResource SemiColorBackground1}"
-                            Margin="4"
-                            CornerRadius="4"
-                            Padding="8">
-                        <StackPanel>
-                            <TextBlock Text="服务器信息" FontWeight="SemiBold" FontSize="12" />
-                            <TextBlock Text="{Binding ServerInfo.CpuName}"
-                                       FontSize="11"
-                                       Foreground="{DynamicResource SemiColorText2}" />
-                            <TextBlock FontSize="11"
-                                       Foreground="{DynamicResource SemiColorText2}">
-                                <TextBlock.Text>
-                                    <MultiBinding StringFormat="磁盘: {0:F1} GB / {1:F1} GB ({2:F1}%)">
-                                        <Binding Path="ServerInfo.DiskUsed" />
-                                        <Binding Path="ServerInfo.DiskTotal" />
-                                        <Binding Path="ServerInfo.DiskUsedPercent" />
-                                    </MultiBinding>
-                                </TextBlock.Text>
-                            </TextBlock>
-                        </StackPanel>
-                    </Border>
                 </DockPanel>
             </Border>
 
-            <!-- Center Panel: File List -->
+            <!-- Center Panel: File Status -->
             <Border Grid.Column="1"
                     Background="{DynamicResource SemiColorBackground}">
                 <DockPanel>
-                    <!-- Unstaged Files -->
-                    <TextBlock Text="未暂存文件"
-                               FontWeight="Bold"
-                               Margin="12,8"
-                               DockPanel.Dock="Top" />
+                    <!-- Unstaged Files Section -->
+                    <Border DockPanel.Dock="Top"
+                            Padding="12,10"
+                            BorderBrush="{DynamicResource SemiColorBorder}"
+                            BorderThickness="0,0,0,1">
+                        <DockPanel>
+                            <TextBlock Text="未暂存文件" FontWeight="SemiBold" FontSize="14" />
+                            <TextBlock DockPanel.Dock="Right"
+                                       Text="{Binding SelectedProject.UnstagedFiles.Count}"
+                                       Foreground="{DynamicResource SemiColorText2}"
+                                       VerticalAlignment="Center" />
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Unstaged File List -->
                     <ListBox ItemsSource="{Binding SelectedProject.UnstagedFiles}"
-                             Margin="4"
+                             Margin="0,4"
                              DockPanel.Dock="Top"
-                             MaxHeight="300">
+                             MaxHeight="350">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                                <Grid ColumnDefinitions="Auto,*,Auto,80,80" Margin="12,4">
                                     <CheckBox IsChecked="{Binding IsSelected}"
-                                              Margin="4,0" />
+                                              VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding RelativePath}"
-                                               VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="2"
-                                               Text="{Binding StatusDisplay}"
+                                               VerticalAlignment="Center"
                                                Margin="8,0"
-                                               Foreground="{DynamicResource SemiColorText2}" />
+                                               TextTrimming="CharacterEllipsis" />
+                                    <Border Grid.Column="2"
+                                            Background="{Binding Status, Converter={StaticResource StatusColor}}"
+                                            CornerRadius="3"
+                                            Padding="6,2"
+                                            Margin="4,0">
+                                        <TextBlock Text="{Binding StatusDisplay}"
+                                                   FontSize="11"
+                                                   Foreground="White" />
+                                    </Border>
                                     <TextBlock Grid.Column="3"
-                                               Text="{Binding LocalSize, Converter={StaticResource BytesToSizeConverter}}"
-                                               Margin="4,0"
-                                               Foreground="{DynamicResource SemiColorText2}"
-                                               MinWidth="60" />
+                                               Text="{Binding LocalSize, Converter={StaticResource BytesToSize}}"
+                                               HorizontalAlignment="Right"
+                                               VerticalAlignment="Center"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource SemiColorText2}" />
                                     <TextBlock Grid.Column="4"
-                                               Text="{Binding ServerSize, Converter={StaticResource BytesToSizeConverter}}"
-                                               Foreground="{DynamicResource SemiColorText2}"
-                                               MinWidth="60" />
+                                               Text="{Binding ServerSize, Converter={StaticResource BytesToSize}}"
+                                               HorizontalAlignment="Right"
+                                               VerticalAlignment="Center"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource SemiColorText2}" />
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
 
-                    <!-- Staged Files -->
-                    <TextBlock Text="暂存文件"
-                               FontWeight="Bold"
-                               Margin="12,8"
-                               DockPanel.Dock="Top" />
+                    <!-- Staged Files Section -->
+                    <Border DockPanel.Dock="Top"
+                            Padding="12,10"
+                            BorderBrush="{DynamicResource SemiColorBorder}"
+                            BorderThickness="0,1,0,1">
+                        <DockPanel>
+                            <TextBlock Text="暂存文件" FontWeight="SemiBold" FontSize="14" />
+                            <TextBlock DockPanel.Dock="Right"
+                                       Text="{Binding SelectedProject.StagedFiles.Count}"
+                                       Foreground="{DynamicResource SemiColorText2}"
+                                       VerticalAlignment="Center" />
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Staged File List -->
                     <ListBox ItemsSource="{Binding SelectedProject.StagedFiles}"
-                             Margin="4">
+                             Margin="0,4">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                <Grid ColumnDefinitions="Auto,*,Auto,80" Margin="12,4">
                                     <CheckBox IsChecked="{Binding IsSelected}"
-                                              Margin="4,0" />
+                                              VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding RelativePath}"
-                                               VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="2"
-                                               Text="{Binding StatusDisplay}"
+                                               VerticalAlignment="Center"
                                                Margin="8,0"
-                                               Foreground="{DynamicResource SemiColorText2}" />
+                                               TextTrimming="CharacterEllipsis" />
+                                    <Border Grid.Column="2"
+                                            Background="{Binding Status, Converter={StaticResource StatusColor}}"
+                                            CornerRadius="3"
+                                            Padding="6,2"
+                                            Margin="4,0">
+                                        <TextBlock Text="{Binding StatusDisplay}"
+                                                   FontSize="11"
+                                                   Foreground="White" />
+                                    </Border>
                                     <TextBlock Grid.Column="3"
-                                               Text="{Binding LocalSize, Converter={StaticResource BytesToSizeConverter}}"
-                                               Foreground="{DynamicResource SemiColorText2}"
-                                               MinWidth="60" />
+                                               Text="{Binding LocalSize, Converter={StaticResource BytesToSize}}"
+                                               HorizontalAlignment="Right"
+                                               VerticalAlignment="Center"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource SemiColorText2}" />
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -163,20 +236,23 @@
                 </DockPanel>
             </Border>
 
-            <!-- Right Panel: Publish -->
+            <!-- Right Panel: Publish & History -->
             <Border Grid.Column="2"
                     Background="{DynamicResource SemiColorBackground}"
                     BorderBrush="{DynamicResource SemiColorBorder}"
                     BorderThickness="1,0,0,0">
                 <DockPanel>
-                    <TextBlock Text="发布"
-                               FontWeight="Bold"
-                               Margin="12,8"
-                               DockPanel.Dock="Top" />
+                    <!-- Publish Header -->
+                    <Border DockPanel.Dock="Top"
+                            Padding="12,10"
+                            BorderBrush="{DynamicResource SemiColorBorder}"
+                            BorderThickness="0,0,0,1">
+                        <TextBlock Text="发布" FontWeight="SemiBold" FontSize="14" />
+                    </Border>
 
                     <!-- Action Buttons -->
                     <StackPanel DockPanel.Dock="Top"
-                                Margin="12,8"
+                                Margin="12,10"
                                 Spacing="8">
                         <Button Content="刷新状态"
                                 Command="{Binding SelectedProject.RefreshStatusCommand}"
@@ -192,49 +268,81 @@
                                 HorizontalAlignment="Stretch" />
                     </StackPanel>
 
-                    <!-- Version and Message -->
+                    <!-- Version Info -->
+                    <Border DockPanel.Dock="Top"
+                            Margin="12,0"
+                            Padding="10"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            CornerRadius="6">
+                        <StackPanel>
+                            <TextBlock Text="当前版本" FontSize="11"
+                                       Foreground="{DynamicResource SemiColorText2}" />
+                            <TextBlock Text="{Binding SelectedProject.CurrentVersion, FallbackValue='未知'}"
+                                       FontWeight="Bold"
+                                       FontSize="16"
+                                       Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Version & Message Input -->
                     <StackPanel DockPanel.Dock="Top"
-                                Margin="12,8"
-                                Spacing="8">
-                        <TextBlock Text="当前版本" />
-                        <TextBlock Text="{Binding SelectedProject.CurrentVersion}"
-                                   FontWeight="Bold"
-                                   Margin="0,0,0,8" />
-                        <TextBlock Text="新版本号" />
-                        <TextBox Text="{Binding SelectedProject.NewVersion}"
-                                 Watermark="例如: V1.0.1" />
-                        <TextBlock Text="变更说明" />
-                        <TextBox Text="{Binding SelectedProject.CommitMessage}"
-                                 Watermark="输入变更说明..."
-                                 AcceptsReturn="True"
-                                 MinHeight="80" />
-                        <Button Content="发布"
+                                Margin="12,10"
+                                Spacing="10">
+                        <StackPanel>
+                            <TextBlock Text="新版本号" FontSize="12"
+                                       Foreground="{DynamicResource SemiColorText2}" />
+                            <TextBox Text="{Binding SelectedProject.NewVersion}"
+                                     Watermark="例如: V1.0.1"
+                                     Margin="0,4,0,0" />
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="变更说明" FontSize="12"
+                                       Foreground="{DynamicResource SemiColorText2}" />
+                            <TextBox Text="{Binding SelectedProject.CommitMessage}"
+                                     Watermark="输入变更说明..."
+                                     AcceptsReturn="True"
+                                     MinHeight="80"
+                                     Margin="0,4,0,0" />
+                        </StackPanel>
+                        <Button Content="发布新版本"
                                 Command="{Binding SelectedProject.PublishCommand}"
                                 Classes="Primary"
-                                HorizontalAlignment="Stretch" />
+                                HorizontalAlignment="Stretch"
+                                Height="36"
+                                FontSize="14" />
                     </StackPanel>
 
-                    <!-- Change Log -->
-                    <TextBlock Text="版本历史"
-                               FontWeight="Bold"
-                               Margin="12,8"
-                               DockPanel.Dock="Top" />
+                    <!-- Change Log Header -->
+                    <Border DockPanel.Dock="Top"
+                            Padding="12,10"
+                            BorderBrush="{DynamicResource SemiColorBorder}"
+                            BorderThickness="0,1,0,1">
+                        <TextBlock Text="版本历史" FontWeight="SemiBold" FontSize="14" />
+                    </Border>
+
+                    <!-- Change Log List -->
                     <ListBox ItemsSource="{Binding SelectedProject.ChangeLogs}"
-                             Margin="4">
+                             Margin="0,4">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Margin="4">
-                                    <TextBlock Text="{Binding Version}"
-                                               FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding Time}"
-                                               FontSize="11"
-                                               Foreground="{DynamicResource SemiColorText2}" />
-                                    <ItemsControl ItemsSource="{Binding Logs}">
+                                <StackPanel Margin="12,6">
+                                    <DockPanel>
+                                        <TextBlock Text="{Binding Version}"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="13" />
+                                        <TextBlock DockPanel.Dock="Right"
+                                                   Text="{Binding Time}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText2}" />
+                                    </DockPanel>
+                                    <ItemsControl ItemsSource="{Binding Logs}"
+                                                  Margin="0,4,0,0">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding}"
-                                                           FontSize="11"
-                                                           Margin="8,0,0,2" />
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource SemiColorText1}"
+                                                           Margin="12,0,0,3" />
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
@@ -251,10 +359,16 @@
                 Background="{DynamicResource SemiColorBackground}"
                 BorderBrush="{DynamicResource SemiColorBorder}"
                 BorderThickness="0,1,0,0"
-                Padding="12,6">
-            <TextBlock Text="{Binding StatusMessage}"
-                       FontSize="12"
-                       Foreground="{DynamicResource SemiColorText2}" />
+                Padding="12,8">
+            <DockPanel>
+                <TextBlock Text="{Binding StatusMessage}"
+                           FontSize="12"
+                           Foreground="{DynamicResource SemiColorText2}" />
+                <TextBlock DockPanel.Dock="Right"
+                           Text="{Binding SelectedProject.Config.ProjectPath}"
+                           FontSize="11"
+                           Foreground="{DynamicResource SemiColorText3}" />
+            </DockPanel>
         </Border>
     </Grid>
 </Window>
