@@ -1,4 +1,4 @@
-package cmd
+﻿package cmd
 
 import (
 	"fmt"
@@ -69,12 +69,14 @@ func runAdd(cmd *cobra.Command, args []string) {
 			return
 		}
 		var paths []string
+		statusMap := make(map[string]string)
 		for _, f := range sd.Unstaged {
 			if f.Status == "new" || f.Status == "modified" {
 				paths = append(paths, f.RelativePath)
+				statusMap[f.RelativePath] = f.Status
 			}
 		}
-		if err := staging.Add(cfg.Project.Path, paths); err != nil {
+		if err := staging.AddWithStatus(cfg.Project.Path, paths, statusMap); err != nil {
 			outputResult(false, err.Error(), nil)
 			return
 		}
@@ -82,7 +84,7 @@ func runAdd(cmd *cobra.Command, args []string) {
 			printOutput(true, "", map[string]int{"added": len(paths)})
 			return
 		}
-		printHumanLn("已添加 %d 个文件到暂存区", len(paths))
+		printHumanLn("已添加%d 个文件到暂存区", len(paths))
 	} else {
 		if len(args) == 0 {
 			if jsonOutput {
@@ -100,7 +102,7 @@ func runAdd(cmd *cobra.Command, args []string) {
 			printOutput(true, "", map[string]int{"added": len(args)})
 			return
 		}
-		printHumanLn("已添加 %d 个文件到暂存区", len(args))
+		printHumanLn("已添加%d 个文件到暂存区", len(args))
 	}
 }
 
@@ -142,7 +144,7 @@ func runReset(cmd *cobra.Command, args []string) {
 		printOutput(true, "", map[string]int{"removed": len(args)})
 		return
 	}
-	printHumanLn("已从暂存区移除 %d 个文件", len(args))
+	printHumanLn("已从暂存区移除%d 个文件", len(args))
 }
 
 func runStaged(cmd *cobra.Command, args []string) {
@@ -169,3 +171,4 @@ func runStaged(cmd *cobra.Command, args []string) {
 		printHumanLn("  [%s] %s  %d bytes", f.Status, f.RelativePath, f.LocalSize)
 	}
 }
+

@@ -1,4 +1,4 @@
-package cmd
+﻿package cmd
 
 import (
 	"fmt"
@@ -22,10 +22,10 @@ func init() {
 	cmdConfigInit.MarkFlagRequired("project")
 	cmdConfigInit.MarkFlagRequired("path")
 
-	cmdConfigSet.Flags().StringVar(&configKey, "key", "", "配置键")
-	cmdConfigSet.Flags().StringVar(&configValue, "value", "", "配置值")
+	cmdConfigSet.Flags().StringVar(&configKey, "key", "", "配置项")
+	cmdConfigSet.Flags().StringVar(&configValue, "value", "", "配置项")
 
-	cmdConfigSetArray.Flags().StringVar(&configKey, "key", "", "配置键")
+	cmdConfigSetArray.Flags().StringVar(&configKey, "key", "", "配置项")
 	cmdConfigSetArray.Flags().StringVar(&setArrayAdd, "add", "", "添加项")
 	cmdConfigSetArray.Flags().StringVar(&setArrayRemove, "remove", "", "移除项")
 	cmdConfigSetArray.Flags().BoolVar(&setArrayClear, "clear", false, "清空数组")
@@ -76,7 +76,7 @@ var cmdConfigList = &cobra.Command{
 
 var cmdConfigPath = &cobra.Command{
 	Use:   "path",
-	Short: "显示配置文件路径",
+	Short: "显示配置文件",
 	Run:   runConfigPath,
 }
 
@@ -126,7 +126,7 @@ func runConfigSet(cmd *cobra.Command, args []string) {
 		printOutput(true, "", nil)
 		return
 	}
-	printHumanLn("配置已更新: %s = %s", key, value)
+	printHumanLn("配置已更新 %s = %s", key, value)
 }
 
 func runConfigSetArray(cmd *cobra.Command, args []string) {
@@ -141,7 +141,9 @@ func runConfigSetArray(cmd *cobra.Command, args []string) {
 	key := args[0]
 	cfg, _ := resolveConfig()
 	if projectPath != "" {
-		config.LoadProject(projectPath) // ensure project config exists
+		if _, lErr := config.LoadProject(projectPath); lErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: project config not found at %s: %v\n", projectPath, lErr)
+		}
 	}
 	applyArrayOp(&cfg, key, setArrayAdd, setArrayRemove, setArrayClear)
 	if projectPath != "" {
@@ -159,7 +161,7 @@ func runConfigSetArray(cmd *cobra.Command, args []string) {
 		printOutput(true, "", nil)
 		return
 	}
-	printHumanLn("配置已更新: %s", key)
+	printHumanLn("配置已更新 %s", key)
 }
 
 func runConfigGet(cmd *cobra.Command, args []string) {
@@ -201,7 +203,7 @@ func runConfigPath(cmd *cobra.Command, args []string) {
 	}
 }
 
-// ─── helpers ──────────────────────────────────────────────────────────
+//  helpers 
 
 func applyConfigSet(cfg *config.Config, key, value string) {
 	switch key {
@@ -269,3 +271,5 @@ func getConfigValue(cfg *config.Config, key string) string {
 		return ""
 	}
 }
+
+

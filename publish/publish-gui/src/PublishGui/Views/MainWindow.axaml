@@ -1,0 +1,229 @@
+﻿<Window x:Class="PublishGui.Views.MainWindow"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PublishGui.ViewModels"
+        xmlns:local="using:PublishGui.Models.Local"
+        xmlns:cli="using:PublishGui.Models.Cli"
+        Title="Publish GUI"
+        Width="1200"
+        Height="800"
+        MinWidth="800"
+        MinHeight="600"
+        WindowStartupLocation="CenterScreen">
+    <Design.DataContext>
+        <vm:MainWindowViewModel />
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- Toolbar -->
+        <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground}"
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="0,0,0,1"
+                Padding="8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="添加已有项目"
+                        Command="{Binding AddExistingProjectCommand}"
+                        Classes="Tertiary" />
+                <Button Content="新建项目"
+                        Command="{Binding AddNewProjectCommand}"
+                        Classes="Primary" />
+                <Button Content="移除项目"
+                        Command="{Binding RemoveProjectCommand}"
+                        Classes="Danger" />
+                <Border Width="1" Background="{DynamicResource SemiColorBorder}" Margin="4,0" />
+                <Button Content="服务器信息"
+                        Command="{Binding RefreshServerInfoCommand}"
+                        Classes="Tertiary" />
+                <Button Content="项目设置"
+                        Command="{Binding OpenProjectSettingsCommand}"
+                        Classes="Tertiary" />
+            </StackPanel>
+        </Border>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1" ColumnDefinitions="250,*,350">
+            <!-- Left Panel: Project List -->
+            <Border Grid.Column="0"
+                    Background="{DynamicResource SemiColorBackground}"
+                    BorderBrush="{DynamicResource SemiColorBorder}"
+                    BorderThickness="0,0,1,0">
+                <DockPanel>
+                    <TextBlock Text="项目列表"
+                               FontWeight="Bold"
+                               Margin="12,8"
+                               DockPanel.Dock="Top" />
+                    <ListBox ItemsSource="{Binding Projects}"
+                             SelectedItem="{Binding SelectedProject}"
+                             Margin="4">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="4">
+                                    <TextBlock Text="{Binding Config.ProjectName}"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Config.ServerUrl}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource SemiColorText2}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- Center Panel: File List -->
+            <Border Grid.Column="1"
+                    Background="{DynamicResource SemiColorBackground}">
+                <DockPanel>
+                    <!-- Unstaged Files -->
+                    <TextBlock Text="未暂存文件"
+                               FontWeight="Bold"
+                               Margin="12,8"
+                               DockPanel.Dock="Top" />
+                    <ListBox ItemsSource="{Binding SelectedProject.UnstagedFiles}"
+                             Margin="4"
+                             DockPanel.Dock="Top"
+                             MaxHeight="300">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                    <CheckBox IsChecked="{Binding IsSelected}"
+                                              Margin="4,0" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding RelativePath}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding StatusDisplay}"
+                                               Margin="8,0"
+                                               Foreground="{DynamicResource SemiColorText2}" />
+                                    <TextBlock Grid.Column="3"
+                                               Text="{Binding LocalSize}"
+                                               Foreground="{DynamicResource SemiColorText2}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!-- Staged Files -->
+                    <TextBlock Text="暂存文件"
+                               FontWeight="Bold"
+                               Margin="12,8"
+                               DockPanel.Dock="Top" />
+                    <ListBox ItemsSource="{Binding SelectedProject.StagedFiles}"
+                             Margin="4">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                    <CheckBox IsChecked="{Binding IsSelected}"
+                                              Margin="4,0" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding RelativePath}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding StatusDisplay}"
+                                               Margin="8,0"
+                                               Foreground="{DynamicResource SemiColorText2}" />
+                                    <TextBlock Grid.Column="3"
+                                               Text="{Binding LocalSize}"
+                                               Foreground="{DynamicResource SemiColorText2}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- Right Panel: Publish -->
+            <Border Grid.Column="2"
+                    Background="{DynamicResource SemiColorBackground}"
+                    BorderBrush="{DynamicResource SemiColorBorder}"
+                    BorderThickness="1,0,0,0">
+                <DockPanel>
+                    <TextBlock Text="发布"
+                               FontWeight="Bold"
+                               Margin="12,8"
+                               DockPanel.Dock="Top" />
+
+                    <!-- Action Buttons -->
+                    <StackPanel DockPanel.Dock="Top"
+                                Margin="12,8"
+                                Spacing="8">
+                        <Button Content="刷新状态"
+                                Command="{Binding SelectedProject.RefreshStatusCommand}"
+                                Classes="Tertiary"
+                                HorizontalAlignment="Stretch" />
+                        <Button Content="添加所有变更"
+                                Command="{Binding SelectedProject.AddAllCommand}"
+                                Classes="Primary"
+                                HorizontalAlignment="Stretch" />
+                        <Button Content="清空暂存区"
+                                Command="{Binding SelectedProject.ResetAllCommand}"
+                                Classes="Danger"
+                                HorizontalAlignment="Stretch" />
+                    </StackPanel>
+
+                    <!-- Version and Message -->
+                    <StackPanel DockPanel.Dock="Top"
+                                Margin="12,8"
+                                Spacing="8">
+                        <TextBlock Text="当前版本" />
+                        <TextBlock Text="{Binding SelectedProject.CurrentVersion}"
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,8" />
+                        <TextBlock Text="新版本号" />
+                        <TextBox Text="{Binding SelectedProject.NewVersion}"
+                                 Watermark="例如: V1.0.1" />
+                        <TextBlock Text="变更说明" />
+                        <TextBox Text="{Binding SelectedProject.CommitMessage}"
+                                 Watermark="输入变更说明..."
+                                 AcceptsReturn="True"
+                                 MinHeight="80" />
+                        <Button Content="发布"
+                                Command="{Binding SelectedProject.PublishCommand}"
+                                Classes="Primary"
+                                HorizontalAlignment="Stretch" />
+                    </StackPanel>
+
+                    <!-- Change Log -->
+                    <TextBlock Text="版本历史"
+                               FontWeight="Bold"
+                               Margin="12,8"
+                               DockPanel.Dock="Top" />
+                    <ListBox ItemsSource="{Binding SelectedProject.ChangeLogs}"
+                             Margin="4">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="4">
+                                    <TextBlock Text="{Binding Version}"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Time}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource SemiColorText2}" />
+                                    <ItemsControl ItemsSource="{Binding Logs}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}"
+                                                           FontSize="11"
+                                                           Margin="8,0,0,2" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource SemiColorBackground}"
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="0,1,0,0"
+                Padding="12,6">
+            <TextBlock Text="{Binding StatusMessage}"
+                       FontSize="12"
+                       Foreground="{DynamicResource SemiColorText2}" />
+        </Border>
+    </Grid>
+</Window>

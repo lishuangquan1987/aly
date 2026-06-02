@@ -1,4 +1,4 @@
-package cmd
+﻿package cmd
 
 import (
 	"os"
@@ -19,13 +19,13 @@ var (
 
 func init() {
 	cmdWatch.Flags().IntVar(&watchInterval, "interval", 2, "轮询间隔（秒）")
-	cmdWatch.Flags().BoolVar(&watchAutoAdd, "auto-add", false, "自动将变更文件加入暂存区")
+	cmdWatch.Flags().BoolVar(&watchAutoAdd, "auto-add", false, "将变更文件加入暂存区")
 	RootCmd.AddCommand(cmdWatch)
 }
 
 var cmdWatch = &cobra.Command{
 	Use:   "watch",
-	Short: "实时监控本地文件变更",
+	Short: "实时监控文件变更",
 	Long:  "轮询监控本地目录的文件新增/修改/删除，检测到变更时实时打印差异摘要。",
 	Run:   runWatch,
 }
@@ -72,7 +72,9 @@ func runWatch(cmd *cobra.Command, args []string) {
 						}
 					}
 					if len(paths) > 0 {
-						staging.Add(cfg.Project.Path, paths)
+						if addErr := staging.Add(cfg.Project.Path, paths); addErr != nil {
+							printHumanLn("[WARN] auto-add failed: %v\n", addErr)
+						}
 						printHumanLn("[%s] Auto-added %d files to staging", timestamp, len(paths))
 					}
 				}
@@ -93,7 +95,10 @@ type fileChg struct {
 }
 
 func scanLocal(cfg config.Config) []fileSnap {
-	files, _ := diff.ScanDirectory(cfg.Project.Path, cfg.Ignore.Folders, cfg.Ignore.Files)
+	files, scanErr := diff.ScanDirectory(cfg.Project.Path, cfg.Ignore.Folders, cfg.Ignore.Files)
+	if scanErr != nil {
+		printHumanLn("[WARN] scan error: %v\n", scanErr)
+	}
 	var result []fileSnap
 	for _, f := range files {
 		result = append(result, fileSnap{path: f.RelativePath, md5: f.MD5})
@@ -121,3 +126,4 @@ func detectChanges(prev, curr []fileSnap) []fileChg {
 	}
 	return changes
 }
+

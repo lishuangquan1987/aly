@@ -1,8 +1,9 @@
-package cmd
+﻿package cmd
 
 import (
 	"publish-cli/internal/diff"
 	"publish-cli/internal/staging"
+	"publish-cli/pkg/models"
 
 	"github.com/spf13/cobra"
 )
@@ -122,7 +123,10 @@ func runDiff(cmd *cobra.Command, args []string) {
 	}
 	// 合并暂存区文件
 	sd.Staged = staging.LoadAsStatusItems(cfg.Project.Path)
-	allFiles := append(append(sd.Staged, sd.Unstaged...), sd.Unchanged...)
+	allFiles := make([]models.FileStatusItem, 0, len(sd.Staged)+len(sd.Unstaged)+len(sd.Unchanged))
+	allFiles = append(allFiles, sd.Staged...)
+	allFiles = append(allFiles, sd.Unstaged...)
+	allFiles = append(allFiles, sd.Unchanged...)
 	for _, f := range allFiles {
 		if diffFile != "" && f.RelativePath != diffFile {
 			continue
@@ -133,3 +137,5 @@ func runDiff(cmd *cobra.Command, args []string) {
 		printHumanLn("")
 	}
 }
+
+

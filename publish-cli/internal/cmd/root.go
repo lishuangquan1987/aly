@@ -1,4 +1,4 @@
-package cmd
+﻿package cmd
 
 import (
 	"encoding/json"
@@ -55,10 +55,14 @@ func printHumanLn(format string, args ...interface{}) {
 // resolveConfig 解析配置（命令行参数覆盖配置文件）
 func resolveConfig() (config.Config, error) {
 	var cfg config.Config
+	var loadErr error
 	if projectPath != "" {
-		cfg, _ = config.LoadProject(projectPath)
+		cfg, loadErr = config.LoadProject(projectPath)
 	} else {
-		cfg, _ = config.LoadGlobal()
+		cfg, loadErr = config.LoadGlobal()
+	}
+	if loadErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load config: %v\n", loadErr)
 	}
 	// 命令行覆盖
 	if serverURL != "" {
@@ -106,7 +110,7 @@ func resolveProjectID(cfg config.Config) (int, error) {
 		return cfg.Project.ID, nil
 	}
 	if cfg.Project.Name == "" || cfg.Server.URL == "" {
-		return 0, fmt.Errorf("需要 --id 或 --project + --server")
+		return 0, fmt.Errorf("--id --project + --server")
 	}
 	client := api.NewClient(cfg.Server.URL)
 	projects, err := client.GetAllProjects()
@@ -133,15 +137,11 @@ func outputResult(success bool, errMsg string, data interface{}) {
 // RootCmd 根命令
 var RootCmd = &cobra.Command{
 	Use:   "publish-cli",
-	Short: "命令行发布工具 — 将本地构建产物推送到服务端",
-	Long: `publish-cli 是面向发布者的命令行工具，用于管理项目、对比文件差异、
-暂存变更文件、推送新版本到服务端。
-
+	Short: "命令行发布工具——将本地构建产物推送到服务端",
+	Long: `publish-cli 向发布的命令行工具，用于管理项目、比文件差异?暂存变更文件、推送新版本到服务
 工作流：
-  publish-cli config init    # 初始化项目配置
-  publish-cli status          # 查看本地与服务端差异
-  publish-cli add --all       # 暂存所有变更
-  publish-cli push --version V1.0.1 --message "更新说明"  # 推送并发布`,
+  publish-cli config init    # 初化项  publish-cli status          # 查看与服务
+  publish-cli add --all       # 暂存有变  publish-cli push --version V1.0.1 --message "更新说明"  # 推送并发布`,
 }
 
 func init() {
@@ -152,3 +152,4 @@ func init() {
 	RootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "JSON 格式输出")
 	RootCmd.PersistentFlags().BoolVar(&quiet, "quiet", false, "静默模式")
 }
+

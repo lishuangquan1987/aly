@@ -1,4 +1,4 @@
-package cmd
+﻿package cmd
 
 import (
 	"fmt"
@@ -24,6 +24,7 @@ var (
 	pushAllVersion  string
 	pushAllMessage  []string
 	pushAllDryRun   bool
+	pushAllForce    bool
 
 	pubVersion      string
 	pubMessage      []string
@@ -77,7 +78,7 @@ func pushFiles(cfg *config.Config, version string, messages []string, filesToUpl
 		if jsonOutput {
 			printOutput(false, "至少需要一条 --message", nil)
 		} else {
-			fmt.Fprintln(os.Stderr, "Error: 至少需要一条 --message")
+			fmt.Fprintln(os.Stderr, "Error: 至少要一--message")
 		}
 		return false
 	}
@@ -102,7 +103,7 @@ func pushFiles(cfg *config.Config, version string, messages []string, filesToUpl
 	}
 
 	if len(filesToUpload) == 0 {
-		outputResult(false, "没有需要推送的文件", nil)
+		outputResult(false, "没有要推送的文件", nil)
 		return false
 	}
 
@@ -111,7 +112,7 @@ func pushFiles(cfg *config.Config, version string, messages []string, filesToUpl
 		for _, p := range filesToUpload {
 			printHumanLn("  %s", p)
 		}
-		printHumanLn("[DRY RUN] 将创建版本: %s (%d 条日志)", version, len(messages))
+		printHumanLn("[DRY RUN] 将创建版 %s (%d 条日", version, len(messages))
 		printHumanLn("[DRY RUN] 未实际推送任何内容。")
 		return false
 	}
@@ -222,7 +223,7 @@ func runPushAll(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	pushFiles(&cfg, pushAllVersion, pushAllMessage, paths, pushAllDryRun, false)
+	pushFiles(&cfg, pushAllVersion, pushAllMessage, paths, pushAllDryRun, pushAllForce)
 }
 
 func runPublish(cmd *cobra.Command, args []string) {
@@ -257,7 +258,7 @@ func runPublish(cmd *cobra.Command, args []string) {
 		}
 	}
 	if len(paths) == 0 {
-		printHumanLn("没有需要发布的文件")
+		printHumanLn("没有要发布的文件")
 		return
 	}
 	if err := staging.Add(cfg.Project.Path, paths); err != nil {
@@ -265,14 +266,12 @@ func runPublish(cmd *cobra.Command, args []string) {
 		return
 	}
 	cfg.Project.ID = pid
-	pushFiles(&cfg, pubVersion, pubMessage, paths, pubDryRun, false)
+	if pushFiles(&cfg, pubVersion, pubMessage, paths, pubDryRun, false) {
+		staging.Clear(cfg.Project.Path)
+	}
 }
 
-func getStatusForPath(items []models.FileStatusItem, relativePath string) string {
-	for i := range items {
-		if items[i].RelativePath == relativePath {
-			return items[i].Status
-		}
-	}
-	return "unknown"
-}
+
+
+
+
