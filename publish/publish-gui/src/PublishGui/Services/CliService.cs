@@ -3,10 +3,8 @@ using PublishGui.Models.Cli;
 using Serilog;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace PublishGui.Services;
@@ -29,29 +27,42 @@ public class CliService
 
     public async Task<string?> FindCliAsync()
     {
-        // Check same directory first
+        // 1. Check same directory as GUI executable
         var currentDir = AppDomain.CurrentDomain.BaseDirectory;
         var sameDirPath = Path.Combine(currentDir, "publish-cli.exe");
         if (File.Exists(sameDirPath))
         {
             _cliPath = sameDirPath;
+            Log.Information("Found publish-cli in same directory: {Path}", _cliPath);
             return _cliPath;
         }
 
-        // Check parent directories (for development)
-        var dir = new DirectoryInfo(currentDir);
-        while (dir != null)
+        // 2. Check publish/publish-cli relative to GUI
+        var guiDir = new DirectoryInfo(currentDir);
+        while (guiDir != null)
         {
-            var parentPath = Path.Combine(dir.FullName, "publish-cli", "publish-cli.exe");
-            if (File.Exists(parentPath))
+            // Check publish/publish-cli/publish-cli.exe
+            var publishCliPath = Path.Combine(guiDir.FullName, "publish", "publish-cli", "publish-cli.exe");
+            if (File.Exists(publishCliPath))
             {
-                _cliPath = parentPath;
+                _cliPath = publishCliPath;
+                Log.Information("Found publish-cli in publish directory: {Path}", _cliPath);
                 return _cliPath;
             }
-            dir = dir.Parent;
+
+            // Check publish-cli/publish-cli.exe (if running from publish-gui)
+            var cliPath2 = Path.Combine(guiDir.FullName, "publish-cli", "publish-cli.exe");
+            if (File.Exists(cliPath2))
+            {
+                _cliPath = cliPath2;
+                Log.Information("Found publish-cli in sibling directory: {Path}", _cliPath);
+                return _cliPath;
+            }
+
+            guiDir = guiDir.Parent;
         }
 
-        // Check PATH
+        // 3. Check PATH environment variable
         var pathEnv = Environment.GetEnvironmentVariable("PATH");
         if (pathEnv != null)
         {
@@ -62,11 +73,13 @@ public class CliService
                 if (File.Exists(fullPath))
                 {
                     _cliPath = fullPath;
+                    Log.Information("Found publish-cli in PATH: {Path}", _cliPath);
                     return _cliPath;
                 }
             }
         }
 
+        Log.Warning("publish-cli.exe not found");
         return null;
     }
 
@@ -74,7 +87,11 @@ public class CliService
     {
         if (string.IsNullOrEmpty(_cliPath))
         {
-            throw new InvalidOperationException("publish-cli path not configured");
+            return new CliOutput<T>
+            {
+                IsSuccess = false,
+                ErrorMsg = "publish-cli 路径未配置，请在项目设置中配置 publish-cli.exe 路径"
+            };
         }
 
         var args = $"{arguments} --json";
@@ -85,7 +102,8 @@ public class CliService
 
         var result = await _processService.RunAsync(_cliPath, args, timeoutMs: timeoutMs);
 
-        Log.Information("Exit code: {Code}, Output: {Output}", result.ExitCode, result.StandardOutput);
+        Log.Information("CLI result: ExitCode={Code}, Output={Output}", result.ExitCode, 
+            result.StandardOutput.Length > 200 ? result.StandardOutput[..200] + "..." : result.StandardOutput);
 
         if (!result.Success)
         {
@@ -93,7 +111,16 @@ public class CliService
             return new CliOutput<T>
             {
                 IsSuccess = false,
-                ErrorMsg = result.StandardError
+                ErrorMsg = string.IsNullOrEmpty(result.StandardError) ? "执行失败" : result.StandardError
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(result.StandardOutput))
+        {
+            return new CliOutput<T>
+            {
+                IsSuccess = false,
+                ErrorMsg = "publish-cli 没有返回任何输出"
             };
         }
 
@@ -107,7 +134,7 @@ public class CliService
             return new CliOutput<T>
             {
                 IsSuccess = false,
-                ErrorMsg = $"Failed to parse output: {ex.Message}"
+                ErrorMsg = $"解析输出失败: {ex.Message}"
             };
         }
     }
