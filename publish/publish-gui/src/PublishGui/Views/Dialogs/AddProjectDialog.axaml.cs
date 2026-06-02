@@ -1,5 +1,6 @@
 ﻿using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using System;
 
 namespace PublishGui.Views.Dialogs;
@@ -21,11 +22,18 @@ public partial class AddProjectDialog : Window
 
     private async void OnBrowse(object? sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFolderDialog();
-        var result = await dialog.ShowAsync(this);
-        if (!string.IsNullOrEmpty(result))
+        var topLevel = GetTopLevel(this);
+        if (topLevel == null) return;
+
+        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            LocalPathBox.Text = result;
+            Title = "选择项目路径",
+            AllowMultiple = false
+        });
+
+        if (folders.Count > 0)
+        {
+            LocalPathBox.Text = folders[0].Path.LocalPath;
         }
     }
 

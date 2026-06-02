@@ -37,6 +37,7 @@ public partial class App : Application
 
     private static void ConfigureServices(IServiceCollection services)
     {
+        services.AddSingleton<ProcessService>();
         services.AddSingleton<CliService>();
         services.AddSingleton<ConfigService>();
         services.AddSingleton<MainWindowViewModel>();

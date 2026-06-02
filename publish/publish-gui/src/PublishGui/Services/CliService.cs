@@ -2,15 +2,24 @@
 using PublishGui.Models.Cli;
 using Serilog;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PublishGui.Services;
 
 public class CliService
 {
+    private readonly ProcessService _processService;
     private string _cliPath = string.Empty;
+
+    public CliService(ProcessService processService)
+    {
+        _processService = processService;
+    }
 
     public string CliPath
     {
@@ -29,13 +38,27 @@ public class CliService
             return _cliPath;
         }
 
+        // Check parent directories (for development)
+        var dir = new DirectoryInfo(currentDir);
+        while (dir != null)
+        {
+            var parentPath = Path.Combine(dir.FullName, "publish-cli", "publish-cli.exe");
+            if (File.Exists(parentPath))
+            {
+                _cliPath = parentPath;
+                return _cliPath;
+            }
+            dir = dir.Parent;
+        }
+
         // Check PATH
         var pathEnv = Environment.GetEnvironmentVariable("PATH");
         if (pathEnv != null)
         {
-            foreach (var dir in pathEnv.Split(';'))
+            foreach (var pathDir in pathEnv.Split(';'))
             {
-                var fullPath = Path.Combine(dir, "publish-cli.exe");
+                if (string.IsNullOrWhiteSpace(pathDir)) continue;
+                var fullPath = Path.Combine(pathDir.Trim(), "publish-cli.exe");
                 if (File.Exists(fullPath))
                 {
                     _cliPath = fullPath;
@@ -47,7 +70,7 @@ public class CliService
         return null;
     }
 
-    public async Task<CliOutput<T>?> RunAsync<T>(string arguments, string? projectPath = null)
+    public async Task<CliOutput<T>?> RunAsync<T>(string arguments, string? projectPath = null, int timeoutMs = 30000)
     {
         if (string.IsNullOrEmpty(_cliPath))
         {
@@ -60,46 +83,38 @@ public class CliService
             args += $" --path \"{projectPath}\"";
         }
 
-        Log.Information("Running: {CliPath} {Args}", _cliPath, args);
+        var result = await _processService.RunAsync(_cliPath, args, timeoutMs: timeoutMs);
 
-        var psi = new ProcessStartInfo
+        Log.Information("Exit code: {Code}, Output: {Output}", result.ExitCode, result.StandardOutput);
+
+        if (!result.Success)
         {
-            FileName = _cliPath,
-            Arguments = args,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var process = Process.Start(psi);
-        if (process == null)
-        {
-            throw new Exception("Failed to start publish-cli process");
-        }
-
-        var output = await process.StandardOutput.ReadToEndAsync();
-        var error = await process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-
-        Log.Information("Exit code: {Code}, Output: {Output}", process.ExitCode, output);
-
-        if (process.ExitCode != 0)
-        {
-            Log.Error("publish-cli error: {Error}", error);
+            Log.Error("publish-cli error: {Error}", result.StandardError);
             return new CliOutput<T>
             {
                 IsSuccess = false,
-                ErrorMsg = error
+                ErrorMsg = result.StandardError
             };
         }
 
-        return JsonConvert.DeserializeObject<CliOutput<T>>(output);
+        try
+        {
+            return JsonConvert.DeserializeObject<CliOutput<T>>(result.StandardOutput);
+        }
+        catch (JsonException ex)
+        {
+            Log.Error(ex, "Failed to parse CLI output: {Output}", result.StandardOutput);
+            return new CliOutput<T>
+            {
+                IsSuccess = false,
+                ErrorMsg = $"Failed to parse output: {ex.Message}"
+            };
+        }
     }
 
-    public async Task<CliOutput<object>?> RunAsync(string arguments, string? projectPath = null)
+    public async Task<CliOutput<object>?> RunAsync(string arguments, string? projectPath = null, int timeoutMs = 30000)
     {
-        return await RunAsync<object>(arguments, projectPath);
+        return await RunAsync<object>(arguments, projectPath, timeoutMs);
     }
 
     // Status command
@@ -137,13 +152,13 @@ public class CliService
     // Publish command
     public async Task<CliOutput<object>?> PublishAsync(string projectPath, string version, string message)
     {
-        return await RunAsync($"publish --version \"{version}\" --message \"{message}\"", projectPath);
+        return await RunAsync($"publish --version \"{version}\" --message \"{message}\"", projectPath, timeoutMs: 120000);
     }
 
     // Push command
     public async Task<CliOutput<object>?> PushAsync(string projectPath, string version, string message)
     {
-        return await RunAsync($"push --version \"{version}\" --message \"{message}\"", projectPath);
+        return await RunAsync($"push --version \"{version}\" --message \"{message}\"", projectPath, timeoutMs: 120000);
     }
 
     // Log command
