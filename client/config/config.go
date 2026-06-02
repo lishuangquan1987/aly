@@ -10,8 +10,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// Config 对应 client.yaml 的配置结构
-type Config struct {
+// Config 瀵瑰簲 client.yaml 鐨勯厤缃粨鏋?type Config struct {
 	ProjectName          string   `yaml:"project_name"`
 	URL                  string   `yaml:"url"`
 	MainExeRelativePath  string   `yaml:"main_exe_relative_path"`
@@ -21,7 +20,7 @@ type Config struct {
 	PostUpdateScript     string   `yaml:"post_update_script"`
 }
 
-// ExeDir 返回 client_updator.exe 所在目录 (UpdateFolder/)
+// ExeDir 杩斿洖 client_updator.exe 鎵€鍦ㄧ洰褰?(UpdateFolder/)
 func ExeDir() (string, error) {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -34,7 +33,7 @@ func ExeDir() (string, error) {
 	return filepath.Dir(resolved), nil
 }
 
-// PackageDir 返回包根目录 (PackageFolder/)，即 ExeDir 的父目录
+// PackageDir 杩斿洖鍖呮牴鐩綍 (PackageFolder/)锛屽嵆 ExeDir 鐨勭埗鐩綍
 func PackageDir() (string, error) {
 	exeDir, err := ExeDir()
 	if err != nil {
@@ -51,7 +50,7 @@ func configPath() (string, error) {
 	return filepath.Join(dir, "client.yaml"), nil
 }
 
-// LoadConfig 从 client.yaml 加载配置
+// LoadConfig 浠?client.yaml 鍔犺浇閰嶇疆
 func LoadConfig() (*Config, error) {
 	path, err := configPath()
 	if err != nil {
@@ -71,8 +70,7 @@ func LoadConfig() (*Config, error) {
 	return &cfg, nil
 }
 
-// MergeFlags 将命令行参数合并到配置中（命令行参数优先）
-func (c *Config) MergeFlags(url string, projectName string, mainExePath string, mustCloseProcessName string) {
+// MergeFlags 灏嗗懡浠よ鍙傛暟鍚堝苟鍒伴厤缃腑锛堝懡浠よ鍙傛暟浼樺厛锛?func (c *Config) MergeFlags(url string, projectName string, mainExePath string, mustCloseProcessName string) {
 	if url != "" {
 		c.URL = url
 	}
@@ -83,12 +81,21 @@ func (c *Config) MergeFlags(url string, projectName string, mainExePath string, 
 		c.MainExeRelativePath = mainExePath
 	}
 	if mustCloseProcessName != "" {
-		c.MustCloseProcessName = append(c.MustCloseProcessName, splitProcessNames(mustCloseProcessName)...)
+		newNames := splitProcessNames(mustCloseProcessName)
+		existing := make(map[string]bool)
+		for _, n := range c.MustCloseProcessName {
+			existing[n] = true
+		}
+		for _, n := range newNames {
+			if !existing[n] {
+				c.MustCloseProcessName = append(c.MustCloseProcessName, n)
+			}
+		}
 	}
 }
 
-// MainExeFolderPath 返回主程序根目录的绝对路径 (PackageFolder/ApplicationFolder/)
-// main_exe_relative_path 相对于 ExeDir（即 UpdateFolder/），如 "../ApplicationFolder/main_application.exe"
+// MainExeFolderPath 杩斿洖涓荤▼搴忔牴鐩綍鐨勭粷瀵硅矾寰?(PackageFolder/ApplicationFolder/)
+// main_exe_relative_path 鐩稿浜?ExeDir锛堝嵆 UpdateFolder/锛夛紝濡?"../ApplicationFolder/main_application.exe"
 func (c *Config) MainExeFolderPath() (string, error) {
 	exeDir, err := ExeDir()
 	if err != nil {
@@ -98,8 +105,7 @@ func (c *Config) MainExeFolderPath() (string, error) {
 	return filepath.Dir(mainExeAbsPath), nil
 }
 
-// MainExeFolderName 返回主程序文件夹名称（如 "ApplicationFolder"）
-func (c *Config) MainExeFolderName() (string, error) {
+// MainExeFolderName 杩斿洖涓荤▼搴忔枃浠跺す鍚嶇О锛堝 "ApplicationFolder"锛?func (c *Config) MainExeFolderName() (string, error) {
 	folderPath, err := c.MainExeFolderPath()
 	if err != nil {
 		return "", err
@@ -107,7 +113,7 @@ func (c *Config) MainExeFolderName() (string, error) {
 	return filepath.Base(folderPath), nil
 }
 
-// AppVersionDir 返回指定版本的应用目录路径 (PackageFolder/ApplicationFolder_{version}/)
+// AppVersionDir 杩斿洖鎸囧畾鐗堟湰鐨勫簲鐢ㄧ洰褰曡矾寰?(PackageFolder/ApplicationFolder_{version}/)
 func (c *Config) AppVersionDir(version string) (string, error) {
 	pkgDir, err := PackageDir()
 	if err != nil {
@@ -120,8 +126,7 @@ func (c *Config) AppVersionDir(version string) (string, error) {
 	return filepath.Join(pkgDir, mainExeFolderName+"_"+version), nil
 }
 
-// CheckUpdaterPath 返回 ApplicationFolder/check-updator.exe 的绝对路径
-func (c *Config) CheckUpdaterPath() (string, error) {
+// CheckUpdaterPath 杩斿洖 ApplicationFolder/check-updator.exe 鐨勭粷瀵硅矾寰?func (c *Config) CheckUpdaterPath() (string, error) {
 	mainFolder, err := c.MainExeFolderPath()
 	if err != nil {
 		return "", err
@@ -129,7 +134,7 @@ func (c *Config) CheckUpdaterPath() (string, error) {
 	return filepath.Join(mainFolder, "check-updator.exe"), nil
 }
 
-// ShouldSkipFile 判断文件是否在排除列表中
+// ShouldSkipFile 鍒ゆ柇鏂囦欢鏄惁鍦ㄦ帓闄ゅ垪琛ㄤ腑
 func (c *Config) ShouldSkipFile(relPath string) bool {
 	base := filepath.Base(relPath)
 	for _, pattern := range c.UnCopyFiles {
@@ -143,8 +148,7 @@ func (c *Config) ShouldSkipFile(relPath string) bool {
 	return false
 }
 
-// ShouldSkipFolder 判断文件夹是否在排除列表中
-func (c *Config) ShouldSkipFolder(relPath string) bool {
+// ShouldSkipFolder 鍒ゆ柇鏂囦欢澶规槸鍚﹀湪鎺掗櫎鍒楄〃涓?func (c *Config) ShouldSkipFolder(relPath string) bool {
 	for _, pattern := range c.UnCopyFolders {
 		if match, _ := filepath.Match(pattern, relPath); match {
 			return true
@@ -178,3 +182,4 @@ func ioutilReadFile(path string) ([]byte, error) {
 	defer f.Close()
 	return ioutil.ReadAll(f)
 }
+

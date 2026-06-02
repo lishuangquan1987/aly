@@ -63,7 +63,9 @@ func ApplyUpdate() {
 				}
 				// Update status to applied
 				versionInfo.VersionStatus = config.VersionStatusApplied
-				config.WriteVersion(versionInfo)
+				if wErr := config.WriteVersion(versionInfo); wErr != nil {
+					util.AppendToLog(".", "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
+				}
 				// Run post-update script and launch main exe
 				if cfg.PostUpdateScript != "" {
 					runScript(filepath.Join(mainFolder, cfg.PostUpdateScript))
@@ -103,7 +105,9 @@ func ApplyUpdate() {
 	// Ensures versionDir is a complete runnable app
 	if err := util.CopyDirWithExclude(mainFolder, versionDir, cfg.ShouldSkipFile, cfg.ShouldSkipFolder); err != nil {
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
-		config.WriteVersion(versionInfo)
+		if wErr := config.WriteVersion(versionInfo); wErr != nil {
+			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after copy fail: write version failed: %v", wErr))
+		}
 		printOutput(false, fmt.Sprintf("copy to version dir: %v", err), nil)
 		return
 	}
@@ -112,7 +116,9 @@ func ApplyUpdate() {
 	prevVersionDir, err := cfg.AppVersionDir(versionInfo.VersionPrevious)
 	if err != nil {
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
-		config.WriteVersion(versionInfo)
+		if wErr := config.WriteVersion(versionInfo); wErr != nil {
+			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after prevVersionDir err: write version failed: %v", wErr))
+		}
 		printOutput(false, err.Error(), nil)
 		return
 	}
@@ -130,7 +136,9 @@ func ApplyUpdate() {
 			os.Rename(oldBackupTemp, prevVersionDir)
 		}
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
-		config.WriteVersion(versionInfo)
+		if wErr := config.WriteVersion(versionInfo); wErr != nil {
+			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after backup rename fail: write version failed: %v", wErr))
+		}
 		printOutput(false, fmt.Sprintf("backup rename failed: %v", err), nil)
 		return
 	}
@@ -141,7 +149,9 @@ func ApplyUpdate() {
 		os.Rename(prevVersionDir, mainFolder)
 		os.Rename(oldBackupTemp, prevVersionDir)
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
-		config.WriteVersion(versionInfo)
+		if wErr := config.WriteVersion(versionInfo); wErr != nil {
+			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after apply rename fail: write version failed: %v", wErr))
+		}
 		printOutput(false, fmt.Sprintf("apply rename failed: %v", err), nil)
 		return
 	}
@@ -167,3 +177,4 @@ func ApplyUpdate() {
 	// Step 10: Output success
 	printOutput(true, "", nil)
 }
+

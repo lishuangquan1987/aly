@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 )
 
-// FileMD5 计算文件的 MD5 哈希值
+// FileMD5 calculates the MD5 hash of a file.
 func FileMD5(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -26,7 +26,7 @@ func FileMD5(path string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-// FileSHA256 计算文件的 SHA-256 哈希值
+// FileSHA256 calculates the SHA-256 hash of a file.
 func FileSHA256(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -42,7 +42,7 @@ func FileSHA256(path string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-// CopyFile 复制单个文件，overwrite 控制是否覆盖目标文件
+// CopyFile copies a single file. overwrite controls whether to overwrite the target file.
 func CopyFile(src, dst string, overwrite bool) error {
 	if !overwrite {
 		if _, err := os.Stat(dst); err == nil {
@@ -82,7 +82,7 @@ func CopyFile(src, dst string, overwrite bool) error {
 	return nil
 }
 
-// CopyDir 复制整个目录，overwrite 控制是否覆盖已存在的文件
+// CopyDir copies an entire directory. overwrite controls whether to overwrite existing files.
 func CopyDir(srcDir, dstDir string, overwrite bool) error {
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -104,8 +104,8 @@ func CopyDir(srcDir, dstDir string, overwrite bool) error {
 	})
 }
 
-// LocalFileMD5Map 获取本地目录下所有文件的 MD5 映射 (relativePath -> md5)
-// 排除 update 目录
+// LocalFileMD5Map returns a map of relativePath -> md5 for all files under root.
+// The "update" directory is excluded. Keys use forward slashes for cross-platform consistency.
 func LocalFileMD5Map(root string) (map[string]string, error) {
 	result := make(map[string]string)
 
@@ -113,20 +113,23 @@ func LocalFileMD5Map(root string) (map[string]string, error) {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
-			relDir, _ := filepath.Rel(root, path)
-			if relDir == "update" || hasPrefix(relDir, "update"+string(filepath.Separator)) || hasPrefix(relDir, "update/") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
 
 		relPath, err := filepath.Rel(root, path)
 		if err != nil {
 			return err
 		}
 
-		if hasPrefix(relPath, "update"+string(filepath.Separator)) || hasPrefix(relPath, "update/") {
+		// Normalize to forward slashes for consistent map keys
+		relPath = filepath.ToSlash(relPath)
+
+		if info.IsDir() {
+			if relPath == "update" || hasPrefix(relPath, "update/") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if hasPrefix(relPath, "update/") {
 			return nil
 		}
 
@@ -142,7 +145,7 @@ func LocalFileMD5Map(root string) (map[string]string, error) {
 	return result, err
 }
 
-// hasPrefix 检查字符串是否有指定前缀
+// hasPrefix checks if a string has the specified prefix.
 func hasPrefix(s, prefix string) bool {
 	if len(s) < len(prefix) {
 		return false
@@ -150,12 +153,12 @@ func hasPrefix(s, prefix string) bool {
 	return s[:len(prefix)] == prefix
 }
 
-// EnsureDir 确保目录存在
+// EnsureDir ensures a directory exists.
 func EnsureDir(path string) error {
 	return os.MkdirAll(path, 0755)
 }
 
-// FileSize 获取文件大小
+// FileSize returns the size of a file.
 func FileSize(path string) (int64, error) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -166,7 +169,7 @@ func FileSize(path string) (int64, error) {
 
 // CopyDirWithExclude copies all files from srcDir to dstDir,
 // skipping files/folders for which shouldSkipFile or shouldSkipFolder returns true.
-// The skip predicates receive paths relative to srcDir.
+// The skip predicates receive paths relative to srcDir (OS-native separators).
 func CopyDirWithExclude(srcDir, dstDir string, shouldSkipFile func(relPath string) bool, shouldSkipFolder func(relPath string) bool) error {
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -179,27 +182,22 @@ func CopyDirWithExclude(srcDir, dstDir string, shouldSkipFile func(relPath strin
 		}
 
 		if info.IsDir() {
-			// Check if this directory should be skipped
-			// Top-level "." is never skipped so we can still walk into subdirs
 			if relPath != "." && shouldSkipFolder != nil && shouldSkipFolder(relPath) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		// Check if this file should be skipped
 		if shouldSkipFile != nil && shouldSkipFile(relPath) {
 			return nil
 		}
 
 		dstPath := filepath.Join(dstDir, relPath)
-		// overwrite=false: don't overwrite files already in dstDir (e.g. newly downloaded files)
 		return CopyFile(path, dstPath, false)
 	})
 }
 
 // AppendToLog appends a line to a log file (creates it if needed).
-// logDir is the directory where the log file is created.
 func AppendToLog(logDir, filename, line string) {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return

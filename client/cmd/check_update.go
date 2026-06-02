@@ -42,9 +42,13 @@ func CheckUpdate() {
 
 	if versionInfo.VersionStatus == config.VersionStatusDownloaded ||
 		versionInfo.VersionStatus == config.VersionStatusApplying {
+		currentVer := versionInfo.VersionPrevious
+		if currentVer == "" {
+			currentVer = versionInfo.Version
+		}
 		printOutput(true, "", &model.CheckUpdateData{
 			HasUpdate:      true,
-			CurrentVersion: stripVPrefix(versionInfo.Version),
+			CurrentVersion: stripVPrefix(currentVer),
 			NewVersion:     stripVPrefix(versionInfo.Version),
 		})
 		return
@@ -95,3 +99,4 @@ func CheckUpdate() {
 		})
 	}
 }
+

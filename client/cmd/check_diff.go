@@ -67,7 +67,11 @@ func CheckDiff() {
 	}
 
 	// Build local file info maps
-	localMD5Map, _ := util.LocalFileMD5Map(mainFolder)
+	localMD5Map, localMD5Err := util.LocalFileMD5Map(mainFolder)
+	if localMD5Err != nil {
+		exeDir, _ := config.ExeDir()
+		util.AppendToLog(exeDir, "check_diff.log", fmt.Sprintf("local md5 scan warning: %v", localMD5Err))
+	}
 
 	var diffFiles []model.DiffFileItem
 	for i := range serverFiles {
@@ -108,5 +112,6 @@ func CheckDiff() {
 		Files:      diffFiles,
 	})
 }
+
 
 

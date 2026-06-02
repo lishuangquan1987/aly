@@ -13,8 +13,8 @@ const (
 	VersionStatusApplied    = "applied"
 )
 
-// VersionInfo 对应 version.json 的结构
-// Note: JSON key "version_previouse" preserved for backward compatibility with older version.json files
+// VersionInfo represents the version.json structure.
+// Note: JSON key "version_previouse" preserved for backward compatibility with older version.json files.
 type VersionInfo struct {
 	VersionPrevious string `json:"version_previouse"`
 	Version          string `json:"version"`
@@ -29,7 +29,7 @@ func versionPath() (string, error) {
 	return filepath.Join(dir, "version.json"), nil
 }
 
-// ReadVersion 读取 version.json，文件不存在时返回空结构体（首次部署）
+// ReadVersion reads version.json; returns an empty struct if the file does not exist (first deploy).
 func ReadVersion() (*VersionInfo, error) {
 	path, err := versionPath()
 	if err != nil {
@@ -52,7 +52,7 @@ func ReadVersion() (*VersionInfo, error) {
 	return &info, nil
 }
 
-// WriteVersion 写入 version.json（先写临时文件再 rename，保证原子性）
+// WriteVersion writes version.json atomically (write tmp → fsync → rename).
 func WriteVersion(info *VersionInfo) error {
 	path, err := versionPath()
 	if err != nil {
@@ -75,6 +75,12 @@ func WriteVersion(info *VersionInfo) error {
 		f.Close()
 		os.Remove(tmpPath)
 		return fmt.Errorf("写入临时文件失败: %v", err)
+	}
+
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("同步临时文件到磁盘失败: %v", err)
 	}
 
 	if err := f.Close(); err != nil {

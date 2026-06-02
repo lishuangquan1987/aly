@@ -9,6 +9,7 @@ import (
 
 	"clientupdator/client/config"
 	"clientupdator/client/model"
+	"clientupdator/client/util"
 )
 
 // Rollback reverts to a previous version (same procedure as apply_update)
@@ -72,7 +73,9 @@ func Rollback() {
 				versionInfo.Version = *versionFlag
 				versionInfo.VersionPrevious = oldVersion
 				versionInfo.VersionStatus = config.VersionStatusApplied
-				config.WriteVersion(versionInfo)
+				if wErr := config.WriteVersion(versionInfo); wErr != nil {
+					util.AppendToLog(".", "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
+				}
 				if cfg.PostUpdateScript != "" {
 					runScript(filepath.Join(mainFolder, cfg.PostUpdateScript))
 				}
@@ -105,7 +108,9 @@ func Rollback() {
 	prevVersionDir, err := cfg.AppVersionDir(oldVersion)
 	if err != nil {
 		versionInfo.VersionStatus = config.VersionStatusApplied
-		config.WriteVersion(versionInfo)
+		if wErr := config.WriteVersion(versionInfo); wErr != nil {
+			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after prevVersionDir err: write version failed: %v", wErr))
+		}
 		printOutput(false, err.Error(), nil)
 		return
 	}
@@ -122,7 +127,9 @@ func Rollback() {
 			os.Rename(oldBackupTemp, prevVersionDir)
 		}
 		versionInfo.VersionStatus = config.VersionStatusApplied
-		config.WriteVersion(versionInfo)
+		if wErr := config.WriteVersion(versionInfo); wErr != nil {
+			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after backup rename fail: write version failed: %v", wErr))
+		}
 		printOutput(false, fmt.Sprintf("backup rename failed: %v", err), nil)
 		return
 	}
@@ -133,7 +140,9 @@ func Rollback() {
 		os.Rename(prevVersionDir, mainFolder)
 		os.Rename(oldBackupTemp, prevVersionDir)
 		versionInfo.VersionStatus = config.VersionStatusApplied
-		config.WriteVersion(versionInfo)
+		if wErr := config.WriteVersion(versionInfo); wErr != nil {
+			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after apply rename fail: write version failed: %v", wErr))
+		}
 		printOutput(false, fmt.Sprintf("apply rename failed: %v", err), nil)
 		return
 	}
@@ -160,3 +169,5 @@ func Rollback() {
 
 	printOutput(true, "", &model.RollbackData{Version: *versionFlag})
 }
+
+

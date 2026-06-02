@@ -29,6 +29,15 @@ func DownloadUpdate() {
 	}
 	cfg.MergeFlags(*urlFlag, *projectNameFlag, *mainExePathFlag, "")
 
+	if cfg.URL == "" {
+		printOutput(false, "no server url configured", nil)
+		return
+	}
+	if cfg.ProjectName == "" {
+		printOutput(false, "no project name configured", nil)
+		return
+	}
+
 	project, err := apiclient.FindProjectByName(cfg.URL, cfg.ProjectName)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
@@ -185,3 +194,4 @@ func DownloadUpdate() {
 
 	printOutput(true, "", model.DownloadUpdateData{Version: newVersion})
 }
+
