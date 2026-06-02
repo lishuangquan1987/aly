@@ -17,6 +17,11 @@ import (
 
 var httpClient = &http.Client{
 	Timeout: 300 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:        10,
+		IdleConnTimeout:     90 * time.Second,
+		DisableCompression:  false,
+	},
 }
 
 // doGet 执行 GET 请求并返回响应体
@@ -27,7 +32,7 @@ func doGet(url string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("服务器返回状态码: %d", resp.StatusCode)
 	}
 
@@ -229,7 +234,7 @@ func DownloadFileWithResume(serverURL string, serverFilePath string, localPath s
 			}
 
 			// Verify download is complete before renaming
-			if checkInfo, checkErr := os.Stat(partPath); checkErr == nil && checkInfo.Size() >= serverFileSize {
+			if checkInfo, checkErr := os.Stat(partPath); checkErr == nil && checkInfo.Size() == serverFileSize {
 				if err := os.Rename(partPath, localPath); err != nil {
 					return fmt.Errorf("rename part file failed: %v", err)
 				}

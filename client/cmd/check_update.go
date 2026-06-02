@@ -44,7 +44,8 @@ func CheckUpdate() {
 		versionInfo.VersionStatus == config.VersionStatusApplying {
 		printOutput(true, "", &model.CheckUpdateData{
 			HasUpdate:      true,
-			CurrentVersion: versionInfo.Version,
+			CurrentVersion: stripVPrefix(versionInfo.Version),
+			NewVersion:     stripVPrefix(versionInfo.Version),
 		})
 		return
 	}
@@ -80,16 +81,7 @@ func CheckUpdate() {
 	localVersion := stripVPrefix(versionInfo.Version)
 
 	if compareVersion(serverVersion, localVersion) > 0 {
-		forceUpdate := false
-		projects, perr := apiclient.GetAllProjects(cfg.URL)
-		if perr == nil {
-			for _, p := range projects {
-				if p.ID == project.ID {
-					forceUpdate = p.ForceUpdate
-					break
-				}
-			}
-		}
+		forceUpdate := project.ForceUpdate
 		printOutput(true, "", &model.CheckUpdateData{
 			HasUpdate:      true,
 			CurrentVersion: localVersion,

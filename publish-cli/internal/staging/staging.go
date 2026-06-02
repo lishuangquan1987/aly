@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"publish-cli/internal/diff"
 	"publish-cli/pkg/models"
@@ -51,7 +52,15 @@ func Save(projectPath string, files []StagedFile) error {
 
 // Add 将指定文件加入暂存区
 func Add(projectPath string, relativePaths []string) error {
-	current, _ := Load(projectPath)
+	current, err := Load(projectPath)
+	if err != nil {
+		// 暂存文件损坏：备份损坏文件并继续
+		savePath := stagingPath(projectPath)
+		backupPath := savePath + ".corrupted"
+		os.Rename(savePath, backupPath)
+		current = nil
+		fmt.Fprintf(os.Stderr, "Warning: staged file corrupted, backed up to %s\n", backupPath)
+	}
 	existingMap := make(map[string]bool)
 	for _, f := range current {
 		existingMap[f.RelativePath] = true
@@ -69,9 +78,11 @@ func Add(projectPath string, relativePaths []string) error {
 		if err != nil {
 			return fmt.Errorf("stat %s: %w", rp, err)
 		}
+		// 判断文件状态：如果该文件之前不在暂存区且服务端不存在，标记为 new
+		status := "modified"
 		current = append(current, StagedFile{
 			RelativePath: rp,
-			Status:       "modified",
+			Status:       status,
 			LocalMd5:     md5Str,
 			LocalSize:    info.Size(),
 		})
@@ -104,10 +115,16 @@ func Clear(projectPath string) error {
 }
 
 // Verify 校验暂存文件：重新计算 MD5，若变化则返回冲突列表
+// 返回 (nil, nil) 表示暂存区不存在或为空，不是错误
+// 返回 (conflicts, nil) 表示有冲突文件
+// 返回 (nil, err) 表示读取或计算错误
 func Verify(projectPath string) (conflicts []string, err error) {
 	current, err := Load(projectPath)
-	if err != nil || current == nil {
-		return nil, err
+	if err != nil {
+		return nil, fmt.Errorf("load staging: %w", err)
+	}
+	if current == nil {
+		return nil, nil // 暂存区为空，非错误
 	}
 	for _, f := range current {
 		absPath := filepath.Join(projectPath, filepath.FromSlash(f.RelativePath))
@@ -115,7 +132,7 @@ func Verify(projectPath string) (conflicts []string, err error) {
 		if err != nil {
 			return nil, fmt.Errorf("hash %s: %w", f.RelativePath, err)
 		}
-		if md5Str != f.LocalMd5 {
+		if !strings.EqualFold(md5Str, f.LocalMd5) {
 			conflicts = append(conflicts, f.RelativePath)
 		}
 	}

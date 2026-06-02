@@ -108,18 +108,27 @@ func ApplyUpdate() {
 		return
 	}
 
-	// Step 6d: Remove previous version dir if exists
-	prevVersionDir, err := cfg.AppVersionDir(versionInfo.VersionPreviouse)
+	// Step 6d: Compute paths for atomic rename
+	prevVersionDir, err := cfg.AppVersionDir(versionInfo.VersionPrevious)
 	if err != nil {
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
 		config.WriteVersion(versionInfo)
 		printOutput(false, err.Error(), nil)
 		return
 	}
-	os.RemoveAll(prevVersionDir)
+	// Temporarily move old backup aside instead of deleting upfront (safer for power failure)
+	oldBackupTemp := prevVersionDir + ".old"
+	os.RemoveAll(oldBackupTemp)
+	if _, statErr := os.Stat(prevVersionDir); statErr == nil {
+		os.Rename(prevVersionDir, oldBackupTemp)
+	}
 
 	// Step 6e: Rename mainFolder -> prevVersionDir (backup)
 	if err := os.Rename(mainFolder, prevVersionDir); err != nil {
+		// Restore old backup if it existed
+		if _, statErr := os.Stat(oldBackupTemp); statErr == nil {
+			os.Rename(oldBackupTemp, prevVersionDir)
+		}
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
 		config.WriteVersion(versionInfo)
 		printOutput(false, fmt.Sprintf("backup rename failed: %v", err), nil)
@@ -130,11 +139,15 @@ func ApplyUpdate() {
 	if err := os.Rename(versionDir, mainFolder); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
 		os.Rename(prevVersionDir, mainFolder)
+		os.Rename(oldBackupTemp, prevVersionDir)
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
 		config.WriteVersion(versionInfo)
 		printOutput(false, fmt.Sprintf("apply rename failed: %v", err), nil)
 		return
 	}
+
+	// Clean up old backup AFTER successful rename
+	os.RemoveAll(oldBackupTemp)
 
 	// Step 7: Update version.json
 	versionInfo.VersionStatus = config.VersionStatusApplied

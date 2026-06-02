@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,7 +83,7 @@ func (c *Config) MergeFlags(url string, projectName string, mainExePath string, 
 		c.MainExeRelativePath = mainExePath
 	}
 	if mustCloseProcessName != "" {
-		c.MustCloseProcessName = splitProcessNames(mustCloseProcessName)
+		c.MustCloseProcessName = append(c.MustCloseProcessName, splitProcessNames(mustCloseProcessName)...)
 	}
 }
 
@@ -175,14 +176,5 @@ func ioutilReadFile(path string) ([]byte, error) {
 		return nil, err
 	}
 	defer f.Close()
-	stat, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	data := make([]byte, stat.Size())
-	_, err = f.Read(data)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
+	return io.ReadAll(f)
 }

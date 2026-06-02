@@ -6,6 +6,9 @@ import (
 
 func init() {
 	RootCmd.AddCommand(cmdServer)
+	cmdServerInfo.Flags().IntVar(&projectID, "id", 0, "项目ID")
+	cmdServerInfo.MarkFlagRequired("id")
+	cmdServer.AddCommand(cmdServerInfo)
 }
 
 var cmdServer = &cobra.Command{
@@ -17,12 +20,6 @@ var cmdServerInfo = &cobra.Command{
 	Use:   "info",
 	Short: "查看服务端系统信息",
 	Run:   runServerInfo,
-}
-
-func init() {
-	cmdServerInfo.Flags().IntVar(&projectID, "id", 0, "项目ID")
-	cmdServerInfo.MarkFlagRequired("id")
-	cmdServer.AddCommand(cmdServerInfo)
 }
 
 func runServerInfo(cmd *cobra.Command, args []string) {

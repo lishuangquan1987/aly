@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"publish-cli/internal/config"
 	"publish-cli/internal/diff"
 	"publish-cli/internal/staging"
 	"publish-cli/pkg/models"
@@ -13,28 +14,37 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// 每个命令使用独立的 flag 变量，避免跨命令覆盖
 var (
-	pushVersion string
-	pushMessage []string
-	dryRun      bool
-	force       bool
+	pushVersion     string
+	pushMessage     []string
+	pushDryRun      bool
+	pushForce       bool
+
+	pushAllVersion  string
+	pushAllMessage  []string
+	pushAllDryRun   bool
+
+	pubVersion      string
+	pubMessage      []string
+	pubDryRun       bool
 )
 
 func init() {
 	cmdPush.Flags().StringVar(&pushVersion, "version", "", "新版本号（必填）")
 	cmdPush.Flags().StringArrayVar(&pushMessage, "message", nil, "变更说明（可多次指定）")
-	cmdPush.Flags().BoolVar(&dryRun, "dry-run", false, "仅校验不实际推送")
-	cmdPush.Flags().BoolVar(&force, "force", false, "跳过 MD5 复核强制上传")
+	cmdPush.Flags().BoolVar(&pushDryRun, "dry-run", false, "仅校验不实际推送")
+	cmdPush.Flags().BoolVar(&pushForce, "force", false, "跳过 MD5 复核强制上传")
 	cmdPush.MarkFlagRequired("version")
 
-	cmdPushAll.Flags().StringVar(&pushVersion, "version", "", "新版本号（必填）")
-	cmdPushAll.Flags().StringArrayVar(&pushMessage, "message", nil, "变更说明（可多次指定）")
-	cmdPushAll.Flags().BoolVar(&dryRun, "dry-run", false, "仅校验不实际推送")
+	cmdPushAll.Flags().StringVar(&pushAllVersion, "version", "", "新版本号（必填）")
+	cmdPushAll.Flags().StringArrayVar(&pushAllMessage, "message", nil, "变更说明（可多次指定）")
+	cmdPushAll.Flags().BoolVar(&pushAllDryRun, "dry-run", false, "仅校验不实际推送")
 	cmdPushAll.MarkFlagRequired("version")
 
-	cmdPublish.Flags().StringVar(&pushVersion, "version", "", "新版本号（必填）")
-	cmdPublish.Flags().StringArrayVar(&pushMessage, "message", nil, "变更说明（可多次指定）")
-	cmdPublish.Flags().BoolVar(&dryRun, "dry-run", false, "仅校验不实际推送")
+	cmdPublish.Flags().StringVar(&pubVersion, "version", "", "新版本号（必填）")
+	cmdPublish.Flags().StringArrayVar(&pubMessage, "message", nil, "变更说明（可多次指定）")
+	cmdPublish.Flags().BoolVar(&pubDryRun, "dry-run", false, "仅校验不实际推送")
 	cmdPublish.MarkFlagRequired("version")
 
 	RootCmd.AddCommand(cmdPush)
@@ -60,6 +70,89 @@ var cmdPublish = &cobra.Command{
 	Run:   runPublish,
 }
 
+// pushFiles 共享的推送逻辑：上传 filesToUpload 指定的文件，然后创建版本记录
+// 返回 true 表示推送成功（可以清理暂存区），false 表示失败或未执行
+func pushFiles(cfg *config.Config, version string, messages []string, filesToUpload []string, isDryRun bool, useForce bool) bool {
+	if len(messages) == 0 {
+		if jsonOutput {
+			printOutput(false, "至少需要一条 --message", nil)
+		} else {
+			fmt.Fprintln(os.Stderr, "Error: 至少需要一条 --message")
+		}
+		return false
+	}
+
+	client := newAPIClient(*cfg)
+	pid, err := resolveProjectID(*cfg)
+	if err != nil {
+		outputResult(false, err.Error(), nil)
+		return false
+	}
+
+	if !useForce {
+		conflicts, err := staging.Verify(cfg.Project.Path)
+		if err != nil {
+			outputResult(false, fmt.Sprintf("MD5 校验失败: %v", err), nil)
+			return false
+		}
+		if len(conflicts) > 0 {
+			outputResult(false, fmt.Sprintf("以下文件在 add 后被修改，请重新 add: %v", conflicts), nil)
+			return false
+		}
+	}
+
+	if len(filesToUpload) == 0 {
+		outputResult(false, "没有需要推送的文件", nil)
+		return false
+	}
+
+	if isDryRun {
+		printHumanLn("[DRY RUN] 将上传以下文件：")
+		for _, p := range filesToUpload {
+			printHumanLn("  %s", p)
+		}
+		printHumanLn("[DRY RUN] 将创建版本: %s (%d 条日志)", version, len(messages))
+		printHumanLn("[DRY RUN] 未实际推送任何内容。")
+		return false
+	}
+
+	// 阶段 1：逐文件上传
+	for _, p := range filesToUpload {
+		absPath := filepath.Join(cfg.Project.Path, filepath.FromSlash(p))
+		printHumanLn("Uploading: %s", p)
+		if err := client.UploadFile(absPath, cfg.Project.Name, p); err != nil {
+			outputResult(false, fmt.Sprintf("上传失败 [%s]: %v", p, err), nil)
+			return false
+		}
+	}
+
+	// 阶段 2：创建版本记录
+	// NOTE: 文件上传和版本创建是两个独立操作，非原子事务。
+	// 如果 PublishVersion 失败，文件已在服务端但无版本记录。
+	// 此时应重试 publish 命令（文件已存在则秒传），或手动调用 PublishVersion。
+	timeStr := time.Now().Format("2006-01-02 15:04:05")
+	_, err = client.PublishVersion(models.PublishVersionRequest{
+		ProjectID: pid,
+		Version:   version,
+		Logs:      messages,
+		Time:      timeStr,
+	})
+	if err != nil {
+		outputResult(false, fmt.Sprintf("创建版本失败: %v（文件已上传，可重试 publish 或手动创建版本）", err), nil)
+		return false
+	}
+
+	if jsonOutput {
+		printOutput(true, "", map[string]string{
+			"version": version,
+			"files":   fmt.Sprintf("%d", len(filesToUpload)),
+		})
+		return true
+	}
+	printHumanLn("%s published successfully (%d files uploaded)", version, len(filesToUpload))
+	return true
+}
+
 func runPush(cmd *cobra.Command, args []string) {
 	cfg, err := resolveConfig()
 	if err != nil {
@@ -74,83 +167,25 @@ func runPush(cmd *cobra.Command, args []string) {
 		outputResult(false, err.Error(), nil)
 		return
 	}
-	if len(pushMessage) == 0 {
-		if jsonOutput {
-			printOutput(false, "至少需要一条 --message", nil)
-		} else {
-			fmt.Fprintln(os.Stderr, "Error: 至少需要一条 --message")
-		}
+
+	stagedFiles, loadErr := staging.Load(cfg.Project.Path)
+	if loadErr != nil {
+		outputResult(false, fmt.Sprintf("读取暂存区失败: %v", loadErr), nil)
 		return
 	}
-
-	client := newAPIClient(cfg)
-	pid, err := resolveProjectID(cfg)
-	if err != nil {
-		outputResult(false, err.Error(), nil)
-		return
-	}
-
-	if !force {
-		conflicts, err := staging.Verify(cfg.Project.Path)
-		if err != nil {
-			outputResult(false, fmt.Sprintf("MD5 校验失败: %v", err), nil)
-			return
-		}
-		if len(conflicts) > 0 {
-			outputResult(false, fmt.Sprintf("以下文件在 add 后被修改，请重新 add: %v", conflicts), nil)
-			return
-		}
-	}
-
-	stagedFiles, _ := staging.Load(cfg.Project.Path)
 	if len(stagedFiles) == 0 {
 		outputResult(false, "暂存区为空，请先 add 文件", nil)
 		return
 	}
 
-	if dryRun {
-		printHumanLn("[DRY RUN] 将上传以下文件：")
-		for _, f := range stagedFiles {
-			printHumanLn("  [%s]  %s  %d bytes", f.Status, f.RelativePath, f.LocalSize)
-		}
-		printHumanLn("[DRY RUN] 将创建版本: %s (%d 条日志)", pushVersion, len(pushMessage))
-		printHumanLn("[DRY RUN] 未实际推送任何内容。")
-		return
-	}
-
-	// 阶段 1：逐文件上传
+	var files []string
 	for _, f := range stagedFiles {
-		absPath := filepath.Join(cfg.Project.Path, filepath.FromSlash(f.RelativePath))
-		printHumanLn("Uploading: %s", f.RelativePath)
-		if err := client.UploadFile(absPath, cfg.Project.Name, f.RelativePath); err != nil {
-			outputResult(false, fmt.Sprintf("上传失败 [%s]: %v", f.RelativePath, err), nil)
-			return
-		}
+		files = append(files, f.RelativePath)
 	}
 
-	// 阶段 2：创建版本记录
-	timeStr := time.Now().Format("2006-01-02 15:04:05")
-	_, err = client.PublishVersion(models.PublishVersionRequest{
-		ProjectID: pid,
-		Version:   pushVersion,
-		Logs:      pushMessage,
-		Time:      timeStr,
-	})
-	if err != nil {
-		outputResult(false, fmt.Sprintf("创建版本失败: %v", err), nil)
-		return
+	if pushFiles(&cfg, pushVersion, pushMessage, files, pushDryRun, pushForce) {
+		staging.Clear(cfg.Project.Path)
 	}
-
-	staging.Clear(cfg.Project.Path)
-
-	if jsonOutput {
-		printOutput(true, "", map[string]string{
-			"version": pushVersion,
-			"files":   fmt.Sprintf("%d", len(stagedFiles)),
-		})
-		return
-	}
-	printHumanLn("%s published successfully (%d files uploaded)", pushVersion, len(stagedFiles))
 }
 
 func runPushAll(cmd *cobra.Command, args []string) {
@@ -165,14 +200,6 @@ func runPushAll(cmd *cobra.Command, args []string) {
 	}
 	if err := requireProject(&cfg); err != nil {
 		outputResult(false, err.Error(), nil)
-		return
-	}
-	if len(pushMessage) == 0 {
-		if jsonOutput {
-			printOutput(false, "至少需要一条 --message", nil)
-		} else {
-			fmt.Fprintln(os.Stderr, "Error: 至少需要一条 --message")
-		}
 		return
 	}
 
@@ -195,56 +222,10 @@ func runPushAll(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	if len(paths) == 0 {
-		printHumanLn("没有需要推送的文件")
-		return
-	}
-
-	if dryRun {
-		printHumanLn("[DRY RUN] 将上传以下文件：")
-		for _, p := range paths {
-			printHumanLn("  [%s]  %s", getStatusForPath(sd.Unstaged, p), p)
-		}
-		printHumanLn("[DRY RUN] 将创建版本: %s (%d 条日志)", pushVersion, len(pushMessage))
-		printHumanLn("[DRY RUN] 未实际推送任何内容。")
-		return
-	}
-
-	// 上传
-	for _, p := range paths {
-		absPath := filepath.Join(cfg.Project.Path, filepath.FromSlash(p))
-		printHumanLn("Uploading: %s", p)
-		if err := client.UploadFile(absPath, cfg.Project.Name, p); err != nil {
-			outputResult(false, fmt.Sprintf("上传失败 [%s]: %v", p, err), nil)
-			return
-		}
-	}
-
-	// 创建版本
-	timeStr := time.Now().Format("2006-01-02 15:04:05")
-	_, err = client.PublishVersion(models.PublishVersionRequest{
-		ProjectID: pid,
-		Version:   pushVersion,
-		Logs:      pushMessage,
-		Time:      timeStr,
-	})
-	if err != nil {
-		outputResult(false, fmt.Sprintf("创建版本失败: %v", err), nil)
-		return
-	}
-
-	if jsonOutput {
-		printOutput(true, "", map[string]string{
-			"version": pushVersion,
-			"files":   fmt.Sprintf("%d", len(paths)),
-		})
-		return
-	}
-	printHumanLn("%s published successfully (%d files uploaded)", pushVersion, len(paths))
+	pushFiles(&cfg, pushAllVersion, pushAllMessage, paths, pushAllDryRun, false)
 }
 
 func runPublish(cmd *cobra.Command, args []string) {
-	// publish = add --all + push
 	cfg, err := resolveConfig()
 	if err != nil {
 		outputResult(false, err.Error(), nil)
@@ -279,11 +260,12 @@ func runPublish(cmd *cobra.Command, args []string) {
 		printHumanLn("没有需要发布的文件")
 		return
 	}
-	staging.Add(cfg.Project.Path, paths)
-	// 然后 push（runPush 内部会重新 resolveProjectID，缓存命中的是 cfg.Project.ID）
+	if err := staging.Add(cfg.Project.Path, paths); err != nil {
+		outputResult(false, err.Error(), nil)
+		return
+	}
 	cfg.Project.ID = pid
-	// 重新序列化配置以便 runPush 使用
-	runPush(cmd, args)
+	pushFiles(&cfg, pubVersion, pubMessage, paths, pubDryRun, false)
 }
 
 func getStatusForPath(items []models.FileStatusItem, relativePath string) string {

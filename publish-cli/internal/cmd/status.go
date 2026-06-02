@@ -52,9 +52,17 @@ func runStatus(cmd *cobra.Command, args []string) {
 		outputResult(false, err.Error(), nil)
 		return
 	}
-	// 合并暂存区文件到 status 输出
+	// 合并暂存区文件到 status 输出，跳过已在 unstaged 中出现的文件（去重）
+	unstagedPaths := make(map[string]bool)
+	for _, u := range sd.Unstaged {
+		unstagedPaths[u.RelativePath] = true
+	}
 	stagedItems := staging.LoadAsStatusItems(cfg.Project.Path)
-	sd.Staged = stagedItems
+	for _, s := range stagedItems {
+		if !unstagedPaths[s.RelativePath] {
+			sd.Staged = append(sd.Staged, s)
+		}
+	}
 
 	if jsonOutput {
 		printOutput(true, "", sd)

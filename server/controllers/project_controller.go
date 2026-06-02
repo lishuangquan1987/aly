@@ -137,6 +137,10 @@ func PublishVersion(ctx *gin.Context) {
 		ctx.JSON(200, models.NG("版本号不能为空"))
 		return
 	}
+	if len(publishDto.Version) > 50 {
+		ctx.JSON(200, models.NG("版本号长度不能超过50个字符"))
+		return
+	}
 
 	ctx.JSON(200, service.PublishVersion(publishDto.ProjectId, publishDto.Version, publishDto.Logs, publishDto.Time))
 }
@@ -183,14 +187,18 @@ func GetProjectOSInfo(ctx *gin.Context) {
 		return
 	}
 
-	projectResult := service.GetProjectById(projectIdUrl.ProjectId)
-	if !projectResult.IsSuccess {
-		ctx.JSON(200, models.NG(projectResult.ErrorMsg))
+	// 直接查询以便区分 "不存在" 和 "其他错误"
+	p, err := db.Client.Project.Query().Where(project.IDEQ(projectIdUrl.ProjectId)).First(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			ctx.JSON(200, models.NG("项目不存在"))
+		} else {
+			ctx.JSON(200, models.NGWithError(err))
+		}
 		return
 	}
 
-	project := projectResult.Data.(*ent.Project)
-	workDir, err := service.GetProjectWorkPath(project.Name)
+	workDir, err := service.GetProjectWorkPath(p.Name)
 	if err != nil {
 		ctx.JSON(200, models.NGWithError(err))
 		return
@@ -198,9 +206,25 @@ func GetProjectOSInfo(ctx *gin.Context) {
 
 	platform, _, _, _ := host.PlatformInformation() //内核信息
 
-	infos, _ := cpu.Info() //cpu信息工具类
+	infos, err := cpu.Info() //cpu信息工具类
+	var cpuName string
+	var cpuMhz float64
+	if err == nil && len(infos) > 0 {
+		cpuName = infos[0].ModelName
+		cpuMhz = infos[0].Mhz
+	} else {
+		cpuName = "unknown"
+	}
 
-	diskInfo, _ := disk.Usage(workDir) //获取客户端更新文件所在盘的容量信息
+	diskInfo, err := disk.Usage(workDir) //获取客户端更新文件所在盘的容量信息
+	var diskUsed, diskFree, diskTotal uint64
+	var diskUsedPercent float64
+	if err == nil {
+		diskUsed = diskInfo.Used
+		diskFree = diskInfo.Free
+		diskTotal = diskInfo.Total
+		diskUsedPercent = diskInfo.UsedPercent
+	}
 
 	serverOSInfo := make([]models.ServerOSInfo, 0)
 	serverOSInfo = append(serverOSInfo, models.ServerOSInfo{
@@ -209,12 +233,12 @@ func GetProjectOSInfo(ctx *gin.Context) {
 		GOARCH:          runtime.GOARCH,
 		Version:         runtime.Version(),
 		NumCPU:          runtime.NumCPU(),
-		CPUName:         infos[0].ModelName,
-		CPUMhz:          infos[0].Mhz,
-		DiskUsed:        float64((diskInfo.Used) / (1024 * 1024 * 1024)), //Byte 转为操作系统的 Gib 单位
-		DiskFree:        float64((diskInfo.Free) / (1024 * 1024 * 1024)),
-		DiskTotal:       float64((diskInfo.Total) / (1024 * 1024 * 1024)),
-		DiskUsedPercent: diskInfo.UsedPercent,
+		CPUName:         cpuName,
+		CPUMhz:          cpuMhz,
+		DiskUsed:        float64((diskUsed) / (1024 * 1024 * 1024)), //Byte 转为操作系统的 Gib 单位
+		DiskFree:        float64((diskFree) / (1024 * 1024 * 1024)),
+		DiskTotal:       float64((diskTotal) / (1024 * 1024 * 1024)),
+		DiskUsedPercent: diskUsedPercent,
 	})
 	ctx.JSON(200, models.CommonResponse{
 		IsSuccess: true,

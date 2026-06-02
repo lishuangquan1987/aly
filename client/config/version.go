@@ -14,8 +14,9 @@ const (
 )
 
 // VersionInfo 对应 version.json 的结构
+// Note: JSON key "version_previouse" preserved for backward compatibility with older version.json files
 type VersionInfo struct {
-	VersionPreviouse string `json:"version_previouse"`
+	VersionPrevious string `json:"version_previouse"`
 	Version          string `json:"version"`
 	VersionStatus    string `json:"version_status"`
 }

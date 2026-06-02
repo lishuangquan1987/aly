@@ -11,7 +11,7 @@ var (
 	// ProjectsColumns holds the columns for the "projects" table.
 	ProjectsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "name", Type: field.TypeString},
+		{Name: "name", Type: field.TypeString, Unique: true},
 		{Name: "title", Type: field.TypeString},
 		{Name: "version", Type: field.TypeString},
 		{Name: "force_update", Type: field.TypeBool},

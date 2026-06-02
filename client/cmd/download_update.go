@@ -60,8 +60,9 @@ func DownloadUpdate() {
 	}
 	currentVersion := stripVPrefix(versionInfo.Version)
 
-	// Guard: if status is already "downloaded", skip version.json update at the end
-	skipVersionUpdate := versionInfo.VersionStatus == config.VersionStatusDownloaded
+	// Guard: skip version.json update if this exact version was already downloaded
+	skipVersionUpdate := versionInfo.VersionStatus == config.VersionStatusDownloaded &&
+		currentVersion == newVersion
 
 	if compareVersion(newVersion, currentVersion) <= 0 {
 		printOutput(false, "already at latest version", nil)
@@ -80,14 +81,21 @@ func DownloadUpdate() {
 		return
 	}
 
-	localMD5Map, _ := util.LocalFileMD5Map(mainFolder)
+	localMD5Map, localMD5Err := util.LocalFileMD5Map(mainFolder)
+	if localMD5Err != nil {
+		exeDir, _ := config.ExeDir()
+		util.AppendToLog(exeDir, "download.log", fmt.Sprintf("local md5 scan warning: %v", localMD5Err))
+	}
 
 	targetDir, err := cfg.AppVersionDir(newVersion)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
 	}
-	util.EnsureDir(targetDir)
+	if err := util.EnsureDir(targetDir); err != nil {
+		printOutput(false, fmt.Sprintf("create target dir: %v", err), nil)
+		return
+	}
 
 	var diffFiles []model.FileInfo
 	for i := range serverFiles {
@@ -166,7 +174,7 @@ func DownloadUpdate() {
 
 	// Update version.json ONLY if status != "downloaded"
 	if !skipVersionUpdate {
-		versionInfo.VersionPreviouse = versionInfo.Version
+		versionInfo.VersionPrevious = versionInfo.Version
 		versionInfo.Version = newVersion
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
 		if err := config.WriteVersion(versionInfo); err != nil {

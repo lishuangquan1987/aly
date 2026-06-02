@@ -93,13 +93,43 @@ func GetAllFilesByProjectId(ctx *gin.Context) {
 
 func DownloadFile(ctx *gin.Context) {
 	pathStr := ctx.Query("path")
-	if !file.Exists(pathStr) {
+
+	// 路径穿越防护：规范化路径并限制在 data 目录内
+	cleanPath := filepath.Clean(pathStr)
+	exePath, err := os.Executable()
+	if err != nil {
 		ctx.Redirect(http.StatusNotFound, "/404")
 		return
 	}
-	fileName := path.GetFileName(pathStr)
-	ctx.Header("Content-Type", "application/octet-stream")
-	ctx.Header("Content-Disposition", "attachment; filename="+fileName)
+	dataDir := filepath.Join(filepath.Dir(exePath), "data")
+	if !strings.HasPrefix(cleanPath, dataDir+string(filepath.Separator)) && cleanPath != dataDir {
+		ctx.Redirect(http.StatusNotFound, "/404")
+		return
+	}
+
+	if !file.Exists(cleanPath) {
+		ctx.Redirect(http.StatusNotFound, "/404")
+		return
+	}
+
+	// 使用 http.ServeContent 支持 Range 请求（断点续传）
+	fileReader, err := os.Open(cleanPath)
+	if err != nil {
+		ctx.Redirect(http.StatusNotFound, "/404")
+		return
+	}
+	defer fileReader.Close()
+
+	fileInfo, err := fileReader.Stat()
+	if err != nil {
+		ctx.Redirect(http.StatusNotFound, "/404")
+		return
+	}
+
+	fileName := path.GetFileName(cleanPath)
+	// RFC 6266: filename*=UTF-8''<percent-encoded> 支持非 ASCII 文件名
+	encodedName := strings.ReplaceAll(fileName, " ", "%20")
+	ctx.Header("Content-Disposition", "attachment; filename*=UTF-8''"+encodedName+"; filename="+fileName)
 	ctx.Header("Content-Transfer-Encoding", "binary")
-	ctx.File(pathStr)
+	http.ServeContent(ctx.Writer, ctx.Request, fileName, fileInfo.ModTime(), fileReader)
 }

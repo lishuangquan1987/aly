@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	apiclient "clientupdator/client/client"
 	"clientupdator/client/config"
@@ -71,7 +72,7 @@ func CheckDiff() {
 	var diffFiles []model.DiffFileItem
 	for i := range serverFiles {
 		relPath := normalizePath(serverFiles[i].FileRelativePath)
-		localFullPath := mainFolder + string(os.PathSeparator) + filepathFromSlash(relPath)
+		localFullPath := filepath.Join(mainFolder, filepathFromSlash(relPath))
 		localMD5, localExists := localMD5Map[relPath]
 
 		if !localExists {

@@ -354,6 +354,10 @@ publish-cli push --version V1.0.1 --message "test" --dry-run
 1. **UPLOAD**：逐文件 `POST /api/file/upload_file`（multipart），任一失败即停止，暂存区保留
 2. **PUBLISH**：`POST /api/project/publish_version`（事务更新 `Project.Version` + 创建 `ProjectChangeLog`），成功清空暂存区
 
+> ⚠️ **重要提示（非原子操作）**  
+> 文件上传和版本创建是两个独立的 HTTP 请求，**非数据库事务**。如果阶段 1（上传）全部成功，但阶段 2（创建版本）失败（网络中断、服务端错误等），会出现 **文件已在服务端但无版本记录** 的不一致状态。  
+> **恢复方式**：重新执行 `publish` 命令 — 已上传的文件会秒传（MD5 一致则跳过），然后重新创建版本记录。也可以通过 API 手动调用 `POST /api/project/publish_version` 补建版本记录。
+
 | 命令 | 说明 | 参数 |
 |------|------|------|
 | `push` | 推送暂存区文件 | `--version`(必), `--message`(必, 可多次), `--dry-run`, `--force` |

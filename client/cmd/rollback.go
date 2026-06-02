@@ -70,7 +70,7 @@ func Rollback() {
 					return
 				}
 				versionInfo.Version = *versionFlag
-				versionInfo.VersionPreviouse = oldVersion
+				versionInfo.VersionPrevious = oldVersion
 				versionInfo.VersionStatus = config.VersionStatusApplied
 				config.WriteVersion(versionInfo)
 				if cfg.PostUpdateScript != "" {
@@ -101,7 +101,7 @@ func Rollback() {
 	// Unlike apply_update (which needs CopyDirWithExclude to fill in unchanged files
 	// from the current folder), rollback only needs atomic rename.
 
-	// Remove previous version backup dir if exists
+	// Compute paths for atomic rename
 	prevVersionDir, err := cfg.AppVersionDir(oldVersion)
 	if err != nil {
 		versionInfo.VersionStatus = config.VersionStatusApplied
@@ -109,10 +109,18 @@ func Rollback() {
 		printOutput(false, err.Error(), nil)
 		return
 	}
-	os.RemoveAll(prevVersionDir)
+	// Temporarily move old backup aside instead of deleting upfront (safer for power failure)
+	oldBackupTemp := prevVersionDir + ".old"
+	os.RemoveAll(oldBackupTemp)
+	if _, statErr := os.Stat(prevVersionDir); statErr == nil {
+		os.Rename(prevVersionDir, oldBackupTemp)
+	}
 
 	// Rename mainFolder -> prevVersionDir (backup current)
 	if err := os.Rename(mainFolder, prevVersionDir); err != nil {
+		if _, statErr := os.Stat(oldBackupTemp); statErr == nil {
+			os.Rename(oldBackupTemp, prevVersionDir)
+		}
 		versionInfo.VersionStatus = config.VersionStatusApplied
 		config.WriteVersion(versionInfo)
 		printOutput(false, fmt.Sprintf("backup rename failed: %v", err), nil)
@@ -123,14 +131,18 @@ func Rollback() {
 	if err := os.Rename(versionDir, mainFolder); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
 		os.Rename(prevVersionDir, mainFolder)
+		os.Rename(oldBackupTemp, prevVersionDir)
 		versionInfo.VersionStatus = config.VersionStatusApplied
 		config.WriteVersion(versionInfo)
 		printOutput(false, fmt.Sprintf("apply rename failed: %v", err), nil)
 		return
 	}
 
+	// Clean up old backup AFTER successful rename
+	os.RemoveAll(oldBackupTemp)
+
 	// Update version.json
-	versionInfo.VersionPreviouse = oldVersion
+	versionInfo.VersionPrevious = oldVersion
 	versionInfo.Version = *versionFlag
 	versionInfo.VersionStatus = config.VersionStatusApplied
 	if err := config.WriteVersion(versionInfo); err != nil {

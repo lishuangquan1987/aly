@@ -129,7 +129,13 @@ func runProjectList(cmd *cobra.Command, args []string) {
 		if p.ForceUpdate {
 			fu = "yes"
 		}
-		printHumanLn("  %-4d %-8s %-10s %-8s %-12s %s", p.ID, p.Name, p.Title, p.Version, fu, p.CreatedAt[:10])
+		created := p.CreatedAt
+		if len(created) > 10 {
+			created = created[:10]
+		} else if len(created) == 0 {
+			created = "-"
+		}
+		printHumanLn("  %-4d %-8s %-10s %-8s %-12s %s", p.ID, p.Name, p.Title, p.Version, fu, created)
 	}
 }
 
@@ -244,7 +250,13 @@ func runProjectInfo(cmd *cobra.Command, args []string) {
 				fu = "yes"
 			}
 			printHumanLn("Force Update: %s", fu)
-			printHumanLn("Created: %s", p.CreatedAt[:10])
+			created := p.CreatedAt
+		if len(created) > 10 {
+			created = created[:10]
+		} else if len(created) == 0 {
+			created = "-"
+		}
+		printHumanLn("Created: %s", created)
 			printHumanLn("")
 			printHumanLn("Ignore Folders:")
 			for _, f := range p.IgnoreFolders {

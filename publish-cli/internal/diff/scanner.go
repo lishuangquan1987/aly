@@ -182,16 +182,25 @@ func isSubPath(child, parent string) bool {
 }
 
 // matchFile 判断文件路径是否匹配忽略规则
+// 支持精确匹配、*.ext 后缀匹配、标准 filepath.Match glob 匹配
 func matchFile(relPath, pattern string) bool {
 	// 精确匹配
 	if relPath == pattern {
 		return true
 	}
-	// 简单通配：如果 pattern 以 * 开头，匹配后缀
+	// 尝试标准 glob 匹配（支持 *, ?, [abc]）
+	if matched, _ := filepath.Match(pattern, relPath); matched {
+		return true
+	}
+	// 用文件名尝试 glob 匹配（方便只写文件名的情况）
+	base := filepath.Base(relPath)
+	if matched, _ := filepath.Match(pattern, base); matched {
+		return true
+	}
+	// 如果 pattern 以 * 开头，匹配后缀（兼容旧行为）
 	if strings.HasPrefix(pattern, "*") {
 		suffix := pattern[1:]
 		return strings.HasSuffix(relPath, suffix)
 	}
-	// 如果 pattern 包含目录分隔符，精确路径匹配
-	return relPath == strings.TrimPrefix(pattern, "./")
+	return false
 }

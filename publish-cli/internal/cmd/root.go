@@ -28,7 +28,11 @@ func printOutput(success bool, errMsg string, data interface{}) {
 		ErrMsg:    errMsg,
 		Data:      data,
 	}
-	bytes, _ := json.Marshal(out)
+	bytes, err := json.Marshal(out)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "JSON marshal error: %v\n", err)
+		os.Exit(1)
+	}
 	fmt.Println(string(bytes))
 }
 

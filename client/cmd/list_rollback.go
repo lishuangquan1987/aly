@@ -76,7 +76,14 @@ func ListRollbackVersions() {
 	})
 }
 
-// isLikelyVersion checks if a string looks like a version number (contains dots)
+// isLikelyVersion checks if a string looks like a version number (e.g., "1.0.0")
 func isLikelyVersion(s string) bool {
+	if len(s) == 0 || len(s) > 50 {
+		return false
+	}
+	// Must start with a digit, contain at least one dot
+	if s[0] < '0' || s[0] > '9' {
+		return false
+	}
 	return strings.Contains(s, ".")
 }

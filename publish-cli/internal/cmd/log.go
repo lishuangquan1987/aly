@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"publish-cli/pkg/models"
+
 	"github.com/spf13/cobra"
 )
 
@@ -38,29 +40,26 @@ func runLog(cmd *cobra.Command, args []string) {
 		outputResult(false, err.Error(), nil)
 		return
 	}
-	// 按 ID 倒序排列
-	for i := len(logs) - 1; i >= 0; i-- {
-		if len(logs)-1-i >= logLimit {
-			break
-		}
-		l := logs[i]
-		if jsonOutput {
-			continue // JSON 一次性输出
-		}
+
+	// 按 ID 倒序排列，统一构建输出列表
+	count := logLimit
+	if count > len(logs) {
+		count = len(logs)
+	}
+	reversed := make([]models.ProjectChangeLog, 0, count)
+	for i := len(logs) - 1; i >= 0 && len(reversed) < logLimit; i-- {
+		reversed = append(reversed, logs[i])
+	}
+
+	if jsonOutput {
+		printOutput(true, "", reversed)
+		return
+	}
+
+	for _, l := range reversed {
 		printHumanLn("%s (%s)", l.Version, l.Time)
 		for _, msg := range l.Logs {
 			printHumanLn("  • %s", msg)
 		}
-	}
-	if jsonOutput {
-		// 倒序输出
-		reversed := make([]interface{}, 0)
-		for i := len(logs) - 1; i >= 0; i-- {
-			if len(logs)-1-i >= logLimit {
-				break
-			}
-			reversed = append(reversed, logs[i])
-		}
-		printOutput(true, "", reversed)
 	}
 }

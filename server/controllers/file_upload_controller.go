@@ -4,6 +4,8 @@ import (
 	"clientupdator/server/internal/service"
 	"clientupdator/server/models"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/utils-go/ngo/io/directory"
@@ -43,7 +45,13 @@ func UploadFile(ctx *gin.Context) {
 	}
 
 	fileName := stringUtils.Replace(fileInfo.RelativeFileName, "\\", "/")
-	absFileName := path.Combine(workDir, fileName)
+	// 路径穿越防护：规范化路径并验证在 workDir 内
+	rawPath := path.Combine(workDir, fileName)
+	absFileName := filepath.Clean(rawPath)
+	if !strings.HasPrefix(absFileName, workDir+string(filepath.Separator)) && absFileName != workDir {
+		ctx.JSON(200, models.NG("非法的文件路径"))
+		return
+	}
 	dir := path.GetDirectoryName(absFileName)
 	if !directory.Exists(dir) {
 		if err = directory.CreateDirectory(dir); err != nil {

@@ -16,7 +16,7 @@ type Project struct {
 // Fields of the Project.
 func (Project) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("name").Comment("项目名称，用于创建文件夹保存文件，创建后不能更改"),
+		field.String("name").Unique().Comment("项目名称，用于创建文件夹保存文件，创建后不能更改"),
 		field.String("title").Comment("项目抬头"),
 		field.String("version").Comment("项目版本"),
 		field.Bool("force_update").Comment("是否强制更新"),

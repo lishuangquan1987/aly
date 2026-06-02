@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"publish-cli/internal/diff"
 	"publish-cli/internal/staging"
@@ -84,7 +85,11 @@ func runAdd(cmd *cobra.Command, args []string) {
 		printHumanLn("已添加 %d 个文件到暂存区", len(paths))
 	} else {
 		if len(args) == 0 {
-			fmt.Println("Usage: publish-cli add [--all | <file>...]")
+			if jsonOutput {
+				printOutput(false, "Usage: publish-cli add [--all | <file>...]", nil)
+			} else {
+				fmt.Fprintln(os.Stderr, "Usage: publish-cli add [--all | <file>...]")
+			}
 			return
 		}
 		if err := staging.Add(cfg.Project.Path, args); err != nil {
@@ -122,7 +127,11 @@ func runReset(cmd *cobra.Command, args []string) {
 		return
 	}
 	if len(args) == 0 {
-		fmt.Println("Usage: publish-cli reset [--all | <file>...]")
+		if jsonOutput {
+			printOutput(false, "Usage: publish-cli reset [--all | <file>...]", nil)
+		} else {
+			fmt.Fprintln(os.Stderr, "Usage: publish-cli reset [--all | <file>...]")
+		}
 		return
 	}
 	if err := staging.Remove(cfg.Project.Path, args); err != nil {

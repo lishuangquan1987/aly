@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"publish-cli/internal/config"
 
@@ -99,7 +100,11 @@ func runConfigInit(cmd *cobra.Command, args []string) {
 
 func runConfigSet(cmd *cobra.Command, args []string) {
 	if len(args) < 2 {
-		fmt.Println("Usage: publish-cli config set <key> <value>")
+		if jsonOutput {
+			printOutput(false, "Usage: publish-cli config set <key> <value>", nil)
+		} else {
+			fmt.Fprintln(os.Stderr, "Usage: publish-cli config set <key> <value>")
+		}
 		return
 	}
 	key := args[0]
@@ -126,7 +131,11 @@ func runConfigSet(cmd *cobra.Command, args []string) {
 
 func runConfigSetArray(cmd *cobra.Command, args []string) {
 	if len(args) < 1 {
-		fmt.Println("Usage: publish-cli config set-array <key> --add <item> | --remove <item> | --clear")
+		if jsonOutput {
+			printOutput(false, "Usage: publish-cli config set-array <key> --add <item> | --remove <item> | --clear", nil)
+		} else {
+			fmt.Fprintln(os.Stderr, "Usage: publish-cli config set-array <key> --add <item> | --remove <item> | --clear")
+		}
 		return
 	}
 	key := args[0]
@@ -204,6 +213,8 @@ func applyConfigSet(cfg *config.Config, key, value string) {
 		cfg.Project.Path = value
 	case "output.format":
 		cfg.Output.Format = value
+	default:
+		fmt.Fprintf(os.Stderr, "Warning: unknown config key '%s'\n", key)
 	}
 }
 

@@ -98,13 +98,34 @@ func SaveGlobal(cfg Config) error {
 	return writeJSON(path, cfg)
 }
 
-// SaveProject 保存项目级配置（仅写入项目特有字段）
+// SaveProject 保存项目级配置（仅写入项目特有字段，避免重复保存全局配置）
 func SaveProject(projectPath string, cfg Config) error {
 	path := ProjectPath(projectPath)
-	return writeJSON(path, cfg)
+	// 仅持久化项目相关字段
+	projectOnly := struct {
+		Server struct {
+			URL string `json:"url"`
+		} `json:"server"`
+		Project struct {
+			Name string `json:"name"`
+			Path string `json:"path"`
+			ID   int    `json:"id"`
+		} `json:"project"`
+		Ignore struct {
+			Folders []string `json:"folders"`
+			Files   []string `json:"files"`
+		} `json:"ignore"`
+	}{
+		Project: cfg.Project,
+		Ignore:  cfg.Ignore,
+	}
+	projectOnly.Server.URL = cfg.Server.URL
+	return writeJSON(path, projectOnly)
 }
 
 // merge 项目级覆盖全局级（非零值覆盖）
+// 注意：零值字段（如 Project.ID=0）无法区分「未设置」与「显式设为 0」
+// 如需将 Project.ID 从全局值覆盖为 0，请直接编辑项目配置文件
 func merge(global, project Config) Config {
 	if project.Server.URL != "" {
 		global.Server.URL = project.Server.URL
@@ -115,7 +136,10 @@ func merge(global, project Config) Config {
 	if project.Project.Path != "" {
 		global.Project.Path = project.Project.Path
 	}
-	if project.Project.ID != 0 {
+	// 哨兵值 -1 表示显式清除项目 ID（不常用，大多数情况用非零值）
+	if project.Project.ID == -1 {
+		global.Project.ID = 0
+	} else if project.Project.ID != 0 {
 		global.Project.ID = project.Project.ID
 	}
 	if len(project.Ignore.Folders) > 0 {
@@ -139,5 +163,5 @@ func writeJSON(path string, v interface{}) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }

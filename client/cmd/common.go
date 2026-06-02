@@ -84,11 +84,14 @@ func closeProcessesGracefully(names []string, timeout time.Duration) {
 func launchMainExe(cfg *config.Config) {
 	exeDir, err := config.ExeDir()
 	if err != nil {
+		util.AppendToLog(".", "update.log", fmt.Sprintf("launch main exe: get exe dir failed: %v", err))
 		return
 	}
 	exePath := filepath.Join(exeDir, cfg.MainExeRelativePath)
 	cmd := exec.Command(exePath)
-	cmd.Start()
+	if err := cmd.Start(); err != nil {
+		util.AppendToLog(exeDir, "update.log", fmt.Sprintf("launch main exe failed: %s %v", exePath, err))
+	}
 }
 
 // filepathFromSlash converts forward-slash paths to OS-specific separators.
@@ -113,7 +116,12 @@ func runScript(scriptPath string) {
 	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
 		return
 	}
-	cmd := exec.Command("cmd", "/c", scriptPath)
+	var cmd *exec.Cmd
+	if os.PathSeparator == '\\' {
+		cmd = exec.Command("cmd", "/c", scriptPath)
+	} else {
+		cmd = exec.Command("sh", "-c", scriptPath)
+	}
 	if err := cmd.Start(); err != nil {
 		exeDir, dirErr := config.ExeDir()
 		if dirErr == nil {

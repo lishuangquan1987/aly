@@ -71,11 +71,13 @@ func CopyFile(src, dst string, overwrite bool) error {
 		return fmt.Errorf("复制文件内容失败: %v", err)
 	}
 
-	srcInfo, err := srcFile.Stat()
-	if err != nil {
-		return nil
+	srcInfo, statErr := srcFile.Stat()
+	if statErr != nil {
+		return fmt.Errorf("获取源文件信息失败 %s: %v", src, statErr)
 	}
-	dstFile.Chmod(srcInfo.Mode())
+	if chmodErr := dstFile.Chmod(srcInfo.Mode()); chmodErr != nil {
+		return fmt.Errorf("设置目标文件权限失败 %s: %v", dst, chmodErr)
+	}
 
 	return nil
 }

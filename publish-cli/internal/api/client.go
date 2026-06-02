@@ -35,13 +35,22 @@ func (c *Client) get(path string, result interface{}) error {
 		return fmt.Errorf("GET %s: %w", path, err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("GET %s returned HTTP %d: %s", path, resp.StatusCode, string(body))
+	}
+
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return fmt.Errorf("GET %s read body: %w", path, readErr)
+	}
 	var cr models.CommonResponse
 	if err := json.Unmarshal(body, &cr); err != nil {
-		return fmt.Errorf("parse response: %w", err)
+		return fmt.Errorf("GET %s parse response: %w", path, err)
 	}
 	if !cr.IsSuccess {
-		return fmt.Errorf("%s", cr.ErrorMsg)
+		return fmt.Errorf("GET %s: %s", path, cr.ErrorMsg)
 	}
 	if result != nil && cr.Data != nil {
 		return json.Unmarshal(cr.Data, result)
@@ -52,20 +61,29 @@ func (c *Client) get(path string, result interface{}) error {
 func (c *Client) post(path string, reqBody interface{}, result interface{}) error {
 	data, err := json.Marshal(reqBody)
 	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
+		return fmt.Errorf("POST %s marshal request: %w", path, err)
 	}
 	resp, err := c.hc.Post(c.ServerURL+path, "application/json", bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("POST %s: %w", path, err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("POST %s returned HTTP %d: %s", path, resp.StatusCode, string(body))
+	}
+
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return fmt.Errorf("POST %s read body: %w", path, readErr)
+	}
 	var cr models.CommonResponse
 	if err := json.Unmarshal(body, &cr); err != nil {
-		return fmt.Errorf("parse response: %w", err)
+		return fmt.Errorf("POST %s parse response: %w", path, err)
 	}
 	if !cr.IsSuccess {
-		return fmt.Errorf("%s", cr.ErrorMsg)
+		return fmt.Errorf("POST %s: %s", path, cr.ErrorMsg)
 	}
 	if result != nil && cr.Data != nil {
 		return json.Unmarshal(cr.Data, result)
@@ -101,7 +119,7 @@ func (c *Client) UpdateProject(req models.UpdateProjectRequest) error {
 // DeleteProject 软删除项目
 func (c *Client) DeleteProject(projectID int) error {
 	path := fmt.Sprintf("/api/project/delete_project/%d", projectID)
-	return c.post(path, nil, nil)
+	return c.post(path, struct{}{}, nil)
 }
 
 // GetProjectChangeLogs 获取变更日志
@@ -178,13 +196,21 @@ func (c *Client) UploadFile(localPath, projectName, relativeFileName string) err
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("upload file returned HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	respBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return fmt.Errorf("upload file read response: %w", readErr)
+	}
 	var cr models.CommonResponse
 	if err := json.Unmarshal(respBody, &cr); err != nil {
-		return fmt.Errorf("parse response: %w", err)
+		return fmt.Errorf("upload file parse response: %w", err)
 	}
 	if !cr.IsSuccess {
-		return fmt.Errorf("%s", cr.ErrorMsg)
+		return fmt.Errorf("upload file: %s", cr.ErrorMsg)
 	}
 	return nil
 }

@@ -72,9 +72,6 @@ func UpdateProject(id int, title string, isForceUpdate bool, ignoreFolders []str
 			SetIgnoreFolders(ignoreFolders).
 			SetIgnoreFiles(ignoreFiles).
 			Save(ctx)
-		if err != nil {
-			return err
-		}
 		return err
 	})
 	if err != nil {
@@ -100,6 +97,7 @@ func GetProjectChangeLogs(projectId int) models.CommonResponse {
 		Query().
 		Where(projectchangelog.HasProjectWith(project.IDEQ(projectId)),
 			projectchangelog.IsDeletedEQ(false)).
+		Order(ent.Desc(projectchangelog.FieldID)).
 		All(ctx)
 	if err != nil {
 		return models.NGWithError(err)
