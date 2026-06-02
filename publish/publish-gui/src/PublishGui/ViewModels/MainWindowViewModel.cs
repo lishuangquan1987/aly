@@ -1,8 +1,11 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+﻿using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PublishGui.Models.Cli;
 using PublishGui.Models.Local;
 using PublishGui.Services;
+using PublishGui.Views.Dialogs;
 using Serilog;
 using System;
 using System.Collections.ObjectModel;
@@ -85,15 +88,38 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task AddExistingProjectAsync()
     {
-        // TODO: Show dialog to add existing project
-        StatusMessage = "添加已有项目功能待实现";
+        var dialog = new AddProjectDialog();
+        var mainWindow = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        if (mainWindow == null) return;
+
+        var result = await dialog.ShowDialog<(string Name, string ServerUrl, string Path, int Id)?>(mainWindow);
+        if (result == null) return;
+
+        var name = result.Value.Name;
+        var serverUrl = result.Value.ServerUrl;
+        var path = result.Value.Path;
+        var id = result.Value.Id;
+
+        var config = new ProjectConfig
+        {
+            ProjectName = name,
+            ServerUrl = serverUrl,
+            ProjectPath = path,
+            ProjectId = id
+        };
+
+        _configService.AddProject(config);
+        var vm = new ProjectViewModel(config, _cliService, _configService);
+        Projects.Add(vm);
+        SelectedProject = vm;
+        StatusMessage = $"已添加项目: {name}";
     }
 
     [RelayCommand]
     private async Task AddNewProjectAsync()
     {
-        // TODO: Show dialog to add new project
-        StatusMessage = "新建项目功能待实现";
+        // TODO: Show wizard for creating new project on server
+        StatusMessage = "新建项目向导待实现";
     }
 
     [RelayCommand]
@@ -101,10 +127,11 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (SelectedProject == null) return;
 
-        _configService.RemoveProject(SelectedProject.Config.ProjectName);
+        var name = SelectedProject.Config.ProjectName;
+        _configService.RemoveProject(name);
         Projects.Remove(SelectedProject);
         SelectedProject = Projects.FirstOrDefault();
-        StatusMessage = "已移除项目";
+        StatusMessage = $"已移除项目: {name}";
     }
 
     [RelayCommand]
@@ -122,10 +149,12 @@ public partial class MainWindowViewModel : ObservableObject
             if (result?.Data != null && result.Data.Count > 0)
             {
                 ServerInfo = result.Data[0];
+                StatusMessage = $"服务器: {ServerInfo.OS} {ServerInfo.Platform}, CPU: {ServerInfo.CpuName}";
             }
         }
         catch (Exception ex)
         {
+            StatusMessage = $"获取服务器信息失败: {ex.Message}";
             Log.Error(ex, "Failed to get server info");
         }
     }

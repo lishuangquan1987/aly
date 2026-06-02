@@ -2,8 +2,12 @@
              xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:semi="https://irihi.tech/semi"
+             xmlns:converters="using:PublishGui.Converters"
              RequestedThemeVariant="Light">
     <Application.Styles>
         <semi:SemiTheme Locale="zh-CN" />
     </Application.Styles>
+    <Application.Resources>
+        <converters:BytesToSizeConverter x:Key="BytesToSizeConverter" />
+    </Application.Resources>
 </Application>
