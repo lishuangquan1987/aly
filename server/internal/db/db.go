@@ -60,6 +60,11 @@ func InitDB() {
 	}
 	// SQLite 单写入者限制：防止并发写入导致 "database is locked"
 	db.SetMaxOpenConns(1)
+	// Enable foreign keys (required by modernc.org/sqlite)
+	_, err = db.Exec("PRAGMA foreign_keys = ON")
+	if err != nil {
+		log.Fatalf("failed enabling foreign keys: %v", err)
+	}
 	// Create a custom ent driver with sqlite3 dialect
 	driver := sqldialect.OpenDB("sqlite3", db)
 	Client = ent.NewClient(ent.Driver(driver))

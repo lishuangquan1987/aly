@@ -98,31 +98,31 @@ func DownloadFile(ctx *gin.Context) {
 	cleanPath := filepath.Clean(pathStr)
 	exePath, err := os.Executable()
 	if err != nil {
-		ctx.Redirect(http.StatusNotFound, "/404")
+		ctx.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 	dataDir := filepath.Join(filepath.Dir(exePath), "data")
 	if !strings.HasPrefix(cleanPath, dataDir+string(filepath.Separator)) && cleanPath != dataDir {
-		ctx.Redirect(http.StatusNotFound, "/404")
+		ctx.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
 	if !file.Exists(cleanPath) {
-		ctx.Redirect(http.StatusNotFound, "/404")
+		ctx.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
 	// 使用 http.ServeContent 支持 Range 请求（断点续传）
 	fileReader, err := os.Open(cleanPath)
 	if err != nil {
-		ctx.Redirect(http.StatusNotFound, "/404")
+		ctx.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 	defer fileReader.Close()
 
 	fileInfo, err := fileReader.Stat()
 	if err != nil {
-		ctx.Redirect(http.StatusNotFound, "/404")
+		ctx.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
