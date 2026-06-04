@@ -70,6 +70,10 @@ func CreateProject(ctx *gin.Context) {
 		createProjectDto.IgnoreFolders,
 		createProjectDto.IgnoreFiles)
 
+	if !result.IsSuccess && strings.Contains(result.ErrorMsg, "UNIQUE") || strings.Contains(result.ErrorMsg, "unique") {
+		ctx.JSON(200, models.NG(fmt.Sprintf("项目名称:%s已存在", createProjectDto.Name)))
+		return
+	}
 	ctx.JSON(200, result)
 }
 
@@ -92,7 +96,7 @@ func UpdateProject(ctx *gin.Context) {
 
 	//判断项目名称是否为空
 	if updateProjectDto.Title == "" {
-		ctx.JSON(200, models.NG("项目名称不能为空"))
+		ctx.JSON(200, models.NG("项目抬头不能为空"))
 		return
 	}
 
@@ -235,9 +239,9 @@ func GetProjectOSInfo(ctx *gin.Context) {
 		NumCPU:          runtime.NumCPU(),
 		CPUName:         cpuName,
 		CPUMhz:          cpuMhz,
-		DiskUsed:        float64((diskUsed) / (1024 * 1024 * 1024)), //Byte 转为操作系统的 Gib 单位
-		DiskFree:        float64((diskFree) / (1024 * 1024 * 1024)),
-		DiskTotal:       float64((diskTotal) / (1024 * 1024 * 1024)),
+		DiskUsed:        float64(diskUsed) / float64(1024*1024*1024), //Byte 转为操作系统的 Gib 单位
+		DiskFree:        float64(diskFree) / float64(1024*1024*1024),
+		DiskTotal:       float64(diskTotal) / float64(1024*1024*1024),
 		DiskUsedPercent: diskUsedPercent,
 	})
 	ctx.JSON(200, models.CommonResponse{

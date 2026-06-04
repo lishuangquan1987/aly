@@ -1,6 +1,7 @@
-﻿using Avalonia.Data.Converters;
-using Avalonia.Media;
+using System;
 using System.Globalization;
+using Avalonia.Data.Converters;
+using Avalonia.Media;
 
 namespace PublishGui.Converters;
 
@@ -8,19 +9,16 @@ public class StatusToColorConverter : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is string status)
+        var status = value as string;
+        return status switch
         {
-            return status switch
-            {
-                "new" => new SolidColorBrush(Color.Parse("#52c41a")),
-                "modified" => new SolidColorBrush(Color.Parse("#1890ff")),
-                "deleted" => new SolidColorBrush(Color.Parse("#ff4d4f")),
-                _ => new SolidColorBrush(Color.Parse("#8c8c8c"))
-            };
-        }
-        return new SolidColorBrush(Color.Parse("#8c8c8c"));
+            "new" => new SolidColorBrush(Color.Parse("#22C55E")),
+            "modified" => new SolidColorBrush(Color.Parse("#F59E0B")),
+            "deleted" => new SolidColorBrush(Color.Parse("#EF4444")),
+            _ => new SolidColorBrush(Color.Parse("#6B7280"))
+        };
     }
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => throw new NotImplementedException();
+        => throw new NotSupportedException();
 }

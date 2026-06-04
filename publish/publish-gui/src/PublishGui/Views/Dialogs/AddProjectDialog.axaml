@@ -1,31 +1,74 @@
-﻿<Window x:Class="PublishGui.Views.Dialogs.AddProjectDialog"
+<Window x:Class="PublishGui.Views.Dialogs.AddProjectDialog"
         xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="添加项目"
-        Width="500"
-        Height="400"
-        WindowStartupLocation="CenterOwner">
-    <StackPanel Margin="16" Spacing="12">
-        <TextBlock Text="添加已有项目" FontWeight="Bold" FontSize="16" />
+        xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        Title="Add Project"
+        Width="480" Height="400"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource SemiColorBg0}"
+        CanResize="False">
+    <Grid RowDefinitions="*,Auto" Margin="24,20">
+        <StackPanel Spacing="16">
+            <!-- Server URL -->
+            <StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                    <materialIcons:MaterialIcon Kind="Server" Width="14" Height="14"
+                                                 Foreground="{DynamicResource SemiColorText1}"/>
+                    <TextBlock Text="Server URL" FontWeight="Medium" FontSize="13"
+                               Foreground="{DynamicResource SemiColorText0}"/>
+                </StackPanel>
+                <TextBox Name="ServerUrlBox" Watermark="http://localhost:2000" FontSize="13"/>
+            </StackPanel>
 
-        <TextBlock Text="项目名称" />
-        <TextBox x:Name="ProjectNameBox" Watermark="输入项目名称" />
+            <!-- Project Name -->
+            <StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                    <materialIcons:MaterialIcon Kind="FileDocumentOutline" Width="14" Height="14"
+                                                 Foreground="{DynamicResource SemiColorText1}"/>
+                    <TextBlock Text="Project Name" FontWeight="Medium" FontSize="13"
+                               Foreground="{DynamicResource SemiColorText0}"/>
+                </StackPanel>
+                <TextBox Name="ProjectNameBox" Watermark="e.g. MyApp" FontSize="13"/>
+            </StackPanel>
 
-        <TextBlock Text="服务端地址" />
-        <TextBox x:Name="ServerUrlBox" Watermark="例如: http://localhost:2000" />
+            <!-- Local Path -->
+            <StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                    <materialIcons:MaterialIcon Kind="FolderOutline" Width="14" Height="14"
+                                                 Foreground="{DynamicResource SemiColorText1}"/>
+                    <TextBlock Text="Local Path" FontWeight="Medium" FontSize="13"
+                               Foreground="{DynamicResource SemiColorText0}"/>
+                </StackPanel>
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Name="ProjectPathBox"
+                             Watermark="C:\Projects\MyApp\build" FontSize="13"/>
+                    <Button Grid.Column="1" Name="BrowseBtn" Content="Browse..."
+                            Margin="8,0,0,0" Height="32" Padding="12,0"/>
+                </Grid>
+            </StackPanel>
 
-        <TextBlock Text="本地路径" />
-        <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBox x:Name="LocalPathBox" Watermark="选择项目本地路径" Width="300" />
-            <Button Content="浏览..." x:Name="BrowseButton" />
+            <!-- Project ID -->
+            <StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                    <materialIcons:MaterialIcon Kind="Identifier" Width="14" Height="14"
+                                                 Foreground="{DynamicResource SemiColorText1}"/>
+                    <TextBlock Text="Project ID" FontWeight="Medium" FontSize="13"
+                               Foreground="{DynamicResource SemiColorText0}"/>
+                </StackPanel>
+                <TextBox Name="ProjectIdBox" Text="0" FontSize="13"/>
+                <TextBlock Text="Leave 0 to auto-lookup by name from server."
+                           FontSize="11" Margin="0,4,0,0"
+                           Foreground="{DynamicResource SemiColorText3}"/>
+            </StackPanel>
         </StackPanel>
 
-        <TextBlock Text="项目 ID（可选，已 init 的项目填写）" />
-        <TextBox x:Name="ProjectIdBox" Watermark="0" />
-
-        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <Button Content="取消" x:Name="CancelButton" Classes="Tertiary" />
-            <Button Content="确认添加" x:Name="ConfirmButton" Classes="Primary" />
+        <!-- Buttons -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Spacing="8"
+                    Margin="0,20,0,0">
+            <Button Name="CancelBtn" Content="Cancel" Height="32" Padding="16,0"/>
+            <Button Name="ConfirmBtn" Content="Add Project"
+                    Classes="Primary" Height="32" Padding="16,0"/>
         </StackPanel>
-    </StackPanel>
+    </Grid>
 </Window>

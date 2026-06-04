@@ -1,33 +1,46 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
-using PublishGui.Constants;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace PublishGui.Models.Local;
 
-/// <summary>
-/// 文件列表项（用于 UI 绑定）
-/// </summary>
 public partial class FileItem : ObservableObject
 {
-    /// <summary>相对路径</summary>
     [ObservableProperty]
     private string _relativePath = string.Empty;
 
-    /// <summary>状态（new/modified/deleted/unchanged）</summary>
     [ObservableProperty]
     private string _status = string.Empty;
 
-    /// <summary>本地文件大小（字节）</summary>
     [ObservableProperty]
     private long _localSize;
 
-    /// <summary>服务端文件大小（字节）</summary>
     [ObservableProperty]
     private long _serverSize;
 
-    /// <summary>是否选中</summary>
+    [ObservableProperty]
+    private string _localMd5 = string.Empty;
+
+    [ObservableProperty]
+    private string _serverMd5 = string.Empty;
+
     [ObservableProperty]
     private bool _isSelected = true;
 
-    /// <summary>状态的中文显示文本</summary>
-    public string StatusDisplay => FileStatus.GetDisplayText(Status);
+    public string StatusDisplay => Status switch
+    {
+        "new" => "New",
+        "modified" => "Modified",
+        "deleted" => "Deleted",
+        _ => Status
+    };
+
+    public static FileItem FromCliItem(Models.Cli.FileStatusItem item) => new()
+    {
+        RelativePath = item.RelativePath,
+        Status = item.Status,
+        LocalSize = item.LocalSize,
+        ServerSize = item.ServerSize,
+        LocalMd5 = item.LocalMd5,
+        ServerMd5 = item.ServerMd5,
+        IsSelected = item.Status is "new" or "modified"
+    };
 }

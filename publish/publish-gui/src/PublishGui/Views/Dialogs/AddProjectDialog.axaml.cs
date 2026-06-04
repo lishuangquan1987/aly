@@ -1,56 +1,63 @@
-﻿using Avalonia.Controls;
+using System;
+using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using System;
+using PublishGui.Models.Local;
+using PublishGui.Services;
 
 namespace PublishGui.Views.Dialogs;
 
 public partial class AddProjectDialog : Window
 {
-    public string ProjectName { get; private set; } = string.Empty;
-    public string ServerUrl { get; private set; } = string.Empty;
-    public string LocalPath { get; private set; } = string.Empty;
-    public int ProjectId { get; private set; }
-
     public AddProjectDialog()
     {
         InitializeComponent();
-        CancelButton.Click += (_, _) => Close(null);
-        ConfirmButton.Click += OnConfirm;
-        BrowseButton.Click += OnBrowse;
+        ConfirmBtn.Click += OnConfirm;
+        CancelBtn.Click += (_, _) => Close(null);
+        BrowseBtn.Click += OnBrowse;
     }
 
     private async void OnBrowse(object? sender, RoutedEventArgs e)
     {
-        var topLevel = GetTopLevel(this);
-        if (topLevel == null) return;
-
-        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "选择项目路径",
-            AllowMultiple = false
-        });
-
+        var folders = await StorageProvider.OpenFolderPickerAsync(
+            new FolderPickerOpenOptions { Title = "Select project folder" });
         if (folders.Count > 0)
-        {
-            LocalPathBox.Text = folders[0].Path.LocalPath;
-        }
+            ProjectPathBox.Text = folders[0].Path.LocalPath;
     }
 
     private void OnConfirm(object? sender, RoutedEventArgs e)
     {
-        ProjectName = ProjectNameBox.Text ?? string.Empty;
-        ServerUrl = ServerUrlBox.Text ?? string.Empty;
-        LocalPath = LocalPathBox.Text ?? string.Empty;
-        int.TryParse(ProjectIdBox.Text, out var id);
-        ProjectId = id;
-
-        if (string.IsNullOrWhiteSpace(ProjectName) || string.IsNullOrWhiteSpace(ServerUrl) || string.IsNullOrWhiteSpace(LocalPath))
+        if (string.IsNullOrWhiteSpace(ServerUrlBox.Text) ||
+            string.IsNullOrWhiteSpace(ProjectNameBox.Text) ||
+            string.IsNullOrWhiteSpace(ProjectPathBox.Text))
         {
-            // TODO: Show error message
+            var msg = new Window
+            {
+                Title = "Validation",
+                Width = 300, Height = 100,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Content = new TextBlock
+                {
+                    Text = "Please fill in all required fields.",
+                    Margin = new Avalonia.Thickness(16),
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center
+                }
+            };
+            msg.ShowDialog(this);
             return;
         }
 
-        Close((ProjectName, ServerUrl, LocalPath, ProjectId));
+        var cfg = new ProjectConfig
+        {
+            ServerUrl = ServerUrlBox.Text.Trim(),
+            ProjectName = ProjectNameBox.Text.Trim(),
+            ProjectPath = ProjectPathBox.Text.Trim(),
+            ProjectId = int.TryParse(ProjectIdBox.Text, out var id) ? id : 0
+        };
+
+        var cfgService = new ConfigService();
+        cfgService.AddProject(cfg);
+        Close(cfg);
     }
 }

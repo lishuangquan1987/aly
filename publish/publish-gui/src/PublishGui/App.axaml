@@ -1,14 +1,17 @@
-﻿<Application x:Class="PublishGui.App"
+<Application x:Class="PublishGui.App"
              xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:semi="https://irihi.tech/semi"
+             xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:converters="using:PublishGui.Converters"
              RequestedThemeVariant="Light">
     <Application.Styles>
         <semi:SemiTheme Locale="zh-CN" />
+        <materialIcons:MaterialIconStyles />
     </Application.Styles>
     <Application.Resources>
-        <converters:BytesToSizeConverter x:Key="BytesToSizeConverter" />
-        <converters:StatusToColorConverter x:Key="StatusToColorConverter" />
+        <converters:BytesToSizeConverter x:Key="BytesToSize" />
+        <converters:StatusToColorConverter x:Key="StatusColor" />
+        <converters:InverseBoolConverter x:Key="InvBool" />
     </Application.Resources>
 </Application>

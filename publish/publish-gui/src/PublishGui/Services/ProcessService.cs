@@ -1,100 +1,72 @@
-﻿using Serilog;
 using System;
 using System.Diagnostics;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace PublishGui.Services;
 
 public class ProcessResult
 {
-    public int ExitCode { get; set; }
+    public bool Success { get; set; }
     public string StandardOutput { get; set; } = string.Empty;
     public string StandardError { get; set; } = string.Empty;
-    public bool Success => ExitCode == 0;
+    public int ExitCode { get; set; }
 }
 
 public class ProcessService
 {
     public async Task<ProcessResult> RunAsync(
-        string fileName,
-        string arguments,
-        string? workingDirectory = null,
-        int timeoutMs = 30000,
-        CancellationToken cancellationToken = default)
+        string fileName, string arguments, string? workingDir = null, int timeoutMs = 30000)
     {
-        Log.Information("Running: {FileName} {Arguments}", fileName, arguments);
+        var sbOut = new StringBuilder();
+        var sbErr = new StringBuilder();
 
         var psi = new ProcessStartInfo
         {
             FileName = fileName,
             Arguments = arguments,
+            UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
         };
+        if (workingDir != null) psi.WorkingDirectory = workingDir;
 
-        if (!string.IsNullOrEmpty(workingDirectory))
-        {
-            psi.WorkingDirectory = workingDirectory;
-        }
+        using var proc = new Process { StartInfo = psi };
 
-        using var process = new Process { StartInfo = psi };
-        
-        var outputBuilder = new StringBuilder();
-        var errorBuilder = new StringBuilder();
-
-        process.OutputDataReceived += (_, e) =>
-        {
-            if (e.Data != null) outputBuilder.AppendLine(e.Data);
-        };
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (e.Data != null) errorBuilder.AppendLine(e.Data);
-        };
+        proc.OutputDataReceived += (_, e) => { if (e.Data != null) sbOut.AppendLine(e.Data); };
+        proc.ErrorDataReceived += (_, e) => { if (e.Data != null) sbErr.AppendLine(e.Data); };
 
         try
         {
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
+            proc.Start();
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
 
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(timeoutMs);
-
-            await process.WaitForExitAsync(cts.Token);
-
-            var result = new ProcessResult
+            if (!proc.WaitForExit(timeoutMs))
             {
-                ExitCode = process.ExitCode,
-                StandardOutput = outputBuilder.ToString().TrimEnd(),
-                StandardError = errorBuilder.ToString().TrimEnd()
-            };
+                proc.Kill();
+                return new ProcessResult { Success = false, StandardError = "Process timed out" };
+            }
 
-            Log.Information("Process exited with {Code}, Output length: {OutputLen}", 
-                result.ExitCode, result.StandardOutput.Length);
+            // Wait for async output to complete
+            proc.WaitForExit();
 
-            return result;
-        }
-        catch (OperationCanceledException)
-        {
-            try { process.Kill(true); } catch { }
             return new ProcessResult
             {
-                ExitCode = -1,
-                StandardError = "Process timed out or was cancelled"
+                Success = proc.ExitCode == 0,
+                StandardOutput = sbOut.ToString().Trim(),
+                StandardError = sbErr.ToString().Trim(),
+                ExitCode = proc.ExitCode
             };
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to run process: {FileName}", fileName);
-            return new ProcessResult
-            {
-                ExitCode = -1,
-                StandardError = ex.Message
-            };
+            Log.Error(ex, "Process {File} {Args} failed", fileName, arguments);
+            return new ProcessResult { Success = false, StandardError = ex.Message };
         }
     }
 }

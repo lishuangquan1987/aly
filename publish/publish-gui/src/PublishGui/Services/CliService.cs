@@ -1,23 +1,18 @@
-﻿using Newtonsoft.Json;
-using PublishGui.Models.Cli;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using PublishGui.Models.Cli;
+using Serilog;
 
 namespace PublishGui.Services;
 
 public class CliService
 {
-    private readonly ProcessService _processService;
-    private string _cliPath = string.Empty;
-
-    public CliService(ProcessService processService)
-    {
-        _processService = processService;
-    }
+    private readonly ProcessService _ps;
+    private string _cliPath;
 
     public string CliPath
     {
@@ -25,104 +20,42 @@ public class CliService
         set => _cliPath = value;
     }
 
-    public async Task<string?> FindCliAsync()
+    public CliService(ProcessService ps)
     {
-        // 1. Check same directory as GUI executable
-        var currentDir = AppDomain.CurrentDomain.BaseDirectory;
-        var sameDirPath = Path.Combine(currentDir, "publish-cli.exe");
-        if (File.Exists(sameDirPath))
-        {
-            _cliPath = sameDirPath;
-            Log.Information("Found publish-cli in same directory: {Path}", _cliPath);
-            return _cliPath;
-        }
-
-        // 2. Check publish/publish-cli relative to GUI
-        var guiDir = new DirectoryInfo(currentDir);
-        while (guiDir != null)
-        {
-            // Check publish/publish-cli/publish-cli.exe
-            var publishCliPath = Path.Combine(guiDir.FullName, "publish", "publish-cli", "publish-cli.exe");
-            if (File.Exists(publishCliPath))
-            {
-                _cliPath = publishCliPath;
-                Log.Information("Found publish-cli in publish directory: {Path}", _cliPath);
-                return _cliPath;
-            }
-
-            // Check publish-cli/publish-cli.exe (if running from publish-gui)
-            var cliPath2 = Path.Combine(guiDir.FullName, "publish-cli", "publish-cli.exe");
-            if (File.Exists(cliPath2))
-            {
-                _cliPath = cliPath2;
-                Log.Information("Found publish-cli in sibling directory: {Path}", _cliPath);
-                return _cliPath;
-            }
-
-            guiDir = guiDir.Parent;
-        }
-
-        // 3. Check PATH environment variable
-        var pathEnv = Environment.GetEnvironmentVariable("PATH");
-        if (pathEnv != null)
-        {
-            foreach (var pathDir in pathEnv.Split(';'))
-            {
-                if (string.IsNullOrWhiteSpace(pathDir)) continue;
-                var fullPath = Path.Combine(pathDir.Trim(), "publish-cli.exe");
-                if (File.Exists(fullPath))
-                {
-                    _cliPath = fullPath;
-                    Log.Information("Found publish-cli in PATH: {Path}", _cliPath);
-                    return _cliPath;
-                }
-            }
-        }
-
-        Log.Warning("publish-cli.exe not found");
-        return null;
+        _ps = ps;
+        _cliPath = FindCliDefault();
     }
 
-    public async Task<CliOutput<T>?> RunAsync<T>(string arguments, string? projectPath = null, int timeoutMs = 30000)
+    public bool Found => !string.IsNullOrEmpty(_cliPath) && File.Exists(_cliPath);
+
+    private static string FindCliDefault()
     {
-        if (string.IsNullOrEmpty(_cliPath))
-        {
-            return new CliOutput<T>
-            {
-                IsSuccess = false,
-                ErrorMsg = "publish-cli 路径未配置，请在项目设置中配置 publish-cli.exe 路径"
-            };
-        }
+        var exeDir = AppDomain.CurrentDomain.BaseDirectory;
+        // Check same dir as GUI
+        var same = Path.Combine(exeDir, "publish-cli.exe");
+        if (File.Exists(same)) return same;
+        // Check publish/publish-cli relative
+        var rel = Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "..", "publish-cli", "publish-cli.exe"));
+        if (File.Exists(rel)) return rel;
+        return string.Empty;
+    }
 
-        var args = $"{arguments} --json";
-        if (!string.IsNullOrEmpty(projectPath))
-        {
-            args += $" --path \"{projectPath}\"";
-        }
+    public string? FindCli() => Found ? _cliPath : null;
 
-        var result = await _processService.RunAsync(_cliPath, args, timeoutMs: timeoutMs);
+    // ── Generic runner ──────────────────────────────────
 
-        Log.Information("CLI result: ExitCode={Code}, Output={Output}", result.ExitCode, 
-            result.StandardOutput.Length > 200 ? result.StandardOutput[..200] + "..." : result.StandardOutput);
+    public async Task<CliOutput<T>?> RunAsync<T>(string args, string projectPath, int timeoutMs = 30000)
+    {
+        if (!Found) return Fail<T>("publish-cli.exe not found");
+
+        var fullArgs = $"{args} --json --path \"{projectPath}\"";
+        var result = await _ps.RunAsync(_cliPath, fullArgs, timeoutMs: timeoutMs);
 
         if (!result.Success)
-        {
-            Log.Error("publish-cli error: {Error}", result.StandardError);
-            return new CliOutput<T>
-            {
-                IsSuccess = false,
-                ErrorMsg = string.IsNullOrEmpty(result.StandardError) ? "执行失败" : result.StandardError
-            };
-        }
+            return Fail<T>(string.IsNullOrEmpty(result.StandardError) ? "execution failed" : result.StandardError);
 
         if (string.IsNullOrWhiteSpace(result.StandardOutput))
-        {
-            return new CliOutput<T>
-            {
-                IsSuccess = false,
-                ErrorMsg = "publish-cli 没有返回任何输出"
-            };
-        }
+            return Fail<T>("no output from publish-cli");
 
         try
         {
@@ -130,116 +63,50 @@ public class CliService
         }
         catch (JsonException ex)
         {
-            Log.Error(ex, "Failed to parse CLI output: {Output}", result.StandardOutput);
-            return new CliOutput<T>
-            {
-                IsSuccess = false,
-                ErrorMsg = $"解析输出失败: {ex.Message}"
-            };
+            Log.Error(ex, "JSON parse failed: {Output}", result.StandardOutput);
+            return Fail<T>($"parse output: {ex.Message}");
         }
     }
 
-    public async Task<CliOutput<object>?> RunAsync(string arguments, string? projectPath = null, int timeoutMs = 30000)
-    {
-        return await RunAsync<object>(arguments, projectPath, timeoutMs);
-    }
+    private static CliOutput<T> Fail<T>(string msg) => new() { IsSuccess = false, ErrorMsg = msg };
 
-    // Status command
-    public async Task<CliOutput<StatusData>?> GetStatusAsync(string projectPath)
-    {
-        return await RunAsync<StatusData>("status", projectPath);
-    }
+    // ── Commands ─────────────────────────────────────────
 
-    // Add --all command
-    public async Task<CliOutput<object>?> AddAllAsync(string projectPath)
-    {
-        return await RunAsync("add --all", projectPath);
-    }
+    public Task<CliOutput<StatusData>?> GetStatusAsync(string projectPath)
+        => RunAsync<StatusData>("status", projectPath);
 
-    // Add specific files
-    public async Task<CliOutput<object>?> AddFilesAsync(string projectPath, IEnumerable<string> files)
-    {
-        var fileList = string.Join(" ", files.Select(f => $"\"{f}\""));
-        return await RunAsync($"add {fileList}", projectPath);
-    }
+    public Task<CliOutput<object>?> AddFilesAsync(string projectPath, List<string> files)
+        => RunAsync<object>($"add {string.Join(" ", files.Select(f => $"\"{f}\""))}", projectPath);
 
-    // Reset --all command
-    public async Task<CliOutput<object>?> ResetAllAsync(string projectPath)
-    {
-        return await RunAsync("reset --all", projectPath);
-    }
+    public Task<CliOutput<object>?> AddAllAsync(string projectPath)
+        => RunAsync<object>("add --all", projectPath);
 
-    // Reset specific files
-    public async Task<CliOutput<object>?> ResetFilesAsync(string projectPath, IEnumerable<string> files)
-    {
-        var fileList = string.Join(" ", files.Select(f => $"\"{f}\""));
-        return await RunAsync($"reset {fileList}", projectPath);
-    }
+    public Task<CliOutput<object>?> ResetAllAsync(string projectPath)
+        => RunAsync<object>("reset --all", projectPath);
 
-    // Publish command
-    public async Task<CliOutput<object>?> PublishAsync(string projectPath, string version, string message)
-    {
-        return await RunAsync($"publish --version \"{version}\" --message \"{message}\"", projectPath, timeoutMs: 120000);
-    }
+    public Task<CliOutput<object>?> PushAsync(string projectPath, string version, string message)
+        => RunAsync<object>($"push --version \"{version}\" --message \"{message}\"", projectPath, 120000);
 
-    // Push command
-    public async Task<CliOutput<object>?> PushAsync(string projectPath, string version, string message)
-    {
-        return await RunAsync($"push --version \"{version}\" --message \"{message}\"", projectPath, timeoutMs: 120000);
-    }
+    public Task<CliOutput<object>?> PublishAsync(string projectPath, string version, string message)
+        => RunAsync<object>($"publish --version \"{version}\" --message \"{message}\"", projectPath, 120000);
 
-    // Log command
-    public async Task<CliOutput<List<ChangeLog>>> GetLogAsync(string projectPath, int limit = 20)
-    {
-        return await RunAsync<List<ChangeLog>>($"log --limit {limit}", projectPath);
-    }
+    public Task<CliOutput<List<ChangeLog>>> GetLogAsync(string projectPath, int limit = 20)
+        => RunAsync<List<ChangeLog>>($"log --limit {limit}", projectPath);
 
-    // Config init command
-    public async Task<CliOutput<object>?> ConfigInitAsync(string projectPath, string serverUrl, string projectName, int projectId = 0)
+    public Task<CliOutput<object>?> ConfigInitAsync(string projectPath, string serverUrl, string projectName, int projectId)
     {
         var args = $"config init --server \"{serverUrl}\" --project \"{projectName}\" --path \"{projectPath}\"";
-        if (projectId > 0)
-        {
-            args += $" --id {projectId}";
-        }
-        return await RunAsync(args, projectPath);
+        if (projectId > 0) args += $" --id {projectId}";
+        return RunAsync<object>(args, projectPath);
     }
 
-    // Config set command
-    public async Task<CliOutput<object>?> ConfigSetAsync(string projectPath, string key, string value)
-    {
-        return await RunAsync($"config set {key} \"{value}\"", projectPath);
-    }
+    public Task<CliOutput<List<ProjectInfo>>?> ProjectListAsync(string serverUrl)
+        => RunAsync<List<ProjectInfo>>($"project list --server \"{serverUrl}\"", string.Empty);
 
-    // Config list command
-    public async Task<CliOutput<object>?> ConfigListAsync(string projectPath)
-    {
-        return await RunAsync("config list", projectPath);
-    }
-
-    // Project list command
-    public async Task<CliOutput<List<ProjectInfo>>> ProjectListAsync(string serverUrl)
-    {
-        return await RunAsync<List<ProjectInfo>>($"project list --server \"{serverUrl}\"");
-    }
-
-    // Project create command
-    public async Task<CliOutput<ProjectInfo>> ProjectCreateAsync(string serverUrl, string name, string title, bool forceUpdate = false)
+    public Task<CliOutput<ProjectInfo>?> ProjectCreateAsync(string serverUrl, string name, string title, bool forceUpdate)
     {
         var args = $"project create --server \"{serverUrl}\" --name \"{name}\" --title \"{title}\"";
         if (forceUpdate) args += " --force-update";
-        return await RunAsync<ProjectInfo>(args);
-    }
-
-    // Project delete command
-    public async Task<CliOutput<object>?> ProjectDeleteAsync(string serverUrl, int projectId)
-    {
-        return await RunAsync($"project delete --server \"{serverUrl}\" --id {projectId}");
-    }
-
-    // Server info command
-    public async Task<CliOutput<List<ServerOsInfo>>> ServerInfoAsync(string serverUrl, int projectId)
-    {
-        return await RunAsync<List<ServerOsInfo>>($"server info --server \"{serverUrl}\" --id {projectId}");
+        return RunAsync<ProjectInfo>(args, string.Empty);
     }
 }

@@ -375,3 +375,21 @@ private async Task SomeOperation()
 - **Avalonia 12 官方文档**: https://docs.avaloniaui.net/docs/welcome
 - **Semi.Avalonia 使用参考**: https://github.com/irihi/Semi.Avalonia
 - **Ursa.Avalonia 使用参考**: https://github.com/irihi/Ursa
+
+
+***
+
+## 十四、PowerShell Encoding Warning
+
+> **CRITICAL**: PowerShell `Set-Content` without `-Encoding UTF8` will corrupt
+> Chinese characters in UTF-8 source files (GBK-interpreted-as-Latin1 double encoding).
+>
+> **ALWAYS use Python** for editing files that contain Chinese/Unicode text.
+> Template:
+>   python -c "with open(path,'r',encoding='utf-8') as f: c=f.read(); ..."
+>
+> **DO NOT use**: `Set-Content`, `Out-File`, `echo >` without explicit `-Encoding UTF8`.
+> **DO NOT use**: `Get-Content | Set-Content` pipeline (may change encoding mid-stream).
+>
+> **If a file is already garbled**: `git checkout -- <file>` to restore, then reapply
+> changes using Python with `encoding='utf-8'`.
