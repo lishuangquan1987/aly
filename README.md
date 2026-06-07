@@ -8,12 +8,9 @@
 ClientUpdator/
 ├── server/                    # 服务端（Go 1.25 + Gin + Ent + SQLite）
 ├── client/                    # 客户端更新程序（Go 1.10，兼容 Windows XP）
-├── publish_tool_avalonia/     # 发布工具 GUI（Avalonia 12 桌面应用）
-├── publish-cli/               # 发布工具 CLI（Go 1.25 + cobra，命令行列发布）
-├── .trae/
-│   └── documents/             # 设计文档
-│       ├── publish-cli-plan.md
-│       └── avalonia-publish-tool-plan.md
+├── publish/
+│   ├── publish-gui/           # 发布工具 GUI（Avalonia 12 桌面应用）
+│   └── publish-cli/           # 发布工具 CLI（Go 1.25 + cobra，命令行发布）
 └── README.md
 ```
 
@@ -173,18 +170,23 @@ PackageFolder/
 
 ## 发布工具
 
-### publish_tool_avalonia（GUI）
+### publish-gui（GUI）
 
-面向发布者的桌面工具（Avalonia 12），提供可视化的项目管理、文件上传和版本发布功能。详细文档将在功能稳定后补充。
+面向发布者的桌面工具（Avalonia 12），提供可视化的项目管理、文件上传和版本发布功能。
+
+```bash
+cd publish/publish-gui
+dotnet build
+```
 
 ### publish-cli（命令行）✅ 可用
 
-publish-cli 是 `publish_tool_avalonia` 的命令行版本，使用 Go 1.25 + cobra 构建，面向 CI/CD 集成和终端操作。工作流借鉴 Git（`status` → `add` → `push`），所有 JSON 输出统一使用 `camelCase`。
+publish-cli 是 publish-gui 的命令行版本，使用 Go 1.25 + cobra 构建，面向 CI/CD 集成和终端操作。工作流借鉴 Git（`status` → `add` → `push`），所有 JSON 输出统一使用 `camelCase`。
 
 #### 构建
 
 ```bash
-cd publish-cli
+cd publish/publish-cli
 go build -o publish-cli.exe ./cmd/publish-cli
 ```
 
@@ -538,14 +540,14 @@ CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o server-darwi
 ### publish-cli
 
 ```bash
-cd publish-cli
+cd publish/publish-cli
 go build -ldflags="-s -w" -o publish-cli.exe ./cmd/publish-cli
 ```
 
 交叉编译（`CGO_ENABLED=0`）：
 
 ```bash
-cd publish-cli
+cd publish/publish-cli
 # Linux amd64
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o publish-cli-linux-amd64 ./cmd/publish-cli
 # Linux arm64
