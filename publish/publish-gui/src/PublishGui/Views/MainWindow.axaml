@@ -120,7 +120,7 @@
             </Border>
 
             <!-- CENTER: File panels -->
-            <Grid Grid.Column="1" RowDefinitions="*,Auto,*">
+            <Grid Grid.Column="1" RowDefinitions="*,*,Auto">
 
                 <!-- ── Unstaged ── -->
                 <Border Grid.Row="0" Background="{DynamicResource SemiColorBg0}">
@@ -197,65 +197,8 @@
                     </Grid>
                 </Border>
 
-                <!-- ── Publish bar ── -->
-                <Border Grid.Row="1" Padding="14,12"
-                        Background="{DynamicResource SemiColorBg1}"
-                        BorderBrush="{DynamicResource SemiColorBorder}"
-                        BorderThickness="0,1">
-                    <StackPanel Spacing="10">
-                        <Grid ColumnDefinitions="Auto,*,Auto" Height="30">
-                            <TextBlock Text="版本号" VerticalAlignment="Center"
-                                       FontSize="13" FontWeight="Medium"
-                                       Margin="0,0,10,0"
-                                       Foreground="{DynamicResource SemiColorText1}"/>
-                            <TextBox Grid.Column="1" Text="{Binding NewVersion}"
-                                     Watermark="例如 V1.0.1"
-                                     VerticalContentAlignment="Center" FontSize="13"/>
-                            <StackPanel Grid.Column="2" Orientation="Horizontal"
-                                        VerticalAlignment="Center" Margin="12,0,0,0">
-                                <materialIcons:MaterialIcon Kind="TagOutline" Width="14" Height="14"
-                                                        FontSize="14"
-                                                        Foreground="{DynamicResource SemiColorText2}"/>
-                                <TextBlock Text="{Binding CurrentVersion}"
-                                           FontSize="12" Margin="6,0,0,0"
-                                           Foreground="{DynamicResource SemiColorText2}"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <TextBox Text="{Binding CommitMessage}"
-                                 Watermark="描述此版本的变更内容..."
-                                 MinHeight="52" AcceptsReturn="True"
-                                 TextWrapping="Wrap" FontSize="13"/>
-
-                        <!-- Progress -->
-                        <StackPanel IsVisible="{Binding IsUploading}" Spacing="6">
-                            <ProgressBar IsIndeterminate="True" Height="4"/>
-                            <TextBlock FontSize="11"
-                                       Foreground="{DynamicResource SemiColorText2}">
-                                <Run Text="上传中 "/>
-                                <Run Text="{Binding UploadProgress}" FontWeight="SemiBold"
-                                     Foreground="{DynamicResource SemiColorPrimary}"/>
-                                <Run Text=" / "/>
-                                <Run Text="{Binding UploadTotal}" FontWeight="SemiBold"/>
-                                <Run Text=" 个文件"/>
-                            </TextBlock>
-                        </StackPanel>
-
-                        <Button Command="{Binding PublishCommand}"
-                                IsEnabled="{Binding IsUploading, Converter={StaticResource InvBool}}"
-                                Classes="Primary" Height="36"
-                                FontSize="14" FontWeight="SemiBold">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <materialIcons:MaterialIcon Kind="Upload" Width="18" Height="18"
-                                                        FontSize="18"/>
-                                <TextBlock Text="发布暂存文件" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
-                </Border>
-
                 <!-- ── Staged ── -->
-                <Border Grid.Row="2" Background="{DynamicResource SemiColorBg0}">
+                <Border Grid.Row="1" Background="{DynamicResource SemiColorBg0}">
                     <Grid RowDefinitions="Auto,*">
                         <Border Padding="14,10"
                                 BorderBrush="{DynamicResource SemiColorBorder}"
@@ -322,6 +265,62 @@
                             </ListBox.ItemTemplate>
                         </ListBox>
                     </Grid>
+                </Border>
+
+                <!-- ── Publish bar ── -->
+                <Border Grid.Row="2" Padding="14,12"
+                        Background="{DynamicResource SemiColorBg1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="0,1,0,0">
+                    <StackPanel Spacing="10">
+                        <Grid ColumnDefinitions="Auto,*,Auto" Height="30">
+                            <TextBlock Text="版本号" VerticalAlignment="Center"
+                                       FontSize="13" FontWeight="Medium"
+                                       Margin="0,0,10,0"
+                                       Foreground="{DynamicResource SemiColorText1}"/>
+                            <TextBox Grid.Column="1" Text="{Binding NewVersion}"
+                                     Watermark="例如 V1.0.1"
+                                     VerticalContentAlignment="Center" FontSize="13"/>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                        VerticalAlignment="Center" Margin="12,0,0,0">
+                                <materialIcons:MaterialIcon Kind="TagOutline" Width="14" Height="14"
+                                                        FontSize="14"
+                                                        Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="{Binding CurrentVersion}"
+                                           FontSize="12" Margin="6,0,0,0"
+                                           Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBox Text="{Binding CommitMessage}"
+                                 Watermark="描述此版本的变更内容..."
+                                 MinHeight="52" AcceptsReturn="True"
+                                 TextWrapping="Wrap" FontSize="13"/>
+
+                        <!-- Progress -->
+                        <StackPanel IsVisible="{Binding IsUploading}" Spacing="6">
+                            <ProgressBar IsIndeterminate="True" Height="4"/>
+                            <TextBlock FontSize="11"
+                                       Foreground="{DynamicResource SemiColorText2}">
+                                <Run Text="上传中 "/>
+                                <Run Text="{Binding UploadProgress}" FontWeight="SemiBold"
+                                     Foreground="{DynamicResource SemiColorPrimary}"/>
+                                <Run Text=" / "/>
+                                <Run Text="{Binding UploadTotal}" FontWeight="SemiBold"/>
+                                <Run Text=" 个文件"/>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <Button Command="{Binding PublishCommand}"
+                                Classes="Primary" Height="36"
+                                FontSize="14" FontWeight="SemiBold">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <materialIcons:MaterialIcon Kind="Upload" Width="18" Height="18"
+                                                        FontSize="18"/>
+                                <TextBlock Text="发布暂存文件" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
                 </Border>
             </Grid>
 

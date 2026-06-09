@@ -49,16 +49,44 @@ public partial class MainWindowViewModel : ObservableObject
         CliPath = _cli.CliPath;
         Log.Information("MainWindowViewModel 初始化: CliFound={Found}, CliPath={Path}", IsCliFound, CliPath);
 
-        RefreshCommand = new AsyncRelayCommand(RefreshAsync);
-        AddAllCommand = new AsyncRelayCommand(AddAllAsync);
-        ResetAllCommand = new AsyncRelayCommand(ResetAllAsync);
-        AddSelectedCommand = new AsyncRelayCommand(AddSelectedAsync);
-        ResetSelectedCommand = new AsyncRelayCommand(ResetSelectedAsync);
-        PublishCommand = new AsyncRelayCommand(PublishAsync);
-        AddProjectCommand = new AsyncRelayCommand(AddProjectAsync);
-        RemoveProjectCommand = new AsyncRelayCommand(RemoveProjectAsync);
+        RefreshCommand       = new AsyncRelayCommand(RefreshAsync,       () => SelectedProject != null && !IsBusy);
+        AddAllCommand        = new AsyncRelayCommand(AddAllAsync,        () => SelectedProject != null && !IsBusy);
+        ResetAllCommand      = new AsyncRelayCommand(ResetAllAsync,      () => SelectedProject != null && !IsBusy);
+        AddSelectedCommand   = new AsyncRelayCommand(AddSelectedAsync,   () => SelectedProject != null && !IsBusy);
+        ResetSelectedCommand = new AsyncRelayCommand(ResetSelectedAsync, () => SelectedProject != null && !IsBusy);
+        PublishCommand       = new AsyncRelayCommand(PublishAsync,       () => SelectedProject != null && !IsBusy && StagedFiles.Count > 0);
+        AddProjectCommand    = new AsyncRelayCommand(AddProjectAsync);
+        RemoveProjectCommand = new AsyncRelayCommand(RemoveProjectAsync, () => SelectedProject != null);
 
         LoadProjects();
+    }
+
+    partial void OnIsBusyChanged(bool value)
+    {
+        RefreshCommand.NotifyCanExecuteChanged();
+        AddAllCommand.NotifyCanExecuteChanged();
+        ResetAllCommand.NotifyCanExecuteChanged();
+        AddSelectedCommand.NotifyCanExecuteChanged();
+        ResetSelectedCommand.NotifyCanExecuteChanged();
+        PublishCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSelectedProjectChanged(ProjectConfig? value)
+    {
+        Log.Information("切换项目: {Name}", value?.ProjectName ?? "(无)");
+        RefreshCommand.NotifyCanExecuteChanged();
+        AddAllCommand.NotifyCanExecuteChanged();
+        ResetAllCommand.NotifyCanExecuteChanged();
+        AddSelectedCommand.NotifyCanExecuteChanged();
+        ResetSelectedCommand.NotifyCanExecuteChanged();
+        PublishCommand.NotifyCanExecuteChanged();
+        RemoveProjectCommand.NotifyCanExecuteChanged();
+        if (value != null) _ = RefreshAsync();
+    }
+
+    partial void OnStagedFilesChanged(ObservableCollection<FileItem> value)
+    {
+        PublishCommand.NotifyCanExecuteChanged();
     }
 
     private void LoadProjects()
@@ -74,14 +102,6 @@ public partial class MainWindowViewModel : ObservableObject
         Log.Information("共加载 {Count} 个项目", Projects.Count);
         if (Projects.Count > 0) SelectedProject = Projects[0];
     }
-
-    partial void OnSelectedProjectChanged(ProjectConfig? value)
-    {
-        Log.Information("切换项目: {Name}", value?.ProjectName ?? "(无)");
-        if (value != null) _ = RefreshAsync();
-    }
-
-    // ── 内部：不设 IsBusy，不检查守卫，不触碰任何 UI 绑定可能为 null 的路径 ──
 
     private async Task RefetchDataAsync()
     {
@@ -107,8 +127,8 @@ public partial class MainWindowViewModel : ObservableObject
             var d = result.Data;
             var unstaged = new ObservableCollection<FileItem>();
             var staged = new ObservableCollection<FileItem>();
-            foreach (var f in d.Unstaged??[]) unstaged.Add(FileItem.FromCliItem(f));
-            foreach (var f in d.Staged??[]) staged.Add(FileItem.FromCliItem(f));
+            foreach (var f in d.Unstaged ?? []) unstaged.Add(FileItem.FromCliItem(f));
+            foreach (var f in d.Staged ?? []) staged.Add(FileItem.FromCliItem(f));
 
             UnstagedFiles = unstaged;
             StagedFiles = staged;
@@ -133,11 +153,9 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    // ── 命令实现 ──
-
     private async Task RefreshAsync()
     {
-        if (SelectedProject == null || IsBusy) return;
+        if (IsBusy) return;
         IsBusy = true;
         try { await RefetchDataAsync(); }
         finally { IsBusy = false; }
@@ -145,8 +163,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task AddAllAsync()
     {
-        if (SelectedProject == null || IsBusy) return;
-        var projectPath = SelectedProject.ProjectPath;
+        if (IsBusy) return;
+        var projectPath = SelectedProject?.ProjectPath;
         if (string.IsNullOrWhiteSpace(projectPath)) { StatusMessage = "项目路径无效"; return; }
         IsBusy = true;
         try
@@ -165,8 +183,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task ResetAllAsync()
     {
-        if (SelectedProject == null || IsBusy) return;
-        var projectPath = SelectedProject.ProjectPath;
+        if (IsBusy) return;
+        var projectPath = SelectedProject?.ProjectPath;
         if (string.IsNullOrWhiteSpace(projectPath)) { StatusMessage = "项目路径无效"; return; }
         IsBusy = true;
         try
@@ -185,8 +203,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task AddSelectedAsync()
     {
-        if (SelectedProject == null || IsBusy) return;
-        var projectPath = SelectedProject.ProjectPath;
+        if (IsBusy) return;
+        var projectPath = SelectedProject?.ProjectPath;
         if (string.IsNullOrWhiteSpace(projectPath)) { StatusMessage = "项目路径无效"; return; }
         var files = UnstagedFiles.Where(f => f.IsSelected).Select(f => f.RelativePath).ToList();
         if (files.Count == 0) { StatusMessage = "请先勾选文件"; return; }
@@ -207,8 +225,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task ResetSelectedAsync()
     {
-        if (SelectedProject == null || IsBusy) return;
-        var projectPath = SelectedProject.ProjectPath;
+        if (IsBusy) return;
+        var projectPath = SelectedProject?.ProjectPath;
         if (string.IsNullOrWhiteSpace(projectPath)) { StatusMessage = "项目路径无效"; return; }
         var toUnstage = StagedFiles.Where(f => f.IsSelected).Select(f => f.RelativePath).ToList();
         if (toUnstage.Count == 0) { StatusMessage = "请先勾选文件"; return; }
@@ -240,8 +258,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task PublishAsync()
     {
-        if (SelectedProject == null || IsBusy) return;
-        var projectPath = SelectedProject.ProjectPath;
+        if (IsBusy) return;
+        var projectPath = SelectedProject?.ProjectPath;
         if (string.IsNullOrWhiteSpace(projectPath)) { StatusMessage = "项目路径无效"; return; }
         if (string.IsNullOrWhiteSpace(NewVersion)) { StatusMessage = "请输入版本号"; return; }
         if (string.IsNullOrWhiteSpace(CommitMessage)) { StatusMessage = "请输入变更说明"; return; }
