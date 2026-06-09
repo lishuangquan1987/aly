@@ -38,31 +38,58 @@ public partial class MainWindowViewModel : ObservableObject
         _cfg = cfg;
         IsCliFound = _cli.Found;
         CliPath = _cli.CliPath;
+        Log.Information("MainWindowViewModel 初始化: CliFound={Found}, CliPath={Path}", IsCliFound, CliPath);
         LoadProjects();
     }
 
     private void LoadProjects()
     {
-        foreach (var c in _cfg.LoadProjects()) Projects.Add(c);
+        Log.Information("加载本地项目配置");
+        Projects.Clear();
+        foreach (var c in _cfg.LoadProjects())
+        {
+            Log.Debug("加载项目: Name={Name}, Server={Server}, Path={Path}, Id={Id}",
+                c.ProjectName, c.ServerUrl, c.ProjectPath, c.ProjectId);
+            Projects.Add(c);
+        }
+        Log.Information("共加载 {Count} 个项目", Projects.Count);
         if (Projects.Count > 0) SelectedProject = Projects[0];
     }
 
     partial void OnSelectedProjectChanged(ProjectConfig? value)
     {
+        Log.Information("切换项目: {Name}", value?.ProjectName ?? "(无)");
         if (value != null) _ = RefreshAsync();
     }
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
-        if (SelectedProject == null || IsBusy) return;
+        if (SelectedProject == null || IsBusy)
+        {
+            Log.Debug("刷新跳过: SelectedProject={P}, IsBusy={B}", SelectedProject?.ProjectName, IsBusy);
+            return;
+        }
         IsBusy = true;
         StatusMessage = "刷新中...";
+        Log.Information("开始刷新: Project={Name}, Path={Path}",
+            SelectedProject.ProjectName, SelectedProject.ProjectPath);
 
         try
         {
+            Log.Debug("调用 GetStatusAsync: {Path}", SelectedProject.ProjectPath);
             var result = await _cli.GetStatusAsync(SelectedProject.ProjectPath);
-            if (result?.Data == null) { StatusMessage = "刷新失败"; return; }
+            Log.Information("GetStatus 结果: IsSuccess={Ok}, ErrorMsg={Err}, Unstaged={U}, Staged={S}",
+                result?.IsSuccess, result?.ErrorMsg,
+                result?.Data?.Unstaged?.Count ?? 0,
+                result?.Data?.Staged?.Count ?? 0);
+
+            if (result?.Data == null)
+            {
+                StatusMessage = $"刷新失败: {result?.ErrorMsg ?? "无数据返回"}";
+                Log.Warning("刷新失败: result={Result}", result);
+                return;
+            }
 
             UnstagedFiles.Clear();
             StagedFiles.Clear();
@@ -71,8 +98,11 @@ public partial class MainWindowViewModel : ObservableObject
             foreach (var f in result.Data.Staged)
                 StagedFiles.Add(FileItem.FromCliItem(f));
 
-            // Change logs
+            Log.Debug("调用 GetLogAsync: {Path}", SelectedProject.ProjectPath);
             var logResult = await _cli.GetLogAsync(SelectedProject.ProjectPath);
+            Log.Information("GetLog 结果: IsSuccess={Ok}, Count={Count}",
+                logResult?.IsSuccess, logResult?.Data?.Count ?? 0);
+
             ChangeLogs.Clear();
             if (logResult?.Data != null)
                 foreach (var l in logResult.Data.OrderByDescending(l2 => l2.Id))
@@ -80,9 +110,14 @@ public partial class MainWindowViewModel : ObservableObject
             if (ChangeLogs.Count > 0)
                 CurrentVersion = ChangeLogs[0].Version;
 
-            StatusMessage = $"{UnstagedFiles.Count} unstaged, {StagedFiles.Count} staged";
+            StatusMessage = $"未暂存 {UnstagedFiles.Count}, 已暂存 {StagedFiles.Count}";
+            Log.Information("刷新完成: {Status}", StatusMessage);
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; Log.Error(ex, "Refresh"); }
+        catch (Exception ex)
+        {
+            StatusMessage = $"刷新异常: {ex.Message}";
+            Log.Error(ex, "刷新异常");
+        }
         finally { IsBusy = false; }
     }
 
@@ -90,8 +125,10 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task AddAllAsync()
     {
         if (SelectedProject == null) return;
+        Log.Information("暂存全部: Project={Name}", SelectedProject.ProjectName);
         var r = await _cli.AddAllAsync(SelectedProject.ProjectPath);
-        StatusMessage = r?.IsSuccess == true ? "已添加所有变更" : $"Add failed: {r?.ErrorMsg}";
+        Log.Information("暂存全部结果: IsSuccess={Ok}, ErrorMsg={Err}", r?.IsSuccess, r?.ErrorMsg);
+        StatusMessage = r?.IsSuccess == true ? "已添加所有变更" : $"添加失败: {r?.ErrorMsg}";
         await RefreshAsync();
     }
 
@@ -99,8 +136,10 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task ResetAllAsync()
     {
         if (SelectedProject == null) return;
+        Log.Information("清空暂存区: Project={Name}", SelectedProject.ProjectName);
         var r = await _cli.ResetAllAsync(SelectedProject.ProjectPath);
-        StatusMessage = r?.IsSuccess == true ? "暂存区已清空" : $"Reset failed: {r?.ErrorMsg}";
+        Log.Information("清空暂存区结果: IsSuccess={Ok}, ErrorMsg={Err}", r?.IsSuccess, r?.ErrorMsg);
+        StatusMessage = r?.IsSuccess == true ? "暂存区已清空" : $"重置失败: {r?.ErrorMsg}";
         await RefreshAsync();
     }
 
@@ -110,8 +149,10 @@ public partial class MainWindowViewModel : ObservableObject
         if (SelectedProject == null) return;
         var files = UnstagedFiles.Where(f => f.IsSelected).Select(f => f.RelativePath).ToList();
         if (files.Count == 0) { StatusMessage = "未选中文件"; return; }
+        Log.Information("暂存选中文件: Project={Name}, Count={Count}", SelectedProject.ProjectName, files.Count);
         var r = await _cli.AddFilesAsync(SelectedProject.ProjectPath, files);
-        StatusMessage = r?.IsSuccess == true ? $"{files.Count} files staged" : $"Add failed: {r?.ErrorMsg}";
+        Log.Information("暂存选中结果: IsSuccess={Ok}, ErrorMsg={Err}", r?.IsSuccess, r?.ErrorMsg);
+        StatusMessage = r?.IsSuccess == true ? $"已暂存 {files.Count} 个文件" : $"添加失败: {r?.ErrorMsg}";
         await RefreshAsync();
     }
 
@@ -121,12 +162,26 @@ public partial class MainWindowViewModel : ObservableObject
         if (SelectedProject == null) return;
         var files = StagedFiles.Where(f => f.IsSelected).Select(f => f.RelativePath).ToList();
         if (files.Count == 0) { StatusMessage = "未选中文件"; return; }
-        // reset by re-adding the files from unstaged... actually publish-cli doesn't have reset per-file easily.
-        // We'll reset all and re-add the unstaged files that should stay.
+        Log.Information("取消暂存选中: Project={Name}, Count={Count}", SelectedProject.ProjectName, files.Count);
         var keepPaths = UnstagedFiles.Where(f => !f.IsSelected).Select(f => f.RelativePath).ToList();
-        await _cli.ResetAllAsync(SelectedProject.ProjectPath);
-        if (keepPaths.Count > 0)
-            await _cli.AddFilesAsync(SelectedProject.ProjectPath, keepPaths);
+        try
+        {
+            await _cli.ResetAllAsync(SelectedProject.ProjectPath);
+            if (keepPaths.Count > 0)
+            {
+                var addResult = await _cli.AddFilesAsync(SelectedProject.ProjectPath, keepPaths);
+                if (addResult?.IsSuccess != true)
+                {
+                    Log.Warning("重新暂存失败: {Error}", addResult?.ErrorMsg);
+                    StatusMessage = $"重置后重新暂存失败: {addResult?.ErrorMsg}";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"取消暂存异常: {ex.Message}";
+            Log.Error(ex, "取消暂存异常");
+        }
         await RefreshAsync();
     }
 
@@ -136,14 +191,17 @@ public partial class MainWindowViewModel : ObservableObject
         if (SelectedProject == null || IsBusy) return;
         if (string.IsNullOrWhiteSpace(NewVersion)) { StatusMessage = "请输入版本号"; return; }
         if (string.IsNullOrWhiteSpace(CommitMessage)) { StatusMessage = "请输入变更说明"; return; }
-        if (StagedFiles.Count == 0) { StatusMessage = "暂存区为空，请先 add 文件"; return; }
+        if (StagedFiles.Count == 0) { StatusMessage = "暂存区为空，请先暂存文件"; return; }
 
         IsBusy = true;
         StatusMessage = "发布中...";
+        Log.Information("开始发布: Project={Name}, Version={Version}, Files={Count}",
+            SelectedProject.ProjectName, NewVersion, StagedFiles.Count);
 
         try
         {
             var r = await _cli.PushAsync(SelectedProject.ProjectPath, NewVersion, CommitMessage);
+            Log.Information("发布结果: IsSuccess={Ok}, ErrorMsg={Err}", r?.IsSuccess, r?.ErrorMsg);
             if (r?.IsSuccess == true)
             {
                 StatusMessage = $"发布成功: {NewVersion}";
@@ -153,21 +211,45 @@ public partial class MainWindowViewModel : ObservableObject
             }
             else StatusMessage = $"发布失败: {r?.ErrorMsg}";
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; Log.Error(ex, "Publish"); }
+        catch (Exception ex)
+        {
+            StatusMessage = $"发布异常: {ex.Message}";
+            Log.Error(ex, "发布异常");
+        }
         finally { IsBusy = false; }
     }
 
     [RelayCommand]
     private async Task AddProjectAsync()
     {
-        var dlg = new Views.Dialogs.AddProjectDialog();
+        Log.Information("打开添加项目对话框");
+        var dlg = new Views.Dialogs.AddProjectDialog(_cli);
         var cfg = await dlg.ShowDialog<ProjectConfig?>(
             (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow!);
         if (cfg != null)
         {
+            Log.Information("添加项目: Name={Name}, Server={Server}, Path={Path}, Id={Id}",
+                cfg.ProjectName, cfg.ServerUrl, cfg.ProjectPath, cfg.ProjectId);
             _cfg.AddProject(cfg);
             Projects.Add(cfg);
+
+            // 初始化 publish-cli 本地配置（创建 .publish-cli/config.json）
+            StatusMessage = "正在初始化本地配置...";
+            Log.Information("初始化 publish-cli 本地配置: Path={Path}, Server={Server}, Name={Name}, Id={Id}",
+                cfg.ProjectPath, cfg.ServerUrl, cfg.ProjectName, cfg.ProjectId);
+            var initResult = await _cli.ConfigInitAsync(cfg.ProjectPath, cfg.ServerUrl, cfg.ProjectName, cfg.ProjectId);
+            Log.Information("初始化本地配置结果: IsSuccess={Ok}, ErrorMsg={Err}", initResult?.IsSuccess, initResult?.ErrorMsg);
+            if (initResult?.IsSuccess != true)
+            {
+                StatusMessage = $"本地配置初始化失败: {initResult?.ErrorMsg}";
+                Log.Warning("本地配置初始化失败: {Error}", initResult?.ErrorMsg);
+            }
+
             SelectedProject = cfg;
+        }
+        else
+        {
+            Log.Debug("添加项目对话框已取消");
         }
     }
 
@@ -175,6 +257,7 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task RemoveProjectAsync()
     {
         if (SelectedProject == null) return;
+        Log.Information("移除项目: {Name}", SelectedProject.ProjectName);
         _cfg.RemoveProject(SelectedProject.ProjectName);
         Projects.Remove(SelectedProject);
         SelectedProject = Projects.FirstOrDefault();

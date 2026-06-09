@@ -4,7 +4,7 @@
         xmlns:vm="using:PublishGui.ViewModels"
         xmlns:conv="using:PublishGui.Converters"
         xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-        Title="Publish GUI"
+        Title="版本发布工具"
         Width="1280" Height="800"
         MinWidth="1000" MinHeight="560"
         Background="{DynamicResource SemiColorBg0}"
@@ -18,7 +18,7 @@
 
     <Grid RowDefinitions="Auto,*,28">
 
-        <!-- ═══ TOOLBAR — Semi-like command bar ═══ -->
+        <!-- ═══ TOOLBAR ═══ -->
         <Border Grid.Row="0" Padding="12,10"
                 Background="{DynamicResource SemiColorBg1}"
                 BorderBrush="{DynamicResource SemiColorBorder}"
@@ -29,7 +29,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <materialIcons:MaterialIcon Kind="PlusCircleOutline" Width="16" Height="16"
                                                     FontSize="16"/>
-                            <TextBlock Text="Add Project" FontSize="13" VerticalAlignment="Center"/>
+                            <TextBlock Text="添加项目" FontSize="13" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Command="{Binding RemoveProjectCommand}" Height="30" Padding="12,0"
@@ -37,7 +37,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <materialIcons:MaterialIcon Kind="DeleteOutline" Width="16" Height="16"
                                                     FontSize="16"/>
-                            <TextBlock Text="Remove" FontSize="13" VerticalAlignment="Center"/>
+                            <TextBlock Text="移除" FontSize="13" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Separator Width="1" Height="16" Margin="6,0"
@@ -46,7 +46,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <materialIcons:MaterialIcon Kind="Refresh" Width="16" Height="16"
                                                     FontSize="16"/>
-                            <TextBlock Text="Refresh" FontSize="13" VerticalAlignment="Center"/>
+                            <TextBlock Text="刷新" FontSize="13" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -88,7 +88,7 @@
                                                     FontSize="16" VerticalAlignment="Center"
                                                     Margin="0,0,8,0"
                                                     Foreground="{DynamicResource SemiColorText1}"/>
-                            <TextBlock Text="Projects" FontWeight="SemiBold" FontSize="14"
+                            <TextBlock Text="项目列表" FontWeight="SemiBold" FontSize="14"
                                        Foreground="{DynamicResource SemiColorText0}"/>
                         </DockPanel>
                     </Border>
@@ -136,7 +136,7 @@
                                                             Foreground="{DynamicResource SemiColorText2}"/>
                                     <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13"
                                                Foreground="{DynamicResource SemiColorText0}">
-                                        <Run Text="Unstaged "/>
+                                        <Run Text="未暂存 "/>
                                         <Run Text="{Binding UnstagedFiles.Count}" FontWeight="Bold"/>
                                     </TextBlock>
                                 </StackPanel>
@@ -145,7 +145,7 @@
                                     <StackPanel Orientation="Horizontal" Spacing="4">
                                         <materialIcons:MaterialIcon Kind="ArrowUpBold"
                                                                 Width="14" Height="14" FontSize="14"/>
-                                        <TextBlock Text="Stage" FontSize="12"/>
+                                        <TextBlock Text="暂存" FontSize="12"/>
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="3" Command="{Binding AddAllCommand}"
@@ -153,7 +153,7 @@
                                     <StackPanel Orientation="Horizontal" Spacing="4">
                                         <materialIcons:MaterialIcon Kind="ArrowUpBoldCircleOutline"
                                                                 Width="14" Height="14" FontSize="14"/>
-                                        <TextBlock Text="All" FontSize="12"/>
+                                        <TextBlock Text="全部" FontSize="12"/>
                                     </StackPanel>
                                 </Button>
                             </Grid>
@@ -204,12 +204,12 @@
                         BorderThickness="0,1">
                     <StackPanel Spacing="10">
                         <Grid ColumnDefinitions="Auto,*,Auto" Height="30">
-                            <TextBlock Text="Version" VerticalAlignment="Center"
+                            <TextBlock Text="版本号" VerticalAlignment="Center"
                                        FontSize="13" FontWeight="Medium"
                                        Margin="0,0,10,0"
                                        Foreground="{DynamicResource SemiColorText1}"/>
                             <TextBox Grid.Column="1" Text="{Binding NewVersion}"
-                                     Watermark="e.g. V1.0.1"
+                                     Watermark="例如 V1.0.1"
                                      VerticalContentAlignment="Center" FontSize="13"/>
                             <StackPanel Grid.Column="2" Orientation="Horizontal"
                                         VerticalAlignment="Center" Margin="12,0,0,0">
@@ -223,7 +223,7 @@
                         </Grid>
 
                         <TextBox Text="{Binding CommitMessage}"
-                                 Watermark="Describe what changed in this version..."
+                                 Watermark="描述此版本的变更内容..."
                                  MinHeight="52" AcceptsReturn="True"
                                  TextWrapping="Wrap" FontSize="13"/>
 
@@ -232,12 +232,12 @@
                             <ProgressBar IsIndeterminate="True" Height="4"/>
                             <TextBlock FontSize="11"
                                        Foreground="{DynamicResource SemiColorText2}">
-                                <Run Text="Uploading "/>
+                                <Run Text="上传中 "/>
                                 <Run Text="{Binding UploadProgress}" FontWeight="SemiBold"
                                      Foreground="{DynamicResource SemiColorPrimary}"/>
                                 <Run Text=" / "/>
                                 <Run Text="{Binding UploadTotal}" FontWeight="SemiBold"/>
-                                <Run Text=" files"/>
+                                <Run Text=" 个文件"/>
                             </TextBlock>
                         </StackPanel>
 
@@ -248,7 +248,7 @@
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <materialIcons:MaterialIcon Kind="Upload" Width="18" Height="18"
                                                         FontSize="18"/>
-                                <TextBlock Text="Push Staged Files" VerticalAlignment="Center"/>
+                                <TextBlock Text="发布暂存文件" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                     </StackPanel>
@@ -268,7 +268,7 @@
                                                             Foreground="{DynamicResource SemiColorSuccess}"/>
                                     <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13"
                                                Foreground="{DynamicResource SemiColorText0}">
-                                        <Run Text="Staged "/>
+                                        <Run Text="已暂存 "/>
                                         <Run Text="{Binding StagedFiles.Count}" FontWeight="Bold"/>
                                     </TextBlock>
                                 </StackPanel>
@@ -277,7 +277,7 @@
                                     <StackPanel Orientation="Horizontal" Spacing="4">
                                         <materialIcons:MaterialIcon Kind="ArrowDownBold"
                                                                 Width="14" Height="14" FontSize="14"/>
-                                        <TextBlock Text="Unstage" FontSize="12"/>
+                                        <TextBlock Text="取消暂存" FontSize="12"/>
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="3" Command="{Binding ResetAllCommand}"
@@ -286,7 +286,7 @@
                                     <StackPanel Orientation="Horizontal" Spacing="4">
                                         <materialIcons:MaterialIcon Kind="CloseCircleOutline"
                                                                 Width="14" Height="14" FontSize="14"/>
-                                        <TextBlock Text="All" FontSize="12"/>
+                                        <TextBlock Text="全部" FontSize="12"/>
                                     </StackPanel>
                                 </Button>
                             </Grid>
@@ -339,7 +339,7 @@
                                                     FontSize="16" VerticalAlignment="Center"
                                                     Margin="0,0,8,0"
                                                     Foreground="{DynamicResource SemiColorText1}"/>
-                            <TextBlock Text="Version History" FontWeight="SemiBold" FontSize="14"
+                            <TextBlock Text="版本历史" FontWeight="SemiBold" FontSize="14"
                                        Foreground="{DynamicResource SemiColorText0}"/>
                         </DockPanel>
                     </Border>
@@ -399,7 +399,7 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
                             VerticalAlignment="Center" Margin="12,0">
                     <Ellipse Width="6" Height="6" Fill="{DynamicResource SemiColorWarning}"/>
-                    <TextBlock Text="Unstaged:" FontSize="11"
+                    <TextBlock Text="未暂存：" FontSize="11"
                                Foreground="{DynamicResource SemiColorText3}"/>
                     <TextBlock Text="{Binding UnstagedFiles.Count}" FontSize="11"
                                FontWeight="SemiBold"
@@ -408,7 +408,7 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
                             VerticalAlignment="Center" Margin="12,0">
                     <Ellipse Width="6" Height="6" Fill="{DynamicResource SemiColorSuccess}"/>
-                    <TextBlock Text="Staged:" FontSize="11"
+                    <TextBlock Text="已暂存：" FontSize="11"
                                Foreground="{DynamicResource SemiColorText3}"/>
                     <TextBlock Text="{Binding StagedFiles.Count}" FontSize="11"
                                FontWeight="SemiBold"

@@ -19,13 +19,22 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        var logDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "PublishGui", "logs");
+        var logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
         Directory.CreateDirectory(logDir);
         Log.Logger = new LoggerConfiguration()
-            .WriteTo.File(Path.Combine(logDir, "log.log"), rollingInterval: RollingInterval.Day)
+#if DEBUG
+            .MinimumLevel.Debug()
+#else
+            .MinimumLevel.Information()
+#endif
+            .WriteTo.File(
+                Path.Combine(logDir, "log.log"),
+                rollingInterval: RollingInterval.Day,
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
+
+        Log.Information("=== PublishGui 启动 ===");
+        Log.Information("日志目录: {Dir}", logDir);
 
         var svc = new ServiceCollection();
         svc.AddSingleton<ProcessService>();
@@ -35,7 +44,14 @@ public partial class App : Application
         Services = svc.BuildServiceProvider();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
             desktop.MainWindow = new MainWindow { DataContext = Services.GetRequiredService<MainWindowViewModel>() };
+            desktop.ShutdownRequested += (_, _) =>
+            {
+                Log.Information("=== PublishGui 关闭 ===");
+                Log.CloseAndFlush();
+            };
+        }
 
         base.OnFrameworkInitializationCompleted();
     }

@@ -35,6 +35,8 @@ public class ProcessService
         };
         if (workingDir != null) psi.WorkingDirectory = workingDir;
 
+        Log.Debug("启动进程: {File} {Args} (超时={Timeout}ms)", fileName, arguments, timeoutMs);
+
         using var proc = new Process { StartInfo = psi };
 
         proc.OutputDataReceived += (_, e) => { if (e.Data != null) sbOut.AppendLine(e.Data); };
@@ -49,23 +51,35 @@ public class ProcessService
             if (!proc.WaitForExit(timeoutMs))
             {
                 proc.Kill();
-                return new ProcessResult { Success = false, StandardError = "Process timed out" };
+                Log.Warning("进程超时: {File} {Args}", fileName, arguments);
+                return new ProcessResult { Success = false, StandardError = "进程执行超时" };
             }
 
             // Wait for async output to complete
             proc.WaitForExit();
 
-            return new ProcessResult
+            var result = new ProcessResult
             {
                 Success = proc.ExitCode == 0,
                 StandardOutput = sbOut.ToString().Trim(),
                 StandardError = sbErr.ToString().Trim(),
                 ExitCode = proc.ExitCode
             };
+
+            Log.Debug("进程完成: ExitCode={Code}, StdOut={OutLen}, StdErr={ErrLen}",
+                result.ExitCode, result.StandardOutput.Length, result.StandardError.Length);
+
+            if (!result.Success)
+            {
+                Log.Warning("进程非零退出: ExitCode={Code}, StdErr={Err}",
+                    result.ExitCode, result.StandardError);
+            }
+
+            return result;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Process {File} {Args} failed", fileName, arguments);
+            Log.Error(ex, "进程执行异常: {File} {Args}", fileName, arguments);
             return new ProcessResult { Success = false, StandardError = ex.Message };
         }
     }

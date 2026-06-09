@@ -17,7 +17,7 @@ func main() {
 	var port int
 	var dbPath string
 	flag.IntVar(&port, "p", 2000, "监听的端口")
-	flag.StringVar(&dbPath, "db", "", "数据库文件路径（默认 exe 同目录 configs/clientupdator.db）")
+	flag.StringVar(&dbPath, "db", "", "数据库文件路径（默认程序根目录 clientupdator.db）")
 	flag.Parse()
 
 	//初始化数据库

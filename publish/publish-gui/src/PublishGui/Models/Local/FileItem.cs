@@ -27,9 +27,9 @@ public partial class FileItem : ObservableObject
 
     public string StatusDisplay => Status switch
     {
-        "new" => "New",
-        "modified" => "Modified",
-        "deleted" => "Deleted",
+        "new" => "新增",
+        "modified" => "修改",
+        "deleted" => "删除",
         _ => Status
     };
 

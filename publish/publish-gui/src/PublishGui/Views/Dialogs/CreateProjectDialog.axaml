@@ -1,0 +1,100 @@
+<Window x:Class="PublishGui.Views.Dialogs.CreateProjectDialog"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        Title="在服务端新建项目"
+        Width="480" Height="480"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource SemiColorBg0}"
+        CanResize="False">
+    <Grid RowDefinitions="*,Auto" Margin="24,20">
+        <ScrollViewer>
+            <StackPanel Spacing="16">
+                <!-- 项目名称 -->
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Kind="FileDocumentOutline" Width="14" Height="14"
+                                                     Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Text="项目名称" FontWeight="Medium" FontSize="13"
+                                   Foreground="{DynamicResource SemiColorText0}"/>
+                        <TextBlock Text="*" Foreground="{DynamicResource SemiColorDanger}" FontSize="13"/>
+                    </StackPanel>
+                    <TextBox Name="NameBox" Watermark="例如 myapp（唯一标识，不可修改）" FontSize="13"/>
+                </StackPanel>
+
+                <!-- 项目标题 -->
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Kind="TextBoxOutline" Width="14" Height="14"
+                                                     Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Text="项目标题" FontWeight="Medium" FontSize="13"
+                                   Foreground="{DynamicResource SemiColorText0}"/>
+                        <TextBlock Text="*" Foreground="{DynamicResource SemiColorDanger}" FontSize="13"/>
+                    </StackPanel>
+                    <TextBox Name="TitleBox" Watermark="例如 我的应用（显示名称）" FontSize="13"/>
+                </StackPanel>
+
+                <!-- 强制更新 -->
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Kind="AlertCircleOutline" Width="14" Height="14"
+                                                     Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Text="强制更新" FontWeight="Medium" FontSize="13"
+                                   Foreground="{DynamicResource SemiColorText0}"/>
+                    </StackPanel>
+                    <CheckBox Name="ForceUpdateBox" Content="客户端检测到新版本时强制更新（跳过用户确认）"
+                              FontSize="12"/>
+                </StackPanel>
+
+                <!-- 忽略文件夹 -->
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Kind="FolderRemoveOutline" Width="14" Height="14"
+                                                     Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Text="忽略文件夹" FontWeight="Medium" FontSize="13"
+                                   Foreground="{DynamicResource SemiColorText0}"/>
+                    </StackPanel>
+                    <TextBox Name="IgnoreFoldersBox"
+                             Watermark="多个文件夹用逗号分隔，例如 logs,temp,cache"
+                             FontSize="13" AcceptsReturn="True" MinHeight="40"
+                             TextWrapping="Wrap"/>
+                    <TextBlock Text="扫描文件时将跳过这些文件夹，不参与版本管理。"
+                               FontSize="11" Margin="0,4,0,0"
+                               Foreground="{DynamicResource SemiColorText3}"/>
+                </StackPanel>
+
+                <!-- 忽略文件 -->
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Kind="FileRemoveOutline" Width="14" Height="14"
+                                                     Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Text="忽略文件" FontWeight="Medium" FontSize="13"
+                                   Foreground="{DynamicResource SemiColorText0}"/>
+                    </StackPanel>
+                    <TextBox Name="IgnoreFilesBox"
+                             Watermark="多个文件用逗号分隔，例如 .DS_Store,Thumbs.db,*.log"
+                             FontSize="13" AcceptsReturn="True" MinHeight="40"
+                             TextWrapping="Wrap"/>
+                    <TextBlock Text="扫描文件时将跳过这些文件，不参与版本管理。"
+                               FontSize="11" Margin="0,4,0,0"
+                               Foreground="{DynamicResource SemiColorText3}"/>
+                </StackPanel>
+
+                <!-- 状态提示 -->
+                <StackPanel Name="StatusPanel" IsVisible="False" Spacing="6">
+                    <TextBlock Name="StatusText" FontSize="12"
+                               Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Spacing="8"
+                    Margin="0,20,0,0">
+            <Button Name="CancelBtn" Content="取消" Height="32" Padding="16,0"/>
+            <Button Name="CreateBtn" Content="创建项目"
+                    Classes="Primary" Height="32" Padding="16,0"/>
+        </StackPanel>
+    </Grid>
+</Window>

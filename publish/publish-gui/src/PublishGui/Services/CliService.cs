@@ -24,6 +24,7 @@ public class CliService
     {
         _ps = ps;
         _cliPath = FindCliDefault();
+        Log.Debug("CliService 初始化: Found={Found}, Path={Path}", Found, _cliPath);
     }
 
     public bool Found => !string.IsNullOrEmpty(_cliPath) && File.Exists(_cliPath);
@@ -31,12 +32,23 @@ public class CliService
     private static string FindCliDefault()
     {
         var exeDir = AppDomain.CurrentDomain.BaseDirectory;
-        // Check same dir as GUI
+        Log.Debug("查找 publish-cli: BaseDirectory={Dir}", exeDir);
+
         var same = Path.Combine(exeDir, "publish-cli.exe");
-        if (File.Exists(same)) return same;
-        // Check publish/publish-cli relative
+        if (File.Exists(same))
+        {
+            Log.Debug("找到 publish-cli: {Path}", same);
+            return same;
+        }
+
         var rel = Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "..", "publish-cli", "publish-cli.exe"));
-        if (File.Exists(rel)) return rel;
+        if (File.Exists(rel))
+        {
+            Log.Debug("找到 publish-cli (相对路径): {Path}", rel);
+            return rel;
+        }
+
+        Log.Warning("未找到 publish-cli.exe");
         return string.Empty;
     }
 
@@ -46,25 +58,45 @@ public class CliService
 
     public async Task<CliOutput<T>?> RunAsync<T>(string args, string projectPath, int timeoutMs = 30000)
     {
-        if (!Found) return Fail<T>("publish-cli.exe not found");
+        if (!Found)
+        {
+            Log.Error("publish-cli.exe 未找到，无法执行命令: {Args}", args);
+            return Fail<T>("未找到 publish-cli.exe");
+        }
 
-        var fullArgs = $"{args} --json --path \"{projectPath}\"";
+        var fullArgs = $"{args} --json --path \"{projectPath.TrimEnd('\\', '/')}\"";
+        Log.Debug("执行 CLI: {Cli} {Args}", _cliPath, fullArgs);
+
         var result = await _ps.RunAsync(_cliPath, fullArgs, timeoutMs: timeoutMs);
 
+        Log.Information("CLI 执行结果: Success={Success}, ExitCode={Code}, StdOut长度={OutLen}, StdErr={Err}",
+            result.Success, result.ExitCode, result.StandardOutput?.Length ?? 0,
+            string.IsNullOrEmpty(result.StandardError) ? "(无)" : result.StandardError);
+
         if (!result.Success)
-            return Fail<T>(string.IsNullOrEmpty(result.StandardError) ? "execution failed" : result.StandardError);
+        {
+            var errMsg = string.IsNullOrEmpty(result.StandardError) ? "执行失败" : result.StandardError;
+            Log.Warning("CLI 命令失败: {Error}", errMsg);
+            return Fail<T>(errMsg);
+        }
 
         if (string.IsNullOrWhiteSpace(result.StandardOutput))
-            return Fail<T>("no output from publish-cli");
+        {
+            Log.Warning("CLI 无输出");
+            return Fail<T>("publish-cli 无输出");
+        }
 
         try
         {
+            Log.Debug("CLI 输出 (前500字符): {Output}", result.StandardOutput.Length > 500
+                ? result.StandardOutput[..500] + "..."
+                : result.StandardOutput);
             return JsonConvert.DeserializeObject<CliOutput<T>>(result.StandardOutput);
         }
         catch (JsonException ex)
         {
-            Log.Error(ex, "JSON parse failed: {Output}", result.StandardOutput);
-            return Fail<T>($"parse output: {ex.Message}");
+            Log.Error(ex, "JSON 解析失败: {Output}", result.StandardOutput);
+            return Fail<T>($"JSON 解析失败: {ex.Message}");
         }
     }
 
@@ -95,18 +127,28 @@ public class CliService
 
     public Task<CliOutput<object>?> ConfigInitAsync(string projectPath, string serverUrl, string projectName, int projectId)
     {
-        var args = $"config init --server \"{serverUrl}\" --project \"{projectName}\" --path \"{projectPath}\"";
+        var trimmedPath = projectPath.TrimEnd('\\', '/');
+        var args = $"config init --server \"{serverUrl}\" --project \"{projectName}\" --path \"{trimmedPath}\"";
         if (projectId > 0) args += $" --id {projectId}";
         return RunAsync<object>(args, projectPath);
     }
 
     public Task<CliOutput<List<ProjectInfo>>?> ProjectListAsync(string serverUrl)
-        => RunAsync<List<ProjectInfo>>($"project list --server \"{serverUrl}\"", string.Empty);
-
-    public Task<CliOutput<ProjectInfo>?> ProjectCreateAsync(string serverUrl, string name, string title, bool forceUpdate)
     {
+        Log.Information("获取服务端项目列表: ServerUrl={Url}", serverUrl);
+        return RunAsync<List<ProjectInfo>>($"project list --server \"{serverUrl}\"", string.Empty);
+    }
+
+    public Task<CliOutput<ProjectInfo>?> ProjectCreateAsync(
+        string serverUrl, string name, string title, bool forceUpdate,
+        List<string>? ignoreFolders = null, List<string>? ignoreFiles = null)
+    {
+        Log.Information("创建服务端项目: ServerUrl={Url}, Name={Name}, Title={Title}, ForceUpdate={Force}",
+            serverUrl, name, title, forceUpdate);
         var args = $"project create --server \"{serverUrl}\" --name \"{name}\" --title \"{title}\"";
         if (forceUpdate) args += " --force-update";
+        if (ignoreFolders is { Count: > 0 }) args += $" --ignore-folders \"{string.Join(",", ignoreFolders)}\"";
+        if (ignoreFiles is { Count: > 0 }) args += $" --ignore-files \"{string.Join(",", ignoreFiles)}\"";
         return RunAsync<ProjectInfo>(args, string.Empty);
     }
 }

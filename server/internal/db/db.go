@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"clientupdator/server/ent"
 
@@ -43,16 +44,32 @@ func WithTx(ctx context.Context, fn func(tx *ent.Tx) error) error {
 	return nil
 }
 
+// InitDB 初始化数据库 — 数据库文件默认放在程序根目录（go run 时为工作目录）
 func InitDB() {
-	//初始化数据库 — 基于可执行文件路径解析 db 路径（允许通过 DBPath 变量自定义）
+	// 优先使用 DBPath，否则基于可执行文件路径解析（go run 时回退到工作目录）
 	dbPath := DBPath
 	if dbPath == "" {
+		dbDir := ""
 		exe, err := os.Executable()
-		if err != nil {
-			log.Fatalf("failed to get executable path: %v", err)
+		if err == nil {
+			exeDir := filepath.Dir(exe)
+			// go run 会将可执行文件放在临时目录，此时回退到工作目录
+			if !strings.Contains(exeDir, os.TempDir()) {
+				dbDir = exeDir
+			}
 		}
-		exeDir := filepath.Dir(exe)
-		dbPath = filepath.Join(exeDir, "configs", "clientupdator.db")
+		if dbDir == "" {
+			wd, err := os.Getwd()
+			if err != nil {
+				log.Fatalf("failed to get working directory: %v", err)
+			}
+			dbDir = wd
+		}
+		dbPath = filepath.Join(dbDir, "clientupdator.db")
+	}
+	// 确保数据库文件所在目录存在
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
+		log.Fatalf("failed to create database directory: %v", err)
 	}
 	db, err := sql.Open("sqlite", dbPath+"?_fk=1")
 	if err != nil {
