@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 
@@ -48,15 +49,18 @@ public class ProcessService
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
 
-            if (!proc.WaitForExit(timeoutMs))
+            using var cts = new CancellationTokenSource(timeoutMs);
+            try
+            {
+                await proc.WaitForExitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
             {
                 proc.Kill();
+                await proc.WaitForExitAsync(CancellationToken.None);
                 Log.Warning("进程超时: {File} {Args}", fileName, arguments);
                 return new ProcessResult { Success = false, StandardError = "进程执行超时" };
             }
-
-            // Wait for async output to complete
-            proc.WaitForExit();
 
             var result = new ProcessResult
             {

@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using PublishGui.Models.Cli;
 using PublishGui.Models.Local;
 using PublishGui.Services;
+using PublishGui.Helpers;
 using Serilog;
 
 namespace PublishGui.Views.Dialogs;
@@ -14,8 +14,6 @@ namespace PublishGui.Views.Dialogs;
 public partial class AddProjectDialog : Window
 {
     private readonly CliService _cli;
-
-    private enum StatusKind { Info, Error, Success }
 
     public AddProjectDialog(CliService cli)
     {
@@ -129,29 +127,14 @@ public partial class AddProjectDialog : Window
             ShowFetchStatus($"项目 \"{project.Name}\" 创建成功 (ID: {project.Id})", false, StatusKind.Success);
             Log.Information("创建项目完成，自动填充: Name={Name}, Id={Id}", project.Name, project.Id);
 
-            // 刷新项目列表
             await FetchProjects();
         }
     }
 
-    private static IBrush GetResourceBrush(string key, IBrush fallback)
-    {
-        if (Avalonia.Application.Current?.TryFindResource(key, out var value) == true && value is IBrush brush)
-            return brush;
-        return fallback;
-    }
-
     private void ShowFetchStatus(string message, bool showCreateButton, StatusKind kind = StatusKind.Info)
     {
-        FetchStatusText.Text = message;
-        FetchStatusText.Foreground = kind switch
-        {
-            StatusKind.Error => GetResourceBrush("SemiColorDanger", Brushes.Red),
-            StatusKind.Success => GetResourceBrush("SemiColorSuccess", Brushes.Green),
-            _ => GetResourceBrush("SemiColorText2", Brushes.Gray)
-        };
+        DialogHelper.SetStatus(FetchStatusText, message, kind, FetchStatusPanel);
         CreateOnServerBtn.IsVisible = showCreateButton;
-        FetchStatusPanel.IsVisible = true;
     }
 
     private void OnConfirm(object? sender, RoutedEventArgs e)

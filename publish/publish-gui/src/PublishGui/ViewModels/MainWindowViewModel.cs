@@ -105,7 +105,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             ChangeLogs.Clear();
             if (logResult?.Data != null)
-                foreach (var l in logResult.Data.OrderByDescending(l2 => l2.Id))
+                foreach (var l in logResult.Data)
                     ChangeLogs.Add(l);
             if (ChangeLogs.Count > 0)
                 CurrentVersion = ChangeLogs[0].Version;
@@ -124,45 +124,72 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task AddAllAsync()
     {
-        if (SelectedProject == null) return;
-        Log.Information("暂存全部: Project={Name}", SelectedProject.ProjectName);
-        var r = await _cli.AddAllAsync(SelectedProject.ProjectPath);
-        Log.Information("暂存全部结果: IsSuccess={Ok}, ErrorMsg={Err}", r?.IsSuccess, r?.ErrorMsg);
-        StatusMessage = r?.IsSuccess == true ? "已添加所有变更" : $"添加失败: {r?.ErrorMsg}";
-        await RefreshAsync();
+        if (SelectedProject == null || IsBusy) return;
+        IsBusy = true;
+        try
+        {
+            Log.Information("暂存全部: Project={Name}", SelectedProject.ProjectName);
+            var r = await _cli.AddAllAsync(SelectedProject.ProjectPath);
+            Log.Information("暂存全部结果: IsSuccess={Ok}, ErrorMsg={Err}", r?.IsSuccess, r?.ErrorMsg);
+            StatusMessage = r?.IsSuccess == true ? "已添加所有变更" : $"添加失败: {r?.ErrorMsg}";
+            await RefreshAsync();
+        }
+        finally { IsBusy = false; }
     }
 
     [RelayCommand]
     private async Task ResetAllAsync()
     {
-        if (SelectedProject == null) return;
+        if (SelectedProject == null || IsBusy) return;
+        IsBusy = true;
         Log.Information("清空暂存区: Project={Name}", SelectedProject.ProjectName);
-        var r = await _cli.ResetAllAsync(SelectedProject.ProjectPath);
-        Log.Information("清空暂存区结果: IsSuccess={Ok}, ErrorMsg={Err}", r?.IsSuccess, r?.ErrorMsg);
-        StatusMessage = r?.IsSuccess == true ? "暂存区已清空" : $"重置失败: {r?.ErrorMsg}";
-        await RefreshAsync();
+        try
+        {
+            var r = await _cli.ResetAllAsync(SelectedProject.ProjectPath);
+            Log.Information("清空暂存区结果: IsSuccess={Ok}, ErrorMsg={Err}", r?.IsSuccess, r?.ErrorMsg);
+            StatusMessage = r?.IsSuccess == true ? "暂存区已清空" : $"重置失败: {r?.ErrorMsg}";
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"重置异常: {ex.Message}";
+            Log.Error(ex, "重置异常");
+        }
+        finally { IsBusy = false; }
     }
 
     [RelayCommand]
     private async Task AddSelectedAsync()
     {
-        if (SelectedProject == null) return;
+        if (SelectedProject == null || IsBusy) return;
         var files = UnstagedFiles.Where(f => f.IsSelected).Select(f => f.RelativePath).ToList();
         if (files.Count == 0) { StatusMessage = "未选中文件"; return; }
+        IsBusy = true;
         Log.Information("暂存选中文件: Project={Name}, Count={Count}", SelectedProject.ProjectName, files.Count);
-        var r = await _cli.AddFilesAsync(SelectedProject.ProjectPath, files);
-        Log.Information("暂存选中结果: IsSuccess={Ok}, ErrorMsg={Err}", r?.IsSuccess, r?.ErrorMsg);
-        StatusMessage = r?.IsSuccess == true ? $"已暂存 {files.Count} 个文件" : $"添加失败: {r?.ErrorMsg}";
-        await RefreshAsync();
+        try
+        {
+            var r = await _cli.AddFilesAsync(SelectedProject.ProjectPath, files);
+            Log.Information("暂存选中结果: IsSuccess={Ok}, ErrorMsg={Err}", r?.IsSuccess, r?.ErrorMsg);
+            StatusMessage = r?.IsSuccess == true ? $"已暂存 {files.Count} 个文件" : $"添加失败: {r?.ErrorMsg}";
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"暂存异常: {ex.Message}";
+            Log.Error(ex, "暂存异常");
+        }
+        finally { IsBusy = false; }
     }
 
     [RelayCommand]
     private async Task ResetSelectedAsync()
     {
-        if (SelectedProject == null) return;
+        if (SelectedProject == null || IsBusy) return;
         var files = StagedFiles.Where(f => f.IsSelected).Select(f => f.RelativePath).ToList();
         if (files.Count == 0) { StatusMessage = "未选中文件"; return; }
+        IsBusy = true;
         Log.Information("取消暂存选中: Project={Name}, Count={Count}", SelectedProject.ProjectName, files.Count);
+        // 保存需要保留的未暂存文件路径（先于 reset-all，避免 reset 后数据丢失）
         var keepPaths = UnstagedFiles.Where(f => !f.IsSelected).Select(f => f.RelativePath).ToList();
         try
         {
@@ -172,9 +199,17 @@ public partial class MainWindowViewModel : ObservableObject
                 var addResult = await _cli.AddFilesAsync(SelectedProject.ProjectPath, keepPaths);
                 if (addResult?.IsSuccess != true)
                 {
-                    Log.Warning("重新暂存失败: {Error}", addResult?.ErrorMsg);
-                    StatusMessage = $"重置后重新暂存失败: {addResult?.ErrorMsg}";
+                    Log.Warning("取消暂存后重新暂存失败: {Error}", addResult?.ErrorMsg);
+                    StatusMessage = $"部分文件暂存失败: {addResult?.ErrorMsg}";
                 }
+                else
+                {
+                    StatusMessage = $"已取消暂存 {files.Count} 个文件";
+                }
+            }
+            else
+            {
+                StatusMessage = $"已取消暂存 {files.Count} 个文件";
             }
         }
         catch (Exception ex)
@@ -182,7 +217,11 @@ public partial class MainWindowViewModel : ObservableObject
             StatusMessage = $"取消暂存异常: {ex.Message}";
             Log.Error(ex, "取消暂存异常");
         }
-        await RefreshAsync();
+        finally
+        {
+            IsBusy = false;
+            await RefreshAsync();
+        }
     }
 
     [RelayCommand]
@@ -254,12 +293,13 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task RemoveProjectAsync()
+    private Task RemoveProjectAsync()
     {
-        if (SelectedProject == null) return;
+        if (SelectedProject == null) return Task.CompletedTask;
         Log.Information("移除项目: {Name}", SelectedProject.ProjectName);
         _cfg.RemoveProject(SelectedProject.ProjectName);
         Projects.Remove(SelectedProject);
         SelectedProject = Projects.FirstOrDefault();
+        return Task.CompletedTask;
     }
 }

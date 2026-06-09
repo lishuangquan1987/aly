@@ -40,7 +40,7 @@ public partial class App : Application
         svc.AddSingleton<ProcessService>();
         svc.AddSingleton<CliService>();
         svc.AddSingleton<ConfigService>();
-        svc.AddSingleton<MainWindowViewModel>();
+        svc.AddTransient<MainWindowViewModel>();
         Services = svc.BuildServiceProvider();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)

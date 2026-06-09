@@ -32,23 +32,24 @@ public class CliService
     private static string FindCliDefault()
     {
         var exeDir = AppDomain.CurrentDomain.BaseDirectory;
+        var exeName = OperatingSystem.IsWindows() ? "publish-cli.exe" : "publish-cli";
         Log.Debug("查找 publish-cli: BaseDirectory={Dir}", exeDir);
 
-        var same = Path.Combine(exeDir, "publish-cli.exe");
+        var same = Path.Combine(exeDir, exeName);
         if (File.Exists(same))
         {
             Log.Debug("找到 publish-cli: {Path}", same);
             return same;
         }
 
-        var rel = Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "..", "publish-cli", "publish-cli.exe"));
+        var rel = Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "..", "publish-cli", exeName));
         if (File.Exists(rel))
         {
             Log.Debug("找到 publish-cli (相对路径): {Path}", rel);
             return rel;
         }
 
-        Log.Warning("未找到 publish-cli.exe");
+        Log.Warning("未找到 publish-cli");
         return string.Empty;
     }
 
@@ -122,7 +123,7 @@ public class CliService
     public Task<CliOutput<object>?> PublishAsync(string projectPath, string version, string message)
         => RunAsync<object>($"publish --version \"{version}\" --message \"{message}\"", projectPath, 120000);
 
-    public Task<CliOutput<List<ChangeLog>>> GetLogAsync(string projectPath, int limit = 20)
+    public Task<CliOutput<List<ChangeLog>>?> GetLogAsync(string projectPath, int limit = 20)
         => RunAsync<List<ChangeLog>>($"log --limit {limit}", projectPath);
 
     public Task<CliOutput<object>?> ConfigInitAsync(string projectPath, string serverUrl, string projectName, int projectId)

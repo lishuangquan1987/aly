@@ -16,6 +16,6 @@ public class ProjectInfo
     [JsonProperty("version")]
     public string Version { get; set; } = string.Empty;
 
-    [JsonProperty("forceUpdate")]
+    [JsonProperty("force_update")]
     public bool IsForceUpdate { get; set; }
 }

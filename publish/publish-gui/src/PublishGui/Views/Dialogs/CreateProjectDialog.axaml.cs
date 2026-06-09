@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using PublishGui.Models.Cli;
 using PublishGui.Services;
+using PublishGui.Helpers;
 using Serilog;
 
 namespace PublishGui.Views.Dialogs;
@@ -14,8 +14,6 @@ public partial class CreateProjectDialog : Window
 {
     private readonly CliService _cli;
     private readonly string _serverUrl;
-
-    private enum StatusKind { Info, Error, Success }
 
     public CreateProjectDialog(CliService cli, string serverUrl)
     {
@@ -88,22 +86,8 @@ public partial class CreateProjectDialog : Window
             .ToList();
     }
 
-    private static IBrush GetResourceBrush(string key, IBrush fallback)
-    {
-        if (Avalonia.Application.Current?.TryFindResource(key, out var value) == true && value is IBrush brush)
-            return brush;
-        return fallback;
-    }
-
     private void ShowStatus(string message, StatusKind kind)
     {
-        StatusText.Text = message;
-        StatusText.Foreground = kind switch
-        {
-            StatusKind.Error => GetResourceBrush("SemiColorDanger", Brushes.Red),
-            StatusKind.Success => GetResourceBrush("SemiColorSuccess", Brushes.Green),
-            _ => GetResourceBrush("SemiColorText2", Brushes.Gray)
-        };
-        StatusPanel.IsVisible = true;
+        DialogHelper.SetStatus(StatusText, message, kind, StatusPanel);
     }
 }
