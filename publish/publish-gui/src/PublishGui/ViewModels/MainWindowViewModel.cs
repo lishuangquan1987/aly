@@ -107,8 +107,8 @@ public partial class MainWindowViewModel : ObservableObject
             var d = result.Data;
             var unstaged = new ObservableCollection<FileItem>();
             var staged = new ObservableCollection<FileItem>();
-            foreach (var f in d.Unstaged) unstaged.Add(FileItem.FromCliItem(f));
-            foreach (var f in d.Staged) staged.Add(FileItem.FromCliItem(f));
+            foreach (var f in d.Unstaged??[]) unstaged.Add(FileItem.FromCliItem(f));
+            foreach (var f in d.Staged??[]) staged.Add(FileItem.FromCliItem(f));
 
             UnstagedFiles = unstaged;
             StagedFiles = staged;
