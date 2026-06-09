@@ -334,4 +334,203 @@ private async Task SomeOperation()
 
 ---
 
+## 十五、各模块职责详解
+
+### 整体架构
+
+```
+┌─────────────────────────────┐          ┌─────────────────────────────┐
+│       发布者的工作站          │          │       终端用户的机器          │
+│                             │          │                             │
+│  ┌───────────┐              │          │                             │
+│  │publish-gui│ 只存项目配置  │          │  ┌─────────┐               │
+│  │ (GUI壳子) │ 不调用API    │          │  │ client  │──→ 应用程序    │
+│  └─────┬─────┘              │          │  │ (更新器) │   (被更新目标) │
+│        │ 子进程调用          │          │  └────┬────┘               │
+│        ▼                    │          │       │                   │
+│  ┌───────────┐              │          │       │                   │
+│  │publish-cli│──────────────┼──┐       └───────┼───────────────────┘
+│  │ (发布引擎) │              │  │               │
+│  └─────┬─────┘              │  │               │
+│        │ 扫描               │  │  HTTP         │  HTTP
+│        ▼                    │  │               │
+│  ┌───────────┐              │  │               │
+│  │ 本地构建   │              │  │               │
+│  │ 产物目录   │              │  │               │
+│  └───────────┘              │  │               │
+│                             │  │               │
+└─────────────────────────────┘  │               │
+                                 ▼               ▼
+                          ┌───────────────────────────┐
+                          │        server             │
+                          │   项目管理 / 文件存储       │
+                          │   版本记录 / 文件清单       │
+                          └───────────────────────────┘
+```
+
+---
+
+### server — 服务端
+
+**定位：** 纯后端 API 服务，不包含任何业务逻辑，只负责数据存储和文件管理。
+
+**核心职责：**
+- **项目管理**：创建/更新/删除项目，记录项目名称、版本号、强制更新标志、忽略规则
+- **文件管理**：接收上传文件、存储文件、提供文件下载（支持断点续传 Range 请求）、记录每个文件的 MD5/SHA256
+- **版本管理**：记录每次发布的版本号、变更说明、发布时间，维护变更日志（ProjectChangeLog）
+- **文件清单**：根据项目 ID 返回该版本下所有文件的路径、大小、校验值（供 client 比对差异）
+
+**不做的事：**
+- 不关心文件是怎么来的（CLI 传的还是 GUI 传的）
+- 不关心谁在下载更新
+- 不做文件差异计算（差异比对是 publish-cli 和 client 各自在本地完成的）
+
+**关键数据模型：**
+- `Project`：id, name, title, version, force_update, ignore_folders, ignore_files
+- `ProjectChangeLog`：id, project_id, version, logs(数组), time
+- 存储的文件按 `{exe_dir}/data/{project_name}/` 目录组织
+
+---
+
+### publish-cli — 发布引擎（核心）
+
+**定位：** 类 Git 工作流的命令行工具，是整个发布流程的核心引擎。publish-gui 通过子进程调用它，不直接调用 server API。
+
+**类比 Git 的核心概念：**
+
+| Git 概念 | publish-cli 对应 | 存储位置 |
+|----------|-----------------|---------|
+| 工作区 (Working Directory) | 本地构建产物目录 | 开发者指定的 `--path` |
+| 暂存区 (Staging Area / Index) | `staged-files.json` | `<projectPath>/.publish-cli/staging/staged-files.json` |
+| 仓库 (Repository) | server 上的文件存储 | server API |
+| `.git/config` | `.publish-cli/config.json` | `<projectPath>/.publish-cli/config.json` |
+| `git add` | `publish-cli add` | 计算 MD5，写入暂存区 |
+| `git status` | `publish-cli status` | 扫描本地文件 vs 服务端文件，显示差异 |
+| `git push` | `publish-cli push` | 上传暂存区文件 + 创建版本记录 |
+
+**配置层级（两级合并，项目覆盖全局）：**
+- 全局配置：`~/.publish-cli/config.json`
+- 项目配置：`<projectPath>/.publish-cli/config.json`
+
+**配置结构：**
+```json
+{
+  "server": { "url": "http://10.0.0.1:2000" },
+  "project": { "name": "myapp", "path": "/path/to/build", "id": 1 },
+  "ignore": { "folders": ["logs", "temp"], "files": ["*.log", ".DS_Store"] }
+}
+```
+
+**核心命令：**
+
+| 命令 | 作用 | 类比 |
+|------|------|------|
+| `config init` | 初始化项目配置（server地址、项目名、ID） | `git init` + `git remote add` |
+| `status` | 扫描本地文件，对比服务端文件，显示新增/修改/删除/未变化 | `git status` |
+| `add [--all \| <file>...]` | 将文件加入暂存区（计算 MD5 快照） | `git add` |
+| `reset [--all \| <file>...]` | 将文件从暂存区移除 | `git reset` |
+| `staged` | 查看暂存区内容 | `git diff --cached` |
+| `push --version <v> --message <msg>` | 上传暂存区文件到 server + 创建版本记录 | `git push` |
+| `push-all --version <v>` | 跳过暂存区，直接上传所有变更文件 | 快捷方式 |
+| `publish --version <v> --message <msg>` | 一键流：status → add --all → push | `git add -A && git commit && git push` |
+| `log [--limit N]` | 查看服务端版本历史 | `git log` |
+| `watch [--auto-add]` | 轮询文件变化，可自动暂存 | 文件监控 |
+
+**文件差异比对机制：**
+1. `ScanDirectory()` 递归扫描本地目录（跳过 `.publish-cli` 和忽略规则），对每个文件同时计算 MD5 和 SHA256
+2. 从 server 拉取文件清单（`GET /api/file/get_all_files/{projectId}`）
+3. 按相对路径做 diff：本地有服务端没有 → `new`，MD5 不同 → `modified`，服务端有本地没有 → `deleted`
+
+**发布流程（push）：**
+1. 加载暂存区文件列表
+2. `staging.Verify()` 重新计算 MD5，校验文件在 add 后是否被修改过
+3. 逐个上传文件（`POST /api/file/upload_file`，multipart）
+4. 调用 `POST /api/project/publish_version` 创建版本记录
+5. 清空暂存区
+
+---
+
+### publish-gui — 发布 GUI
+
+**定位：** 面向发布者的图形界面，**纯前端壳子**，所有发布操作都通过子进程调用 publish-cli 完成，自身不直接调用 server API。
+
+**存储的内容（只存配置，不存数据）：**
+- `%LOCALAPPDATA%/PublishGui/config.json`：项目列表（项目名、服务端地址、本地路径、项目 ID）
+- 不缓存文件内容、不缓存版本历史，所有数据实时从 publish-cli 获取
+
+**与 publish-cli 的关系：**
+```
+GUI 用户点击"刷新"  →  CliService.RunAsync("status")  →  ProcessService  →  publish-cli.exe status --json
+GUI 用户点击"全部暂存" →  CliService.RunAsync("add --all") →  ProcessService  →  publish-cli.exe add --all --json
+GUI 用户点击"发布"    →  CliService.RunAsync("push ...")  →  ProcessService  →  publish-cli.exe push --version ... --json
+```
+
+**唯一不经过 publish-cli 的操作：**
+- 添加项目时调用 `publish-cli config init` 初始化本地配置
+- 添加项目时通过 `publish-cli project list` / `publish-cli project create` 操作服务端项目
+
+---
+
+### client — 终端用户更新器
+
+**定位：** 集成到最终用户的应用程序中，负责检测更新、下载更新、原子替换应用文件。用 Go 1.10 编译以兼容 Windows XP。
+
+**更新状态机（version.json）：**
+```
+applied → (检测到新版本) → downloaded → applying → applied
+                ↑                              │
+                └──────── rollback ─────────────┘
+```
+
+**七个命令：**
+
+| 命令 | 作用 | 使用场景 |
+|------|------|---------|
+| `check_update` | 比较本地版本与服务端最新版本，返回是否有更新及是否强制更新 | 应用启动时定期调用 |
+| `check_diff` | 列出本地与服务端文件的 MD5/SHA256 差异 | 诊断更新问题 |
+| `download_update` | 下载变更文件（仅下载 MD5 不同的文件），支持断点续传（>100MB 用 Range 请求） | 用户确认更新后 |
+| `apply_update` | 原子文件夹替换（关闭进程 → 备份当前 → 替换为新版 → 重启应用） | 下载完成后 |
+| `rollback --version X` | 回退到指定版本（版本目录是之前 apply 时保存的完整快照） | 新版有问题时 |
+| `list_rollback_versions` | 列出可回退的版本目录 | 查看历史版本 |
+| `check_self_update` | 检查更新器自身是否需要替换（比对 SHA256） | 更新器自身升级 |
+
+**原子替换机制（apply_update）：**
+1. 设置状态为 `applying`（写入 version.json）
+2. 发送 `WM_CLOSE` 优雅关闭目标进程，超时后 `TerminateProcess`
+3. 将当前应用目录备份为 `ApplicationFolder_{oldVersion}/`
+4. 将新版目录重命名为应用目录
+5. 设置状态为 `applied`，启动主程序
+6. 如果中途崩溃，下次运行时根据 `applying` 状态自动恢复
+
+**文件目录结构：**
+```
+PackageFolder/                          ← main_exe_relative_path 的父目录
+├── ApplicationFolder/                  ← 当前活跃的应用目录（被更新的目标）
+├── ApplicationFolder_V1.0.0/          ← 版本备份（可用于回退）
+├── ApplicationFolder_V1.0.1/
+└── UpdateFolder/                       ← client-updator.exe 所在目录
+    ├── client-updator.exe
+    ├── client.yaml
+    ├── version.json
+    └── logs/
+```
+
+---
+
+### 模块间通信关系
+
+```
+publish-gui  ──子进程──→  publish-cli  ──HTTP──→  server  ←──HTTP──  client
+   │                       │                       │                   │
+   │ config.json           │ .publish-cli/         │ SQLite            │ client.yaml
+   │ (项目名/路径/ID)       │ config.json           │ (项目/文件/版本)    │ version.json
+   │                       │ staging/              │                   │ (版本/状态)
+   │                       │ staged-files.json     │                   │
+```
+
+- **publish-gui → publish-cli**：通过 `ProcessService` 启动子进程，传入 `--json` 参数获取 JSON 输出
+- **publish-cli → server**：HTTP REST API（上传文件、查询文件清单、创建版本）
+- **client → server**：HTTP REST API（查询版本、获取文件清单、下载文件）
+- **publish-gui ↔ publish-cli**：共享同一个 `.publish-cli/config.json`（GUI 通过 `config init` 写入，CLI 读取）
+
 > **版本**: 2.0 | **适用范围**: publish/publish-gui/（.NET 8 + Avalonia 12 + CommunityToolkit.Mvvm + Semi.Avalonia + Ursa.Avalonia）
