@@ -20,9 +20,6 @@ public class ProcessService
     public async Task<ProcessResult> RunAsync(
         string fileName, string arguments, string? workingDir = null, int timeoutMs = 30000)
     {
-        var sbOut = new StringBuilder();
-        var sbErr = new StringBuilder();
-
         var psi = new ProcessStartInfo
         {
             FileName = fileName,
@@ -40,14 +37,9 @@ public class ProcessService
 
         using var proc = new Process { StartInfo = psi };
 
-        proc.OutputDataReceived += (_, e) => { if (e.Data != null) sbOut.AppendLine(e.Data); };
-        proc.ErrorDataReceived += (_, e) => { if (e.Data != null) sbErr.AppendLine(e.Data); };
-
         try
         {
             proc.Start();
-            proc.BeginOutputReadLine();
-            proc.BeginErrorReadLine();
 
             using var cts = new CancellationTokenSource(timeoutMs);
             try
@@ -62,14 +54,15 @@ public class ProcessService
                 return new ProcessResult { Success = false, StandardError = "进程执行超时" };
             }
 
-            // WaitForExitAsync 不保证异步输出已刷新，必须再调用同步版确保 OutputDataReceived 全部触发
-            proc.WaitForExit();
+            // 进程已退出，文件流已关闭，此时同步读取不会死锁
+            var stdout = proc.StandardOutput.ReadToEnd();
+            var stderr = proc.StandardError.ReadToEnd();
 
             var result = new ProcessResult
             {
                 Success = proc.ExitCode == 0,
-                StandardOutput = sbOut.ToString().Trim(),
-                StandardError = sbErr.ToString().Trim(),
+                StandardOutput = stdout.Trim(),
+                StandardError = stderr.Trim(),
                 ExitCode = proc.ExitCode
             };
 
