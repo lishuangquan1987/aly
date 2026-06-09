@@ -65,7 +65,8 @@ public class CliService
             return Fail<T>("未找到 publish-cli.exe");
         }
 
-        var fullArgs = $"{args} --json --path \"{projectPath.TrimEnd('\\', '/')}\"";
+        var safePath = projectPath ?? string.Empty;
+        var fullArgs = $"{args} --json --path \"{safePath.TrimEnd('\\', '/')}\"";
         Log.Debug("执行 CLI: {Cli} {Args}", _cliPath, fullArgs);
 
         var result = await _ps.RunAsync(_cliPath, fullArgs, timeoutMs: timeoutMs);
@@ -128,10 +129,11 @@ public class CliService
 
     public Task<CliOutput<object>?> ConfigInitAsync(string projectPath, string serverUrl, string projectName, int projectId)
     {
-        var trimmedPath = projectPath.TrimEnd('\\', '/');
+        var safePath = projectPath ?? string.Empty;
+        var trimmedPath = safePath.TrimEnd('\\', '/');
         var args = $"config init --server \"{serverUrl}\" --project \"{projectName}\" --path \"{trimmedPath}\"";
         if (projectId > 0) args += $" --id {projectId}";
-        return RunAsync<object>(args, projectPath);
+        return RunAsync<object>(args, safePath);
     }
 
     public Task<CliOutput<List<ProjectInfo>>?> ProjectListAsync(string serverUrl)
