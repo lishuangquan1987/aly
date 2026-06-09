@@ -32,6 +32,15 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private bool _isCliFound;
     [ObservableProperty] private string _cliPath = string.Empty;
 
+    public IAsyncRelayCommand RefreshCommand { get; }
+    public IAsyncRelayCommand AddAllCommand { get; }
+    public IAsyncRelayCommand ResetAllCommand { get; }
+    public IAsyncRelayCommand AddSelectedCommand { get; }
+    public IAsyncRelayCommand ResetSelectedCommand { get; }
+    public IAsyncRelayCommand PublishCommand { get; }
+    public IAsyncRelayCommand AddProjectCommand { get; }
+    public IAsyncRelayCommand RemoveProjectCommand { get; }
+
     public MainWindowViewModel(CliService cli, ConfigService cfg)
     {
         _cli = cli;
@@ -39,6 +48,16 @@ public partial class MainWindowViewModel : ObservableObject
         IsCliFound = _cli.Found;
         CliPath = _cli.CliPath;
         Log.Information("MainWindowViewModel 初始化: CliFound={Found}, CliPath={Path}", IsCliFound, CliPath);
+
+        RefreshCommand = new AsyncRelayCommand(RefreshAsync);
+        AddAllCommand = new AsyncRelayCommand(AddAllAsync);
+        ResetAllCommand = new AsyncRelayCommand(ResetAllAsync);
+        AddSelectedCommand = new AsyncRelayCommand(AddSelectedAsync);
+        ResetSelectedCommand = new AsyncRelayCommand(ResetSelectedAsync);
+        PublishCommand = new AsyncRelayCommand(PublishAsync);
+        AddProjectCommand = new AsyncRelayCommand(AddProjectAsync);
+        RemoveProjectCommand = new AsyncRelayCommand(RemoveProjectAsync);
+
         LoadProjects();
     }
 
@@ -62,7 +81,6 @@ public partial class MainWindowViewModel : ObservableObject
         if (value != null) _ = RefreshAsync();
     }
 
-    [RelayCommand]
     private async Task RefreshAsync()
     {
         if (SelectedProject == null || IsBusy)
@@ -121,7 +139,6 @@ public partial class MainWindowViewModel : ObservableObject
         finally { IsBusy = false; }
     }
 
-    [RelayCommand]
     private async Task AddAllAsync()
     {
         if (SelectedProject == null || IsBusy) return;
@@ -137,7 +154,6 @@ public partial class MainWindowViewModel : ObservableObject
         finally { IsBusy = false; }
     }
 
-    [RelayCommand]
     private async Task ResetAllAsync()
     {
         if (SelectedProject == null || IsBusy) return;
@@ -158,7 +174,6 @@ public partial class MainWindowViewModel : ObservableObject
         finally { IsBusy = false; }
     }
 
-    [RelayCommand]
     private async Task AddSelectedAsync()
     {
         if (SelectedProject == null || IsBusy) return;
@@ -181,7 +196,6 @@ public partial class MainWindowViewModel : ObservableObject
         finally { IsBusy = false; }
     }
 
-    [RelayCommand]
     private async Task ResetSelectedAsync()
     {
         if (SelectedProject == null || IsBusy) return;
@@ -189,7 +203,6 @@ public partial class MainWindowViewModel : ObservableObject
         if (files.Count == 0) { StatusMessage = "未选中文件"; return; }
         IsBusy = true;
         Log.Information("取消暂存选中: Project={Name}, Count={Count}", SelectedProject.ProjectName, files.Count);
-        // 保存需要保留的未暂存文件路径（先于 reset-all，避免 reset 后数据丢失）
         var keepPaths = UnstagedFiles.Where(f => !f.IsSelected).Select(f => f.RelativePath).ToList();
         try
         {
@@ -224,7 +237,6 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
     private async Task PublishAsync()
     {
         if (SelectedProject == null || IsBusy) return;
@@ -258,7 +270,6 @@ public partial class MainWindowViewModel : ObservableObject
         finally { IsBusy = false; }
     }
 
-    [RelayCommand]
     private async Task AddProjectAsync()
     {
         Log.Information("打开添加项目对话框");
@@ -272,7 +283,6 @@ public partial class MainWindowViewModel : ObservableObject
             _cfg.AddProject(cfg);
             Projects.Add(cfg);
 
-            // 初始化 publish-cli 本地配置（创建 .publish-cli/config.json）
             StatusMessage = "正在初始化本地配置...";
             Log.Information("初始化 publish-cli 本地配置: Path={Path}, Server={Server}, Name={Name}, Id={Id}",
                 cfg.ProjectPath, cfg.ServerUrl, cfg.ProjectName, cfg.ProjectId);
@@ -292,7 +302,6 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
     private Task RemoveProjectAsync()
     {
         if (SelectedProject == null) return Task.CompletedTask;
