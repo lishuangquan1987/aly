@@ -8,6 +8,7 @@ import (
 	"clientupdator/server/models"
 	"fmt"
 	"runtime"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shirou/gopsutil/cpu"
@@ -249,5 +250,3 @@ func GetProjectOSInfo(ctx *gin.Context) {
 		Data:      serverOSInfo,
 	})
 }
-
-
