@@ -89,6 +89,16 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
         IsBusy = true;
+        try
+        {
+            await RefetchDataAsync();
+        }
+        finally { IsBusy = false; }
+    }
+
+    private async Task RefetchDataAsync()
+    {
+        if (SelectedProject == null) return;
         StatusMessage = "刷新中...";
         Log.Information("开始刷新: Project={Name}, Path={Path}",
             SelectedProject.ProjectName, SelectedProject.ProjectPath);
@@ -136,7 +146,6 @@ public partial class MainWindowViewModel : ObservableObject
             StatusMessage = $"刷新异常: {ex.Message}";
             Log.Error(ex, "刷新异常");
         }
-        finally { IsBusy = false; }
     }
 
     private async Task AddAllAsync()
@@ -149,7 +158,7 @@ public partial class MainWindowViewModel : ObservableObject
             var r = await _cli.AddAllAsync(SelectedProject.ProjectPath);
             Log.Information("暂存全部结果: IsSuccess={Ok}, ErrorMsg={Err}", r?.IsSuccess, r?.ErrorMsg);
             StatusMessage = r?.IsSuccess == true ? "已添加所有变更" : $"添加失败: {r?.ErrorMsg}";
-            await RefreshAsync();
+            await RefetchDataAsync();
         }
         finally { IsBusy = false; }
     }
@@ -164,7 +173,7 @@ public partial class MainWindowViewModel : ObservableObject
             var r = await _cli.ResetAllAsync(SelectedProject.ProjectPath);
             Log.Information("清空暂存区结果: IsSuccess={Ok}, ErrorMsg={Err}", r?.IsSuccess, r?.ErrorMsg);
             StatusMessage = r?.IsSuccess == true ? "暂存区已清空" : $"重置失败: {r?.ErrorMsg}";
-            await RefreshAsync();
+            await RefetchDataAsync();
         }
         catch (Exception ex)
         {
@@ -186,7 +195,7 @@ public partial class MainWindowViewModel : ObservableObject
             var r = await _cli.AddFilesAsync(SelectedProject.ProjectPath, files);
             Log.Information("暂存选中结果: IsSuccess={Ok}, ErrorMsg={Err}", r?.IsSuccess, r?.ErrorMsg);
             StatusMessage = r?.IsSuccess == true ? $"已暂存 {files.Count} 个文件" : $"添加失败: {r?.ErrorMsg}";
-            await RefreshAsync();
+            await RefetchDataAsync();
         }
         catch (Exception ex)
         {
@@ -233,7 +242,7 @@ public partial class MainWindowViewModel : ObservableObject
         finally
         {
             IsBusy = false;
-            await RefreshAsync();
+            await RefetchDataAsync();
         }
     }
 
@@ -258,7 +267,7 @@ public partial class MainWindowViewModel : ObservableObject
                 StatusMessage = $"发布成功: {NewVersion}";
                 NewVersion = string.Empty;
                 CommitMessage = string.Empty;
-                await RefreshAsync();
+                await RefetchDataAsync();
             }
             else StatusMessage = $"发布失败: {r?.ErrorMsg}";
         }
