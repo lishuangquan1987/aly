@@ -62,6 +62,9 @@ public class ProcessService
                 return new ProcessResult { Success = false, StandardError = "进程执行超时" };
             }
 
+            // WaitForExitAsync 不保证异步输出已刷新，必须再调用同步版确保 OutputDataReceived 全部触发
+            proc.WaitForExit();
+
             var result = new ProcessResult
             {
                 Success = proc.ExitCode == 0,
