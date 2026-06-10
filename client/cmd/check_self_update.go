@@ -4,7 +4,6 @@ import (
 	"flag"
 	"os"
 
-	"zap/client/config"
 	"zap/client/model"
 	"zap/client/util"
 )
