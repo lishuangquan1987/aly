@@ -31,7 +31,11 @@ public class ProcessService
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8
         };
-        if (workingDir != null) psi.WorkingDirectory = workingDir;
+        if (!string.IsNullOrWhiteSpace(workingDir))
+        {
+            psi.WorkingDirectory = workingDir;
+            Log.Debug("工作目录: {WorkDir}", workingDir);
+        }
 
         Log.Debug("启动进程: {File} {Args} (超时={Timeout}ms)", fileName, arguments, timeoutMs);
 

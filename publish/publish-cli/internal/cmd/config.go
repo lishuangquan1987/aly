@@ -188,7 +188,8 @@ func runConfigList(cmd *cobra.Command, args []string) {
 }
 
 func runConfigPath(cmd *cobra.Command, args []string) {
-	fmt.Println(config.UpdatorDir(projectPath))
+	cfg, _ := resolveConfig()
+	fmt.Println(config.UpdatorDir(cfg.Path))
 }
 
 //  helpers 

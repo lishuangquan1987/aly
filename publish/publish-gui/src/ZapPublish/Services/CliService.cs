@@ -12,22 +12,17 @@ namespace ZapPublish.Services;
 public class CliService
 {
     private readonly ProcessService _ps;
-    private string _cliPath;
 
-    public string CliPath
-    {
-        get => _cliPath;
-        set => _cliPath = value;
-    }
+    public string CliPath => FindCliDefault();
+    
 
     public CliService(ProcessService ps)
     {
         _ps = ps;
-        _cliPath = FindCliDefault();
-        Log.Debug("CliService 初始化: Found={Found}, Path={Path}", Found, _cliPath);
+        Log.Debug("CliService 初始化: Found={Found}, Path={Path}", Found, CliPath);
     }
 
-    public bool Found => !string.IsNullOrEmpty(_cliPath) && File.Exists(_cliPath);
+    public bool Found => !string.IsNullOrEmpty(CliPath) && File.Exists(CliPath);
 
     private static string FindCliDefault()
     {
@@ -53,7 +48,7 @@ public class CliService
         return string.Empty;
     }
 
-    public string? FindCli() => Found ? _cliPath : null;
+    public string? FindCli() => Found ? CliPath : null;
 
     // ── Generic runner ──────────────────────────────────
 
@@ -61,15 +56,15 @@ public class CliService
     {
         if (!Found)
         {
-            Log.Error("zap-publish.exe 未找到，无法执行命令: {Args}", args);
-            return Fail<T>("未找到 zap-publish.exe");
+            Log.Error("zap-publish 未找到，无法执行命令: {Args}", args);
+            return Fail<T>("未找到 zap-publish");
         }
 
-        var safePath = projectPath ?? string.Empty;
-        var fullArgs = $"{args} --json --path \"{safePath.TrimEnd('\\', '/')}\"";
-        Log.Debug("执行 CLI: {Cli} {Args}", _cliPath, fullArgs);
+        var fullArgs = $"{args} --json";
+        var workDir = string.IsNullOrWhiteSpace(projectPath) ? null : projectPath;
+        Log.Debug("执行 CLI: {Cli} {Args} (WorkDir={WorkDir})", CliPath, fullArgs, workDir ?? "(无)");
 
-        var result = await _ps.RunAsync(_cliPath, fullArgs, timeoutMs: timeoutMs);
+        var result = await _ps.RunAsync(CliPath, fullArgs, workDir, timeoutMs: timeoutMs);
 
         Log.Information("CLI 执行结果: Success={Success}, ExitCode={Code}, StdOut长度={OutLen}, StdErr={Err}",
             result.Success, result.ExitCode, result.StandardOutput?.Length ?? 0,
@@ -129,10 +124,8 @@ public class CliService
 
     public Task<CliOutput<object>?> ConfigInitAsync(string projectPath, string serverUrl, string projectName)
     {
-        var safePath = projectPath ?? string.Empty;
-        var trimmedPath = safePath.TrimEnd('\\', '/');
-        var args = $"config init --server \"{serverUrl}\" --project \"{projectName}\" --path \"{trimmedPath}\"";
-        return RunAsync<object>(args, safePath);
+        var args = $"config init --server \"{serverUrl}\" --project \"{projectName}\"";
+        return RunAsync<object>(args, projectPath);
     }
 
     public Task<CliOutput<List<ProjectInfo>>?> ProjectListAsync(string serverUrl)

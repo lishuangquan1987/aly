@@ -15,7 +15,6 @@ import (
 var (
 	serverURL   string
 	projectName string
-	projectPath string
 	projectID   int
 	jsonOutput  bool
 	quiet       bool
@@ -25,7 +24,7 @@ var (
 type RuntimeConfig struct {
 	Shared  config.SharedConfig
 	Publish config.PublishConfig
-	Path    string // 项目路径（--path CLI 参数）
+	Path    string // 当前工作目录（由调用者通过 cd / WorkingDirectory 指定）
 	ID      int    // 项目 ID（--id CLI 参数）
 }
 
@@ -60,23 +59,20 @@ func printHumanLn(format string, args ...interface{}) {
 	fmt.Printf(format+"\n", args...)
 }
 
-// resolveConfig 解析配置（.updator/ 文件 + CLI 参数覆盖）
-// 不指定 --path 时使用当前目录，对标 git init 的行为。
+// resolveConfig 解析配置（从当前工作目录的 .updator/ 文件读取 + CLI 参数覆盖）
+// 对标 git，始终使用当前目录（由调用者通过 cd 或 WorkingDirectory 指定）。
 func resolveConfig() (RuntimeConfig, error) {
-	if projectPath == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return RuntimeConfig{}, fmt.Errorf("无法获取当前目录: %w", err)
-		}
-		projectPath = cwd
+	cwd, err := os.Getwd()
+	if err != nil {
+		return RuntimeConfig{}, fmt.Errorf("无法获取当前目录: %w", err)
 	}
 
-	shared, err := config.LoadShared(projectPath)
+	shared, err := config.LoadShared(cwd)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to load shared.json: %v\n", err)
 		shared = config.DefaultShared()
 	}
-	publish, err := config.LoadPublish(projectPath)
+	publish, err := config.LoadPublish(cwd)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to load publish.json: %v\n", err)
 		publish = config.DefaultPublish()
@@ -93,7 +89,7 @@ func resolveConfig() (RuntimeConfig, error) {
 	return RuntimeConfig{
 		Shared:  shared,
 		Publish: publish,
-		Path:    projectPath,
+		Path:    cwd,
 		ID:      projectID,
 	}, nil
 }
@@ -143,7 +139,6 @@ var RootCmd = &cobra.Command{
 func init() {
 	RootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "服务器地址")
 	RootCmd.PersistentFlags().StringVar(&projectName, "project", "", "项目名称")
-	RootCmd.PersistentFlags().StringVar(&projectPath, "path", "", "本地构建产物路径（不指定则用当前目录）")
 	RootCmd.PersistentFlags().IntVar(&projectID, "id", 0, "项目ID（直传，跳过名称查找）")
 	RootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "JSON 格式输出")
 	RootCmd.PersistentFlags().BoolVar(&quiet, "quiet", false, "静默模式")

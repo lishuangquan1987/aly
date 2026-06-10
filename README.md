@@ -181,11 +181,11 @@ zap-server-windows-amd64.exe -p 2000
 ### 2. 初始化项目并发布
 
 ```bash
-# 1. 初始化项目配置（创建 .updator/shared.json + .updator/publish.json）
+# 1. 进入项目目录，初始化项目配置（创建 .updator/shared.json + .updator/publish.json）
+cd ./dist
 zap-publish config init \
   --server http://localhost:2000 \
-  --project myapp \
-  --path ./dist
+  --project myapp
 
 # 2. 查看差异
 zap-publish status
@@ -334,7 +334,7 @@ go build -ldflags="-s -w" -o zap-publish.exe .
 |------|------|--------|
 | `--server` | 服务器地址 | 配置文件 `server_url` |
 | `--project` | 项目名称 | 配置文件 `project_name` |
-| `--path` | 本地构建产物路径 | CLI 参数（必传），zap-publish-gui 的本地配置 |
+
 | `--id` | 项目 ID（直传，跳过名称查找） | 无（纯 CLI 参数） |
 | `--json` | JSON 格式输出 | `false`（默认人类可读） |
 | `--quiet` | 静默模式 | `false` |
@@ -343,8 +343,8 @@ go build -ldflags="-s -w" -o zap-publish.exe .
 
 `resolveConfig()` 函数按以下优先级合并配置：
 
-1. **CLI 参数**（`--server`、`--project`、`--path`、`--id`）
-2. **项目级配置**（`.updator/shared.json` + `.updator/publish.json`，当指定 `--path` 时加载）
+1. **CLI 参数**（`--server`、`--project`、`--id`）
+2. **项目级配置**（`.updator/shared.json` + `.updator/publish.json`，从当前工作目录读取）
 
 合并规则：非零/非空值覆盖（CLI 参数 > `.updator/`）。
 
@@ -365,10 +365,10 @@ go build -ldflags="-s -w" -o zap-publish.exe .
 初始化项目配置，创建 `.updator/shared.json` 和 `.updator/publish.json`。
 
 ```bash
+cd ./dist
 zap-publish config init \
   --server http://localhost:2000 \
-  --project myapp \
-  --path ./dist
+  --project myapp
 ```
 
 **实现**：
@@ -430,7 +430,7 @@ zap-publish config list
 zap-publish config path
 ```
 
-**实现**：当指定 `--path` 时输出 `.updator/` 路径，否则输出全局配置路径。
+**实现**：输出当前工作目录下的 `.updator/` 路径。
 
 ---
 
@@ -501,7 +501,7 @@ zap-publish project info --name myapp
 查看本地与服务端的文件差异，分为 staged（已暂存）、unstaged（未暂存）、unchanged（无变化）三组。
 
 ```bash
-zap-publish status --project myapp --path ./dist
+zap-publish status --project myapp
 ```
 
 **实现**：
@@ -1003,19 +1003,19 @@ dotnet build
 **CliService** — zap-publish 命令封装
 
 - 自动查找 `zap-publish.exe`（同级目录 → 相对路径回退）
-- `RunAsync<T>(args, projectPath, timeoutMs)` → 自动追加 `--json --path "{projectPath}"` → 调 ProcessService → 解析 stdout JSON 为 `CliOutput<T>`
+- `RunAsync<T>(args, projectPath, timeoutMs)` → 自动追加 `--json` → 设 `WorkingDirectory` 为项目路径 → 调 ProcessService → 解析 stdout JSON 为 `CliOutput<T>`
 - 每个公开方法对应一个 CLI 命令：
 
 ### UI 操作 → CLI 命令映射
 
 | UI 操作 | ViewModel 方法 | 调用的 CLI 命令 |
 |---------|---------------|----------------|
-| **刷新** | `RefreshAsync()` | `zap-publish status --json --path "{path}"` + `zap-publish log --limit 20 --json --path "{path}"` |
-| **全部暂存** | `AddAllAsync()` | `zap-publish add --all --json --path "{path}"` |
-| **清空暂存** | `ResetAllAsync()` | `zap-publish reset --all --json --path "{path}"` |
-| **暂存选中文件** | `AddSelectedAsync()` | `zap-publish add "file1" "file2" ... --json --path "{path}"` |
-| **取消暂存选中** | `ResetSelectedAsync()` | 先 `zap-publish reset --all --json --path "{path}"`，再 `zap-publish add "保留文件1" ... --json --path "{path}"` |
-| **发布** | `PublishAsync()` | `zap-publish push --version "{ver}" --message "{msg}" --json --path "{path}"`（timeout 120s） |
+| **刷新** | `RefreshAsync()` | `zap-publish status --json` + `zap-publish log --limit 20 --json` |
+| **全部暂存** | `AddAllAsync()` | `zap-publish add --all --json` |
+| **清空暂存** | `ResetAllAsync()` | `zap-publish reset --all --json` |
+| **暂存选中文件** | `AddSelectedAsync()` | `zap-publish add "file1" "file2" ... --json` |
+| **取消暂存选中** | `ResetSelectedAsync()` | 先 `zap-publish reset --all --json`，再 `zap-publish add "保留文件1" ... --json` |
+| **发布** | `PublishAsync()` | `zap-publish push --version "{ver}" --message "{msg}" --json`（timeout 120s） |
 | **添加项目** | `AddProjectAsync()` | 打开 AddProjectDialog → 填写服务端地址、选择/创建项目、选择本地路径 → 返回 ProjectConfig（仅 DisplayName + ProjectPath） |
 | **移除项目** | `RemoveProjectAsync()` | 仅操作本地 ConfigService，不调用 CLI |
 
@@ -1224,8 +1224,7 @@ npm run build
 zap-publish config set server.url $DEPLOY_SERVER
 zap-publish config set project.name $PROJECT_NAME
 
-zap-publish publish \
-  --path ./dist \
+cd ./dist && zap-publish publish \
   --version $BUILD_VERSION \
   --message "CI Build #${BUILD_NUMBER}"
 
