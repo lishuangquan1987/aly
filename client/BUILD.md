@@ -10,13 +10,13 @@
 ### 1. 删除 GOPATH 下的旧源码
 
 ```batch
-rmdir /s /q %GOPATH%\src\clientupdator\client
+rmdir /s /q %GOPATH%\src\zap\client
 ```
 
 ### 2. 将工作目录的源码复制到 GOPATH
 
 ```batch
-xcopy /e /i /y client %GOPATH%\src\clientupdator\client
+xcopy /e /i /y client %GOPATH%\src\zap\client
 ```
 
 > 注意：当前命令在项目根目录（`Zap/`）下执行，`client` 是工作目录下的源码目录。
@@ -58,10 +58,10 @@ REM 构建 zap-update（32位，兼容 XP）
 REM 需要 Go 1.10，且项目位于 GOPATH/src/zap/client 下
 
 echo 正在清理 GOPATH 旧源码...
-rmdir /s /q %GOPATH%\src\clientupdator\client
+rmdir /s /q %GOPATH%\src\zap\client
 
 echo 正在复制源码到 GOPATH...
-xcopy /e /i /y client %GOPATH%\src\clientupdator\client >nul
+xcopy /e /i /y client %GOPATH%\src\zap\client >nul
 
 echo 正在编译 zap-update.exe (GOARCH=386) ...
 set GOOS=windows

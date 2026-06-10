@@ -33,7 +33,7 @@ public partial class App : Application
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
 
-        Log.Information("=== PublishGui 启动 ===");
+        Log.Information("=== ZapPublish 启动 ===");
         Log.Information("日志目录: {Dir}", logDir);
 
         var svc = new ServiceCollection();
@@ -48,7 +48,7 @@ public partial class App : Application
             desktop.MainWindow = new MainWindow { DataContext = Services.GetRequiredService<MainWindowViewModel>() };
             desktop.ShutdownRequested += (_, _) =>
             {
-                Log.Information("=== PublishGui 关闭 ===");
+                Log.Information("=== ZapPublish 关闭 ===");
                 Log.CloseAndFlush();
             };
         }

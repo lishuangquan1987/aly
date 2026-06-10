@@ -1,6 +1,6 @@
 # Zap — 客户端自动更新系统
 
-一个轻量级的客户端自动更新解决方案，包含四个模块：zap-server（服务端）、zap-publish（发布引擎，原 publish-cli）、ZapPublish（发布 GUI）、zap-update（终端更新器）。
+一个轻量级的客户端自动更新解决方案，包含四个模块：zap-server（服务端）、zap-publish（发布引擎，原 zap-publish）、ZapPublish（发布 GUI）、zap-update（终端更新器）。
 
 ## 项目结构
 

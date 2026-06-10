@@ -32,13 +32,13 @@ public class CliService
     private static string FindCliDefault()
     {
         var exeDir = AppDomain.CurrentDomain.BaseDirectory;
-        var exeName = OperatingSystem.IsWindows() ? "zap-publish.exe" : "publish-cli";
-        Log.Debug("查找 publish-cli: BaseDirectory={Dir}", exeDir);
+        var exeName = OperatingSystem.IsWindows() ? "zap-publish.exe" : "zap-publish";
+        Log.Debug("查找 zap-publish: BaseDirectory={Dir}", exeDir);
 
         var same = Path.Combine(exeDir, exeName);
         if (File.Exists(same))
         {
-            Log.Debug("找到 publish-cli: {Path}", same);
+            Log.Debug("找到 zap-publish: {Path}", same);
             return same;
         }
 
@@ -49,7 +49,7 @@ public class CliService
             return rel;
         }
 
-        Log.Warning("未找到 publish-cli");
+        Log.Warning("未找到 zap-publish");
         return string.Empty;
     }
 

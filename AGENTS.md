@@ -23,7 +23,7 @@
 
 | 元素 | 规则 | 示例 |
 | ---- | ---- | ---- |
-| 命名空间 | `PublishGui.{Layer}` | `PublishGui.Services` |
+| 命名空间 | `ZapPublish.{Layer}` | `ZapPublish.Services` |
 | 类 | PascalCase | `MainWindowViewModel` |
 | 接口 | `I` 前缀 + PascalCase | `IProjectApi` |
 | 属性 | PascalCase | `ServerUrl` |
@@ -35,12 +35,12 @@
 
 ## 二、模型设计规则（publish-gui）
 
-### 2.1 DTO（`PublishGui.Models.Cli`）
+### 2.1 DTO（`ZapPublish.Models.Cli`）
 
 - 用于 API 序列化/反序列化，使用 Newtonsoft.Json `[JsonProperty]`
 - 属性 `{ get; set; }`，集合默认 `new()`，字符串默认 `string.Empty`
 
-### 2.2 本地模型（`PublishGui.Models.Local`）
+### 2.2 本地模型（`ZapPublish.Models.Local`）
 
 - 用于 UI 绑定，继承 `ObservableObject`，使用 `[ObservableProperty]`
 - 枚举类型定义在同文件中
