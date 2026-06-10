@@ -45,6 +45,10 @@ public class ProcessService
         {
             proc.Start();
 
+            // 并发读取 stdout/stderr，防止管道缓冲区满导致子进程死锁
+            var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+            var stderrTask = proc.StandardError.ReadToEndAsync();
+
             using var cts = new CancellationTokenSource(timeoutMs);
             try
             {
@@ -58,9 +62,8 @@ public class ProcessService
                 return new ProcessResult { Success = false, StandardError = "进程执行超时" };
             }
 
-            // 进程已退出，文件流已关闭，此时同步读取不会死锁
-            var stdout = proc.StandardOutput.ReadToEnd();
-            var stderr = proc.StandardError.ReadToEnd();
+            var stdout = (await stdoutTask).Trim();
+            var stderr = (await stderrTask).Trim();
 
             var result = new ProcessResult
             {
