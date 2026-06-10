@@ -109,17 +109,51 @@ func normalizePath(p string) string {
 	return strings.Replace(p, "\\", "/", -1)
 }
 
-// printProgress 输出下载进度到 stdout，每行一个 JSON。
-// 调用者按行读取 stdout，json.Unmarshal 失败的行即为进度行（或错误输出）。
+// printProgress 输出下载进度到 stdout，每行统一用 {isSuccess, errorMsg, data} 包裹的 JSON。
+// data 中包含 index/total/file/status/file_size/error 字段。
 func printProgress(index, total int, file, status string, fileSize int64, errMsg string) {
-	bytes, _ := json.Marshal(model.DownloadProgress{
-		Index:    index,
-		Total:    total,
-		File:     file,
-		Status:   status,
-		FileSize: fileSize,
-		Error:    errMsg,
-	})
+	out := model.Output{
+		IsSuccess: true,
+		ErrMsg:    "",
+		Data: model.DownloadProgress{
+			Index:    index,
+			Total:    total,
+			File:     file,
+			Status:   status,
+			FileSize: fileSize,
+			Error:    errMsg,
+		},
+	}
+	bytes, _ := json.Marshal(out)
+	fmt.Println(string(bytes))
+}
+
+// printProgressFail 输出失败的进度行（isSuccess: false），后跟最终结果。
+func printProgressFail(index, total int, file string, fileSize int64, errMsg string) {
+	out := model.Output{
+		IsSuccess: false,
+		ErrMsg:    fmt.Sprintf("%s: %s", file, errMsg),
+		Data: model.DownloadProgress{
+			Index:    index,
+			Total:    total,
+			File:     file,
+			Status:   "FAIL",
+			FileSize: fileSize,
+			Error:    errMsg,
+		},
+	}
+	bytes, _ := json.Marshal(out)
+	fmt.Println(string(bytes))
+}
+
+// printProgressDone 输出最终完成行（isSuccess: true, data: null）。
+func printProgressDone() {
+	out := model.Output{
+		IsSuccess: true,
+		ErrMsg:    "",
+		Data:      nil,
+	}
+	bytes, _ := json.Marshal(out)
 	fmt.Println(string(bytes))
 }
 
