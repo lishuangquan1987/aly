@@ -45,7 +45,7 @@ public class CliService
         var rel = Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "..", "publish-cli", exeName));
         if (File.Exists(rel))
         {
-            Log.Debug("找到 publish-cli (相对路径): {Path}", rel);
+            Log.Debug("找到 zap-publish (开发路径): {Path}", rel);
             return rel;
         }
 
@@ -85,7 +85,7 @@ public class CliService
         if (string.IsNullOrWhiteSpace(result.StandardOutput))
         {
             Log.Warning("CLI 无输出");
-            return Fail<T>("publish-cli 无输出");
+            return Fail<T>("zap-publish 无输出");
         }
 
         try

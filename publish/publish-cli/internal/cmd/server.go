@@ -16,7 +16,7 @@ var cmdServer = &cobra.Command{
 
 var cmdServerInfo = &cobra.Command{
 	Use:   "info",
-	Short: "查看服务端系统信息（需指定 --project 或 --id）",
+	Short: "查看服务端系统信息",
 	Run:   runServerInfo,
 }
 
@@ -30,12 +30,8 @@ func runServerInfo(cmd *cobra.Command, args []string) {
 		outputResult(false, err.Error(), nil)
 		return
 	}
-	if err := requireProject(&cfg); err != nil {
-		outputResult(false, err.Error(), nil)
-		return
-	}
 	client := newAPIClient(cfg)
-	info, err := client.GetProjectOSInfo(cfg.Shared.ProjectName)
+	info, err := client.GetServerInfo()
 	if err != nil {
 		outputResult(false, err.Error(), nil)
 		return

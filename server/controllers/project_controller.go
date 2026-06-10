@@ -7,6 +7,8 @@ import (
 	"zap/server/internal/service"
 	"zap/server/models"
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -241,6 +243,57 @@ func GetProjectOSInfo(ctx *gin.Context) {
 		CPUName:         cpuName,
 		CPUMhz:          cpuMhz,
 		DiskUsed:        float64(diskUsed) / float64(1024*1024*1024), //Byte 转为操作系统的 Gib 单位
+		DiskFree:        float64(diskFree) / float64(1024*1024*1024),
+		DiskTotal:       float64(diskTotal) / float64(1024*1024*1024),
+		DiskUsedPercent: diskUsedPercent,
+	})
+	ctx.JSON(200, models.CommonResponse{
+		IsSuccess: true,
+		Data:      serverOSInfo,
+	})
+}
+
+// ServerInfo 获取服务器基本信息（无需指定项目）
+func ServerInfo(ctx *gin.Context) {
+	exePath, err := os.Executable()
+	if err != nil {
+		ctx.JSON(200, models.NGWithError(err))
+		return
+	}
+	workDir := filepath.Dir(exePath)
+
+	platform, _, _, _ := host.PlatformInformation()
+
+	infos, err := cpu.Info()
+	var cpuName string
+	var cpuMhz float64
+	if err == nil && len(infos) > 0 {
+		cpuName = infos[0].ModelName
+		cpuMhz = infos[0].Mhz
+	} else {
+		cpuName = "unknown"
+	}
+
+	diskInfo, err := disk.Usage(workDir)
+	var diskUsed, diskFree, diskTotal uint64
+	var diskUsedPercent float64
+	if err == nil {
+		diskUsed = diskInfo.Used
+		diskFree = diskInfo.Free
+		diskTotal = diskInfo.Total
+		diskUsedPercent = diskInfo.UsedPercent
+	}
+
+	serverOSInfo := make([]models.ServerOSInfo, 0)
+	serverOSInfo = append(serverOSInfo, models.ServerOSInfo{
+		OS:              runtime.GOOS,
+		Platform:        platform,
+		GOARCH:          runtime.GOARCH,
+		Version:         runtime.Version(),
+		NumCPU:          runtime.NumCPU(),
+		CPUName:         cpuName,
+		CPUMhz:          cpuMhz,
+		DiskUsed:        float64(diskUsed) / float64(1024*1024*1024),
 		DiskFree:        float64(diskFree) / float64(1024*1024*1024),
 		DiskTotal:       float64(diskTotal) / float64(1024*1024*1024),
 		DiskUsedPercent: diskUsedPercent,

@@ -72,7 +72,7 @@ func runStatus(cmd *cobra.Command, args []string) {
 
 	if len(sd.Staged) > 0 {
 		printHumanLn("Changes staged for commit:")
-		printHumanLn("  (use \"publish-cli reset <file>...\" to unstage)")
+		printHumanLn("  (use \"zap-publish reset <file>...\" to unstage)")
 		printHumanLn("")
 		for _, f := range sd.Staged {
 			printHumanLn("        %-12s %s", f.Status+":", f.RelativePath)
@@ -81,7 +81,7 @@ func runStatus(cmd *cobra.Command, args []string) {
 	}
 	if len(sd.Unstaged) > 0 {
 		printHumanLn("Changes not staged for commit:")
-		printHumanLn("  (use \"publish-cli add <file>...\" to stage)")
+		printHumanLn("  (use \"zap-publish add <file>...\" to stage)")
 		printHumanLn("")
 		for _, f := range sd.Unstaged {
 			printHumanLn("        %-12s %s", f.Status+":", f.RelativePath)

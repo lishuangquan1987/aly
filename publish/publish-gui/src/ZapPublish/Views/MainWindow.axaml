@@ -101,7 +101,7 @@
                                 <Border Padding="12,10" Margin="0,1" CornerRadius="6"
                                         Background="Transparent">
                                     <StackPanel>
-                                        <TextBlock Text="{Binding ProjectName}"
+                                        <TextBlock Text="{Binding DisplayName}"
                                                    FontWeight="SemiBold" FontSize="13"
                                                    Foreground="{DynamicResource SemiColorText0}"/>
                                         <TextBlock Text="{Binding ServerUrl}" FontSize="11"

@@ -54,25 +54,25 @@ public class ConfigService
 
     public void AddProject(ProjectConfig project)
     {
-        Log.Information("添加项目到配置: Name={Name}", project.ProjectName);
+        Log.Information("添加项目到配置: DisplayName={Name}", project.DisplayName);
         var projects = LoadProjects();
         projects.Add(project);
         SaveProjects(projects);
     }
 
-    public void RemoveProject(string projectName)
+    public void RemoveProject(string displayName)
     {
-        Log.Information("从配置移除项目: Name={Name}", projectName);
+        Log.Information("从配置移除项目: DisplayName={Name}", displayName);
         var projects = LoadProjects();
-        projects.RemoveAll(p => p.ProjectName == projectName);
+        projects.RemoveAll(p => p.DisplayName == displayName);
         SaveProjects(projects);
     }
 
     public void UpdateProject(ProjectConfig project)
     {
-        Log.Information("更新项目配置: Name={Name}", project.ProjectName);
+        Log.Information("更新项目配置: DisplayName={Name}", project.DisplayName);
         var projects = LoadProjects();
-        var index = projects.FindIndex(p => p.ProjectName == project.ProjectName);
+        var index = projects.FindIndex(p => p.DisplayName == project.DisplayName);
         if (index >= 0)
         {
             projects[index] = project;
@@ -80,7 +80,7 @@ public class ConfigService
         }
         else
         {
-            Log.Warning("更新项目配置失败: 未找到 Name={Name}", project.ProjectName);
+            Log.Warning("更新项目配置失败: 未找到 DisplayName={Name}", project.DisplayName);
         }
     }
 }

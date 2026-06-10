@@ -19,6 +19,11 @@ func InitRouter(r *gin.Engine) {
 			projectGroup.POST("publish_version", controllers.PublishVersion)
 			projectGroup.GET("get_project_os_info/:projectName", controllers.GetProjectOSInfo)
 		}
+
+		serverGroup := group.Group("server")
+		{
+			serverGroup.GET("info", controllers.ServerInfo)
+		}
 		fileGroup := group.Group("file")
 		{
 			fileGroup.POST("upload_file", controllers.UploadFile)

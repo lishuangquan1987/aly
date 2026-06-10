@@ -18,7 +18,6 @@ var (
 
 func init() {
 	cmdConfigInit.MarkFlagRequired("project")
-	cmdConfigInit.MarkFlagRequired("path")
 
 	RootCmd.AddCommand(cmdConfig)
 	cmdConfig.AddCommand(cmdConfigInit)
@@ -96,7 +95,7 @@ func runConfigInit(cmd *cobra.Command, args []string) {
 
 func runConfigSet(cmd *cobra.Command, args []string) {
 	if len(args) < 2 {
-		outputResult(false, "Usage: publish-cli config set <key> <value>", nil)
+		outputResult(false, "Usage: zap-publish config set <key> <value>", nil)
 		return
 	}
 	key := args[0]
@@ -124,7 +123,7 @@ func runConfigSet(cmd *cobra.Command, args []string) {
 
 func runConfigSetArray(cmd *cobra.Command, args []string) {
 	if len(args) < 1 {
-		outputResult(false, "Usage: publish-cli config set-array <key> --add <item> | --remove <item> | --clear", nil)
+		outputResult(false, "Usage: zap-publish config set-array <key> --add <item> | --remove <item> | --clear", nil)
 		return
 	}
 	key := args[0]
@@ -151,7 +150,7 @@ func runConfigSetArray(cmd *cobra.Command, args []string) {
 
 func runConfigGet(cmd *cobra.Command, args []string) {
 	if len(args) < 1 {
-		fmt.Println("Usage: publish-cli config get <key>")
+		fmt.Println("Usage: zap-publish config get <key>")
 		return
 	}
 	key := args[0]

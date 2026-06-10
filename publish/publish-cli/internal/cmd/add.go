@@ -83,9 +83,9 @@ func runAdd(cmd *cobra.Command, args []string) {
 	} else {
 		if len(args) == 0 {
 			if jsonOutput {
-				printOutput(false, "Usage: publish-cli add [--all | <file>...]", nil)
+				printOutput(false, "Usage: zap-publish add [--all | <file>...]", nil)
 			} else {
-				fmt.Fprintln(os.Stderr, "Usage: publish-cli add [--all | <file>...]")
+				fmt.Fprintln(os.Stderr, "Usage: zap-publish add [--all | <file>...]")
 			}
 			return
 		}
@@ -125,9 +125,9 @@ func runReset(cmd *cobra.Command, args []string) {
 	}
 	if len(args) == 0 {
 		if jsonOutput {
-			printOutput(false, "Usage: publish-cli reset [--all | <file>...]", nil)
+			printOutput(false, "Usage: zap-publish reset [--all | <file>...]", nil)
 		} else {
-			fmt.Fprintln(os.Stderr, "Usage: publish-cli reset [--all | <file>...]")
+			fmt.Fprintln(os.Stderr, "Usage: zap-publish reset [--all | <file>...]")
 		}
 		return
 	}

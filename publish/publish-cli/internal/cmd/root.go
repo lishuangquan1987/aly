@@ -61,10 +61,14 @@ func printHumanLn(format string, args ...interface{}) {
 }
 
 // resolveConfig 解析配置（.updator/ 文件 + CLI 参数覆盖）
-// 必须指定 --path，否则报错。
+// 不指定 --path 时使用当前目录，对标 git init 的行为。
 func resolveConfig() (RuntimeConfig, error) {
 	if projectPath == "" {
-		return RuntimeConfig{}, fmt.Errorf("请指定 --path")
+		cwd, err := os.Getwd()
+		if err != nil {
+			return RuntimeConfig{}, fmt.Errorf("无法获取当前目录: %w", err)
+		}
+		projectPath = cwd
 	}
 
 	shared, err := config.LoadShared(projectPath)
@@ -126,20 +130,20 @@ func outputResult(success bool, errMsg string, data interface{}) {
 
 // RootCmd 根命令
 var RootCmd = &cobra.Command{
-	Use:   "publish-cli",
+	Use:   "zap-publish",
 	Short: "命令行发布工具——将本地构建产物推送到服务端",
-	Long: `publish-cli 向发布的命令行工具，用于管理项目、比文件差异、暂存变更文件、推送新版本到服务端。
+	Long: `zap-publish 向发布的命令行工具，用于管理项目、比文件差异、暂存变更文件、推送新版本到服务端。
 工作流：
-  publish-cli config init    # 初始化项目
-  publish-cli status          # 查看与服务端差异
-  publish-cli add --all       # 暂存所有变更
-  publish-cli push --version V1.0.1 --message "更新说明"  # 推送并发布`,
+  zap-publish config init    # 初始化项目
+  zap-publish status          # 查看与服务端差异
+  zap-publish add --all       # 暂存所有变更
+  zap-publish push --version V1.0.1 --message "更新说明"  # 推送并发布`,
 }
 
 func init() {
 	RootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "服务器地址")
 	RootCmd.PersistentFlags().StringVar(&projectName, "project", "", "项目名称")
-	RootCmd.PersistentFlags().StringVar(&projectPath, "path", "", "本地构建产物路径（必填）")
+	RootCmd.PersistentFlags().StringVar(&projectPath, "path", "", "本地构建产物路径（不指定则用当前目录）")
 	RootCmd.PersistentFlags().IntVar(&projectID, "id", 0, "项目ID（直传，跳过名称查找）")
 	RootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "JSON 格式输出")
 	RootCmd.PersistentFlags().BoolVar(&quiet, "quiet", false, "静默模式")

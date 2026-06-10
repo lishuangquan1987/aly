@@ -78,15 +78,15 @@
                             Classes="Tertiary"/>
                 </StackPanel>
 
-                <!-- Project Name -->
+                <!-- Display Name -->
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
                         <materialIcons:MaterialIcon Kind="FileDocumentOutline" Width="14" Height="14"
                                                      Foreground="{DynamicResource SemiColorText1}"/>
-                        <TextBlock Text="项目名称" FontWeight="Medium" FontSize="13"
+                        <TextBlock Text="显示名称" FontWeight="Medium" FontSize="13"
                                    Foreground="{DynamicResource SemiColorText0}"/>
                     </StackPanel>
-                    <TextBox Name="ProjectNameBox" Watermark="例如 MyApp" FontSize="13"/>
+                    <TextBox Name="ProjectNameBox" Watermark="例如 MyApp（本地别名，可自定义）" FontSize="13"/>
                 </StackPanel>
 
                 <!-- Local Path -->

@@ -3,7 +3,7 @@ using Avalonia.Media;
 
 namespace ZapPublish.Helpers;
 
-public enum StatusKind { Info, Error, Success }
+public enum StatusKind { Info, Error, Success, Warning }
 
 public static class DialogHelper
 {
@@ -22,6 +22,7 @@ public static class DialogHelper
         {
             StatusKind.Error => GetResourceBrush("SemiColorDanger", Brushes.Red),
             StatusKind.Success => GetResourceBrush("SemiColorSuccess", Brushes.Green),
+            StatusKind.Warning => GetResourceBrush("SemiColorWarning", Brushes.Orange),
             _ => GetResourceBrush("SemiColorText2", Brushes.Gray)
         };
         if (statusPanel != null) statusPanel.IsVisible = true;

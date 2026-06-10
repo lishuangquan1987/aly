@@ -49,8 +49,8 @@ Zap/
 │
 ├── publish/
 │   ├── publish-gui/                   # C# GUI 发布工具
-│   │   ├── PublishGui.slnx
-│   │   └── src/PublishGui/
+│   │   ├── ZapPublish.slnx
+│   │   └── src/ZapPublish/
 │   │       ├── App.axaml(.cs)         # 应用入口 + 主题初始化
 │   │       ├── Program.cs             # 启动入口
 │   │       ├── ViewLocator.cs         # ViewModel 自动解析
@@ -102,7 +102,7 @@ Zap/
 
 | 元素 | 规则 | 示例 |
 | ---- | ---- | ---- |
-| 命名空间 | `PublishGui.{Layer}` | `PublishGui.Services` |
+| 命名空间 | `ZapPublish.{Layer}` | `ZapPublish.Services` |
 | 类 | PascalCase | `MainWindowViewModel` |
 | 接口 | `I` 前缀 + PascalCase | `IProjectApi` |
 | 属性 | PascalCase | `ServerUrl` |
@@ -165,8 +165,8 @@ public async Task<List<ProjectDto>> GetAllProjectsAsync(string serverUrl)
 
 ### 4.2 本地服务
 
-- 文件路径用 `Path.Combine`，配置持久化用 JSON（`{LocalApplicationData}/PublishGui/`）
-- 日志用 Serilog（`{LocalApplicationData}/PublishGui/logs/log.log`）
+- 文件路径用 `Path.Combine`，配置持久化用 JSON（`{LocalApplicationData}/ZapPublish/`）
+- 日志用 Serilog（`{LocalApplicationData}/ZapPublish/logs/log.log`）
 - 文件操作在 Service 层封装，ViewModel 不直接使用 `System.IO`
 
 ### 4.3 服务注册
@@ -262,12 +262,12 @@ private async Task SomeOperation()
 
 ## 八、模型设计规则（publish-gui）
 
-### 8.1 DTO（`PublishGui.Models.Cli`）
+### 8.1 DTO（`ZapPublish.Models.Cli`）
 
 - 用于 API 序列化/反序列化，使用 Newtonsoft.Json `[JsonProperty]`
 - 属性 `{ get; set; }`，集合默认 `new()`，字符串默认 `string.Empty`
 
-### 8.2 本地模型（`PublishGui.Models.Local`）
+### 8.2 本地模型（`ZapPublish.Models.Local`）
 
 - 用于 UI 绑定，继承 `ObservableObject`，使用 `[ObservableProperty]`
 - 枚举类型定义在同文件中

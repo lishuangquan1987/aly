@@ -143,6 +143,15 @@ func (c *Client) GetProjectOSInfo(projectName string) ([]models.ServerOSInfo, er
 	return info, nil
 }
 
+// GetServerInfo 获取服务端系统信息（无需指定项目）
+func (c *Client) GetServerInfo() ([]models.ServerOSInfo, error) {
+	var info []models.ServerOSInfo
+	if err := c.get("/api/server/info", &info); err != nil {
+		return nil, err
+	}
+	return info, nil
+}
+
 // PublishVersion 发布新版本
 func (c *Client) PublishVersion(req models.PublishVersionRequest) (*models.ProjectChangeLog, error) {
 	var log models.ProjectChangeLog

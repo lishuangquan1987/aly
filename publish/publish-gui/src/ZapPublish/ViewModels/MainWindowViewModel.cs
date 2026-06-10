@@ -73,7 +73,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnSelectedProjectChanged(ProjectConfig? value)
     {
-        Log.Information("切换项目: {Name}", value?.ProjectName ?? "(无)");
+        Log.Information("切换项目: {Name}", value?.DisplayName ?? "(无)");
         RefreshCommand.NotifyCanExecuteChanged();
         AddAllCommand.NotifyCanExecuteChanged();
         ResetAllCommand.NotifyCanExecuteChanged();
@@ -95,8 +95,8 @@ public partial class MainWindowViewModel : ObservableObject
         Projects.Clear();
         foreach (var c in _cfg.LoadProjects())
         {
-            Log.Debug("加载项目: Name={Name}, Server={Server}, Path={Path}",
-                c.ProjectName, c.ServerUrl, c.ProjectPath);
+            Log.Debug("加载项目: DisplayName={Name}, Path={Path}",
+                c.DisplayName, c.ProjectPath);
             Projects.Add(c);
         }
         Log.Information("共加载 {Count} 个项目", Projects.Count);
@@ -113,7 +113,7 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
         StatusMessage = "刷新中...";
-        Log.Information("开始刷新: Project={Name}, Path={Path}", project.ProjectName, projectPath);
+        Log.Information("开始刷新: Project={Name}, Path={Path}", project.DisplayName, projectPath);
 
         try
         {
@@ -301,11 +301,6 @@ public partial class MainWindowViewModel : ObservableObject
         {
             _cfg.AddProject(cfg);
             Projects.Add(cfg);
-            StatusMessage = "正在初始化本地配置...";
-            var projectPath = cfg.ProjectPath ?? string.Empty;
-            var initResult = await _cli.ConfigInitAsync(projectPath, cfg.ServerUrl, cfg.ProjectName);
-            if (initResult?.IsSuccess != true)
-                StatusMessage = $"本地配置初始化失败: {initResult?.ErrorMsg}";
             SelectedProject = cfg;
         }
     }
@@ -313,7 +308,7 @@ public partial class MainWindowViewModel : ObservableObject
     private Task RemoveProjectAsync()
     {
         if (SelectedProject == null) return Task.CompletedTask;
-        _cfg.RemoveProject(SelectedProject.ProjectName);
+        _cfg.RemoveProject(SelectedProject.DisplayName);
         Projects.Remove(SelectedProject);
         SelectedProject = Projects.FirstOrDefault();
         return Task.CompletedTask;

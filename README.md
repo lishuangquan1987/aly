@@ -57,7 +57,7 @@ Zap/
 
 zap-publish-gui 本身 **不直接调用 server API**，所有发布操作都通过子进程调用 zap-publish 完成。zap-publish-gui 仅在本地维护一个项目列表配置（`%LOCALAPPDATA%/ZapPublish/config.json`）。
 
-**唯一例外**：添加项目时，zap-publish-gui 调用 `zap-publish config init` 初始化本地项目配置，并通过 `zap-publish project list` / `zap-publish project create` 操作服务端项目。
+**唯一例外**：添加项目时，zap-publish-gui 调用 `zap-publish project list` / `zap-publish project create` 操作服务端项目；通过 `zap-publish config init` 在选中的本地路径初始化 `.updator/` 配置（类比 SourceTree 的"克隆/添加仓库"时初始化 .git）。
 
 ---
 
@@ -323,7 +323,7 @@ PackageFolder/
 
 ```bash
 cd publish/zap-publish
-go build -ldflags="-s -w" -o zap-publish.exe ./cmd/zap-publish
+go build -ldflags="-s -w" -o zap-publish.exe .
 ```
 
 ### 全局参数
@@ -993,7 +993,7 @@ dotnet build
 **ConfigService** — 本地项目列表管理
 
 - 存储位置：`%LOCALAPPDATA%/ZapPublish/config.json`
-- 数据结构：`List<ProjectConfig>`（每个 ProjectConfig 包含 `ServerUrl`、`ProjectName`、`ProjectPath`）
+- 数据结构：`List<ProjectConfig>`（每个 ProjectConfig 包含 `DisplayName`、`ProjectPath`——类比 SourceTree 的书签，只记别名+路径，真实配置来自项目的 `.updator/`）
 - 方法：`LoadProjects()`、`SaveProjects()`、`AddProject()`、`RemoveProject()`、`UpdateProject()`
 
 **ProcessService** — 子进程执行引擎
@@ -1016,7 +1016,7 @@ dotnet build
 | **暂存选中文件** | `AddSelectedAsync()` | `zap-publish add "file1" "file2" ... --json --path "{path}"` |
 | **取消暂存选中** | `ResetSelectedAsync()` | 先 `zap-publish reset --all --json --path "{path}"`，再 `zap-publish add "保留文件1" ... --json --path "{path}"` |
 | **发布** | `PublishAsync()` | `zap-publish push --version "{ver}" --message "{msg}" --json --path "{path}"`（timeout 120s） |
-| **添加项目** | `AddProjectAsync()` | 打开 AddProjectDialog → 选择已有项目或创建新项目 → `zap-publish config init --server "{url}" --project "{name}" --path "{path}" --json` + `zap-publish project list --server "{url}" --json` 或 `zap-publish project create --server "{url}" --name "{name}" --title "{title}" ... --json` |
+| **添加项目** | `AddProjectAsync()` | 打开 AddProjectDialog → 填写服务端地址、选择/创建项目、选择本地路径 → 返回 ProjectConfig（仅 DisplayName + ProjectPath） |
 | **移除项目** | `RemoveProjectAsync()` | 仅操作本地 ConfigService，不调用 CLI |
 
 ### 发布流程（GUI 用户视角）
@@ -1243,34 +1243,34 @@ fi
 
 ```bash
 cd server
-go build -ldflags="-s -w" -o zap-server.exe ./cmd
+go build -ldflags="-s -w" -o zap-server.exe .
 ```
 
 交叉编译（`CGO_ENABLED=0` 纯静态编译）：
 
 ```bash
 cd server
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o zap-server-linux-amd64 ./cmd
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o zap-server-linux-arm64 ./cmd
-CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o zap-server-darwin-amd64 ./cmd
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o zap-server-darwin-arm64 ./cmd
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o zap-server-linux-amd64 .
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o zap-server-linux-arm64 .
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o zap-server-darwin-amd64 .
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o zap-server-darwin-arm64 .
 ```
 
 ### zap-publish
 
 ```bash
 cd publish/zap-publish
-go build -ldflags="-s -w" -o zap-publish.exe ./cmd/zap-publish
+go build -ldflags="-s -w" -o zap-publish.exe .
 ```
 
 交叉编译（`CGO_ENABLED=0`）：
 
 ```bash
 cd publish/zap-publish
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o zap-publish-linux-amd64 ./cmd/zap-publish
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o zap-publish-linux-arm64 ./cmd/zap-publish
-CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o zap-publish-darwin-amd64 ./cmd/zap-publish
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o zap-publish-darwin-arm64 ./cmd/zap-publish
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o zap-publish-linux-amd64 .
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o zap-publish-linux-arm64 .
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o zap-publish-darwin-amd64 .
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o zap-publish-darwin-arm64 .
 ```
 
 ### zap-publish-gui
