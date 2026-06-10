@@ -109,6 +109,20 @@ func normalizePath(p string) string {
 	return strings.Replace(p, "\\", "/", -1)
 }
 
+// printProgress 输出下载进度到 stdout，每行一个 JSON。
+// 调用者按行读取 stdout，json.Unmarshal 失败的行即为进度行（或错误输出）。
+func printProgress(index, total int, file, status string, fileSize int64, errMsg string) {
+	bytes, _ := json.Marshal(model.DownloadProgress{
+		Index:    index,
+		Total:    total,
+		File:     file,
+		Status:   status,
+		FileSize: fileSize,
+		Error:    errMsg,
+	})
+	fmt.Println(string(bytes))
+}
+
 // stripVPrefix 去除版本号前导的 V/v
 func stripVPrefix(v string) string {
 	if len(v) > 0 && (v[0] == 'V' || v[0] == 'v') {

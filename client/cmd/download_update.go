@@ -102,17 +102,23 @@ func DownloadUpdate() {
 		}
 	}
 
-	for _, serverFile := range diffFiles {
-		localPath := filepath.Join(targetDir, filepathFromSlash(normalizePath(serverFile.FileRelativePath)))
+	total := len(diffFiles)
+
+	for idx, serverFile := range diffFiles {
+		relPath := normalizePath(serverFile.FileRelativePath)
+		localPath := filepath.Join(targetDir, filepathFromSlash(relPath))
 
 		// Check if file already exists in target dir with correct MD5+SHA256, skip if valid
 		if info, statErr := os.Stat(localPath); statErr == nil && info.Size() == serverFile.FileSize {
 			localMD5, md5Err := util.FileMD5(localPath)
 			localSHA256, shaErr := util.FileSHA256(localPath)
 			if md5Err == nil && shaErr == nil && localMD5 == serverFile.MD5 && localSHA256 == serverFile.SHA256 {
+				printProgress(idx+1, total, relPath, "SKIP", serverFile.FileSize, "")
 				continue
 			}
 		}
+
+		printProgress(idx+1, total, relPath, "START", serverFile.FileSize, "")
 
 		// Download with retry up to 3 times
 		downloaded := false
@@ -124,6 +130,7 @@ func DownloadUpdate() {
 					exeDir, _ := config.ExeDir()
 					util.AppendToLog(exeDir, fmt.Sprintf("update_%s_fail.log", newVersion),
 						fmt.Sprintf("%s %s", serverFile.FileRelativePath, lastErr))
+					printProgress(idx+1, total, relPath, "FAIL", serverFile.FileSize, lastErr)
 					printOutput(false, fmt.Sprintf("download %s failed after 3 retries: %v", serverFile.FileRelativePath, err), nil)
 					return
 				}
@@ -140,6 +147,7 @@ func DownloadUpdate() {
 					exeDir, _ := config.ExeDir()
 					util.AppendToLog(exeDir, fmt.Sprintf("update_%s_fail.log", newVersion),
 						fmt.Sprintf("%s %s", serverFile.FileRelativePath, lastErr))
+					printProgress(idx+1, total, relPath, "FAIL", serverFile.FileSize, lastErr)
 					printOutput(false, fmt.Sprintf("hash compute %s failed after 3 retries", serverFile.FileRelativePath), nil)
 					return
 				}
@@ -157,6 +165,7 @@ func DownloadUpdate() {
 				exeDir, _ := config.ExeDir()
 				util.AppendToLog(exeDir, fmt.Sprintf("update_%s_fail.log", newVersion),
 					fmt.Sprintf("%s %s (server_md5=%s local_md5=%s)", serverFile.FileRelativePath, lastErr, serverFile.MD5, localMD5))
+				printProgress(idx+1, total, relPath, "FAIL", serverFile.FileSize, lastErr)
 				printOutput(false, fmt.Sprintf("verify %s failed after 3 retries", serverFile.FileRelativePath), nil)
 				return
 			}
@@ -166,6 +175,8 @@ func DownloadUpdate() {
 		if !downloaded {
 			return
 		}
+
+		printProgress(idx+1, total, relPath, "DONE", serverFile.FileSize, "")
 	}
 
 	// Update version.json ONLY if status != "downloaded"

@@ -83,6 +83,16 @@ type DownloadUpdateData struct {
 	Version string `json:"version"`
 }
 
+// DownloadProgress 是 download_update 命令的过程进度输出（每行一个 JSON）
+type DownloadProgress struct {
+	Index    int    `json:"index"`
+	Total    int    `json:"total"`
+	File     string `json:"file"`
+	Status   string `json:"status"`   // START / DONE / SKIP / FAIL
+	FileSize int64  `json:"file_size"`
+	Error    string `json:"error,omitempty"`
+}
+
 // RollbackListData 是 list_rollback_versions 命令 data 字段
 type RollbackListData struct {
 	CurrentVersion string   `json:"current_version"`
