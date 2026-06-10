@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
-	apiclient "clientupdator/client/client"
-	"clientupdator/client/config"
-	"clientupdator/client/model"
-	"clientupdator/client/util"
+	apiclient "zap/client/client"
+	"zap/client/config"
+	"zap/client/model"
+	"zap/client/util"
 )
 
 // CheckDiff lists files that differ from server (only server-side files)

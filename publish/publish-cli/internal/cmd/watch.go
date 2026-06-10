@@ -5,8 +5,8 @@ import (
 	"os/signal"
 	"time"
 
-	"publish-cli/internal/diff"
-	"publish-cli/internal/staging"
+	"zap/publish-cli/internal/diff"
+	"zap/publish-cli/internal/staging"
 
 	"github.com/spf13/cobra"
 )

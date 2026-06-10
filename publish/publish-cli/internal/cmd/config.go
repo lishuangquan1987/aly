@@ -3,7 +3,7 @@
 import (
 	"fmt"
 
-	"publish-cli/internal/config"
+	"zap/publish-cli/internal/config"
 
 	"github.com/spf13/cobra"
 )

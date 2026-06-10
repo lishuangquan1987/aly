@@ -1,11 +1,11 @@
 package controllers
 
 import (
-	"clientupdator/server/ent"
-	"clientupdator/server/ent/project"
-	"clientupdator/server/internal/db"
-	"clientupdator/server/internal/service"
-	"clientupdator/server/models"
+	"zap/server/ent"
+	"zap/server/ent/project"
+	"zap/server/internal/db"
+	"zap/server/internal/service"
+	"zap/server/models"
 	"fmt"
 	"runtime"
 	"strings"

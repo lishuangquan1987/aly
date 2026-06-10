@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"publish-cli/internal/cmd"
+	"zap/publish-cli/internal/cmd"
 )
 
 func main() {

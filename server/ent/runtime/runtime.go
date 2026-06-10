@@ -2,7 +2,7 @@
 
 package runtime
 
-// The schema-stitching logic is generated in clientupdator/server/ent/runtime.go
+// The schema-stitching logic is generated in zap/server/ent/runtime.go
 
 const (
 	Version = "v0.14.6"                                         // Version of ent codegen.

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"clientupdator/server/ent"
+	"zap/server/ent"
 
 	sqldialect "entgo.io/ent/dialect/sql"
 
@@ -65,7 +65,7 @@ func InitDB() {
 			}
 			dbDir = wd
 		}
-		dbPath = filepath.Join(dbDir, "clientupdator.db")
+		dbPath = filepath.Join(dbDir, "zap.db")
 	}
 	// 确保数据库文件所在目录存在
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {

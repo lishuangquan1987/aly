@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"publish-cli/pkg/models"
+	"zap/publish-cli/pkg/models"
 )
 
 // Client HTTP API 客户端

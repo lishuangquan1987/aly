@@ -1,7 +1,7 @@
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
-with open(r'E:\Project2026\client-updator\AGENTS.md', 'r', encoding='utf-8') as f:
+with open(r'E:\Project2026\zap-update\AGENTS.md', 'r', encoding='utf-8') as f:
     content = f.read()
 
 old = """## 十一、交互与自检
@@ -39,7 +39,7 @@ new = """## 十一、代码审查与提交
 content = content.replace(old, new)
 content = content.replace('## 十三、文档参考', '## 十四、文档参考')
 
-with open(r'E:\Project2026\client-updator\AGENTS.md', 'w', encoding='utf-8') as f:
+with open(r'E:\Project2026\zap-update\AGENTS.md', 'w', encoding='utf-8') as f:
     f.write(content)
 
 print('AGENTS.md updated with code review section')

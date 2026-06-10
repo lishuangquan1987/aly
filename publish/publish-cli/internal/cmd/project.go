@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"publish-cli/pkg/models"
+	"zap/publish-cli/pkg/models"
 
 	"github.com/spf13/cobra"
 )

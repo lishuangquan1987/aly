@@ -9,10 +9,10 @@ import (
 	"log"
 	"reflect"
 
-	"clientupdator/server/ent/migrate"
+	"zap/server/ent/migrate"
 
-	"clientupdator/server/ent/project"
-	"clientupdator/server/ent/projectchangelog"
+	"zap/server/ent/project"
+	"zap/server/ent/projectchangelog"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"

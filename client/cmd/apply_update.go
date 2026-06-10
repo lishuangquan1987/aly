@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"clientupdator/client/config"
-	"clientupdator/client/util"
+	"zap/client/config"
+	"zap/client/util"
 )
 
 // ApplyUpdate applies a downloaded update with atomic replacement

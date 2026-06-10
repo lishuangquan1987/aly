@@ -1,7 +1,7 @@
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
-content = r"""# ClientUpdator 项目规则
+content = r"""# Zap 项目规则
 
 > 所有新增/修改代码必须遵循以下规则。
 
@@ -28,7 +28,7 @@ content = r"""# ClientUpdator 项目规则
 ## 一、项目结构
 
 ```
-ClientUpdator/
+Zap/
 ├── server/                            # Go 服务端
 │   ├── cmd/main.go                    # 入口
 │   ├── cmd/gen/main.go                # ent 代码生成入口
@@ -328,7 +328,7 @@ private async Task SomeOperation()
 > **版本**: 2.0 | **适用范围**: publish/publish-gui/（.NET 8 + Avalonia 12 + CommunityToolkit.Mvvm + Semi.Avalonia + Ursa.Avalonia）
 """
 
-with open(r'E:\Project2026\client-updator\AGENTS.md', 'w', encoding='utf-8') as f:
+with open(r'E:\Project2026\zap-update\AGENTS.md', 'w', encoding='utf-8') as f:
     f.write(content.lstrip())
 
 print(f'Written {len(content)} chars to AGENTS.md')

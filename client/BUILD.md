@@ -1,9 +1,9 @@
-# client-updator 编译说明
+# zap-update 编译说明
 
 ## 环境要求
 
 - Go 1.10（必须，项目中使用了 Go 1.10 特性）
-- 项目位于 `%GOPATH%/src/clientupdator/client/`（GOPATH 模式）
+- 项目位于 `%GOPATH%/src/zap/client/`（GOPATH 模式）
 
 ## 完整编译流程
 
@@ -19,7 +19,7 @@ rmdir /s /q %GOPATH%\src\clientupdator\client
 xcopy /e /i /y client %GOPATH%\src\clientupdator\client
 ```
 
-> 注意：当前命令在项目根目录（`ClientUpdator/`）下执行，`client` 是工作目录下的源码目录。
+> 注意：当前命令在项目根目录（`Zap/`）下执行，`client` 是工作目录下的源码目录。
 
 ### 3. 编译（32 位，兼容 Windows XP）
 
@@ -27,10 +27,10 @@ xcopy /e /i /y client %GOPATH%\src\clientupdator\client
 set GOOS=windows
 set GOARCH=386
 set GO111MODULE=off
-go build -ldflags="-s -w" -o client-updator.exe clientupdator/client
+go build -ldflags="-s -w" -o zap-update.exe zap/client
 ```
 
-> **注意**：必须使用 import path `clientupdator/client`，不能使用绝对路径（如 `C:\xxx`），否则 Go 1.10 在 GOPATH 模式下会找不到包。
+> **注意**：必须使用 import path `zap/client`，不能使用绝对路径（如 `C:\xxx`），否则 Go 1.10 在 GOPATH 模式下会找不到包。
 
 编译参数说明：
 
@@ -44,8 +44,8 @@ go build -ldflags="-s -w" -o client-updator.exe clientupdator/client
 ### 4. 将 exe 复制回工作目录
 
 ```batch
-copy /y client-updator.exe client\client-updator.exe
-del client-updator.exe
+copy /y zap-update.exe client\zap-update.exe
+del zap-update.exe
 ```
 
 ## 一键编译脚本
@@ -54,8 +54,8 @@ del client-updator.exe
 
 ```batch
 @echo off
-REM 构建 client-updator（32位，兼容 XP）
-REM 需要 Go 1.10，且项目位于 GOPATH/src/clientupdator/client 下
+REM 构建 zap-update（32位，兼容 XP）
+REM 需要 Go 1.10，且项目位于 GOPATH/src/zap/client 下
 
 echo 正在清理 GOPATH 旧源码...
 rmdir /s /q %GOPATH%\src\clientupdator\client
@@ -63,32 +63,32 @@ rmdir /s /q %GOPATH%\src\clientupdator\client
 echo 正在复制源码到 GOPATH...
 xcopy /e /i /y client %GOPATH%\src\clientupdator\client >nul
 
-echo 正在编译 client-updator.exe (GOARCH=386) ...
+echo 正在编译 zap-update.exe (GOARCH=386) ...
 set GOOS=windows
 set GOARCH=386
 set GO111MODULE=off
-go build -ldflags="-s -w" -o client-updator.exe clientupdator/client
+go build -ldflags="-s -w" -o zap-update.exe zap/client
 if %errorlevel% neq 0 (
     echo 编译失败！
     exit /b %errorlevel%
 )
 
 echo 正在复制 exe 到 client\ 目录...
-copy /y client-updator.exe client\client-updator.exe >nul
-del client-updator.exe
+copy /y zap-update.exe client\zap-update.exe >nul
+del zap-update.exe
 
-echo 构建成功：client\client-updator.exe
+echo 构建成功：client\zap-update.exe
 ```
 
 ## 常见问题
 
 ### Q: 为什么不能用 `go build client/` 直接在项目根目录编译？
 
-因为源码中的 import 路径是 `clientupdator/client/...`（例如 `clientupdator/client/cmd`、`clientupdator/client/config`），需要在 GOPATH 模式下通过 `$GOPATH/src/clientupdator/client/` 解析。直接在项目根目录用相对路径编译会找不到这些内部包。
+因为源码中的 import 路径是 `zap/client/...`（例如 `zap/client/cmd`、`zap/client/config`），需要在 GOPATH 模式下通过 `$GOPATH/src/zap/client/` 解析。直接在项目根目录用相对路径编译会找不到这些内部包。
 
 ### Q: 为什么 exe 时间戳没有更新？
 
-检查是否用了绝对路径作为 package 参数（如 `C:\Users\xxx`）。Go 1.10 GOPATH 模式下，绝对路径会被拼接到 `$GOROOT/src/` 和 `$GOPATH/src/` 后面，导致找不到包或编译的是旧文件。应始终使用 import path `clientupdator/client`。
+检查是否用了绝对路径作为 package 参数（如 `C:\Users\xxx`）。Go 1.10 GOPATH 模式下，绝对路径会被拼接到 `$GOROOT/src/` 和 `$GOPATH/src/` 后面，导致找不到包或编译的是旧文件。应始终使用 import path `zap/client`。
 
 ### Q: 编译出的 exe 体积多大？
 

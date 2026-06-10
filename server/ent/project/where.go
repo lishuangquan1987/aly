@@ -3,7 +3,7 @@
 package project
 
 import (
-	"clientupdator/server/ent/predicate"
+	"zap/server/ent/predicate"
 	"time"
 
 	"entgo.io/ent/dialect/sql"

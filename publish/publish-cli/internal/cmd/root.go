@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"publish-cli/internal/api"
-	"publish-cli/internal/config"
-	"publish-cli/pkg/models"
+	"zap/publish-cli/internal/api"
+	"zap/publish-cli/internal/config"
+	"zap/publish-cli/pkg/models"
 
 	"github.com/spf13/cobra"
 )

@@ -3,8 +3,8 @@
 package ent
 
 import (
-	"clientupdator/server/ent/project"
-	"clientupdator/server/ent/projectchangelog"
+	"zap/server/ent/project"
+	"zap/server/ent/projectchangelog"
 	"context"
 	"errors"
 	"fmt"

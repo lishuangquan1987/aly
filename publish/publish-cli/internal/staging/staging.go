@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"publish-cli/internal/diff"
-	"publish-cli/pkg/models"
+	"zap/publish-cli/internal/diff"
+	"zap/publish-cli/pkg/models"
 )
 
 // StagedFile represents a staged file entry.

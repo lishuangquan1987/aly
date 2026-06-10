@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"publish-cli/internal/diff"
-	"publish-cli/internal/staging"
-	"publish-cli/pkg/models"
+	"zap/publish-cli/internal/diff"
+	"zap/publish-cli/internal/staging"
+	"zap/publish-cli/pkg/models"
 
 	"github.com/spf13/cobra"
 )

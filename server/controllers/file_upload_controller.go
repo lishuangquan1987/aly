@@ -1,8 +1,8 @@
 package controllers
 
 import (
-	"clientupdator/server/internal/service"
-	"clientupdator/server/models"
+	"zap/server/internal/service"
+	"zap/server/models"
 	"fmt"
 	"path/filepath"
 	"strings"

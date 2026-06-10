@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"clientupdator/client/model"
+	"zap/client/model"
 )
 
 var httpClient = &http.Client{

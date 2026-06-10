@@ -3,9 +3,9 @@
 package ent
 
 import (
-	"clientupdator/server/ent/project"
-	"clientupdator/server/ent/projectchangelog"
-	"clientupdator/server/ent/schema"
+	"zap/server/ent/project"
+	"zap/server/ent/projectchangelog"
+	"zap/server/ent/schema"
 	"time"
 )
 

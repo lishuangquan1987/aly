@@ -1,11 +1,11 @@
 package service
 
 import (
-	"clientupdator/server/ent"
-	"clientupdator/server/ent/project"
-	"clientupdator/server/ent/projectchangelog"
-	"clientupdator/server/internal/db"
-	"clientupdator/server/models"
+	"zap/server/ent"
+	"zap/server/ent/project"
+	"zap/server/ent/projectchangelog"
+	"zap/server/internal/db"
+	"zap/server/models"
 	"context"
 	"os"
 	"path/filepath"

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	apiclient "clientupdator/client/client"
-	"clientupdator/client/config"
-	"clientupdator/client/model"
+	apiclient "zap/client/client"
+	"zap/client/config"
+	"zap/client/model"
 )
 
 // CheckUpdate checks for new version

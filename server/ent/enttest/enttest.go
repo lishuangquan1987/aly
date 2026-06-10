@@ -5,11 +5,11 @@ package enttest
 import (
 	"context"
 
-	"clientupdator/server/ent"
+	"zap/server/ent"
 	// required by schema hooks.
-	_ "clientupdator/server/ent/runtime"
+	_ "zap/server/ent/runtime"
 
-	"clientupdator/server/ent/migrate"
+	"zap/server/ent/migrate"
 
 	"entgo.io/ent/dialect/sql/schema"
 )

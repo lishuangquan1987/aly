@@ -4,9 +4,9 @@ import (
 	"flag"
 	"os"
 
-	"clientupdator/client/config"
-	"clientupdator/client/model"
-	"clientupdator/client/util"
+	"zap/client/config"
+	"zap/client/model"
+	"zap/client/util"
 )
 
 // CheckSelfUpdate checks if updator itself needs to be updated
@@ -27,13 +27,13 @@ func CheckSelfUpdate() {
 		return
 	}
 
-	// If check-updator.exe doesn't exist (first deploy), no update needed
+	// If zap-update.exe doesn't exist (first deploy), no update needed
 	if _, err := os.Stat(checkPath); os.IsNotExist(err) {
 		printOutput(true, "", &model.CheckSelfUpdateData{NeedUpdate: false})
 		return
 	}
 
-	// Compare SHA256 of self vs check-updator.exe
+	// Compare SHA256 of self vs zap-update.exe
 	selfPath, err := os.Executable()
 	if err != nil {
 		printOutput(false, err.Error(), nil)

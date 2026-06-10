@@ -1,7 +1,7 @@
 package routers
 
 import (
-	"clientupdator/server/controllers"
+	"zap/server/controllers"
 
 	"github.com/gin-gonic/gin"
 )

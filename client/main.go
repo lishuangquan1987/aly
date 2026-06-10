@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"clientupdator/client/cmd"
+	"zap/client/cmd"
 )
 
 func main() {
@@ -37,7 +37,7 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println("用法: client-updator <命令> [选项]")
+	fmt.Println("用法: zap-update <命令> [选项]")
 	fmt.Println()
 	fmt.Println("命令:")
 	fmt.Println("  check_update              检查更新")

@@ -1,4 +1,4 @@
-module clientupdator/server
+module zap/server
 
 go 1.25.0
 

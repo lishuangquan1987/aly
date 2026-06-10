@@ -1,10 +1,10 @@
 package controllers
 
 import (
-	"clientupdator/server/ent"
-	"clientupdator/server/internal/service"
-	"clientupdator/server/internal/utils"
-	"clientupdator/server/models"
+	"zap/server/ent"
+	"zap/server/internal/service"
+	"zap/server/internal/utils"
+	"zap/server/models"
 	"net/http"
 	"os"
 	"path/filepath"

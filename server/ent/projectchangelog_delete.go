@@ -3,8 +3,8 @@
 package ent
 
 import (
-	"clientupdator/server/ent/predicate"
-	"clientupdator/server/ent/projectchangelog"
+	"zap/server/ent/predicate"
+	"zap/server/ent/projectchangelog"
 	"context"
 
 	"entgo.io/ent/dialect/sql"

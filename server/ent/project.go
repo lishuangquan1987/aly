@@ -3,7 +3,7 @@
 package ent
 
 import (
-	"clientupdator/server/ent/project"
+	"zap/server/ent/project"
 	"encoding/json"
 	"fmt"
 	"strings"

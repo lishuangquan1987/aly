@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"publish-cli/pkg/models"
+	"zap/publish-cli/pkg/models"
 
 	"github.com/spf13/cobra"
 )

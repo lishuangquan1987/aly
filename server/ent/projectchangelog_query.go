@@ -3,9 +3,9 @@
 package ent
 
 import (
-	"clientupdator/server/ent/predicate"
-	"clientupdator/server/ent/project"
-	"clientupdator/server/ent/projectchangelog"
+	"zap/server/ent/predicate"
+	"zap/server/ent/project"
+	"zap/server/ent/projectchangelog"
 	"context"
 	"fmt"
 	"math"

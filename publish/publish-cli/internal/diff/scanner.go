@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"publish-cli/pkg/models"
+	"zap/publish-cli/pkg/models"
 )
 
 // ScanDirectory 递归扫描目录，返回文件列表（应用忽略规则）

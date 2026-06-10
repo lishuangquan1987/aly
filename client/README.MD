@@ -24,10 +24,10 @@ PackageFolder/
 │   ├── .updator/
 │   │   ├── shared.json             # 共用配置（server_url、project_name、ignore规则）
 │   │   └── client.json             # client 专有配置（must_close_process_name、post_update_script）
-│   ├── check-updator.exe           # updator 副本（用于自更新比对）
+│   ├── zap-update.exe           # updator 副本（用于自更新比对）
 │   └── ...
 ├── UpdateFolder/                   # 更新程序文件夹
-│   ├── client-updator.exe
+│   ├── zap-update.exe
 │   ├── client.yaml                 # 精简配置（仅 main_exe_relative_path）
 │   ├── version.json                # 版本状态机
 │   └── logs/
@@ -49,7 +49,7 @@ PackageFolder/
 
 ### client.yaml（精简版）
 
-位于 `client-updator.exe` 同级目录（UpdateFolder），仅包含定位 ApplicationFolder 所需的字段：
+位于 `zap-update.exe` 同级目录（UpdateFolder），仅包含定位 ApplicationFolder 所需的字段：
 
 ```yaml
 main_exe_relative_path: "../ApplicationFolder/main_application.exe"
@@ -57,7 +57,7 @@ main_exe_relative_path: "../ApplicationFolder/main_application.exe"
 
 ### shared.json
 
-位于 `ApplicationFolder/.updator/shared.json`，publish-cli 和 client 共用。随构建产物上传到 server，client 更新时自动同步：
+位于 `ApplicationFolder/.updator/shared.json`，zap-publish 和 client 共用。随构建产物上传到 server，client 更新时自动同步：
 
 ```json
 {
@@ -93,7 +93,7 @@ main_exe_relative_path: "../ApplicationFolder/main_application.exe"
 
 ### version.json
 
-位于 `client-updator.exe` 同级目录（UpdateFolder），记录当前版本信息：
+位于 `zap-update.exe` 同级目录（UpdateFolder），记录当前版本信息：
 
 ```json
 {
@@ -217,7 +217,7 @@ client/
 注意：此步骤需检查 version.json 中的 status 状态。如果为 `downloaded` 或 `applying`，则直接返回有更新，版本为当前 version.json 中记录的版本号。
 
 ```bash
-client-updator.exe check_update [--url <url>] [--project-name <name>]
+zap-update.exe check_update [--url <url>] [--project-name <name>]
 ```
 
 **调用接口**：`GET {url}/api/project/get_project_change_logs/{projectName}`
@@ -263,7 +263,7 @@ client-updator.exe check_update [--url <url>] [--project-name <name>]
 注意：此步骤调用者可跳过，当调用者检测到有新版本时，可以直接调用第 3 步进行更新。此步骤只是为了方便可视化更新客户端查看差异文件。
 
 ```bash
-client-updator.exe check_diff [--url <url>] [--project-name <name>]
+zap-update.exe check_diff [--url <url>] [--project-name <name>]
 ```
 
 **调用接口**：`GET {url}/api/file/get_all_files/{projectName}`
@@ -300,7 +300,7 @@ client-updator.exe check_diff [--url <url>] [--project-name <name>]
 注意：此步骤只下载更新，不复制文件。当本地文件夹 `./{main_exe_folder_name}_{new_version}` 中存在要下载的文件且 MD5/SHA256 校验通过（可能是以前下载了部分文件），则跳过此文件下载。
 
 ```bash
-client-updator.exe download_update [--url <url>] [--project-name <name>] [--main-exe-path <path>]
+zap-update.exe download_update [--url <url>] [--project-name <name>] [--main-exe-path <path>]
 ```
 
 **调用接口**：
@@ -334,7 +334,7 @@ client-updator.exe download_update [--url <url>] [--project-name <name>] [--main
 ### 4. 应用更新（原子替换）
 
 ```bash
-client-updator.exe apply_update [--main-exe-path <path>] [--must-close-process-name <name1,name2>] [--close-timeout <seconds>]
+zap-update.exe apply_update [--main-exe-path <path>] [--must-close-process-name <name1,name2>] [--close-timeout <seconds>]
 ```
 
 **执行步骤**：
@@ -370,7 +370,7 @@ client-updator.exe apply_update [--main-exe-path <path>] [--must-close-process-n
 ### 5. 列出可回滚版本
 
 ```bash
-client-updator.exe list_rollback_versions [--main-exe-path <path>]
+zap-update.exe list_rollback_versions [--main-exe-path <path>]
 ```
 
 **功能**：扫描 `PackageDir/` 下所有匹配 `{folder_name}_*` 的目录，验证后缀是合法的版本号格式（如 `1.0.0`）。
@@ -385,7 +385,7 @@ client-updator.exe list_rollback_versions [--main-exe-path <path>]
 ### 6. 版本回滚
 
 ```bash
-client-updator.exe rollback --version 1.0.0 [--main-exe-path <path>] [--must-close-process-name <name1,name2>] [--close-timeout <seconds>]
+zap-update.exe rollback --version 1.0.0 [--main-exe-path <path>] [--must-close-process-name <name1,name2>] [--close-timeout <seconds>]
 ```
 
 **执行步骤**：与第 4 步（应用更新）相同的原子替换操作。
@@ -403,15 +403,15 @@ client-updator.exe rollback --version 1.0.0 [--main-exe-path <path>] [--must-clo
 ### 7. 自更新检查
 
 ```bash
-client-updator.exe check_self_update [--main-exe-path <path>]
+zap-update.exe check_self_update [--main-exe-path <path>]
 ```
 
-**功能**：比对自身与 `ApplicationFolder/check-updator.exe` 的 SHA-256，判断 updator 是否需要更新。
+**功能**：比对自身与 `ApplicationFolder/zap-update.exe` 的 SHA-256，判断 updator 是否需要更新。
 
-**原理**：发布者每次打包时，将当前版本的 `client_updator.exe` 复制一份放入主程序目录，命名为 `check-updator.exe`。当主程序更新后，`check-updator.exe` 变成了新版，而 `UpdateFolder/client_updator.exe` 仍是旧版，比对不一致即为需要更新。
+**原理**：发布者每次打包时，将当前版本的 `zap-update.exe` 复制一份放入主程序目录，命名为 `zap-update.exe`。当主程序更新后，`zap-update.exe` 变成了新版，而 `UpdateFolder/zap-update.exe` 仍是旧版，比对不一致即为需要更新。
 
 **行为**：
-- 若 `ApplicationFolder/check-updator.exe` 不存在（首次部署），视为不需要更新
+- 若 `ApplicationFolder/zap-update.exe` 不存在（首次部署），视为不需要更新
 - 若存在且 SHA-256 一致，不需要更新
 - 若存在且 SHA-256 不一致，需要更新
 
@@ -421,7 +421,7 @@ client-updator.exe check_self_update [--main-exe-path <path>]
 不需要更新：`{ "isSuccess": true, "errorMsg": "", "data": { "need_update": false } }`
 
 **调用方（main app）后续动作**：
-收到 `need_update: true` 后，将 `ApplicationFolder/check-updator.exe` 复制到 `UpdateFolder/client_updator.exe` 覆盖旧版（此时 updator 已退出，文件锁释放，可安全覆盖）。
+收到 `need_update: true` 后，将 `ApplicationFolder/zap-update.exe` 复制到 `UpdateFolder/zap-update.exe` 覆盖旧版（此时 updator 已退出，文件锁释放，可安全覆盖）。
 
 ---
 
@@ -449,7 +449,7 @@ client-updator.exe check_self_update [--main-exe-path <path>]
 | # | 问题 | 说明 |
 |---|------|------|
 | 6 | WM_CLOSE 对控制台程序无效 | 只发 WM_CLOSE 消息，对无消息循环的控制台程序 / Windows 服务无效，只能等超时后强杀。建议对控制台进程使用 AttachConsole + CTRL_C_EVENT |
-| 7 | 无并发锁/互斥机制 | 没有文件锁、Mutex 等机制防止同时运行两个 client_updator.exe 实例，可能破坏 version.json 和文件系统状态 |
+| 7 | 无并发锁/互斥机制 | 没有文件锁、Mutex 等机制防止同时运行两个 zap-update.exe 实例，可能破坏 version.json 和文件系统状态 |
 | 8 | 关闭进程后可能被看门狗重启 | 关闭进程后、文件操作前的时间窗口内，如果有守护进程或服务自动重启了目标进程，后续重命名会因文件被占用而失败 |
 
 ### 下载安全

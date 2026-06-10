@@ -3,7 +3,7 @@
 package hook
 
 import (
-	"clientupdator/server/ent"
+	"zap/server/ent"
 	"context"
 	"fmt"
 )
