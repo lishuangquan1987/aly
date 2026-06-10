@@ -8,23 +8,24 @@ publish_tool_avalonia/.idea/
 publish_tool_avalonia/.vs/
 
 # server build artifacts
-server/server.exe
-server/server-*
+server/zap-server.exe
+server/zap-server-*
 
 # client build artifacts
-client/client-updator.exe
+client/zap-update.exe
 client/test/temp_test/
 client/test/*.exe
 test_data/
 
 # publish-cli build artifacts
-publish-cli/publish-cli.exe
+publish/publish-cli/zap-publish.exe
 
 # test artifacts
 test_e2e/
 .publish-cli/
+.updator/
 server/data/
-server/server.exe~
+server/zap-server.exe~
 *~
-server/configs/clientupdator.db
+server/configs/zap.db
 server/release-server.exe
