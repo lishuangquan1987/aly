@@ -17,18 +17,17 @@ func CheckUpdate() {
 	projectNameFlag := fs.String("project-name", "", "project name")
 	fs.Parse(os.Args[2:])
 
-	cfg, err := config.LoadConfig()
+	fc, err := loadFullConfig(*urlFlag, *projectNameFlag, "", "")
 	if err != nil {
-		printOutput(false, fmt.Sprintf("load config: %v", err), nil)
+		printOutput(false, err.Error(), nil)
 		return
 	}
-	cfg.MergeFlags(*urlFlag, *projectNameFlag, "", "")
 
-	if cfg.URL == "" {
+	if fc.Shared.ServerURL == "" {
 		printOutput(false, "no server url configured", nil)
 		return
 	}
-	if cfg.ProjectName == "" {
+	if fc.Shared.ProjectName == "" {
 		printOutput(false, "no project name configured", nil)
 		return
 	}
@@ -54,13 +53,13 @@ func CheckUpdate() {
 		return
 	}
 
-	project, err := apiclient.FindProjectByName(cfg.URL, cfg.ProjectName)
+	project, err := apiclient.FindProjectByName(fc.Shared.ServerURL, fc.Shared.ProjectName)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
 	}
 
-	logs, err := apiclient.GetProjectChangeLogs(cfg.URL, project.ID)
+	logs, err := apiclient.GetProjectChangeLogs(fc.Shared.ServerURL, fc.Shared.ProjectName)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
@@ -99,4 +98,3 @@ func CheckUpdate() {
 		})
 	}
 }
-

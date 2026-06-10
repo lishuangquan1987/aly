@@ -43,18 +43,13 @@ func runStatus(cmd *cobra.Command, args []string) {
 		return
 	}
 	client := newAPIClient(cfg)
-	pid, err := resolveProjectID(cfg)
-	if err != nil {
-		outputResult(false, err.Error(), nil)
-		return
-	}
-	sd, err := diff.RunStatus(cfg, client, pid)
+	sd, err := diff.RunStatus(cfg.Path, cfg.Shared.IgnoreFolders, cfg.Shared.IgnoreFiles, client, cfg.Shared.ProjectName)
 	if err != nil {
 		outputResult(false, err.Error(), nil)
 		return
 	}
 	// 合并暂存区文件：从 unstaged 移除已暂存的，放入 staged
-	stagedItems := staging.LoadAsStatusItems(cfg.Project.Path)
+	stagedItems := staging.LoadAsStatusItems(cfg.Path)
 	stagedPaths := make(map[string]bool, len(stagedItems))
 	for _, s := range stagedItems {
 		stagedPaths[s.RelativePath] = true
@@ -116,18 +111,13 @@ func runDiff(cmd *cobra.Command, args []string) {
 		return
 	}
 	client := newAPIClient(cfg)
-	pid, err := resolveProjectID(cfg)
-	if err != nil {
-		outputResult(false, err.Error(), nil)
-		return
-	}
-	sd, err := diff.RunStatus(cfg, client, pid)
+	sd, err := diff.RunStatus(cfg.Path, cfg.Shared.IgnoreFolders, cfg.Shared.IgnoreFiles, client, cfg.Shared.ProjectName)
 	if err != nil {
 		outputResult(false, err.Error(), nil)
 		return
 	}
 	// 合并暂存区文件
-	sd.Staged = staging.LoadAsStatusItems(cfg.Project.Path)
+	sd.Staged = staging.LoadAsStatusItems(cfg.Path)
 	allFiles := make([]models.FileStatusItem, 0, len(sd.Staged)+len(sd.Unstaged)+len(sd.Unchanged))
 	allFiles = append(allFiles, sd.Staged...)
 	allFiles = append(allFiles, sd.Unstaged...)
@@ -142,5 +132,3 @@ func runDiff(cmd *cobra.Command, args []string) {
 		printHumanLn("")
 	}
 }
-
-

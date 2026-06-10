@@ -102,7 +102,6 @@ public partial class AddProjectDialog : Window
         if (ServerProjectList.SelectedItem is ProjectInfo project)
         {
             ProjectNameBox.Text = project.Name;
-            ProjectIdBox.Text = project.Id.ToString();
             Log.Information("选择了服务端项目: Name={Name}, Id={Id}", project.Name, project.Id);
         }
     }
@@ -123,8 +122,7 @@ public partial class AddProjectDialog : Window
         if (project != null)
         {
             ProjectNameBox.Text = project.Name;
-            ProjectIdBox.Text = project.Id.ToString();
-            ShowFetchStatus($"项目 \"{project.Name}\" 创建成功 (ID: {project.Id})", false, StatusKind.Success);
+            ShowFetchStatus($"项目 \"{project.Name}\" 创建成功", false, StatusKind.Success);
             Log.Information("创建项目完成，自动填充: Name={Name}, Id={Id}", project.Name, project.Id);
 
             await FetchProjects();
@@ -164,12 +162,11 @@ public partial class AddProjectDialog : Window
         {
             ServerUrl = ServerUrlBox.Text.Trim(),
             ProjectName = ProjectNameBox.Text.Trim(),
-            ProjectPath = ProjectPathBox.Text.Trim(),
-            ProjectId = int.TryParse(ProjectIdBox.Text, out var id) ? id : 0
+            ProjectPath = ProjectPathBox.Text.Trim()
         };
 
-        Log.Information("添加项目: Name={Name}, Server={Server}, Path={Path}, Id={Id}",
-            cfg.ProjectName, cfg.ServerUrl, cfg.ProjectPath, cfg.ProjectId);
+        Log.Information("添加项目: Name={Name}, Server={Server}, Path={Path}",
+            cfg.ProjectName, cfg.ServerUrl, cfg.ProjectPath);
 
         Close(cfg);
     }

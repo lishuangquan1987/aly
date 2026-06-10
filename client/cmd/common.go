@@ -30,6 +30,80 @@ func printOutput(success bool, errMsg string, data interface{}) {
 	fmt.Println(string(bytes))
 }
 
+// FullConfig 运行时完整配置（client.yaml + .updator/shared.json + .updator/client.json + CLI 参数）
+type FullConfig struct {
+	ExeCfg    *config.Config
+	Shared    *config.SharedConfig
+	Client    *config.ClientConfig
+	MainFolder string
+}
+
+// loadFullConfig 加载完整配置：client.yaml → MainExeRelativePath → .updator/shared.json → .updator/client.json
+// url/projectName/mainExePath/mustClose 为 CLI 参数覆盖
+func loadFullConfig(url, projectName, mainExePath, mustClose string) (*FullConfig, error) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("load config: %v", err)
+	}
+	cfg.MergeFlags(mainExePath)
+
+	mainFolder, err := cfg.MainExeFolderPath()
+	if err != nil {
+		return nil, err
+	}
+
+	shared, err := config.LoadSharedConfig(mainFolder)
+	if err != nil {
+		return nil, fmt.Errorf("load shared.json: %v", err)
+	}
+
+	cc, err := config.LoadClientConfig(mainFolder)
+	if err != nil {
+		return nil, fmt.Errorf("load client.json: %v", err)
+	}
+
+	// CLI 参数覆盖
+	if url != "" {
+		shared.ServerURL = url
+	}
+	if projectName != "" {
+		shared.ProjectName = projectName
+	}
+	if mustClose != "" {
+		newNames := splitProcessNamesCLI(mustClose)
+		existing := make(map[string]bool)
+		for _, n := range cc.MustCloseProcessName {
+			existing[n] = true
+		}
+		for _, n := range newNames {
+			if !existing[n] {
+				cc.MustCloseProcessName = append(cc.MustCloseProcessName, n)
+			}
+		}
+	}
+
+	return &FullConfig{
+		ExeCfg:     cfg,
+		Shared:     shared,
+		Client:     cc,
+		MainFolder: mainFolder,
+	}, nil
+}
+
+func splitProcessNamesCLI(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var result []string
+	for _, name := range strings.Split(s, ",") {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			result = append(result, name)
+		}
+	}
+	return result
+}
+
 // normalizePath 将反斜杠转为正斜杠
 func normalizePath(p string) string {
 	return strings.Replace(p, "\\", "/", -1)

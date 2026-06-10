@@ -72,7 +72,7 @@ type CreateProjectRequest struct {
 
 // UpdateProjectRequest POST /api/project/update_project
 type UpdateProjectRequest struct {
-	ID            int      `json:"id"`
+	Name          string   `json:"name"`
 	Title         string   `json:"title"`
 	IsForceUpdate bool     `json:"isForceUpdate"`
 	IgnoreFolders []string `json:"ignoreFolders"`
@@ -81,10 +81,10 @@ type UpdateProjectRequest struct {
 
 // PublishVersionRequest POST /api/project/publish_version
 type PublishVersionRequest struct {
-	ProjectID int      `json:"projectId"`
-	Version   string   `json:"version"`
-	Logs      []string `json:"logs"`
-	Time      string   `json:"time"`
+	ProjectName string   `json:"projectName"`
+	Version     string   `json:"version"`
+	Logs        []string `json:"logs"`
+	Time        string   `json:"time"`
 }
 
 // ─── CLI 输出模型（camelCase）────────────────────────────────────────────

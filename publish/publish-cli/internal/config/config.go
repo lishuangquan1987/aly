@@ -7,55 +7,53 @@ import (
 	"path/filepath"
 )
 
-// Config 发布项目配置
-type Config struct {
-	Server struct {
-		URL string `json:"url"`
-	} `json:"server"`
-	Project struct {
-		Name string `json:"name"`
-		Path string `json:"path"`
-		ID   int    `json:"id"`
-	} `json:"project"`
-	Ignore struct {
-		Folders []string `json:"folders"`
-		Files   []string `json:"files"`
-	} `json:"ignore"`
-	Output struct {
-		Format string `json:"format"` // human / json
-	} `json:"output"`
+// SharedConfig publish-cli + client 共用配置（.updator/shared.json）
+type SharedConfig struct {
+	ServerURL     string   `json:"server_url"`
+	ProjectName   string   `json:"project_name"`
+	IgnoreFolders []string `json:"ignore_folders"`
+	IgnoreFiles   []string `json:"ignore_files"`
 }
 
-// DefaultConfig 返回默认配置
-func DefaultConfig() Config {
-	c := Config{}
-	c.Output.Format = "human"
-	c.Ignore.Folders = []string{}
-	c.Ignore.Files = []string{}
-	return c
+// PublishConfig publish-cli 专有配置（.updator/publish.json，本地不上传）
+type PublishConfig struct {
+	OutputFormat string `json:"output_format"` // human / json
 }
 
-// GlobalPath 全局配置文件路径
-func GlobalPath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
+// DefaultShared 返回默认共用配置
+func DefaultShared() SharedConfig {
+	return SharedConfig{
+		IgnoreFolders: []string{},
+		IgnoreFiles:   []string{},
 	}
-	return filepath.Join(dir, ".publish-cli", "config.json"), nil
 }
 
-// ProjectPath 项目级配置文件路径（<project-path>/.publish-cli/config.json）
-func ProjectPath(projectPath string) string {
-	return filepath.Join(projectPath, ".publish-cli", "config.json")
-}
-
-// LoadGlobal 加载全局配置
-func LoadGlobal() (Config, error) {
-	cfg := DefaultConfig()
-	path, err := GlobalPath()
-	if err != nil {
-		return cfg, err
+// DefaultPublish 返回默认 publish-cli 配置
+func DefaultPublish() PublishConfig {
+	return PublishConfig{
+		OutputFormat: "human",
 	}
+}
+
+// UpdatorDir 返回 .updator/ 目录路径
+func UpdatorDir(projectPath string) string {
+	return filepath.Join(projectPath, ".updator")
+}
+
+// SharedPath 返回 .updator/shared.json 路径
+func SharedPath(projectPath string) string {
+	return filepath.Join(UpdatorDir(projectPath), "shared.json")
+}
+
+// PublishPath 返回 .updator/publish.json 路径
+func PublishPath(projectPath string) string {
+	return filepath.Join(UpdatorDir(projectPath), "publish.json")
+}
+
+// LoadShared 加载共用配置
+func LoadShared(projectPath string) (SharedConfig, error) {
+	cfg := DefaultShared()
+	path := SharedPath(projectPath)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -64,94 +62,36 @@ func LoadGlobal() (Config, error) {
 		return cfg, err
 	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return cfg, fmt.Errorf("parse global config: %w", err)
+		return cfg, fmt.Errorf("parse shared.json: %w", err)
 	}
 	return cfg, nil
 }
 
-// LoadProject 加载项目级配置（返回合并后的完整配置）
-func LoadProject(projectPath string) (Config, error) {
-	global, _ := LoadGlobal()
-	path := ProjectPath(projectPath)
+// SaveShared 保存共用配置
+func SaveShared(projectPath string, cfg SharedConfig) error {
+	return writeJSON(SharedPath(projectPath), cfg)
+}
+
+// LoadPublish 加载 publish-cli 专有配置
+func LoadPublish(projectPath string) (PublishConfig, error) {
+	cfg := DefaultPublish()
+	path := PublishPath(projectPath)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return global, nil
+			return cfg, nil
 		}
-		return global, err
+		return cfg, err
 	}
-	var projectCfg Config
-	if err := json.Unmarshal(data, &projectCfg); err != nil {
-		return global, fmt.Errorf("parse project config: %w", err)
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return cfg, fmt.Errorf("parse publish.json: %w", err)
 	}
-	// 合并：项目级覆盖全局
-	merged := merge(global, projectCfg)
-	return merged, nil
+	return cfg, nil
 }
 
-// SaveGlobal 保存全局配置
-func SaveGlobal(cfg Config) error {
-	path, err := GlobalPath()
-	if err != nil {
-		return err
-	}
-	return writeJSON(path, cfg)
-}
-
-// SaveProject 保存项目级配置（仅写入项目特有字段，避免重复保存全局配置）
-func SaveProject(projectPath string, cfg Config) error {
-	path := ProjectPath(projectPath)
-	// 仅持久化项目相关字段
-	projectOnly := struct {
-		Server struct {
-			URL string `json:"url"`
-		} `json:"server"`
-		Project struct {
-			Name string `json:"name"`
-			Path string `json:"path"`
-			ID   int    `json:"id"`
-		} `json:"project"`
-		Ignore struct {
-			Folders []string `json:"folders"`
-			Files   []string `json:"files"`
-		} `json:"ignore"`
-	}{
-		Project: cfg.Project,
-		Ignore:  cfg.Ignore,
-	}
-	projectOnly.Server.URL = cfg.Server.URL
-	return writeJSON(path, projectOnly)
-}
-
-// merge 项目级覆盖全局级（非零值覆盖）
-// 注意：零值字段（如 Project.ID=0）无法区分「未设置」与「显式设为 0」
-// 如需将 Project.ID 从全局值覆盖为 0，请直接编辑项目配置文件
-func merge(global, project Config) Config {
-	if project.Server.URL != "" {
-		global.Server.URL = project.Server.URL
-	}
-	if project.Project.Name != "" {
-		global.Project.Name = project.Project.Name
-	}
-	if project.Project.Path != "" {
-		global.Project.Path = project.Project.Path
-	}
-	// 哨兵值 -1 表示显式清除项目 ID（不常用，大多数情况用非零值）
-	if project.Project.ID == -1 {
-		global.Project.ID = 0
-	} else if project.Project.ID != 0 {
-		global.Project.ID = project.Project.ID
-	}
-	if len(project.Ignore.Folders) > 0 {
-		global.Ignore.Folders = project.Ignore.Folders
-	}
-	if len(project.Ignore.Files) > 0 {
-		global.Ignore.Files = project.Ignore.Files
-	}
-	if project.Output.Format != "" {
-		global.Output.Format = project.Output.Format
-	}
-	return global
+// SavePublish 保存 publish-cli 专有配置
+func SavePublish(projectPath string, cfg PublishConfig) error {
+	return writeJSON(PublishPath(projectPath), cfg)
 }
 
 func writeJSON(path string, v interface{}) error {

@@ -16,16 +16,16 @@ import (
 	"github.com/utils-go/ngo/io/path"
 )
 
-func GetAllFilesByProjectId(ctx *gin.Context) {
-	var projectIdDto struct {
-		ProjectId int `uri:"projectId" json:"projectId"`
+func GetAllFilesByProjectName(ctx *gin.Context) {
+	var projectNameDto struct {
+		ProjectName string `uri:"projectName" json:"projectName"`
 	}
-	if err := ctx.BindUri(&projectIdDto); err != nil {
+	if err := ctx.BindUri(&projectNameDto); err != nil {
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
 
-	projectResult := service.GetProjectById(projectIdDto.ProjectId)
+	projectResult := service.GetProjectByName(projectNameDto.ProjectName)
 	if !projectResult.IsSuccess {
 		ctx.JSON(200, projectResult)
 		return

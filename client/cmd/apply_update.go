@@ -19,22 +19,15 @@ func ApplyUpdate() {
 	closeTimeoutFlag := fs.Int("close-timeout", 30, "timeout seconds for process close")
 	fs.Parse(os.Args[2:])
 
-	cfg, err := config.LoadConfig()
+	fc, err := loadFullConfig("", "", *mainExePathFlag, *mustCloseFlag)
 	if err != nil {
-		printOutput(false, fmt.Sprintf("load config: %v", err), nil)
+		printOutput(false, err.Error(), nil)
 		return
 	}
-	cfg.MergeFlags("", "", *mainExePathFlag, *mustCloseFlag)
 
 	versionInfo, err := config.ReadVersion()
 	if err != nil {
 		printOutput(false, fmt.Sprintf("read version: %v", err), nil)
-		return
-	}
-
-	mainFolder, err := cfg.MainExeFolderPath()
-	if err != nil {
-		printOutput(false, err.Error(), nil)
 		return
 	}
 
@@ -46,18 +39,18 @@ func ApplyUpdate() {
 
 	case config.VersionStatusApplying:
 		// Crash recovery
-		if _, statErr := os.Stat(mainFolder); statErr == nil {
+		if _, statErr := os.Stat(fc.MainFolder); statErr == nil {
 			// Main folder exists and is complete -> redo replacement steps (fall through)
 		} else {
 			// Main folder doesn't exist, check if version dir exists
-			versionDir, verDirErr := cfg.AppVersionDir(versionInfo.Version)
+			versionDir, verDirErr := fc.ExeCfg.AppVersionDir(versionInfo.Version)
 			if verDirErr != nil {
 				printOutput(false, verDirErr.Error(), nil)
 				return
 			}
 			if _, statErr := os.Stat(versionDir); statErr == nil {
 				// Rename AppVersionDir to MainExeFolderPath
-				if err := os.Rename(versionDir, mainFolder); err != nil {
+				if err := os.Rename(versionDir, fc.MainFolder); err != nil {
 					printOutput(false, fmt.Sprintf("crash recovery failed: %v", err), nil)
 					return
 				}
@@ -67,10 +60,10 @@ func ApplyUpdate() {
 					util.AppendToLog(".", "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
 				}
 				// Run post-update script and launch main exe
-				if cfg.PostUpdateScript != "" {
-					runScript(filepath.Join(mainFolder, cfg.PostUpdateScript))
+				if fc.Client.PostUpdateScript != "" {
+					runScript(filepath.Join(fc.MainFolder, fc.Client.PostUpdateScript))
 				}
-				launchMainExe(cfg)
+				launchMainExe(fc.ExeCfg)
 				printOutput(true, "", nil)
 				return
 			}
@@ -90,20 +83,25 @@ func ApplyUpdate() {
 	}
 
 	// Close processes gracefully
-	if len(cfg.MustCloseProcessName) > 0 {
-		closeProcessesGracefully(cfg.MustCloseProcessName, time.Duration(*closeTimeoutFlag)*time.Second)
+	if len(fc.Client.MustCloseProcessName) > 0 {
+		closeProcessesGracefully(fc.Client.MustCloseProcessName, time.Duration(*closeTimeoutFlag)*time.Second)
 	}
 
 	// Atomic replacement
-	versionDir, err := cfg.AppVersionDir(versionInfo.Version)
+	versionDir, err := fc.ExeCfg.AppVersionDir(versionInfo.Version)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
 	}
 
-	// Step 6c: Copy current mainFolder content to versionDir (excluding un_copy_files and un_copy_folders)
-	// Ensures versionDir is a complete runnable app
-	if err := util.CopyDirWithExclude(mainFolder, versionDir, cfg.ShouldSkipFile, cfg.ShouldSkipFolder); err != nil {
+	// Copy current mainFolder content to versionDir (excluding ignore folders/files from shared.json)
+	shouldSkipFile := func(relPath string) bool {
+		return config.ShouldSkipFile(relPath, fc.Shared.IgnoreFiles)
+	}
+	shouldSkipFolder := func(relPath string) bool {
+		return config.ShouldSkipFolder(relPath, fc.Shared.IgnoreFolders)
+	}
+	if err := util.CopyDirWithExclude(fc.MainFolder, versionDir, shouldSkipFile, shouldSkipFolder); err != nil {
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
 			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after copy fail: write version failed: %v", wErr))
@@ -112,8 +110,8 @@ func ApplyUpdate() {
 		return
 	}
 
-	// Step 6d: Compute paths for atomic rename
-	prevVersionDir, err := cfg.AppVersionDir(versionInfo.VersionPrevious)
+	// Compute paths for atomic rename
+	prevVersionDir, err := fc.ExeCfg.AppVersionDir(versionInfo.VersionPrevious)
 	if err != nil {
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
@@ -129,8 +127,8 @@ func ApplyUpdate() {
 		os.Rename(prevVersionDir, oldBackupTemp)
 	}
 
-	// Step 6e: Rename mainFolder -> prevVersionDir (backup)
-	if err := os.Rename(mainFolder, prevVersionDir); err != nil {
+	// Rename mainFolder -> prevVersionDir (backup)
+	if err := os.Rename(fc.MainFolder, prevVersionDir); err != nil {
 		// Restore old backup if it existed
 		if _, statErr := os.Stat(oldBackupTemp); statErr == nil {
 			os.Rename(oldBackupTemp, prevVersionDir)
@@ -143,10 +141,10 @@ func ApplyUpdate() {
 		return
 	}
 
-	// Step 6f: Rename versionDir -> mainFolder
-	if err := os.Rename(versionDir, mainFolder); err != nil {
+	// Rename versionDir -> mainFolder
+	if err := os.Rename(versionDir, fc.MainFolder); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
-		os.Rename(prevVersionDir, mainFolder)
+		os.Rename(prevVersionDir, fc.MainFolder)
 		os.Rename(oldBackupTemp, prevVersionDir)
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
@@ -159,22 +157,21 @@ func ApplyUpdate() {
 	// Clean up old backup AFTER successful rename
 	os.RemoveAll(oldBackupTemp)
 
-	// Step 7: Update version.json
+	// Update version.json
 	versionInfo.VersionStatus = config.VersionStatusApplied
 	if err := config.WriteVersion(versionInfo); err != nil {
 		printOutput(false, fmt.Sprintf("write version: %v", err), nil)
 		return
 	}
 
-	// Step 8: Run post_update_script if configured
-	if cfg.PostUpdateScript != "" {
-		runScript(filepath.Join(mainFolder, cfg.PostUpdateScript))
+	// Run post_update_script if configured
+	if fc.Client.PostUpdateScript != "" {
+		runScript(filepath.Join(fc.MainFolder, fc.Client.PostUpdateScript))
 	}
 
-	// Step 9: Launch main exe
-	launchMainExe(cfg)
+	// Launch main exe
+	launchMainExe(fc.ExeCfg)
 
-	// Step 10: Output success
+	// Output success
 	printOutput(true, "", nil)
 }
-

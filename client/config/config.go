@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -10,17 +11,26 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// Config 瀵瑰簲 client.yaml 鐨勯厤缃粨鏋?type Config struct {
-	ProjectName          string   `yaml:"project_name"`
-	URL                  string   `yaml:"url"`
-	MainExeRelativePath  string   `yaml:"main_exe_relative_path"`
-	UnCopyFiles          []string `yaml:"un_copy_files"`
-	UnCopyFolders        []string `yaml:"un_copy_folders"`
-	MustCloseProcessName []string `yaml:"must_close_process_name"`
-	PostUpdateScript     string   `yaml:"post_update_script"`
+// Config 对应精简版 client.yaml（仅 main_exe_relative_path）
+type Config struct {
+	MainExeRelativePath string `yaml:"main_exe_relative_path"`
 }
 
-// ExeDir 杩斿洖 client_updator.exe 鎵€鍦ㄧ洰褰?(UpdateFolder/)
+// SharedConfig 对应 .updator/shared.json（publish-cli + client 共用）
+type SharedConfig struct {
+	ServerURL     string   `json:"server_url"`
+	ProjectName   string   `json:"project_name"`
+	IgnoreFolders []string `json:"ignore_folders"`
+	IgnoreFiles   []string `json:"ignore_files"`
+}
+
+// ClientConfig 对应 .updator/client.json（client 专有）
+type ClientConfig struct {
+	MustCloseProcessName []string `json:"must_close_process_name"`
+	PostUpdateScript     string   `json:"post_update_script"`
+}
+
+// ExeDir 返回 client_updator.exe 所在目录 (UpdateFolder/)
 func ExeDir() (string, error) {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -33,13 +43,18 @@ func ExeDir() (string, error) {
 	return filepath.Dir(resolved), nil
 }
 
-// PackageDir 杩斿洖鍖呮牴鐩綍 (PackageFolder/)锛屽嵆 ExeDir 鐨勭埗鐩綍
+// PackageDir 返回包根目录 (PackageFolder/)，即 ExeDir 的父目录
 func PackageDir() (string, error) {
 	exeDir, err := ExeDir()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Dir(exeDir), nil
+}
+
+// UpdatorDir 返回 .updator/ 目录路径（位于 mainFolder 下）
+func UpdatorDir(mainFolder string) string {
+	return filepath.Join(mainFolder, ".updator")
 }
 
 func configPath() (string, error) {
@@ -50,7 +65,7 @@ func configPath() (string, error) {
 	return filepath.Join(dir, "client.yaml"), nil
 }
 
-// LoadConfig 浠?client.yaml 鍔犺浇閰嶇疆
+// LoadConfig 从 client.yaml 加载精简配置（仅 main_exe_relative_path）
 func LoadConfig() (*Config, error) {
 	path, err := configPath()
 	if err != nil {
@@ -70,32 +85,43 @@ func LoadConfig() (*Config, error) {
 	return &cfg, nil
 }
 
-// MergeFlags 灏嗗懡浠よ鍙傛暟鍚堝苟鍒伴厤缃腑锛堝懡浠よ鍙傛暟浼樺厛锛?func (c *Config) MergeFlags(url string, projectName string, mainExePath string, mustCloseProcessName string) {
-	if url != "" {
-		c.URL = url
+// LoadSharedConfig 从 ApplicationFolder/.updator/shared.json 加载共用配置
+func LoadSharedConfig(mainFolder string) (*SharedConfig, error) {
+	path := filepath.Join(UpdatorDir(mainFolder), "shared.json")
+	data, err := ioutilReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read shared.json failed: %v", err)
 	}
-	if projectName != "" {
-		c.ProjectName = projectName
+	var cfg SharedConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse shared.json failed: %v", err)
 	}
+	return &cfg, nil
+}
+
+// LoadClientConfig 从 ApplicationFolder/.updator/client.json 加载 client 专有配置
+func LoadClientConfig(mainFolder string) (*ClientConfig, error) {
+	path := filepath.Join(UpdatorDir(mainFolder), "client.json")
+	data, err := ioutilReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read client.json failed: %v", err)
+	}
+	var cfg ClientConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse client.json failed: %v", err)
+	}
+	return &cfg, nil
+}
+
+// MergeFlags 将命令行参数合并到 Config（命令行参数优先）
+func (c *Config) MergeFlags(mainExePath string) {
 	if mainExePath != "" {
 		c.MainExeRelativePath = mainExePath
 	}
-	if mustCloseProcessName != "" {
-		newNames := splitProcessNames(mustCloseProcessName)
-		existing := make(map[string]bool)
-		for _, n := range c.MustCloseProcessName {
-			existing[n] = true
-		}
-		for _, n := range newNames {
-			if !existing[n] {
-				c.MustCloseProcessName = append(c.MustCloseProcessName, n)
-			}
-		}
-	}
 }
 
-// MainExeFolderPath 杩斿洖涓荤▼搴忔牴鐩綍鐨勭粷瀵硅矾寰?(PackageFolder/ApplicationFolder/)
-// main_exe_relative_path 鐩稿浜?ExeDir锛堝嵆 UpdateFolder/锛夛紝濡?"../ApplicationFolder/main_application.exe"
+// MainExeFolderPath 返回主程序根目录的绝对路径 (PackageFolder/ApplicationFolder/)
+// main_exe_relative_path 相对于 ExeDir（即 UpdateFolder/），如 "../ApplicationFolder/main_application.exe"
 func (c *Config) MainExeFolderPath() (string, error) {
 	exeDir, err := ExeDir()
 	if err != nil {
@@ -105,7 +131,8 @@ func (c *Config) MainExeFolderPath() (string, error) {
 	return filepath.Dir(mainExeAbsPath), nil
 }
 
-// MainExeFolderName 杩斿洖涓荤▼搴忔枃浠跺す鍚嶇О锛堝 "ApplicationFolder"锛?func (c *Config) MainExeFolderName() (string, error) {
+// MainExeFolderName 返回主程序文件夹名称（如 "ApplicationFolder"）
+func (c *Config) MainExeFolderName() (string, error) {
 	folderPath, err := c.MainExeFolderPath()
 	if err != nil {
 		return "", err
@@ -113,7 +140,7 @@ func (c *Config) MainExeFolderPath() (string, error) {
 	return filepath.Base(folderPath), nil
 }
 
-// AppVersionDir 杩斿洖鎸囧畾鐗堟湰鐨勫簲鐢ㄧ洰褰曡矾寰?(PackageFolder/ApplicationFolder_{version}/)
+// AppVersionDir 返回指定版本的应用目录路径 (PackageFolder/ApplicationFolder_{version}/)
 func (c *Config) AppVersionDir(version string) (string, error) {
 	pkgDir, err := PackageDir()
 	if err != nil {
@@ -126,7 +153,8 @@ func (c *Config) AppVersionDir(version string) (string, error) {
 	return filepath.Join(pkgDir, mainExeFolderName+"_"+version), nil
 }
 
-// CheckUpdaterPath 杩斿洖 ApplicationFolder/check-updator.exe 鐨勭粷瀵硅矾寰?func (c *Config) CheckUpdaterPath() (string, error) {
+// CheckUpdaterPath 返回 ApplicationFolder/check-updator.exe 的绝对路径
+func (c *Config) CheckUpdaterPath() (string, error) {
 	mainFolder, err := c.MainExeFolderPath()
 	if err != nil {
 		return "", err
@@ -134,26 +162,33 @@ func (c *Config) AppVersionDir(version string) (string, error) {
 	return filepath.Join(mainFolder, "check-updator.exe"), nil
 }
 
-// ShouldSkipFile 鍒ゆ柇鏂囦欢鏄惁鍦ㄦ帓闄ゅ垪琛ㄤ腑
-func (c *Config) ShouldSkipFile(relPath string) bool {
-	base := filepath.Base(relPath)
-	for _, pattern := range c.UnCopyFiles {
-		if match, _ := filepath.Match(pattern, base); match {
+// ShouldSkipFolder 判断文件夹是否在忽略列表中（基于 SharedConfig.IgnoreFolders）
+// relPath 为相对于源目录的路径（OS 原生分隔符）
+func ShouldSkipFolder(relPath string, ignoreFolders []string) bool {
+	relPath = filepath.ToSlash(relPath)
+	for _, pattern := range ignoreFolders {
+		if match, _ := filepath.Match(pattern, relPath); match {
 			return true
 		}
-		if strings.EqualFold(pattern, base) {
+		if strings.EqualFold(pattern, relPath) {
 			return true
 		}
 	}
 	return false
 }
 
-// ShouldSkipFolder 鍒ゆ柇鏂囦欢澶规槸鍚﹀湪鎺掗櫎鍒楄〃涓?func (c *Config) ShouldSkipFolder(relPath string) bool {
-	for _, pattern := range c.UnCopyFolders {
-		if match, _ := filepath.Match(pattern, relPath); match {
+// ShouldSkipFile 判断文件是否在忽略列表中（基于 SharedConfig.IgnoreFiles）
+// relPath 为相对于源目录的路径
+func ShouldSkipFile(relPath string, ignoreFiles []string) bool {
+	base := filepath.Base(relPath)
+	for _, pattern := range ignoreFiles {
+		if match, _ := filepath.Match(pattern, base); match {
 			return true
 		}
-		if strings.EqualFold(pattern, relPath) {
+		if strings.EqualFold(pattern, base) {
+			return true
+		}
+		if match, _ := filepath.Match(pattern, relPath); match {
 			return true
 		}
 	}
@@ -182,4 +217,3 @@ func ioutilReadFile(path string) ([]byte, error) {
 	defer f.Close()
 	return ioutil.ReadAll(f)
 }
-

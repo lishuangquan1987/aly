@@ -170,5 +170,5 @@ func LoadAsStatusItems(projectPath string) []models.FileStatusItem {
 }
 
 func stagingPath(projectPath string) string {
-	return filepath.Join(projectPath, ".publish-cli", "staging", "staged-files.json")
+	return filepath.Join(projectPath, ".updator", "staging", "staged-files.json")
 }

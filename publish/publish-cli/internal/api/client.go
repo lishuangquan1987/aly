@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -117,25 +118,25 @@ func (c *Client) UpdateProject(req models.UpdateProjectRequest) error {
 }
 
 // DeleteProject 软删除项目
-func (c *Client) DeleteProject(projectID int) error {
-	path := fmt.Sprintf("/api/project/delete_project/%d", projectID)
+func (c *Client) DeleteProject(projectName string) error {
+	path := fmt.Sprintf("/api/project/delete_project/%s", url.PathEscape(projectName))
 	return c.post(path, struct{}{}, nil)
 }
 
-// GetProjectChangeLogs 获取变更日志
-func (c *Client) GetProjectChangeLogs(projectID int) ([]models.ProjectChangeLog, error) {
+// GetProjectChangeLogs 获取变更日志（按项目名称）
+func (c *Client) GetProjectChangeLogs(projectName string) ([]models.ProjectChangeLog, error) {
 	var logs []models.ProjectChangeLog
-	path := fmt.Sprintf("/api/project/get_project_change_logs/%d", projectID)
+	path := fmt.Sprintf("/api/project/get_project_change_logs/%s", url.PathEscape(projectName))
 	if err := c.get(path, &logs); err != nil {
 		return nil, err
 	}
 	return logs, nil
 }
 
-// GetProjectOSInfo 获取服务端系统信息
-func (c *Client) GetProjectOSInfo(projectID int) ([]models.ServerOSInfo, error) {
+// GetProjectOSInfo 获取服务端系统信息（按项目名称）
+func (c *Client) GetProjectOSInfo(projectName string) ([]models.ServerOSInfo, error) {
 	var info []models.ServerOSInfo
-	path := fmt.Sprintf("/api/project/get_project_os_info/%d", projectID)
+	path := fmt.Sprintf("/api/project/get_project_os_info/%s", url.PathEscape(projectName))
 	if err := c.get(path, &info); err != nil {
 		return nil, err
 	}
@@ -153,10 +154,10 @@ func (c *Client) PublishVersion(req models.PublishVersionRequest) (*models.Proje
 
 // ─── File API ──────────────────────────────────────────────────────────
 
-// GetAllFiles 获取服务端文件列表
-func (c *Client) GetAllFiles(projectID int) ([]models.FileInfo, error) {
+// GetAllFiles 获取服务端文件列表（按项目名称）
+func (c *Client) GetAllFiles(projectName string) ([]models.FileInfo, error) {
 	var files []models.FileInfo
-	path := fmt.Sprintf("/api/file/get_all_files/%d", projectID)
+	path := fmt.Sprintf("/api/file/get_all_files/%s", url.PathEscape(projectName))
 	if err := c.get(path, &files); err != nil {
 		return nil, err
 	}

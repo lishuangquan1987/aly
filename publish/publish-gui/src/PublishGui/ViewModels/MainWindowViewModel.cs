@@ -95,8 +95,8 @@ public partial class MainWindowViewModel : ObservableObject
         Projects.Clear();
         foreach (var c in _cfg.LoadProjects())
         {
-            Log.Debug("加载项目: Name={Name}, Server={Server}, Path={Path}, Id={Id}",
-                c.ProjectName, c.ServerUrl, c.ProjectPath, c.ProjectId);
+            Log.Debug("加载项目: Name={Name}, Server={Server}, Path={Path}",
+                c.ProjectName, c.ServerUrl, c.ProjectPath);
             Projects.Add(c);
         }
         Log.Information("共加载 {Count} 个项目", Projects.Count);
@@ -303,7 +303,7 @@ public partial class MainWindowViewModel : ObservableObject
             Projects.Add(cfg);
             StatusMessage = "正在初始化本地配置...";
             var projectPath = cfg.ProjectPath ?? string.Empty;
-            var initResult = await _cli.ConfigInitAsync(projectPath, cfg.ServerUrl, cfg.ProjectName, cfg.ProjectId);
+            var initResult = await _cli.ConfigInitAsync(projectPath, cfg.ServerUrl, cfg.ProjectName);
             if (initResult?.IsSuccess != true)
                 StatusMessage = $"本地配置初始化失败: {initResult?.ErrorMsg}";
             SelectedProject = cfg;

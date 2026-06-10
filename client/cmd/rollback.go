@@ -26,20 +26,13 @@ func Rollback() {
 		return
 	}
 
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		printOutput(false, fmt.Sprintf("load config: %v", err), nil)
-		return
-	}
-	cfg.MergeFlags("", "", *mainExePathFlag, *mustCloseFlag)
-
-	mainFolder, err := cfg.MainExeFolderPath()
+	fc, err := loadFullConfig("", "", *mainExePathFlag, *mustCloseFlag)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
 	}
 
-	versionDir, err := cfg.AppVersionDir(*versionFlag)
+	versionDir, err := fc.ExeCfg.AppVersionDir(*versionFlag)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
@@ -61,12 +54,12 @@ func Rollback() {
 	switch versionInfo.VersionStatus {
 	case config.VersionStatusApplying:
 		// Crash recovery
-		if _, statErr := os.Stat(mainFolder); statErr == nil {
+		if _, statErr := os.Stat(fc.MainFolder); statErr == nil {
 			// Main folder exists, redo replacement steps (fall through)
 		} else {
 			// Main folder doesn't exist, check if target version dir exists
 			if _, statErr := os.Stat(versionDir); statErr == nil {
-				if err := os.Rename(versionDir, mainFolder); err != nil {
+				if err := os.Rename(versionDir, fc.MainFolder); err != nil {
 					printOutput(false, fmt.Sprintf("crash recovery failed: %v", err), nil)
 					return
 				}
@@ -76,10 +69,10 @@ func Rollback() {
 				if wErr := config.WriteVersion(versionInfo); wErr != nil {
 					util.AppendToLog(".", "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
 				}
-				if cfg.PostUpdateScript != "" {
-					runScript(filepath.Join(mainFolder, cfg.PostUpdateScript))
+				if fc.Client.PostUpdateScript != "" {
+					runScript(filepath.Join(fc.MainFolder, fc.Client.PostUpdateScript))
 				}
-				launchMainExe(cfg)
+				launchMainExe(fc.ExeCfg)
 				printOutput(true, "", nil)
 				return
 			}
@@ -96,8 +89,8 @@ func Rollback() {
 	}
 
 	// Close processes gracefully
-	if len(cfg.MustCloseProcessName) > 0 {
-		closeProcessesGracefully(cfg.MustCloseProcessName, time.Duration(*closeTimeoutFlag)*time.Second)
+	if len(fc.Client.MustCloseProcessName) > 0 {
+		closeProcessesGracefully(fc.Client.MustCloseProcessName, time.Duration(*closeTimeoutFlag)*time.Second)
 	}
 
 	// Rollback target version dir already has complete files from when it was active.
@@ -105,7 +98,7 @@ func Rollback() {
 	// from the current folder), rollback only needs atomic rename.
 
 	// Compute paths for atomic rename
-	prevVersionDir, err := cfg.AppVersionDir(oldVersion)
+	prevVersionDir, err := fc.ExeCfg.AppVersionDir(oldVersion)
 	if err != nil {
 		versionInfo.VersionStatus = config.VersionStatusApplied
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
@@ -122,7 +115,7 @@ func Rollback() {
 	}
 
 	// Rename mainFolder -> prevVersionDir (backup current)
-	if err := os.Rename(mainFolder, prevVersionDir); err != nil {
+	if err := os.Rename(fc.MainFolder, prevVersionDir); err != nil {
 		if _, statErr := os.Stat(oldBackupTemp); statErr == nil {
 			os.Rename(oldBackupTemp, prevVersionDir)
 		}
@@ -135,9 +128,9 @@ func Rollback() {
 	}
 
 	// Rename versionDir -> mainFolder (activate rollback target)
-	if err := os.Rename(versionDir, mainFolder); err != nil {
+	if err := os.Rename(versionDir, fc.MainFolder); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
-		os.Rename(prevVersionDir, mainFolder)
+		os.Rename(prevVersionDir, fc.MainFolder)
 		os.Rename(oldBackupTemp, prevVersionDir)
 		versionInfo.VersionStatus = config.VersionStatusApplied
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
@@ -160,14 +153,12 @@ func Rollback() {
 	}
 
 	// Run post_update_script if configured
-	if cfg.PostUpdateScript != "" {
-		runScript(filepath.Join(mainFolder, cfg.PostUpdateScript))
+	if fc.Client.PostUpdateScript != "" {
+		runScript(filepath.Join(fc.MainFolder, fc.Client.PostUpdateScript))
 	}
 
 	// Launch main exe
-	launchMainExe(cfg)
+	launchMainExe(fc.ExeCfg)
 
 	printOutput(true, "", &model.RollbackData{Version: *versionFlag})
 }
-
-

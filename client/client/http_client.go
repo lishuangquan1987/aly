@@ -95,10 +95,11 @@ func FindProjectByName(serverURL string, name string) (*model.Project, error) {
 	return nil, fmt.Errorf("未找到项目: %s", name)
 }
 
-// GetProjectChangeLogs 获取项目的变更日志
-func GetProjectChangeLogs(serverURL string, projectID int) ([]model.ProjectChangeLog, error) {
-	url := fmt.Sprintf("%s/api/project/get_project_change_logs/%d",
-		strings.TrimRight(serverURL, "/"), projectID)
+// GetProjectChangeLogs 获取项目的变更日志（按项目名称）
+func GetProjectChangeLogs(serverURL string, projectName string) ([]model.ProjectChangeLog, error) {
+	pn := urlEncodePath(projectName)
+	url := fmt.Sprintf("%s/api/project/get_project_change_logs/%s",
+		strings.TrimRight(serverURL, "/"), pn)
 	data, err := doGet(url)
 	if err != nil {
 		return nil, err
@@ -117,10 +118,11 @@ func GetProjectChangeLogs(serverURL string, projectID int) ([]model.ProjectChang
 	return logs, nil
 }
 
-// GetAllFiles 获取项目的所有文件列表
-func GetAllFiles(serverURL string, projectID int) ([]model.FileInfo, error) {
-	url := fmt.Sprintf("%s/api/file/get_all_files/%d",
-		strings.TrimRight(serverURL, "/"), projectID)
+// GetAllFiles 获取项目的所有文件列表（按项目名称）
+func GetAllFiles(serverURL string, projectName string) ([]model.FileInfo, error) {
+	pn := urlEncodePath(projectName)
+	url := fmt.Sprintf("%s/api/file/get_all_files/%s",
+		strings.TrimRight(serverURL, "/"), pn)
 	data, err := doGet(url)
 	if err != nil {
 		return nil, err

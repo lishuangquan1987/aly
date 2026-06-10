@@ -60,13 +60,13 @@ func CreateProjectWithFirstLog(name string, title string, isForceUpdate bool, ig
 	return models.OKWithData(project)
 }
 
-func UpdateProject(id int, title string, isForceUpdate bool, ignoreFolders []string, ignoreFiles []string) models.CommonResponse {
+func UpdateProject(name string, title string, isForceUpdate bool, ignoreFolders []string, ignoreFiles []string) models.CommonResponse {
 	ctx := context.Background()
 	err := db.WithTx(ctx, func(tx *ent.Tx) error {
 		//更新项目
 		var err error
 		_, err = tx.Project.Update().
-			Where(project.IDEQ(id)).
+			Where(project.NameEQ(name)).
 			SetTitle(title).
 			SetForceUpdate(isForceUpdate).
 			SetIgnoreFolders(ignoreFolders).
@@ -91,11 +91,11 @@ func GetAllProjects() models.CommonResponse {
 	return models.OKWithData(projects)
 }
 
-func GetProjectChangeLogs(projectId int) models.CommonResponse {
+func GetProjectChangeLogs(projectName string) models.CommonResponse {
 	ctx := context.Background()
 	projectLogs, err := db.Client.ProjectChangeLog.
 		Query().
-		Where(projectchangelog.HasProjectWith(project.IDEQ(projectId)),
+		Where(projectchangelog.HasProjectWith(project.NameEQ(projectName)),
 			projectchangelog.IsDeletedEQ(false)).
 		Order(ent.Desc(projectchangelog.FieldID)).
 		All(ctx)
@@ -106,9 +106,9 @@ func GetProjectChangeLogs(projectId int) models.CommonResponse {
 	return models.OKWithData(projectLogs)
 }
 
-func GetProjectById(projectId int) models.CommonResponse {
+func GetProjectByName(projectName string) models.CommonResponse {
 	ctx := context.Background()
-	p, err := db.Client.Project.Query().Where(project.IDEQ(projectId)).First(ctx)
+	p, err := db.Client.Project.Query().Where(project.NameEQ(projectName)).First(ctx)
 	if err != nil {
 		return models.NGWithError(err)
 	}
@@ -116,18 +116,18 @@ func GetProjectById(projectId int) models.CommonResponse {
 	return models.OKWithData(p)
 }
 
-func PublishVersion(projectId int, version string, logs []string, time string) models.CommonResponse {
+func PublishVersion(projectName string, version string, logs []string, time string) models.CommonResponse {
 	ctx := context.Background()
 	var changelog *ent.ProjectChangeLog
 	err := db.WithTx(ctx, func(tx *ent.Tx) error {
 		// 获取项目实体（用于关联变更日志）
-		p, err := tx.Project.Get(ctx, projectId)
+		p, err := tx.Project.Query().Where(project.NameEQ(projectName)).First(ctx)
 		if err != nil {
 			return err
 		}
 		// 更新项目版本号
 		_, err = tx.Project.Update().
-			Where(project.IDEQ(projectId)).
+			Where(project.NameEQ(projectName)).
 			SetVersion(version).
 			Save(ctx)
 		if err != nil {
@@ -149,9 +149,9 @@ func PublishVersion(projectId int, version string, logs []string, time string) m
 	return models.OKWithData(changelog)
 }
 
-func DeleteProject(projectId int) models.CommonResponse {
+func DeleteProject(projectName string) models.CommonResponse {
 	ctx := context.Background()
-	_, err := db.Client.Project.Update().Where(project.IDEQ(projectId)).
+	_, err := db.Client.Project.Update().Where(project.NameEQ(projectName)).
 		SetIsDeleted(true).
 		Save(ctx)
 	if err != nil {

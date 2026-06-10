@@ -22,29 +22,22 @@ func DownloadUpdate() {
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
 	fs.Parse(os.Args[2:])
 
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		printOutput(false, fmt.Sprintf("load config: %v", err), nil)
-		return
-	}
-	cfg.MergeFlags(*urlFlag, *projectNameFlag, *mainExePathFlag, "")
-
-	if cfg.URL == "" {
-		printOutput(false, "no server url configured", nil)
-		return
-	}
-	if cfg.ProjectName == "" {
-		printOutput(false, "no project name configured", nil)
-		return
-	}
-
-	project, err := apiclient.FindProjectByName(cfg.URL, cfg.ProjectName)
+	fc, err := loadFullConfig(*urlFlag, *projectNameFlag, *mainExePathFlag, "")
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
 	}
 
-	logs, err := apiclient.GetProjectChangeLogs(cfg.URL, project.ID)
+	if fc.Shared.ServerURL == "" {
+		printOutput(false, "no server url configured", nil)
+		return
+	}
+	if fc.Shared.ProjectName == "" {
+		printOutput(false, "no project name configured", nil)
+		return
+	}
+
+	logs, err := apiclient.GetProjectChangeLogs(fc.Shared.ServerURL, fc.Shared.ProjectName)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
@@ -78,25 +71,19 @@ func DownloadUpdate() {
 		return
 	}
 
-	mainFolder, err := cfg.MainExeFolderPath()
-	if err != nil {
-		printOutput(false, err.Error(), nil)
-		return
-	}
-
-	serverFiles, err := apiclient.GetAllFiles(cfg.URL, project.ID)
+	serverFiles, err := apiclient.GetAllFiles(fc.Shared.ServerURL, fc.Shared.ProjectName)
 	if err != nil {
 		printOutput(false, fmt.Sprintf("get file list: %v", err), nil)
 		return
 	}
 
-	localMD5Map, localMD5Err := util.LocalFileMD5Map(mainFolder)
+	localMD5Map, localMD5Err := util.LocalFileMD5Map(fc.MainFolder)
 	if localMD5Err != nil {
 		exeDir, _ := config.ExeDir()
 		util.AppendToLog(exeDir, "download.log", fmt.Sprintf("local md5 scan warning: %v", localMD5Err))
 	}
 
-	targetDir, err := cfg.AppVersionDir(newVersion)
+	targetDir, err := fc.ExeCfg.AppVersionDir(newVersion)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
@@ -131,7 +118,7 @@ func DownloadUpdate() {
 		downloaded := false
 		var lastErr string
 		for retry := 0; retry < 3; retry++ {
-			if err := apiclient.DownloadFileWithResume(cfg.URL, serverFile.FileAbsolutePath, localPath, serverFile.FileSize, largeFileThreshold); err != nil {
+			if err := apiclient.DownloadFileWithResume(fc.Shared.ServerURL, serverFile.FileAbsolutePath, localPath, serverFile.FileSize, largeFileThreshold); err != nil {
 				lastErr = fmt.Sprintf("download error: %v", err)
 				if retry == 2 {
 					exeDir, _ := config.ExeDir()
@@ -194,4 +181,3 @@ func DownloadUpdate() {
 
 	printOutput(true, "", model.DownloadUpdateData{Version: newVersion})
 }
-

@@ -16,8 +16,4 @@ public partial class ProjectConfig : ObservableObject
     [ObservableProperty]
     [property: JsonProperty("ProjectPath")]
     private string _projectPath = string.Empty;
-
-    [ObservableProperty]
-    [property: JsonProperty("ProjectId")]
-    private int _projectId;
 }

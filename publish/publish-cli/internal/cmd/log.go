@@ -30,12 +30,7 @@ func runLog(cmd *cobra.Command, args []string) {
 		return
 	}
 	client := newAPIClient(cfg)
-	pid, err := resolveProjectID(cfg)
-	if err != nil {
-		outputResult(false, err.Error(), nil)
-		return
-	}
-	logs, err := client.GetProjectChangeLogs(pid)
+	logs, err := client.GetProjectChangeLogs(cfg.Shared.ProjectName)
 	if err != nil {
 		outputResult(false, err.Error(), nil)
 		return

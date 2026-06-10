@@ -127,12 +127,11 @@ public class CliService
     public Task<CliOutput<List<ChangeLog>>?> GetLogAsync(string projectPath, int limit = 20)
         => RunAsync<List<ChangeLog>>($"log --limit {limit}", projectPath);
 
-    public Task<CliOutput<object>?> ConfigInitAsync(string projectPath, string serverUrl, string projectName, int projectId)
+    public Task<CliOutput<object>?> ConfigInitAsync(string projectPath, string serverUrl, string projectName)
     {
         var safePath = projectPath ?? string.Empty;
         var trimmedPath = safePath.TrimEnd('\\', '/');
         var args = $"config init --server \"{serverUrl}\" --project \"{projectName}\" --path \"{trimmedPath}\"";
-        if (projectId > 0) args += $" --id {projectId}";
         return RunAsync<object>(args, safePath);
     }
 

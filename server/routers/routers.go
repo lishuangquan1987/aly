@@ -14,15 +14,15 @@ func InitRouter(r *gin.Engine) {
 			projectGroup.POST("create_project", controllers.CreateProject)
 			projectGroup.POST("update_project", controllers.UpdateProject)
 			projectGroup.GET("get_all_projects", controllers.GetAllProjects)
-			projectGroup.GET("get_project_change_logs/:projectId", controllers.GetProjectChangeLogs)
-			projectGroup.POST("delete_project/:projectId", controllers.DeleteProject)
+			projectGroup.GET("get_project_change_logs/:projectName", controllers.GetProjectChangeLogs)
+			projectGroup.POST("delete_project/:projectName", controllers.DeleteProject)
 			projectGroup.POST("publish_version", controllers.PublishVersion)
-			projectGroup.GET("get_project_os_info/:projectId", controllers.GetProjectOSInfo)
+			projectGroup.GET("get_project_os_info/:projectName", controllers.GetProjectOSInfo)
 		}
 		fileGroup := group.Group("file")
 		{
 			fileGroup.POST("upload_file", controllers.UploadFile)
-			fileGroup.GET("get_all_files/:projectId", controllers.GetAllFilesByProjectId)
+			fileGroup.GET("get_all_files/:projectName", controllers.GetAllFilesByProjectName)
 			fileGroup.GET("download_file", controllers.DownloadFile)
 		}
 	}

@@ -21,6 +21,14 @@ var (
 	quiet       bool
 )
 
+// RuntimeConfig 运行时配置（CLI 参数 + 配置文件合并结果）
+type RuntimeConfig struct {
+	Shared  config.SharedConfig
+	Publish config.PublishConfig
+	Path    string // 项目路径（--path CLI 参数）
+	ID      int    // 项目 ID（--id CLI 参数）
+}
+
 // printOutput 按 isSuccess/errorMsg/data 格式输出 JSON 到 stdout
 func printOutput(success bool, errMsg string, data interface{}) {
 	out := models.Output{
@@ -52,77 +60,59 @@ func printHumanLn(format string, args ...interface{}) {
 	fmt.Printf(format+"\n", args...)
 }
 
-// resolveConfig 解析配置（命令行参数覆盖配置文件）
-func resolveConfig() (config.Config, error) {
-	var cfg config.Config
-	var loadErr error
-	if projectPath != "" {
-		cfg, loadErr = config.LoadProject(projectPath)
-	} else {
-		cfg, loadErr = config.LoadGlobal()
+// resolveConfig 解析配置（.updator/ 文件 + CLI 参数覆盖）
+// 必须指定 --path，否则报错。
+func resolveConfig() (RuntimeConfig, error) {
+	if projectPath == "" {
+		return RuntimeConfig{}, fmt.Errorf("请指定 --path")
 	}
-	if loadErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to load config: %v\n", loadErr)
+
+	shared, err := config.LoadShared(projectPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load shared.json: %v\n", err)
+		shared = config.DefaultShared()
 	}
-	// 命令行覆盖
+	publish, err := config.LoadPublish(projectPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load publish.json: %v\n", err)
+		publish = config.DefaultPublish()
+	}
+
+	// CLI 参数覆盖配置文件
 	if serverURL != "" {
-		cfg.Server.URL = serverURL
+		shared.ServerURL = serverURL
 	}
 	if projectName != "" {
-		cfg.Project.Name = projectName
+		shared.ProjectName = projectName
 	}
-	if projectPath != "" {
-		cfg.Project.Path = projectPath
-	}
-	if projectID != 0 {
-		cfg.Project.ID = projectID
-	}
-	return cfg, nil
+
+	return RuntimeConfig{
+		Shared:  shared,
+		Publish: publish,
+		Path:    projectPath,
+		ID:      projectID,
+	}, nil
 }
 
 // requireServer checks that server URL is configured
-func requireServer(cfg *config.Config) error {
-	if cfg.Server.URL == "" {
+func requireServer(cfg *RuntimeConfig) error {
+	if cfg.Shared.ServerURL == "" {
 		return fmt.Errorf("no server URL configured; use --server or config set server.url")
 	}
 	return nil
 }
 
-// requireProject checks that project name and path are configured
-func requireProject(cfg *config.Config) error {
-	if cfg.Project.Name == "" {
+// requireProject checks that project name is configured
+func requireProject(cfg *RuntimeConfig) error {
+	if cfg.Shared.ProjectName == "" {
 		return fmt.Errorf("no project name configured")
-	}
-	if cfg.Project.Path == "" {
-		return fmt.Errorf("no project path configured")
 	}
 	return nil
 }
 
 // newAPIClient creates an API client from config
-func newAPIClient(cfg config.Config) *api.Client {
-	return api.NewClient(cfg.Server.URL)
-}
-
-// resolveProjectID 从配置中获取项目 ID，若为 0 则按名称查找
-func resolveProjectID(cfg config.Config) (int, error) {
-	if cfg.Project.ID != 0 {
-		return cfg.Project.ID, nil
-	}
-	if cfg.Project.Name == "" || cfg.Server.URL == "" {
-		return 0, fmt.Errorf("--id --project + --server")
-	}
-	client := api.NewClient(cfg.Server.URL)
-	projects, err := client.GetAllProjects()
-	if err != nil {
-		return 0, fmt.Errorf("获取项目列表失败: %w", err)
-	}
-	for _, p := range projects {
-		if p.Name == cfg.Project.Name {
-			return p.ID, nil
-		}
-	}
-	return 0, fmt.Errorf("项目 '%s' 不存在", cfg.Project.Name)
+func newAPIClient(cfg RuntimeConfig) *api.Client {
+	return api.NewClient(cfg.Shared.ServerURL)
 }
 
 // outputResult 根据输出模式输出结果
@@ -138,18 +128,19 @@ func outputResult(success bool, errMsg string, data interface{}) {
 var RootCmd = &cobra.Command{
 	Use:   "publish-cli",
 	Short: "命令行发布工具——将本地构建产物推送到服务端",
-	Long: `publish-cli 向发布的命令行工具，用于管理项目、比文件差异?暂存变更文件、推送新版本到服务
+	Long: `publish-cli 向发布的命令行工具，用于管理项目、比文件差异、暂存变更文件、推送新版本到服务端。
 工作流：
-  publish-cli config init    # 初化项  publish-cli status          # 查看与服务
-  publish-cli add --all       # 暂存有变  publish-cli push --version V1.0.1 --message "更新说明"  # 推送并发布`,
+  publish-cli config init    # 初始化项目
+  publish-cli status          # 查看与服务端差异
+  publish-cli add --all       # 暂存所有变更
+  publish-cli push --version V1.0.1 --message "更新说明"  # 推送并发布`,
 }
 
 func init() {
 	RootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "服务器地址")
 	RootCmd.PersistentFlags().StringVar(&projectName, "project", "", "项目名称")
-	RootCmd.PersistentFlags().StringVar(&projectPath, "path", "", "本地构建产物路径")
-	RootCmd.PersistentFlags().IntVar(&projectID, "id", 0, "项目ID")
+	RootCmd.PersistentFlags().StringVar(&projectPath, "path", "", "本地构建产物路径（必填）")
+	RootCmd.PersistentFlags().IntVar(&projectID, "id", 0, "项目ID（直传，跳过名称查找）")
 	RootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "JSON 格式输出")
 	RootCmd.PersistentFlags().BoolVar(&quiet, "quiet", false, "静默模式")
 }
-

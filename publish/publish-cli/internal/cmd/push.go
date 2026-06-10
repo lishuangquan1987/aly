@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"publish-cli/internal/config"
 	"publish-cli/internal/diff"
 	"publish-cli/internal/staging"
 	"publish-cli/pkg/models"
@@ -73,7 +72,7 @@ var cmdPublish = &cobra.Command{
 
 // pushFiles 共享的推送逻辑：上传 filesToUpload 指定的文件，然后创建版本记录
 // 返回 true 表示推送成功（可以清理暂存区），false 表示失败或未执行
-func pushFiles(cfg *config.Config, version string, messages []string, filesToUpload []string, isDryRun bool, useForce bool) bool {
+func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUpload []string, isDryRun bool, useForce bool) bool {
 	if len(messages) == 0 {
 		if jsonOutput {
 			printOutput(false, "至少需要一条 --message", nil)
@@ -83,15 +82,10 @@ func pushFiles(cfg *config.Config, version string, messages []string, filesToUpl
 		return false
 	}
 
-	client := newAPIClient(*cfg)
-	pid, err := resolveProjectID(*cfg)
-	if err != nil {
-		outputResult(false, err.Error(), nil)
-		return false
-	}
+	client := newAPIClient(cfg)
 
 	if !useForce {
-		conflicts, err := staging.Verify(cfg.Project.Path)
+		conflicts, err := staging.Verify(cfg.Path)
 		if err != nil {
 			outputResult(false, fmt.Sprintf("MD5 校验失败: %v", err), nil)
 			return false
@@ -119,24 +113,21 @@ func pushFiles(cfg *config.Config, version string, messages []string, filesToUpl
 
 	// 阶段 1：逐文件上传
 	for _, p := range filesToUpload {
-		absPath := filepath.Join(cfg.Project.Path, filepath.FromSlash(p))
+		absPath := filepath.Join(cfg.Path, filepath.FromSlash(p))
 		printHumanLn("Uploading: %s", p)
-		if err := client.UploadFile(absPath, cfg.Project.Name, p); err != nil {
+		if err := client.UploadFile(absPath, cfg.Shared.ProjectName, p); err != nil {
 			outputResult(false, fmt.Sprintf("上传失败 [%s]: %v", p, err), nil)
 			return false
 		}
 	}
 
 	// 阶段 2：创建版本记录
-	// NOTE: 文件上传和版本创建是两个独立操作，非原子事务。
-	// 如果 PublishVersion 失败，文件已在服务端但无版本记录。
-	// 此时应重试 publish 命令（文件已存在则秒传），或手动调用 PublishVersion。
 	timeStr := time.Now().Format("2006-01-02 15:04:05")
-	_, err = client.PublishVersion(models.PublishVersionRequest{
-		ProjectID: pid,
-		Version:   version,
-		Logs:      messages,
-		Time:      timeStr,
+	_, err := client.PublishVersion(models.PublishVersionRequest{
+		ProjectName: cfg.Shared.ProjectName,
+		Version:     version,
+		Logs:        messages,
+		Time:        timeStr,
 	})
 	if err != nil {
 		outputResult(false, fmt.Sprintf("创建版本失败: %v（文件已上传，可重试 publish 或手动创建版本）", err), nil)
@@ -169,7 +160,7 @@ func runPush(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	stagedFiles, loadErr := staging.Load(cfg.Project.Path)
+	stagedFiles, loadErr := staging.Load(cfg.Path)
 	if loadErr != nil {
 		outputResult(false, fmt.Sprintf("读取暂存区失败: %v", loadErr), nil)
 		return
@@ -184,8 +175,8 @@ func runPush(cmd *cobra.Command, args []string) {
 		files = append(files, f.RelativePath)
 	}
 
-	if pushFiles(&cfg, pushVersion, pushMessage, files, pushDryRun, pushForce) {
-		staging.Clear(cfg.Project.Path)
+	if pushFiles(cfg, pushVersion, pushMessage, files, pushDryRun, pushForce) {
+		staging.Clear(cfg.Path)
 	}
 }
 
@@ -205,12 +196,7 @@ func runPushAll(cmd *cobra.Command, args []string) {
 	}
 
 	client := newAPIClient(cfg)
-	pid, err := resolveProjectID(cfg)
-	if err != nil {
-		outputResult(false, err.Error(), nil)
-		return
-	}
-	sd, err := diff.RunStatus(cfg, client, pid)
+	sd, err := diff.RunStatus(cfg.Path, cfg.Shared.IgnoreFolders, cfg.Shared.IgnoreFiles, client, cfg.Shared.ProjectName)
 	if err != nil {
 		outputResult(false, err.Error(), nil)
 		return
@@ -223,7 +209,7 @@ func runPushAll(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	pushFiles(&cfg, pushAllVersion, pushAllMessage, paths, pushAllDryRun, pushAllForce)
+	pushFiles(cfg, pushAllVersion, pushAllMessage, paths, pushAllDryRun, pushAllForce)
 }
 
 func runPublish(cmd *cobra.Command, args []string) {
@@ -241,12 +227,7 @@ func runPublish(cmd *cobra.Command, args []string) {
 		return
 	}
 	client := newAPIClient(cfg)
-	pid, err := resolveProjectID(cfg)
-	if err != nil {
-		outputResult(false, err.Error(), nil)
-		return
-	}
-	sd, err := diff.RunStatus(cfg, client, pid)
+	sd, err := diff.RunStatus(cfg.Path, cfg.Shared.IgnoreFolders, cfg.Shared.IgnoreFiles, client, cfg.Shared.ProjectName)
 	if err != nil {
 		outputResult(false, err.Error(), nil)
 		return
@@ -261,17 +242,11 @@ func runPublish(cmd *cobra.Command, args []string) {
 		printHumanLn("没有要发布的文件")
 		return
 	}
-	if err := staging.Add(cfg.Project.Path, paths); err != nil {
+	if err := staging.Add(cfg.Path, paths); err != nil {
 		outputResult(false, err.Error(), nil)
 		return
 	}
-	cfg.Project.ID = pid
-	if pushFiles(&cfg, pubVersion, pubMessage, paths, pubDryRun, false) {
-		staging.Clear(cfg.Project.Path)
+	if pushFiles(cfg, pubVersion, pubMessage, paths, pubDryRun, false) {
+		staging.Clear(cfg.Path)
 	}
 }
-
-
-
-
-

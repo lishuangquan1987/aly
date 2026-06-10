@@ -19,42 +19,29 @@ func CheckDiff() {
 	projectNameFlag := fs.String("project-name", "", "project name")
 	fs.Parse(os.Args[2:])
 
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		printOutput(false, fmt.Sprintf("load config: %v", err), nil)
-		return
-	}
-	cfg.MergeFlags(*urlFlag, *projectNameFlag, "", "")
-
-	if cfg.URL == "" {
-		printOutput(false, "no server url configured", nil)
-		return
-	}
-	if cfg.ProjectName == "" {
-		printOutput(false, "no project name configured", nil)
-		return
-	}
-
-	project, err := apiclient.FindProjectByName(cfg.URL, cfg.ProjectName)
+	fc, err := loadFullConfig(*urlFlag, *projectNameFlag, "", "")
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
 	}
 
-	serverFiles, err := apiclient.GetAllFiles(cfg.URL, project.ID)
+	if fc.Shared.ServerURL == "" {
+		printOutput(false, "no server url configured", nil)
+		return
+	}
+	if fc.Shared.ProjectName == "" {
+		printOutput(false, "no project name configured", nil)
+		return
+	}
+
+	serverFiles, err := apiclient.GetAllFiles(fc.Shared.ServerURL, fc.Shared.ProjectName)
 	if err != nil {
 		printOutput(false, fmt.Sprintf("get server files: %v", err), nil)
 		return
 	}
 
-	mainFolder, err := cfg.MainExeFolderPath()
-	if err != nil {
-		printOutput(false, err.Error(), nil)
-		return
-	}
-
 	// Get new version from change logs
-	logs, logsErr := apiclient.GetProjectChangeLogs(cfg.URL, project.ID)
+	logs, logsErr := apiclient.GetProjectChangeLogs(fc.Shared.ServerURL, fc.Shared.ProjectName)
 	newVersion := ""
 	if logsErr == nil && len(logs) > 0 {
 		latestLog := logs[0]
@@ -67,7 +54,7 @@ func CheckDiff() {
 	}
 
 	// Build local file info maps
-	localMD5Map, localMD5Err := util.LocalFileMD5Map(mainFolder)
+	localMD5Map, localMD5Err := util.LocalFileMD5Map(fc.MainFolder)
 	if localMD5Err != nil {
 		exeDir, _ := config.ExeDir()
 		util.AppendToLog(exeDir, "check_diff.log", fmt.Sprintf("local md5 scan warning: %v", localMD5Err))
@@ -76,7 +63,7 @@ func CheckDiff() {
 	var diffFiles []model.DiffFileItem
 	for i := range serverFiles {
 		relPath := normalizePath(serverFiles[i].FileRelativePath)
-		localFullPath := filepath.Join(mainFolder, filepathFromSlash(relPath))
+		localFullPath := filepath.Join(fc.MainFolder, filepathFromSlash(relPath))
 		localMD5, localExists := localMD5Map[relPath]
 
 		if !localExists {
@@ -112,6 +99,3 @@ func CheckDiff() {
 		Files:      diffFiles,
 	})
 }
-
-
-

@@ -16,12 +16,11 @@ func ListRollbackVersions() {
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
 	fs.Parse(os.Args[2:])
 
-	cfg, err := config.LoadConfig()
+	fc, err := loadFullConfig("", "", *mainExePathFlag, "")
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
 	}
-	cfg.MergeFlags("", "", *mainExePathFlag, "")
 
 	pkgDir, err := config.PackageDir()
 	if err != nil {
@@ -29,7 +28,7 @@ func ListRollbackVersions() {
 		return
 	}
 
-	folderName, err := cfg.MainExeFolderName()
+	folderName, err := fc.ExeCfg.MainExeFolderName()
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
@@ -97,4 +96,3 @@ func isLikelyVersion(s string) bool {
 	}
 	return true
 }
-

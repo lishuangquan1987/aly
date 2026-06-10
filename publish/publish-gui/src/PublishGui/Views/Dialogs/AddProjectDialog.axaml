@@ -105,8 +105,6 @@
                     </Grid>
                 </StackPanel>
 
-                <!-- Project ID (内部使用，不显示) -->
-                <TextBox Name="ProjectIdBox" Text="0" IsVisible="False"/>
             </StackPanel>
         </ScrollViewer>
 

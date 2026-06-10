@@ -11,39 +11,39 @@ import (
 )
 
 var (
-	forceUpdate  bool
-	title        string
-	projectName2 string
-	ignoreFoldersStr string
-	ignoreFilesStr   string
+	pForceUpdate     bool
+	pTitle           string
+	pUpdateName      string
+	pIgnoreFoldersStr string
+	pIgnoreFilesStr   string
 )
 
 func init() {
 	// project create flags
-	cmdProjectCreate.Flags().StringVar(&projectName2, "name", "", "项目名称")
-	cmdProjectCreate.Flags().StringVar(&title, "title", "", "项目抬头")
-	cmdProjectCreate.Flags().BoolVar(&forceUpdate, "force-update", false, "是否强制更新")
-	cmdProjectCreate.Flags().StringVar(&ignoreFoldersStr, "ignore-folders", "", "忽略的文件夹（逗号分隔）")
-	cmdProjectCreate.Flags().StringVar(&ignoreFilesStr, "ignore-files", "", "忽略的文件（逗号分隔）")
+	cmdProjectCreate.Flags().StringVar(&pUpdateName, "name", "", "项目名称")
+	cmdProjectCreate.Flags().StringVar(&pTitle, "title", "", "项目抬头")
+	cmdProjectCreate.Flags().BoolVar(&pForceUpdate, "force-update", false, "是否强制更新")
+	cmdProjectCreate.Flags().StringVar(&pIgnoreFoldersStr, "ignore-folders", "", "忽略的文件夹（逗号分隔）")
+	cmdProjectCreate.Flags().StringVar(&pIgnoreFilesStr, "ignore-files", "", "忽略的文件（逗号分隔）")
 	cmdProjectCreate.MarkFlagRequired("name")
 	cmdProjectCreate.MarkFlagRequired("title")
 
 	// project update flags
-	cmdProjectUpdate.Flags().IntVar(&projectID, "id", 0, "项目ID")
-	cmdProjectUpdate.Flags().StringVar(&title, "title", "", "项目抬头")
-	cmdProjectUpdate.Flags().BoolVar(&forceUpdate, "force-update", false, "是否强制更新")
-	cmdProjectUpdate.Flags().StringVar(&ignoreFoldersStr, "ignore-folders", "", "忽略的文件夹（逗号分隔）")
-	cmdProjectUpdate.Flags().StringVar(&ignoreFilesStr, "ignore-files", "", "忽略的文件（逗号分隔）")
-	cmdProjectUpdate.MarkFlagRequired("id")
+	cmdProjectUpdate.Flags().StringVar(&pUpdateName, "name", "", "项目名称（必填）")
+	cmdProjectUpdate.Flags().StringVar(&pTitle, "title", "", "项目抬头")
+	cmdProjectUpdate.Flags().BoolVar(&pForceUpdate, "force-update", false, "是否强制更新")
+	cmdProjectUpdate.Flags().StringVar(&pIgnoreFoldersStr, "ignore-folders", "", "忽略的文件夹（逗号分隔）")
+	cmdProjectUpdate.Flags().StringVar(&pIgnoreFilesStr, "ignore-files", "", "忽略的文件（逗号分隔）")
+	cmdProjectUpdate.MarkFlagRequired("name")
 	cmdProjectUpdate.MarkFlagRequired("title")
 
 	// project delete flags
-	cmdProjectDelete.Flags().IntVar(&projectID, "id", 0, "项目ID")
-	cmdProjectDelete.MarkFlagRequired("id")
+	cmdProjectDelete.Flags().StringVar(&pUpdateName, "name", "", "项目名称（必填）")
+	cmdProjectDelete.MarkFlagRequired("name")
 
-	// project info flags
+	// project info flags (keep --id for convenience)
 	cmdProjectInfo.Flags().IntVar(&projectID, "id", 0, "项目ID")
-	cmdProjectInfo.MarkFlagRequired("id")
+	cmdProjectInfo.Flags().StringVar(&pUpdateName, "name", "", "项目名称")
 
 	RootCmd.AddCommand(cmdProject)
 	cmdProject.AddCommand(cmdProjectList)
@@ -72,19 +72,19 @@ var cmdProjectCreate = &cobra.Command{
 
 var cmdProjectUpdate = &cobra.Command{
 	Use:   "update",
-	Short: "更新项目配置",
+	Short: "更新项目配置（按名称）",
 	Run:   runProjectUpdate,
 }
 
 var cmdProjectDelete = &cobra.Command{
 	Use:   "delete",
-	Short: "删除项目",
+	Short: "删除项目（按名称）",
 	Run:   runProjectDelete,
 }
 
 var cmdProjectInfo = &cobra.Command{
 	Use:   "info",
-	Short: "查看项目详情",
+	Short: "查看项目详情（--id 或 --name）",
 	Run:   runProjectInfo,
 }
 
@@ -151,11 +151,11 @@ func runProjectCreate(cmd *cobra.Command, args []string) {
 	}
 	client := newAPIClient(cfg)
 	req := models.CreateProjectRequest{
-		Name:          projectName2,
-		Title:         title,
-		IsForceUpdate: forceUpdate,
-		IgnoreFolders: parseCSV(ignoreFoldersStr),
-		IgnoreFiles:   parseCSV(ignoreFilesStr),
+		Name:          pUpdateName,
+		Title:         pTitle,
+		IsForceUpdate: pForceUpdate,
+		IgnoreFolders: parseCSV(pIgnoreFoldersStr),
+		IgnoreFiles:   parseCSV(pIgnoreFilesStr),
 	}
 	project, err := client.CreateProject(req)
 	if err != nil {
@@ -181,11 +181,11 @@ func runProjectUpdate(cmd *cobra.Command, args []string) {
 	}
 	client := newAPIClient(cfg)
 	req := models.UpdateProjectRequest{
-		ID:            projectID,
-		Title:         title,
-		IsForceUpdate: forceUpdate,
-		IgnoreFolders: parseCSV(ignoreFoldersStr),
-		IgnoreFiles:   parseCSV(ignoreFilesStr),
+		Name:          pUpdateName,
+		Title:         pTitle,
+		IsForceUpdate: pForceUpdate,
+		IgnoreFolders: parseCSV(pIgnoreFoldersStr),
+		IgnoreFiles:   parseCSV(pIgnoreFilesStr),
 	}
 	if err := client.UpdateProject(req); err != nil {
 		outputResult(false, err.Error(), nil)
@@ -195,7 +195,7 @@ func runProjectUpdate(cmd *cobra.Command, args []string) {
 		printOutput(true, "", nil)
 		return
 	}
-	printHumanLn("项目更新成功: [%d]", projectID)
+	printHumanLn("项目更新成功: %s", pUpdateName)
 }
 
 func runProjectDelete(cmd *cobra.Command, args []string) {
@@ -209,7 +209,7 @@ func runProjectDelete(cmd *cobra.Command, args []string) {
 		return
 	}
 	client := newAPIClient(cfg)
-	if err := client.DeleteProject(projectID); err != nil {
+	if err := client.DeleteProject(pUpdateName); err != nil {
 		outputResult(false, err.Error(), nil)
 		return
 	}
@@ -217,7 +217,7 @@ func runProjectDelete(cmd *cobra.Command, args []string) {
 		printOutput(true, "", nil)
 		return
 	}
-	printHumanLn("项目已删除: [%d]", projectID)
+	printHumanLn("项目已删除: %s", pUpdateName)
 }
 
 func runProjectInfo(cmd *cobra.Command, args []string) {
@@ -236,8 +236,9 @@ func runProjectInfo(cmd *cobra.Command, args []string) {
 		outputResult(false, err.Error(), nil)
 		return
 	}
+	matchName := pUpdateName
 	for _, p := range projects {
-		if p.ID == projectID {
+		if (projectID != 0 && p.ID == projectID) || (matchName != "" && p.Name == matchName) {
 			if jsonOutput {
 				printOutput(true, "", p)
 				return
@@ -251,12 +252,12 @@ func runProjectInfo(cmd *cobra.Command, args []string) {
 			}
 			printHumanLn("Force Update: %s", fu)
 			created := p.CreatedAt
-		if len(created) > 10 {
-			created = created[:10]
-		} else if len(created) == 0 {
-			created = "-"
-		}
-		printHumanLn("Created: %s", created)
+			if len(created) > 10 {
+				created = created[:10]
+			} else if len(created) == 0 {
+				created = "-"
+			}
+			printHumanLn("Created: %s", created)
 			printHumanLn("")
 			printHumanLn("Ignore Folders:")
 			for _, f := range p.IgnoreFolders {
@@ -269,5 +270,5 @@ func runProjectInfo(cmd *cobra.Command, args []string) {
 			return
 		}
 	}
-	fmt.Fprintf(os.Stderr, "Error: 项目 [%d] 不存在\n", projectID)
+	fmt.Fprintf(os.Stderr, "Error: 项目不存在\n")
 }

@@ -58,12 +58,7 @@ func runAdd(cmd *cobra.Command, args []string) {
 			return
 		}
 		client := newAPIClient(cfg)
-		pid, err := resolveProjectID(cfg)
-		if err != nil {
-			outputResult(false, err.Error(), nil)
-			return
-		}
-		sd, err := diff.RunStatus(cfg, client, pid)
+		sd, err := diff.RunStatus(cfg.Path, cfg.Shared.IgnoreFolders, cfg.Shared.IgnoreFiles, client, cfg.Shared.ProjectName)
 		if err != nil {
 			outputResult(false, err.Error(), nil)
 			return
@@ -76,7 +71,7 @@ func runAdd(cmd *cobra.Command, args []string) {
 				statusMap[f.RelativePath] = f.Status
 			}
 		}
-		if err := staging.AddWithStatus(cfg.Project.Path, paths, statusMap); err != nil {
+		if err := staging.AddWithStatus(cfg.Path, paths, statusMap); err != nil {
 			outputResult(false, err.Error(), nil)
 			return
 		}
@@ -94,7 +89,7 @@ func runAdd(cmd *cobra.Command, args []string) {
 			}
 			return
 		}
-		if err := staging.Add(cfg.Project.Path, args); err != nil {
+		if err := staging.Add(cfg.Path, args); err != nil {
 			outputResult(false, err.Error(), nil)
 			return
 		}
@@ -117,7 +112,7 @@ func runReset(cmd *cobra.Command, args []string) {
 		return
 	}
 	if resetAll {
-		if err := staging.Clear(cfg.Project.Path); err != nil {
+		if err := staging.Clear(cfg.Path); err != nil {
 			outputResult(false, err.Error(), nil)
 			return
 		}
@@ -136,7 +131,7 @@ func runReset(cmd *cobra.Command, args []string) {
 		}
 		return
 	}
-	if err := staging.Remove(cfg.Project.Path, args); err != nil {
+	if err := staging.Remove(cfg.Path, args); err != nil {
 		outputResult(false, err.Error(), nil)
 		return
 	}
@@ -157,7 +152,7 @@ func runStaged(cmd *cobra.Command, args []string) {
 		outputResult(false, err.Error(), nil)
 		return
 	}
-	items := staging.LoadAsStatusItems(cfg.Project.Path)
+	items := staging.LoadAsStatusItems(cfg.Path)
 	if jsonOutput {
 		printOutput(true, "", items)
 		return

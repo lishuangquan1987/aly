@@ -80,7 +80,7 @@ func CreateProject(ctx *gin.Context) {
 
 func UpdateProject(ctx *gin.Context) {
 	var updateProjectDto struct {
-		ID            int      `json:"id"`
+		Name          string   `json:"name"`
 		Title         string   `json:"title"`
 		IsForceUpdate bool     `json:"isForceUpdate"`
 		IgnoreFolders []string `json:"ignoreFolders"`
@@ -90,19 +90,19 @@ func UpdateProject(ctx *gin.Context) {
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
-	if updateProjectDto.ID <= 0 {
-		ctx.JSON(200, models.NG("项目ID不能为空"))
+	if updateProjectDto.Name == "" {
+		ctx.JSON(200, models.NG("项目名称不能为空"))
 		return
 	}
 
-	//判断项目名称是否为空
+	//判断项目抬头是否为空
 	if updateProjectDto.Title == "" {
 		ctx.JSON(200, models.NG("项目抬头不能为空"))
 		return
 	}
 
-	//判断项目名称是否存在
-	_, err := db.Client.Project.Query().Where(project.IDEQ(int(updateProjectDto.ID))).First(ctx)
+	//判断项目是否存在
+	_, err := db.Client.Project.Query().Where(project.NameEQ(updateProjectDto.Name)).First(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			ctx.JSON(200, models.NG("项目不存在"))
@@ -114,7 +114,7 @@ func UpdateProject(ctx *gin.Context) {
 
 	//更新
 	result := service.UpdateProject(
-		updateProjectDto.ID,
+		updateProjectDto.Name,
 		updateProjectDto.Title,
 		updateProjectDto.IsForceUpdate,
 		updateProjectDto.IgnoreFolders,
@@ -125,17 +125,17 @@ func UpdateProject(ctx *gin.Context) {
 
 func PublishVersion(ctx *gin.Context) {
 	var publishDto struct {
-		ProjectId int      `json:"projectId"`
-		Version   string   `json:"version"`
-		Logs      []string `json:"logs"`
-		Time      string   `json:"time"`
+		ProjectName string   `json:"projectName"`
+		Version     string   `json:"version"`
+		Logs        []string `json:"logs"`
+		Time        string   `json:"time"`
 	}
 	if err := ctx.ShouldBindJSON(&publishDto); err != nil {
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
-	if publishDto.ProjectId <= 0 {
-		ctx.JSON(200, models.NG("项目ID不能为空"))
+	if publishDto.ProjectName == "" {
+		ctx.JSON(200, models.NG("项目名称不能为空"))
 		return
 	}
 	if publishDto.Version == "" {
@@ -147,19 +147,19 @@ func PublishVersion(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(200, service.PublishVersion(publishDto.ProjectId, publishDto.Version, publishDto.Logs, publishDto.Time))
+	ctx.JSON(200, service.PublishVersion(publishDto.ProjectName, publishDto.Version, publishDto.Logs, publishDto.Time))
 }
 
 func DeleteProject(ctx *gin.Context) {
-	var projectIdDto struct {
-		ProjectId int `uri:"projectId" json:"projectId"`
+	var projectNameDto struct {
+		ProjectName string `uri:"projectName" json:"projectName"`
 	}
-	if err := ctx.BindUri(&projectIdDto); err != nil {
+	if err := ctx.BindUri(&projectNameDto); err != nil {
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
 
-	ctx.JSON(200, service.DeleteProject(projectIdDto.ProjectId))
+	ctx.JSON(200, service.DeleteProject(projectNameDto.ProjectName))
 }
 
 func GetAllProjects(ctx *gin.Context) {
@@ -167,33 +167,33 @@ func GetAllProjects(ctx *gin.Context) {
 }
 
 func GetProjectChangeLogs(ctx *gin.Context) {
-	var projectIdDto struct {
-		ProjectId int `uri:"projectId" json:"projectId"`
+	var projectNameDto struct {
+		ProjectName string `uri:"projectName" json:"projectName"`
 	}
-	if err := ctx.BindUri(&projectIdDto); err != nil {
+	if err := ctx.BindUri(&projectNameDto); err != nil {
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
 
-	if projectIdDto.ProjectId <= 0 {
-		ctx.JSON(200, models.NG("项目ID不能为空"))
+	if projectNameDto.ProjectName == "" {
+		ctx.JSON(200, models.NG("项目名称不能为空"))
 		return
 	}
 
-	ctx.JSON(200, service.GetProjectChangeLogs(projectIdDto.ProjectId))
+	ctx.JSON(200, service.GetProjectChangeLogs(projectNameDto.ProjectName))
 }
 
 func GetProjectOSInfo(ctx *gin.Context) {
-	var projectIdUrl struct {
-		ProjectId int `uri:"projectId" json:"projectId"`
+	var projectNameUrl struct {
+		ProjectName string `uri:"projectName" json:"projectName"`
 	}
-	if err := ctx.BindUri(&projectIdUrl); err != nil {
+	if err := ctx.BindUri(&projectNameUrl); err != nil {
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
 
 	// 直接查询以便区分 "不存在" 和 "其他错误"
-	p, err := db.Client.Project.Query().Where(project.IDEQ(projectIdUrl.ProjectId)).First(ctx)
+	p, err := db.Client.Project.Query().Where(project.NameEQ(projectNameUrl.ProjectName)).First(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			ctx.JSON(200, models.NG("项目不存在"))

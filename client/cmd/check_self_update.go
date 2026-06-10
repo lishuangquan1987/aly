@@ -15,14 +15,13 @@ func CheckSelfUpdate() {
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
 	fs.Parse(os.Args[2:])
 
-	cfg, err := config.LoadConfig()
+	fc, err := loadFullConfig("", "", *mainExePathFlag, "")
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
 	}
-	cfg.MergeFlags("", "", *mainExePathFlag, "")
 
-	checkPath, err := cfg.CheckUpdaterPath()
+	checkPath, err := fc.ExeCfg.CheckUpdaterPath()
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return

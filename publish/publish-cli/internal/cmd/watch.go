@@ -5,7 +5,6 @@ import (
 	"os/signal"
 	"time"
 
-	"publish-cli/internal/config"
 	"publish-cli/internal/diff"
 	"publish-cli/internal/staging"
 
@@ -41,7 +40,7 @@ func runWatch(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	printHumanLn("Watching %s (interval: %ds, auto-add: %v)", cfg.Project.Path, watchInterval, watchAutoAdd)
+	printHumanLn("Watching %s (interval: %ds, auto-add: %v)", cfg.Path, watchInterval, watchAutoAdd)
 	printHumanLn("Press Ctrl+C to stop.\n")
 
 	sigCh := make(chan os.Signal, 1)
@@ -49,7 +48,7 @@ func runWatch(cmd *cobra.Command, args []string) {
 	ticker := time.NewTicker(time.Duration(watchInterval) * time.Second)
 	defer ticker.Stop()
 
-	prevFiles := scanLocal(cfg)
+	prevFiles := scanLocal(cfg.Path, cfg.Shared.IgnoreFolders, cfg.Shared.IgnoreFiles)
 
 	for {
 		select {
@@ -57,7 +56,7 @@ func runWatch(cmd *cobra.Command, args []string) {
 			printHumanLn("\nStopped.")
 			return
 		case <-ticker.C:
-			currFiles := scanLocal(cfg)
+			currFiles := scanLocal(cfg.Path, cfg.Shared.IgnoreFolders, cfg.Shared.IgnoreFiles)
 			changes := detectChanges(prevFiles, currFiles)
 			if len(changes) > 0 {
 				timestamp := time.Now().Format("15:04:05")
@@ -72,7 +71,7 @@ func runWatch(cmd *cobra.Command, args []string) {
 						}
 					}
 					if len(paths) > 0 {
-						if addErr := staging.Add(cfg.Project.Path, paths); addErr != nil {
+						if addErr := staging.Add(cfg.Path, paths); addErr != nil {
 							printHumanLn("[WARN] auto-add failed: %v\n", addErr)
 						}
 						printHumanLn("[%s] Auto-added %d files to staging", timestamp, len(paths))
@@ -94,8 +93,8 @@ type fileChg struct {
 	status string
 }
 
-func scanLocal(cfg config.Config) []fileSnap {
-	files, scanErr := diff.ScanDirectory(cfg.Project.Path, cfg.Ignore.Folders, cfg.Ignore.Files)
+func scanLocal(projectPath string, ignoreFolders []string, ignoreFiles []string) []fileSnap {
+	files, scanErr := diff.ScanDirectory(projectPath, ignoreFolders, ignoreFiles)
 	if scanErr != nil {
 		printHumanLn("[WARN] scan error: %v\n", scanErr)
 	}
@@ -126,4 +125,3 @@ func detectChanges(prev, curr []fileSnap) []fileChg {
 	}
 	return changes
 }
-

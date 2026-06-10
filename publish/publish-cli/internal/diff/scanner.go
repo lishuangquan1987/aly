@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"publish-cli/internal/config"
 	"publish-cli/pkg/models"
 )
 
@@ -21,8 +20,8 @@ func ScanDirectory(root string, ignoreFolders, ignoreFiles []string) ([]models.L
 			return err
 		}
 		if info.IsDir() {
-			// 跳过 .publish-cli 元数据目录
-			if info.Name() == ".publish-cli" {
+			// 跳过 .updator 和 .publish-cli 元数据目录
+			if info.Name() == ".updator" || info.Name() == ".publish-cli" {
 				return filepath.SkipDir
 			}
 			// 应用忽略文件夹规则
@@ -120,14 +119,14 @@ func HashFile(path string) (md5Str, sha256Str string, err error) {
 }
 
 // RunStatus 执行完整 status 流程：扫描 → 查询 → 比对
-func RunStatus(cfg config.Config, apiClient interface {
-	GetAllFiles(projectID int) ([]models.FileInfo, error)
-}, projectID int) (*models.StatusData, error) {
-	localFiles, err := ScanDirectory(cfg.Project.Path, cfg.Ignore.Folders, cfg.Ignore.Files)
+func RunStatus(projectPath string, ignoreFolders []string, ignoreFiles []string, apiClient interface {
+	GetAllFiles(projectName string) ([]models.FileInfo, error)
+}, projectName string) (*models.StatusData, error) {
+	localFiles, err := ScanDirectory(projectPath, ignoreFolders, ignoreFiles)
 	if err != nil {
 		return nil, fmt.Errorf("scan local: %w", err)
 	}
-	serverFiles, err := apiClient.GetAllFiles(projectID)
+	serverFiles, err := apiClient.GetAllFiles(projectName)
 	if err != nil {
 		return nil, fmt.Errorf("get server files: %w", err)
 	}
