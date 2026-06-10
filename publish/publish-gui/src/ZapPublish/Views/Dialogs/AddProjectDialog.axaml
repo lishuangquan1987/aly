@@ -1,7 +1,10 @@
 <Window x:Class="ZapPublish.Views.Dialogs.AddProjectDialog"
         xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ZapPublish.ViewModels"
+        xmlns:cli="using:ZapPublish.Models.Cli"
         xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        x:DataType="vm:AddProjectDialogViewModel"
         Title="添加项目"
         Width="520" Height="420"
         WindowStartupLocation="CenterOwner"
@@ -19,15 +22,16 @@
                                    Foreground="{DynamicResource SemiColorText0}"/>
                     </StackPanel>
                     <Grid ColumnDefinitions="*,Auto">
-                        <TextBox Name="ServerUrlBox" Watermark="http://localhost:2000" FontSize="13"/>
-                        <Button Grid.Column="1" Name="FetchProjectsBtn" Content="获取项目"
+                        <TextBox Text="{Binding ServerUrl}" Watermark="http://localhost:2000" FontSize="13"/>
+                        <Button Grid.Column="1" Command="{Binding FetchProjectsCommand}"
+                                Content="获取项目"
                                 Margin="8,0,0,0" Height="32" Padding="12,0"
                                 Classes="Primary"/>
                     </Grid>
                 </StackPanel>
 
                 <!-- 服务端项目列表 -->
-                <StackPanel Name="ProjectListPanel" IsVisible="False">
+                <StackPanel IsVisible="{Binding ShowProjectList}">
                     <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
                         <materialIcons:MaterialIcon Kind="FormatListBulleted" Width="14" Height="14"
                                                      Foreground="{DynamicResource SemiColorText1}"/>
@@ -36,9 +40,11 @@
                     </StackPanel>
                     <Border BorderBrush="{DynamicResource SemiColorBorder}"
                             BorderThickness="1" CornerRadius="6" MaxHeight="150">
-                        <ListBox Name="ServerProjectList" Background="Transparent">
+                        <ListBox ItemsSource="{Binding ServerProjects}"
+                                 SelectedItem="{Binding SelectedServerProject}"
+                                 Background="Transparent">
                             <ListBox.ItemTemplate>
-                                <DataTemplate>
+                                <DataTemplate x:DataType="cli:ProjectInfo">
                                     <Border Padding="10,6" Margin="0,1" CornerRadius="4">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -70,11 +76,12 @@
                 </StackPanel>
 
                 <!-- 获取状态 / 空结果提示 -->
-                <StackPanel Name="FetchStatusPanel" IsVisible="False" Spacing="6">
-                    <TextBlock Name="FetchStatusText" FontSize="12"
+                <StackPanel IsVisible="{Binding ShowCreateButton}" Spacing="6">
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="12"
                                Foreground="{DynamicResource SemiColorText2}"/>
-                    <Button Name="CreateOnServerBtn" Content="在服务端新建项目"
-                            IsVisible="False" Height="32" Padding="12,0"
+                    <Button Command="{Binding CreateOnServerCommand}"
+                            Content="在服务端新建项目"
+                            Height="32" Padding="12,0"
                             Classes="Tertiary"/>
                 </StackPanel>
 
@@ -86,7 +93,8 @@
                         <TextBlock Text="显示名称" FontWeight="Medium" FontSize="13"
                                    Foreground="{DynamicResource SemiColorText0}"/>
                     </StackPanel>
-                    <TextBox Name="ProjectNameBox" Watermark="例如 MyApp（本地别名，可自定义）" FontSize="13"/>
+                    <TextBox Text="{Binding DisplayName}"
+                             Watermark="例如 MyApp（本地别名，可自定义）" FontSize="13"/>
                 </StackPanel>
 
                 <!-- Local Path -->
@@ -98,11 +106,18 @@
                                    Foreground="{DynamicResource SemiColorText0}"/>
                     </StackPanel>
                     <Grid ColumnDefinitions="*,Auto">
-                        <TextBox Name="ProjectPathBox"
+                        <TextBox Text="{Binding ProjectPath}"
                                  Watermark="C:\Projects\MyApp\build" FontSize="13"/>
-                        <Button Grid.Column="1" Name="BrowseBtn" Content="浏览..."
+                        <Button Grid.Column="1" Command="{Binding BrowseCommand}"
+                                Content="浏览..."
                                 Margin="8,0,0,0" Height="32" Padding="12,0"/>
                     </Grid>
+                </StackPanel>
+
+                <!-- 初始化状态 -->
+                <StackPanel IsVisible="{Binding ShowInitStatus}" Spacing="6">
+                    <TextBlock Text="{Binding InitStatusMessage}" FontSize="12"
+                               Foreground="{DynamicResource SemiColorText2}"/>
                 </StackPanel>
 
             </StackPanel>
@@ -112,8 +127,8 @@
         <StackPanel Grid.Row="1" Orientation="Horizontal"
                     HorizontalAlignment="Right" Spacing="8"
                     Margin="0,20,0,0">
-            <Button Name="CancelBtn" Content="取消" Height="32" Padding="16,0"/>
-            <Button Name="ConfirmBtn" Content="添加项目"
+            <Button Command="{Binding CancelCommand}" Content="取消" Height="32" Padding="16,0"/>
+            <Button Command="{Binding ConfirmCommand}" Content="添加项目"
                     Classes="Primary" Height="32" Padding="16,0"/>
         </StackPanel>
     </Grid>

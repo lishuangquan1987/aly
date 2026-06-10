@@ -15,6 +15,7 @@ public partial class MainWindowViewModel : ObservableObject
 {
     private readonly CliService _cli;
     private readonly ConfigService _cfg;
+    private readonly IDialogService _dialog;
 
     [ObservableProperty] private ObservableCollection<ProjectConfig> _projects = new();
     [ObservableProperty] private ProjectConfig? _selectedProject;
@@ -41,10 +42,11 @@ public partial class MainWindowViewModel : ObservableObject
     public IAsyncRelayCommand AddProjectCommand { get; }
     public IAsyncRelayCommand RemoveProjectCommand { get; }
 
-    public MainWindowViewModel(CliService cli, ConfigService cfg)
+    public MainWindowViewModel(CliService cli, ConfigService cfg, IDialogService dialog)
     {
         _cli = cli;
         _cfg = cfg;
+        _dialog = dialog;
         IsCliFound = _cli.Found;
         CliPath = _cli.CliPath;
         Log.Information("MainWindowViewModel 初始化: CliFound={Found}, CliPath={Path}", IsCliFound, CliPath);
@@ -290,18 +292,16 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task AddProjectAsync()
     {
         Log.Information("打开添加项目对话框");
-        var dlg = new Views.Dialogs.AddProjectDialog(_cli);
-        var lifetime = Avalonia.Application.Current?.ApplicationLifetime
-            as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-        var owner = lifetime?.MainWindow;
-        if (owner == null) { StatusMessage = "无法打开对话框"; return; }
-
-        var cfg = await dlg.ShowDialog<ProjectConfig?>(owner);
+        var cfg = await _dialog.ShowAddProjectDialogAsync();
         if (cfg != null)
         {
             _cfg.AddProject(cfg);
             Projects.Add(cfg);
             SelectedProject = cfg;
+        }
+        else
+        {
+            StatusMessage = "无法打开对话框";
         }
     }
 

@@ -40,6 +40,7 @@ public partial class App : Application
         svc.AddSingleton<ProcessService>();
         svc.AddSingleton<CliService>();
         svc.AddSingleton<ConfigService>();
+        svc.AddSingleton<IDialogService, DialogService>();
         svc.AddTransient<MainWindowViewModel>();
         Services = svc.BuildServiceProvider();
 

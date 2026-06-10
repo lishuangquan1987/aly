@@ -2,8 +2,11 @@
         xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:ZapPublish.ViewModels"
+        xmlns:local="using:ZapPublish.Models.Local"
+        xmlns:cli="using:ZapPublish.Models.Cli"
         xmlns:conv="using:ZapPublish.Converters"
         xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        x:DataType="vm:MainWindowViewModel"
         Title="版本发布工具"
         Width="1280" Height="800"
         MinWidth="1000" MinHeight="560"
@@ -97,16 +100,13 @@
                              SelectedItem="{Binding SelectedProject}"
                              Background="Transparent" Margin="4,2">
                         <ListBox.ItemTemplate>
-                            <DataTemplate>
+                            <DataTemplate x:DataType="local:ProjectConfig">
                                 <Border Padding="12,10" Margin="0,1" CornerRadius="6"
                                         Background="Transparent">
                                     <StackPanel>
                                         <TextBlock Text="{Binding DisplayName}"
                                                    FontWeight="SemiBold" FontSize="13"
                                                    Foreground="{DynamicResource SemiColorText0}"/>
-                                        <TextBlock Text="{Binding ServerUrl}" FontSize="11"
-                                                   Foreground="{DynamicResource SemiColorText2}"
-                                                   Margin="0,3,0,0"/>
                                         <TextBlock Text="{Binding ProjectPath}" FontSize="10"
                                                    Foreground="{DynamicResource SemiColorText3}"
                                                    Margin="0,2,0,0"
@@ -162,7 +162,7 @@
                         <ListBox Grid.Row="1" ItemsSource="{Binding UnstagedFiles}"
                                  Background="Transparent" Margin="4,2">
                             <ListBox.ItemTemplate>
-                                <DataTemplate>
+                                <DataTemplate x:DataType="local:FileItem">
                                     <Border Padding="10,5" Margin="0,1" CornerRadius="4">
                                         <Grid ColumnDefinitions="Auto,*,Auto,72,72">
                                             <CheckBox IsChecked="{Binding IsSelected}"
@@ -238,7 +238,7 @@
                         <ListBox Grid.Row="1" ItemsSource="{Binding StagedFiles}"
                                  Background="Transparent" Margin="4,2">
                             <ListBox.ItemTemplate>
-                                <DataTemplate>
+                                <DataTemplate x:DataType="local:FileItem">
                                     <Border Padding="10,5" Margin="0,1" CornerRadius="4">
                                         <Grid ColumnDefinitions="Auto,*,Auto,72">
                                             <CheckBox IsChecked="{Binding IsSelected}"
@@ -346,7 +346,7 @@
                     <ListBox Grid.Row="1" ItemsSource="{Binding ChangeLogs}"
                              Background="Transparent" Margin="4,2">
                         <ListBox.ItemTemplate>
-                            <DataTemplate>
+                            <DataTemplate x:DataType="cli:ChangeLog">
                                 <Border Padding="12,10" Margin="0,1" CornerRadius="6"
                                         Background="Transparent">
                                     <StackPanel>
@@ -365,7 +365,7 @@
                                         </DockPanel>
                                         <ItemsControl ItemsSource="{Binding Logs}" Margin="20,4,0,0">
                                             <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
+                                                <DataTemplate x:DataType="x:String">
                                                     <TextBlock Text="{Binding}" FontSize="11"
                                                                Foreground="{DynamicResource SemiColorText2}"
                                                                Margin="0,1,0,0"
