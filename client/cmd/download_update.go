@@ -62,9 +62,12 @@ func DownloadUpdate() {
 	}
 	currentVersion := stripVPrefix(versionInfo.Version)
 
-	// Guard: skip version.json update if this exact version was already downloaded
-	skipVersionUpdate := versionInfo.VersionStatus == config.VersionStatusDownloaded &&
-		currentVersion == newVersion
+	// Guard: if this exact version was already downloaded, skip re-download
+	if versionInfo.VersionStatus == config.VersionStatusDownloaded &&
+		currentVersion == newVersion {
+		printOutput(true, "", &model.DownloadUpdateData{Version: newVersion})
+		return
+	}
 
 	if compareVersion(newVersion, currentVersion) <= 0 {
 		printOutput(false, "already at latest version", nil)
@@ -176,16 +179,14 @@ func DownloadUpdate() {
 		printProgress(idx+1, total, relPath, "DONE", serverFile.FileSize, "")
 	}
 
-	// Update version.json ONLY if status != "downloaded"
-	if !skipVersionUpdate {
-		versionInfo.VersionPrevious = versionInfo.Version
-		versionInfo.Version = newVersion
-		versionInfo.VersionStatus = config.VersionStatusDownloaded
-		versionInfo.AfterApplyUpdateScript = latestLog.AfterApplyUpdateScript
-		if err := config.WriteVersion(versionInfo); err != nil {
-			printProgressFail(0, 0, "version.json", 0, fmt.Sprintf("write version: %v", err))
-			return
-		}
+	// Update version.json
+	versionInfo.VersionPrevious = versionInfo.Version
+	versionInfo.Version = newVersion
+	versionInfo.VersionStatus = config.VersionStatusDownloaded
+	versionInfo.AfterApplyUpdateScript = latestLog.AfterApplyUpdateScript
+	if err := config.WriteVersion(versionInfo); err != nil {
+		printProgressFail(0, 0, "version.json", 0, fmt.Sprintf("write version: %v", err))
+		return
 	}
 
 	printProgressDone()

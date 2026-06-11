@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -53,7 +54,7 @@ func ReadVersion() (*VersionInfo, error) {
 	return &info, nil
 }
 
-// WriteVersion writes version.json atomically (write tmp → fsync → rename).
+// WriteVersion writes version.json.
 func WriteVersion(info *VersionInfo) error {
 	path, err := versionPath()
 	if err != nil {
@@ -65,33 +66,8 @@ func WriteVersion(info *VersionInfo) error {
 		return fmt.Errorf("序列化 version.json 失败: %v", err)
 	}
 
-	tmpPath := path + ".tmp"
-	f, err := os.Create(tmpPath)
-	if err != nil {
-		return fmt.Errorf("创建临时文件失败: %v", err)
-	}
-
-	_, err = f.Write(data)
-	if err != nil {
-		f.Close()
-		os.Remove(tmpPath)
-		return fmt.Errorf("写入临时文件失败: %v", err)
-	}
-
-	if err := f.Sync(); err != nil {
-		f.Close()
-		os.Remove(tmpPath)
-		return fmt.Errorf("同步临时文件到磁盘失败: %v", err)
-	}
-
-	if err := f.Close(); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("关闭临时文件失败: %v", err)
-	}
-
-	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("重命名临时文件失败: %v", err)
+	if err := ioutil.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("写入 version.json 失败: %v", err)
 	}
 
 	return nil
