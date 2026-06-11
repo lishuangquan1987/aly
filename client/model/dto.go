@@ -26,12 +26,13 @@ type Project struct {
 
 // ProjectChangeLog 对应服务端 ent 生成的 ProjectChangeLog 结构
 type ProjectChangeLog struct {
-	ID        int      `json:"id"`
-	Version   string   `json:"version"`
-	Logs      []string `json:"logs"`
-	Time      string   `json:"time"`
-	CreatedAt string   `json:"created_at"`
-	IsDeleted bool     `json:"is_deleted"`
+	ID                      int      `json:"id"`
+	Version                 string   `json:"version"`
+	Logs                    []string `json:"logs"`
+	Time                    string   `json:"time"`
+	CreatedAt               string   `json:"created_at"`
+	IsDeleted               bool     `json:"is_deleted"`
+	AfterApplyUpdateScript  string   `json:"after_apply_update_script"`
 }
 
 // FileInfo 对应服务端 models.FileInfo（camelCase + 小写 md5/sha256）

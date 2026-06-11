@@ -21,6 +21,7 @@ func (ProjectChangeLog) Fields() []ent.Field {
 		field.String("time").Comment("变更时间"),
 		field.Time("created_at").Default(time.Now).Comment("创建日期"),
 		field.Bool("is_deleted").Default(false).Comment("是否被删除"),
+		field.String("after_apply_update_script").Optional().Comment("更新后执行的脚本（相对于应用目录）"),
 	}
 }
 

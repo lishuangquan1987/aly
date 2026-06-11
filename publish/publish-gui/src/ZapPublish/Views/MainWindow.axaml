@@ -43,15 +43,16 @@
                             <TextBlock Text="移除" FontSize="13" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Separator Width="1" Height="16" Margin="6,0"
-                               Background="{DynamicResource SemiColorBorder}"/>
-                    <Button Command="{Binding RefreshCommand}" Height="30" Padding="12,0">
+                    <Button Command="{Binding EditProjectCommand}" Height="30" Padding="12,0"
+                            Classes="Tertiary">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <materialIcons:MaterialIcon Kind="Refresh" Width="16" Height="16"
+                            <materialIcons:MaterialIcon Kind="Cog" Width="16" Height="16"
                                                     FontSize="16"/>
-                            <TextBlock Text="刷新" FontSize="13" VerticalAlignment="Center"/>
+                            <TextBlock Text="项目设置" FontSize="13" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
+                    <Separator Width="1" Height="16" Margin="6,0"
+                               Background="{DynamicResource SemiColorBorder}"/>
                 </StackPanel>
 
                 <!-- CLI status pill -->
@@ -122,6 +123,24 @@
             <!-- CENTER: File panels -->
             <Grid Grid.Column="1" RowDefinitions="*,*,Auto">
 
+                <!-- Loading overlay -->
+                <Border Grid.RowSpan="3" IsVisible="{Binding IsBusy}"
+                        Background="#40000000" ZIndex="100">
+                    <Border VerticalAlignment="Center" HorizontalAlignment="Center"
+                            Background="{DynamicResource SemiColorBg1}"
+                            CornerRadius="12" Padding="32,24"
+                            BoxShadow="0 8 32 #20000000"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="16" HorizontalAlignment="Center">
+                            <ProgressBar IsIndeterminate="True" Width="240" Height="4"
+                                         Foreground="{DynamicResource SemiColorPrimary}"/>
+                            <TextBlock Text="{Binding StatusMessage}" FontSize="14"
+                                       FontWeight="Medium" HorizontalAlignment="Center"
+                                       Foreground="{DynamicResource SemiColorText0}"/>
+                        </StackPanel>
+                    </Border>
+                </Border>
+
                 <!-- ── Unstaged ── -->
                 <Border Grid.Row="0" Background="{DynamicResource SemiColorBg0}">
                     <Grid RowDefinitions="Auto,*">
@@ -129,7 +148,7 @@
                                 BorderBrush="{DynamicResource SemiColorBorder}"
                                 BorderThickness="0,0,0,1"
                                 Background="{DynamicResource SemiColorBg1}">
-                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" Height="28">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Height="28">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <materialIcons:MaterialIcon Kind="FileDocumentOutline"
                                                             Width="16" Height="16" FontSize="16"
@@ -140,7 +159,15 @@
                                         <Run Text="{Binding UnstagedFiles.Count}" FontWeight="Bold"/>
                                     </TextBlock>
                                 </StackPanel>
-                                <Button Grid.Column="2" Command="{Binding AddSelectedCommand}"
+                                <Button Grid.Column="2" Command="{Binding RefreshCommand}"
+                                        Height="28" Padding="10,0" Margin="0,0,4,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <materialIcons:MaterialIcon Kind="Refresh"
+                                                                Width="14" Height="14" FontSize="14"/>
+                                        <TextBlock Text="刷新" FontSize="12"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="3" Command="{Binding AddSelectedCommand}"
                                         Height="28" Padding="10,0" Margin="0,0,4,0">
                                     <StackPanel Orientation="Horizontal" Spacing="4">
                                         <materialIcons:MaterialIcon Kind="ArrowUpBold"
@@ -148,7 +175,7 @@
                                         <TextBlock Text="暂存" FontSize="12"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Grid.Column="3" Command="{Binding AddAllCommand}"
+                                <Button Grid.Column="4" Command="{Binding AddAllCommand}"
                                         Classes="Primary" Height="28" Padding="10,0">
                                     <StackPanel Orientation="Horizontal" Spacing="4">
                                         <materialIcons:MaterialIcon Kind="ArrowUpBoldCircleOutline"
@@ -297,19 +324,25 @@
                                  MinHeight="52" AcceptsReturn="True"
                                  TextWrapping="Wrap" FontSize="13"/>
 
+                        <TextBox Text="{Binding AfterApplyUpdateScript}"
+                                 Watermark="更新后执行的脚本路径（可选，相对于应用目录）"
+                                 FontSize="13" Height="30"/>
+
                         <!-- Progress -->
-                        <StackPanel IsVisible="{Binding IsUploading}" Spacing="6">
-                            <ProgressBar IsIndeterminate="True" Height="4"/>
-                            <TextBlock FontSize="11"
-                                       Foreground="{DynamicResource SemiColorText2}">
-                                <Run Text="上传中 "/>
-                                <Run Text="{Binding UploadProgress}" FontWeight="SemiBold"
-                                     Foreground="{DynamicResource SemiColorPrimary}"/>
-                                <Run Text=" / "/>
-                                <Run Text="{Binding UploadTotal}" FontWeight="SemiBold"/>
-                                <Run Text=" 个文件"/>
-                            </TextBlock>
-                        </StackPanel>
+                        <Border IsVisible="{Binding IsUploading}" CornerRadius="6"
+                                Padding="10,8" Background="{DynamicResource SemiColorFill0}"
+                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <StackPanel Spacing="6">
+                                <ProgressBar IsIndeterminate="True" Height="3"
+                                             Foreground="{DynamicResource SemiColorPrimary}"/>
+                                <TextBlock FontSize="11"
+                                           Foreground="{DynamicResource SemiColorText2}"
+                                           HorizontalAlignment="Center">
+                                    <Run Text="{Binding StatusMessage}" FontWeight="Medium"
+                                         Foreground="{DynamicResource SemiColorText0}"/>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
 
                         <Button Command="{Binding PublishCommand}"
                                 Classes="Primary" Height="36"

@@ -127,10 +127,11 @@ func UpdateProject(ctx *gin.Context) {
 
 func PublishVersion(ctx *gin.Context) {
 	var publishDto struct {
-		ProjectName string   `json:"projectName"`
-		Version     string   `json:"version"`
-		Logs        []string `json:"logs"`
-		Time        string   `json:"time"`
+		ProjectName             string   `json:"projectName"`
+		Version                 string   `json:"version"`
+		Logs                    []string `json:"logs"`
+		Time                    string   `json:"time"`
+		AfterApplyUpdateScript  string   `json:"afterApplyUpdateScript"`
 	}
 	if err := ctx.ShouldBindJSON(&publishDto); err != nil {
 		ctx.JSON(200, models.NGWithError(err))
@@ -149,7 +150,7 @@ func PublishVersion(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(200, service.PublishVersion(publishDto.ProjectName, publishDto.Version, publishDto.Logs, publishDto.Time))
+	ctx.JSON(200, service.PublishVersion(publishDto.ProjectName, publishDto.Version, publishDto.Logs, publishDto.Time, publishDto.AfterApplyUpdateScript))
 }
 
 func DeleteProject(ctx *gin.Context) {
@@ -166,6 +167,23 @@ func DeleteProject(ctx *gin.Context) {
 
 func GetAllProjects(ctx *gin.Context) {
 	ctx.JSON(200, service.GetAllProjects())
+}
+
+func GetProjectByName(ctx *gin.Context) {
+	var projectNameDto struct {
+		ProjectName string `uri:"projectName" json:"projectName"`
+	}
+	if err := ctx.BindUri(&projectNameDto); err != nil {
+		ctx.JSON(200, models.NGWithError(err))
+		return
+	}
+
+	if projectNameDto.ProjectName == "" {
+		ctx.JSON(200, models.NG("项目名称不能为空"))
+		return
+	}
+
+	ctx.JSON(200, service.GetProjectByName(projectNameDto.ProjectName))
 }
 
 func GetProjectChangeLogs(ctx *gin.Context) {

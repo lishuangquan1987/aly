@@ -19,7 +19,7 @@ func CheckDiff() {
 	projectNameFlag := fs.String("project-name", "", "project name")
 	fs.Parse(os.Args[2:])
 
-	fc, err := loadFullConfig(*urlFlag, *projectNameFlag, "", "")
+	fc, err := loadFullConfig(*urlFlag, *projectNameFlag, "")
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return

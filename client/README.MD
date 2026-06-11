@@ -22,20 +22,18 @@ PackageFolder/
 ├── ApplicationFolder/              # 主程序文件夹
 │   ├── main_application.exe
 │   ├── .updator/
-│   │   ├── shared.json             # 共用配置（server_url、project_name、ignore规则）
-│   │   └── client.json             # client 专有配置（must_close_process_name、post_update_script）
+│   │   └── shared.json             # 共用配置（server_url、project_name、ignore规则）
 │   ├── zap-update.exe           # updator 副本（用于自更新比对）
 │   └── ...
 ├── UpdateFolder/                   # 更新程序文件夹
 │   ├── zap-update.exe
-│   ├── client.yaml                 # 精简配置（仅 main_exe_relative_path）
+│   ├── client.json                 # 精简配置（仅 main_exe_relative_path）
 │   ├── version.json                # 版本状态机
 │   └── logs/
 ├── ApplicationFolder_1.0.0/        # 主程序文件夹 1.0.0 版本（回滚用）
 │   ├── main_application.exe
 │   ├── .updator/
-│   │   ├── shared.json
-│   │   └── client.json
+│   │   └── shared.json
 │   └── ...
 ├── ApplicationFolder_1.0.1/        # 主程序文件夹 1.0.1 版本
 │   └── ...
@@ -47,12 +45,15 @@ PackageFolder/
 
 ## 配置文件
 
-### client.yaml（精简版）
+### client.json（精简版）
 
-位于 `zap-update.exe` 同级目录（UpdateFolder），仅包含定位 ApplicationFolder 所需的字段：
+位于 `zap-update.exe` 同级目录（UpdateFolder），包含定位 ApplicationFolder 和关闭进程所需的字段：
 
-```yaml
-main_exe_relative_path: "../ApplicationFolder/main_application.exe"
+```json
+{
+  "main_exe_relative_path": "../ApplicationFolder/main_application.exe",
+  "must_close_process_name": ["main_application", "plugin_host"]
+}
 ```
 
 ### shared.json
@@ -75,22 +76,6 @@ main_exe_relative_path: "../ApplicationFolder/main_application.exe"
 | `ignore_folders` | apply_update 时不复制的文件夹（路径前缀匹配） |
 | `ignore_files` | apply_update 时不复制的文件（支持 glob 通配符） |
 
-### client.json
-
-位于 `ApplicationFolder/.updator/client.json`，client 专有配置。随构建产物上传到 server：
-
-```json
-{
-  "must_close_process_name": ["main_application", "plugin_host"],
-  "post_update_script": ""
-}
-```
-
-| 字段 | 说明 |
-| --- | --- |
-| `must_close_process_name` | 更新时必须关闭的进程名列表（不含 .exe） |
-| `post_update_script` | 更新完成后执行的脚本路径（相对于 ApplicationFolder） |
-
 ### version.json
 
 位于 `zap-update.exe` 同级目录（UpdateFolder），记录当前版本信息：
@@ -99,7 +84,8 @@ main_exe_relative_path: "../ApplicationFolder/main_application.exe"
 {
   "version_previouse": "0.0.9",
   "version": "1.0.0",
-  "version_status": "applied"
+  "version_status": "applied",
+  "after_apply_update_script": "post_update.bat"
 }
 ```
 
@@ -133,13 +119,12 @@ applied --> (download_update 成功) --> downloaded
 
 每个命令启动时的配置加载顺序：
 
-1. 读取 `client.yaml`（UpdateFolder）--> 获取 `main_exe_relative_path`
+1. 读取 `client.json`（UpdateFolder）--> 获取 `main_exe_relative_path`
 2. 通过 `main_exe_relative_path` 推导出 `ApplicationFolder` 路径
 3. 读取 `ApplicationFolder/.updator/shared.json` --> 获取 `server_url`、`project_name`、`ignore_folders`、`ignore_files`
-4. 读取 `ApplicationFolder/.updator/client.json` --> 获取 `must_close_process_name`、`post_update_script`
-5. 命令行参数覆盖以上所有配置
+4. 命令行参数覆盖以上所有配置
 
-**优先级**：CLI 参数 > `.updator/shared.json` + `.updator/client.json` > `client.yaml`
+**优先级**：CLI 参数 > `.updator/shared.json` > `client.json`
 
 ---
 
@@ -157,7 +142,7 @@ client/
 ├── README.MD
 ├── main.go                    # 入口，CLI 参数解析
 ├── config/
-│   ├── config.go              # 配置加载（client.yaml + .updator/shared.json + .updator/client.json）
+│   ├── config.go              # 配置加载（client.json + .updator/shared.json）
 │   └── version.go             # version.json 读写
 ├── client/
 │   └── http_client.go         # 服务端 HTTP API 调用
@@ -182,7 +167,7 @@ client/
 | 用途 | 库 | 说明 |
 | --- | --- | --- |
 | CLI 参数解析 | 标准库 `flag` | Go 1.10 内置 |
-| YAML 解析 | `gopkg.in/yaml.v2` | 兼容 Go 1.10 |
+| YAML 解析 | 已移除（统一使用 JSON） | 之前使用 `gopkg.in/yaml.v2` |
 | HTTP 请求 | 标准库 `net/http` | Go 1.10 内置 |
 | JSON 序列化 | 标准库 `encoding/json` | Go 1.10 内置 |
 | SHA-256 计算 | 标准库 `crypto/sha256` | Go 1.10 内置 |
@@ -201,12 +186,12 @@ client/
 
 | 命令 | 调用接口 | 方法 |
 | --- | --- | --- |
-| check_update | `/api/project/get_all_projects` + `/api/project/get_project_change_logs/{projectName}` | GET |
-| check_diff | `/api/project/get_all_projects` + `/api/file/get_all_files/{projectName}` | GET |
-| download_update | `/api/project/get_all_projects` + `/api/file/get_all_files/{projectName}` + `/api/file/download_file?path=` | GET |
+| check_update | `/api/project/get_project_by_name/{projectName}` + `/api/project/get_project_change_logs/{projectName}` | GET |
+| check_diff | `/api/project/get_project_by_name/{projectName}` + `/api/file/get_all_files/{projectName}` | GET |
+| download_update | `/api/project/get_project_by_name/{projectName}` + `/api/file/get_all_files/{projectName}` + `/api/file/download_file?path=` | GET |
 | check_self_update | 无（纯本地 SHA-256 比对） | -- |
 
-> **注意**：所有接口已从 `{projectId}` 迁移为 `{projectName}`。服务端保证 projectName 唯一。check_update / check_diff / download_update 都先通过 `FindProjectByName` 按项目名称查找项目，获取 project.id，再调用后续接口。
+> **注意**：所有接口已从 `{projectId}` 迁移为 `{projectName}`。服务端保证 projectName 唯一。在重构之前，check_update / check_diff / download_update 先调用 `GetAllProjects` 拉全量列表再在本地过滤，现已改用独立的 `/api/project/get_project_by_name/{projectName}` 接口按名称精确查询。
 
 ---
 
@@ -334,7 +319,7 @@ zap-update.exe download_update [--url <url>] [--project-name <name>] [--main-exe
 ### 4. 应用更新（原子替换）
 
 ```bash
-zap-update.exe apply_update [--main-exe-path <path>] [--must-close-process-name <name1,name2>] [--close-timeout <seconds>]
+zap-update.exe apply_update [--main-exe-path <path>] [--close-timeout <seconds>]
 ```
 
 **执行步骤**：
@@ -346,7 +331,7 @@ zap-update.exe apply_update [--main-exe-path <path>] [--must-close-process-name 
      - 若 `ApplicationFolder` 不存在但 `ApplicationFolder_{version}` 存在：说明旧目录已被重命名走、新目录尚未改过来，直接将 `ApplicationFolder_{version}` 重命名为 `ApplicationFolder`，然后执行步骤 6
    - 若为 `downloaded`：正常执行后续步骤
 2. 将 `version_status` 设为 `applying`（标记开始应用）
-3. 关闭 `must_close_process_name` 中列出的所有进程：
+3. 关闭 `client.json` 中 `must_close_process_name` 列出的所有进程：
    - 先发送 `WM_CLOSE` 消息请求正常退出
    - 等待超时（默认 30 秒，可通过 `--close-timeout` 配置）
    - 超时后调用 `TerminateProcess` 强制终止
@@ -356,7 +341,7 @@ zap-update.exe apply_update [--main-exe-path <path>] [--must-close-process-name 
    - 将 `./{main_exe_folder_name}_{version}` 重命名为 `./{main_exe_folder_name}`
    - **若任一步失败**：将 `version_status` 回设为 `downloaded`（允许重试），返回错误
 5. 更新 version.json：`version` 设为新版本号，`version_previouse` 设为旧版本号，`version_status` 设为 `applied`
-6. 执行 `post_update_script`（如已配置），脚本失败不影响更新结果，仅记录日志到 `update.log`
+6. 执行 `version.json` 中 `after_apply_update_script`（如已配置），脚本失败不影响更新结果，仅记录日志到 `update.log`
 7. **启动主程序**：以 `main_exe_relative_path` 为路径启动主程序 exe
 
 **返回 data**：
@@ -385,7 +370,7 @@ zap-update.exe list_rollback_versions [--main-exe-path <path>]
 ### 6. 版本回滚
 
 ```bash
-zap-update.exe rollback --version 1.0.0 [--main-exe-path <path>] [--must-close-process-name <name1,name2>] [--close-timeout <seconds>]
+zap-update.exe rollback --version 1.0.0 [--main-exe-path <path>] [--close-timeout <seconds>]
 ```
 
 **执行步骤**：与第 4 步（应用更新）相同的原子替换操作。

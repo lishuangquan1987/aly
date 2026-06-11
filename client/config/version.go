@@ -16,9 +16,10 @@ const (
 // VersionInfo represents the version.json structure.
 // Note: JSON key "version_previouse" preserved for backward compatibility with older version.json files.
 type VersionInfo struct {
-	VersionPrevious string `json:"version_previouse"`
-	Version          string `json:"version"`
-	VersionStatus    string `json:"version_status"`
+	VersionPrevious        string `json:"version_previouse"`
+	Version                string `json:"version"`
+	VersionStatus          string `json:"version_status"`
+	AfterApplyUpdateScript string `json:"after_apply_update_script,omitempty"`
 }
 
 func versionPath() (string, error) {

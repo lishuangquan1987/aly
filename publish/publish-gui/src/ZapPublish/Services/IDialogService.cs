@@ -8,4 +8,5 @@ public interface IDialogService
 {
     Task<ProjectConfig?> ShowAddProjectDialogAsync();
     Task<ProjectInfo?> ShowCreateProjectDialogAsync(string serverUrl);
+    Task<ProjectConfig?> ShowEditProjectDialogAsync(ProjectConfig project);
 }

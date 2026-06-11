@@ -14,7 +14,7 @@ func CheckSelfUpdate() {
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
 	fs.Parse(os.Args[2:])
 
-	fc, err := loadFullConfig("", "", *mainExePathFlag, "")
+	fc, err := loadFullConfig("", "", *mainExePathFlag)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return

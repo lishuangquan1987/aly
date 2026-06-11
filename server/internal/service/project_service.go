@@ -116,7 +116,7 @@ func GetProjectByName(projectName string) models.CommonResponse {
 	return models.OKWithData(p)
 }
 
-func PublishVersion(projectName string, version string, logs []string, time string) models.CommonResponse {
+func PublishVersion(projectName string, version string, logs []string, time string, afterApplyUpdateScript string) models.CommonResponse {
 	ctx := context.Background()
 	var changelog *ent.ProjectChangeLog
 	err := db.WithTx(ctx, func(tx *ent.Tx) error {
@@ -134,12 +134,15 @@ func PublishVersion(projectName string, version string, logs []string, time stri
 			return err
 		}
 		// 创建变更日志记录
-		changelog, err = tx.ProjectChangeLog.Create().
+		create := tx.ProjectChangeLog.Create().
 			SetProject(p).
 			SetVersion(version).
 			SetLogs(logs).
-			SetTime(time).
-			Save(ctx)
+			SetTime(time)
+		if afterApplyUpdateScript != "" {
+			create = create.SetAfterApplyUpdateScript(afterApplyUpdateScript)
+		}
+		changelog, err = create.Save(ctx)
 		return err
 	})
 	if err != nil {

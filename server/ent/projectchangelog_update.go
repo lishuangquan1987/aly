@@ -3,13 +3,13 @@
 package ent
 
 import (
-	"zap/server/ent/predicate"
-	"zap/server/ent/project"
-	"zap/server/ent/projectchangelog"
 	"context"
 	"errors"
 	"fmt"
 	"time"
+	"zap/server/ent/predicate"
+	"zap/server/ent/project"
+	"zap/server/ent/projectchangelog"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -98,6 +98,26 @@ func (_u *ProjectChangeLogUpdate) SetNillableIsDeleted(v *bool) *ProjectChangeLo
 	return _u
 }
 
+// SetAfterApplyUpdateScript sets the "after_apply_update_script" field.
+func (_u *ProjectChangeLogUpdate) SetAfterApplyUpdateScript(v string) *ProjectChangeLogUpdate {
+	_u.mutation.SetAfterApplyUpdateScript(v)
+	return _u
+}
+
+// SetNillableAfterApplyUpdateScript sets the "after_apply_update_script" field if the given value is not nil.
+func (_u *ProjectChangeLogUpdate) SetNillableAfterApplyUpdateScript(v *string) *ProjectChangeLogUpdate {
+	if v != nil {
+		_u.SetAfterApplyUpdateScript(*v)
+	}
+	return _u
+}
+
+// ClearAfterApplyUpdateScript clears the value of the "after_apply_update_script" field.
+func (_u *ProjectChangeLogUpdate) ClearAfterApplyUpdateScript() *ProjectChangeLogUpdate {
+	_u.mutation.ClearAfterApplyUpdateScript()
+	return _u
+}
+
 // SetProjectID sets the "project" edge to the Project entity by ID.
 func (_u *ProjectChangeLogUpdate) SetProjectID(id int) *ProjectChangeLogUpdate {
 	_u.mutation.SetProjectID(id)
@@ -183,6 +203,12 @@ func (_u *ProjectChangeLogUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if value, ok := _u.mutation.IsDeleted(); ok {
 		_spec.SetField(projectchangelog.FieldIsDeleted, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.AfterApplyUpdateScript(); ok {
+		_spec.SetField(projectchangelog.FieldAfterApplyUpdateScript, field.TypeString, value)
+	}
+	if _u.mutation.AfterApplyUpdateScriptCleared() {
+		_spec.ClearField(projectchangelog.FieldAfterApplyUpdateScript, field.TypeString)
 	}
 	if _u.mutation.ProjectCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -301,6 +327,26 @@ func (_u *ProjectChangeLogUpdateOne) SetNillableIsDeleted(v *bool) *ProjectChang
 	return _u
 }
 
+// SetAfterApplyUpdateScript sets the "after_apply_update_script" field.
+func (_u *ProjectChangeLogUpdateOne) SetAfterApplyUpdateScript(v string) *ProjectChangeLogUpdateOne {
+	_u.mutation.SetAfterApplyUpdateScript(v)
+	return _u
+}
+
+// SetNillableAfterApplyUpdateScript sets the "after_apply_update_script" field if the given value is not nil.
+func (_u *ProjectChangeLogUpdateOne) SetNillableAfterApplyUpdateScript(v *string) *ProjectChangeLogUpdateOne {
+	if v != nil {
+		_u.SetAfterApplyUpdateScript(*v)
+	}
+	return _u
+}
+
+// ClearAfterApplyUpdateScript clears the value of the "after_apply_update_script" field.
+func (_u *ProjectChangeLogUpdateOne) ClearAfterApplyUpdateScript() *ProjectChangeLogUpdateOne {
+	_u.mutation.ClearAfterApplyUpdateScript()
+	return _u
+}
+
 // SetProjectID sets the "project" edge to the Project entity by ID.
 func (_u *ProjectChangeLogUpdateOne) SetProjectID(id int) *ProjectChangeLogUpdateOne {
 	_u.mutation.SetProjectID(id)
@@ -416,6 +462,12 @@ func (_u *ProjectChangeLogUpdateOne) sqlSave(ctx context.Context) (_node *Projec
 	}
 	if value, ok := _u.mutation.IsDeleted(); ok {
 		_spec.SetField(projectchangelog.FieldIsDeleted, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.AfterApplyUpdateScript(); ok {
+		_spec.SetField(projectchangelog.FieldAfterApplyUpdateScript, field.TypeString, value)
+	}
+	if _u.mutation.AfterApplyUpdateScriptCleared() {
+		_spec.ClearField(projectchangelog.FieldAfterApplyUpdateScript, field.TypeString)
 	}
 	if _u.mutation.ProjectCleared() {
 		edge := &sqlgraph.EdgeSpec{

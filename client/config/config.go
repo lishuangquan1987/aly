@@ -7,13 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"gopkg.in/yaml.v2"
 )
 
-// Config 对应精简版 client.yaml（仅 main_exe_relative_path）
+// Config 对应精简版 client.json（main_exe_relative_path + must_close_process_name）
 type Config struct {
-	MainExeRelativePath string `yaml:"main_exe_relative_path"`
+	MainExeRelativePath  string   `json:"main_exe_relative_path"`
+	MustCloseProcessName []string `json:"must_close_process_name"`
 }
 
 // SharedConfig 对应 .updator/shared.json（publish-cli + client 共用）
@@ -22,12 +21,6 @@ type SharedConfig struct {
 	ProjectName   string   `json:"project_name"`
 	IgnoreFolders []string `json:"ignore_folders"`
 	IgnoreFiles   []string `json:"ignore_files"`
-}
-
-// ClientConfig 对应 .updator/client.json（client 专有）
-type ClientConfig struct {
-	MustCloseProcessName []string `json:"must_close_process_name"`
-	PostUpdateScript     string   `json:"post_update_script"`
 }
 
 // ExeDir 返回 zap-update.exe 所在目录 (UpdateFolder/)
@@ -62,10 +55,10 @@ func configPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "client.yaml"), nil
+	return filepath.Join(dir, "client.json"), nil
 }
 
-// LoadConfig 从 client.yaml 加载精简配置（仅 main_exe_relative_path）
+// LoadConfig 从 client.json 加载配置（main_exe_relative_path + must_close_process_name）
 func LoadConfig() (*Config, error) {
 	path, err := configPath()
 	if err != nil {
@@ -78,7 +71,7 @@ func LoadConfig() (*Config, error) {
 	}
 
 	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse config file failed: %v", err)
 	}
 
@@ -95,20 +88,6 @@ func LoadSharedConfig(mainFolder string) (*SharedConfig, error) {
 	var cfg SharedConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse shared.json failed: %v", err)
-	}
-	return &cfg, nil
-}
-
-// LoadClientConfig 从 ApplicationFolder/.updator/client.json 加载 client 专有配置
-func LoadClientConfig(mainFolder string) (*ClientConfig, error) {
-	path := filepath.Join(UpdatorDir(mainFolder), "client.json")
-	data, err := ioutilReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read client.json failed: %v", err)
-	}
-	var cfg ClientConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse client.json failed: %v", err)
 	}
 	return &cfg, nil
 }

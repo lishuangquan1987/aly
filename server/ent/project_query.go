@@ -3,13 +3,13 @@
 package ent
 
 import (
-	"zap/server/ent/predicate"
-	"zap/server/ent/project"
-	"zap/server/ent/projectchangelog"
 	"context"
 	"database/sql/driver"
 	"fmt"
 	"math"
+	"zap/server/ent/predicate"
+	"zap/server/ent/project"
+	"zap/server/ent/projectchangelog"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"

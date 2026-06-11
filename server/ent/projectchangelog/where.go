@@ -3,8 +3,8 @@
 package projectchangelog
 
 import (
-	"zap/server/ent/predicate"
 	"time"
+	"zap/server/ent/predicate"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -73,6 +73,11 @@ func CreatedAt(v time.Time) predicate.ProjectChangeLog {
 // IsDeleted applies equality check predicate on the "is_deleted" field. It's identical to IsDeletedEQ.
 func IsDeleted(v bool) predicate.ProjectChangeLog {
 	return predicate.ProjectChangeLog(sql.FieldEQ(FieldIsDeleted, v))
+}
+
+// AfterApplyUpdateScript applies equality check predicate on the "after_apply_update_script" field. It's identical to AfterApplyUpdateScriptEQ.
+func AfterApplyUpdateScript(v string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldEQ(FieldAfterApplyUpdateScript, v))
 }
 
 // VersionEQ applies the EQ predicate on the "version" field.
@@ -253,6 +258,81 @@ func IsDeletedEQ(v bool) predicate.ProjectChangeLog {
 // IsDeletedNEQ applies the NEQ predicate on the "is_deleted" field.
 func IsDeletedNEQ(v bool) predicate.ProjectChangeLog {
 	return predicate.ProjectChangeLog(sql.FieldNEQ(FieldIsDeleted, v))
+}
+
+// AfterApplyUpdateScriptEQ applies the EQ predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptEQ(v string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldEQ(FieldAfterApplyUpdateScript, v))
+}
+
+// AfterApplyUpdateScriptNEQ applies the NEQ predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptNEQ(v string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldNEQ(FieldAfterApplyUpdateScript, v))
+}
+
+// AfterApplyUpdateScriptIn applies the In predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptIn(vs ...string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldIn(FieldAfterApplyUpdateScript, vs...))
+}
+
+// AfterApplyUpdateScriptNotIn applies the NotIn predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptNotIn(vs ...string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldNotIn(FieldAfterApplyUpdateScript, vs...))
+}
+
+// AfterApplyUpdateScriptGT applies the GT predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptGT(v string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldGT(FieldAfterApplyUpdateScript, v))
+}
+
+// AfterApplyUpdateScriptGTE applies the GTE predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptGTE(v string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldGTE(FieldAfterApplyUpdateScript, v))
+}
+
+// AfterApplyUpdateScriptLT applies the LT predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptLT(v string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldLT(FieldAfterApplyUpdateScript, v))
+}
+
+// AfterApplyUpdateScriptLTE applies the LTE predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptLTE(v string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldLTE(FieldAfterApplyUpdateScript, v))
+}
+
+// AfterApplyUpdateScriptContains applies the Contains predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptContains(v string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldContains(FieldAfterApplyUpdateScript, v))
+}
+
+// AfterApplyUpdateScriptHasPrefix applies the HasPrefix predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptHasPrefix(v string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldHasPrefix(FieldAfterApplyUpdateScript, v))
+}
+
+// AfterApplyUpdateScriptHasSuffix applies the HasSuffix predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptHasSuffix(v string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldHasSuffix(FieldAfterApplyUpdateScript, v))
+}
+
+// AfterApplyUpdateScriptIsNil applies the IsNil predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptIsNil() predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldIsNull(FieldAfterApplyUpdateScript))
+}
+
+// AfterApplyUpdateScriptNotNil applies the NotNil predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptNotNil() predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldNotNull(FieldAfterApplyUpdateScript))
+}
+
+// AfterApplyUpdateScriptEqualFold applies the EqualFold predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptEqualFold(v string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldEqualFold(FieldAfterApplyUpdateScript, v))
+}
+
+// AfterApplyUpdateScriptContainsFold applies the ContainsFold predicate on the "after_apply_update_script" field.
+func AfterApplyUpdateScriptContainsFold(v string) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldContainsFold(FieldAfterApplyUpdateScript, v))
 }
 
 // HasProject applies the HasEdge predicate on the "project" edge.

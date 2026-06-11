@@ -19,15 +19,18 @@ var (
 	pushMessage     []string
 	pushDryRun      bool
 	pushForce       bool
+	pushScript      string
 
 	pushAllVersion  string
 	pushAllMessage  []string
 	pushAllDryRun   bool
 	pushAllForce    bool
+	pushAllScript   string
 
 	pubVersion      string
 	pubMessage      []string
 	pubDryRun       bool
+	pubScript       string
 )
 
 func init() {
@@ -35,16 +38,19 @@ func init() {
 	cmdPush.Flags().StringArrayVar(&pushMessage, "message", nil, "变更说明（可多次指定）")
 	cmdPush.Flags().BoolVar(&pushDryRun, "dry-run", false, "仅校验不实际推送")
 	cmdPush.Flags().BoolVar(&pushForce, "force", false, "跳过 MD5 复核强制上传")
+	cmdPush.Flags().StringVar(&pushScript, "after-apply-update-script", "", "更新后执行的脚本路径（相对于应用目录）")
 	cmdPush.MarkFlagRequired("version")
 
 	cmdPushAll.Flags().StringVar(&pushAllVersion, "version", "", "新版本号（必填）")
 	cmdPushAll.Flags().StringArrayVar(&pushAllMessage, "message", nil, "变更说明（可多次指定）")
 	cmdPushAll.Flags().BoolVar(&pushAllDryRun, "dry-run", false, "仅校验不实际推送")
+	cmdPushAll.Flags().StringVar(&pushAllScript, "after-apply-update-script", "", "更新后执行的脚本路径（相对于应用目录）")
 	cmdPushAll.MarkFlagRequired("version")
 
 	cmdPublish.Flags().StringVar(&pubVersion, "version", "", "新版本号（必填）")
 	cmdPublish.Flags().StringArrayVar(&pubMessage, "message", nil, "变更说明（可多次指定）")
 	cmdPublish.Flags().BoolVar(&pubDryRun, "dry-run", false, "仅校验不实际推送")
+	cmdPublish.Flags().StringVar(&pubScript, "after-apply-update-script", "", "更新后执行的脚本路径（相对于应用目录）")
 	cmdPublish.MarkFlagRequired("version")
 
 	RootCmd.AddCommand(cmdPush)
@@ -72,7 +78,7 @@ var cmdPublish = &cobra.Command{
 
 // pushFiles 共享的推送逻辑：上传 filesToUpload 指定的文件，然后创建版本记录
 // 返回 true 表示推送成功（可以清理暂存区），false 表示失败或未执行
-func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUpload []string, isDryRun bool, useForce bool) bool {
+func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUpload []string, isDryRun bool, useForce bool, afterApplyUpdateScript string) bool {
 	if len(messages) == 0 {
 		if jsonOutput {
 			printOutput(false, "至少需要一条 --message", nil)
@@ -124,10 +130,11 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 	// 阶段 2：创建版本记录
 	timeStr := time.Now().Format("2006-01-02 15:04:05")
 	_, err := client.PublishVersion(models.PublishVersionRequest{
-		ProjectName: cfg.Shared.ProjectName,
-		Version:     version,
-		Logs:        messages,
-		Time:        timeStr,
+		ProjectName:            cfg.Shared.ProjectName,
+		Version:                version,
+		Logs:                   messages,
+		Time:                   timeStr,
+		AfterApplyUpdateScript: afterApplyUpdateScript,
 	})
 	if err != nil {
 		outputResult(false, fmt.Sprintf("创建版本失败: %v（文件已上传，可重试 publish 或手动创建版本）", err), nil)
@@ -175,7 +182,7 @@ func runPush(cmd *cobra.Command, args []string) {
 		files = append(files, f.RelativePath)
 	}
 
-	if pushFiles(cfg, pushVersion, pushMessage, files, pushDryRun, pushForce) {
+	if pushFiles(cfg, pushVersion, pushMessage, files, pushDryRun, pushForce, pushScript) {
 		staging.Clear(cfg.Path)
 	}
 }
@@ -209,7 +216,7 @@ func runPushAll(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	pushFiles(cfg, pushAllVersion, pushAllMessage, paths, pushAllDryRun, pushAllForce)
+	pushFiles(cfg, pushAllVersion, pushAllMessage, paths, pushAllDryRun, pushAllForce, pushAllScript)
 }
 
 func runPublish(cmd *cobra.Command, args []string) {
@@ -246,7 +253,7 @@ func runPublish(cmd *cobra.Command, args []string) {
 		outputResult(false, err.Error(), nil)
 		return
 	}
-	if pushFiles(cfg, pubVersion, pubMessage, paths, pubDryRun, false) {
+	if pushFiles(cfg, pubVersion, pubMessage, paths, pubDryRun, false, pubScript) {
 		staging.Clear(cfg.Path)
 	}
 }

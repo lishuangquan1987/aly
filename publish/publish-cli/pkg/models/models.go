@@ -26,12 +26,13 @@ type Project struct {
 
 // ProjectChangeLog 服务端 ent 生成的 ProjectChangeLog
 type ProjectChangeLog struct {
-	ID        int      `json:"id"`
-	Version   string   `json:"version"`
-	Logs      []string `json:"logs"`
-	Time      string   `json:"time"`
-	CreatedAt string   `json:"created_at"`
-	IsDeleted bool     `json:"is_deleted"`
+	ID                      int      `json:"id"`
+	Version                 string   `json:"version"`
+	Logs                    []string `json:"logs"`
+	Time                    string   `json:"time"`
+	CreatedAt               string   `json:"created_at"`
+	IsDeleted               bool     `json:"is_deleted"`
+	AfterApplyUpdateScript  string   `json:"after_apply_update_script"`
 }
 
 // FileInfo 服务端 models.FileInfo（camelCase）
@@ -81,10 +82,11 @@ type UpdateProjectRequest struct {
 
 // PublishVersionRequest POST /api/project/publish_version
 type PublishVersionRequest struct {
-	ProjectName string   `json:"projectName"`
-	Version     string   `json:"version"`
-	Logs        []string `json:"logs"`
-	Time        string   `json:"time"`
+	ProjectName            string   `json:"projectName"`
+	Version                string   `json:"version"`
+	Logs                   []string `json:"logs"`
+	Time                   string   `json:"time"`
+	AfterApplyUpdateScript string   `json:"afterApplyUpdateScript"`
 }
 
 // ─── CLI 输出模型（camelCase）────────────────────────────────────────────

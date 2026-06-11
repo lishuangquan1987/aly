@@ -17,7 +17,6 @@ func Rollback() {
 	fs := flag.NewFlagSet("rollback", flag.ExitOnError)
 	versionFlag := fs.String("version", "", "target version to rollback to")
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
-	mustCloseFlag := fs.String("must-close-process-name", "", "process names to close")
 	closeTimeoutFlag := fs.Int("close-timeout", 30, "timeout seconds")
 	fs.Parse(os.Args[2:])
 
@@ -26,7 +25,7 @@ func Rollback() {
 		return
 	}
 
-	fc, err := loadFullConfig("", "", *mainExePathFlag, *mustCloseFlag)
+	fc, err := loadFullConfig("", "", *mainExePathFlag)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
@@ -69,8 +68,8 @@ func Rollback() {
 				if wErr := config.WriteVersion(versionInfo); wErr != nil {
 					util.AppendToLog(".", "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
 				}
-				if fc.Client.PostUpdateScript != "" {
-					runScript(filepath.Join(fc.MainFolder, fc.Client.PostUpdateScript))
+				if versionInfo.AfterApplyUpdateScript != "" {
+					runScript(filepath.Join(fc.MainFolder, versionInfo.AfterApplyUpdateScript))
 				}
 				launchMainExe(fc.ExeCfg)
 				printOutput(true, "", nil)
@@ -89,8 +88,8 @@ func Rollback() {
 	}
 
 	// Close processes gracefully
-	if len(fc.Client.MustCloseProcessName) > 0 {
-		closeProcessesGracefully(fc.Client.MustCloseProcessName, time.Duration(*closeTimeoutFlag)*time.Second)
+	if len(fc.ExeCfg.MustCloseProcessName) > 0 {
+		closeProcessesGracefully(fc.ExeCfg.MustCloseProcessName, time.Duration(*closeTimeoutFlag)*time.Second)
 	}
 
 	// Rollback target version dir already has complete files from when it was active.
@@ -152,9 +151,9 @@ func Rollback() {
 		return
 	}
 
-	// Run post_update_script if configured
-	if fc.Client.PostUpdateScript != "" {
-		runScript(filepath.Join(fc.MainFolder, fc.Client.PostUpdateScript))
+	// Run post-update script if configured
+	if versionInfo.AfterApplyUpdateScript != "" {
+		runScript(filepath.Join(fc.MainFolder, versionInfo.AfterApplyUpdateScript))
 	}
 
 	// Launch main exe

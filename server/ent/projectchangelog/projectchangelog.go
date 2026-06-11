@@ -24,6 +24,8 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldIsDeleted holds the string denoting the is_deleted field in the database.
 	FieldIsDeleted = "is_deleted"
+	// FieldAfterApplyUpdateScript holds the string denoting the after_apply_update_script field in the database.
+	FieldAfterApplyUpdateScript = "after_apply_update_script"
 	// EdgeProject holds the string denoting the project edge name in mutations.
 	EdgeProject = "project"
 	// Table holds the table name of the projectchangelog in the database.
@@ -45,6 +47,7 @@ var Columns = []string{
 	FieldTime,
 	FieldCreatedAt,
 	FieldIsDeleted,
+	FieldAfterApplyUpdateScript,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "project_change_logs"
@@ -101,6 +104,11 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByIsDeleted orders the results by the is_deleted field.
 func ByIsDeleted(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsDeleted, opts...).ToFunc()
+}
+
+// ByAfterApplyUpdateScript orders the results by the after_apply_update_script field.
+func ByAfterApplyUpdateScript(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAfterApplyUpdateScript, opts...).ToFunc()
 }
 
 // ByProjectField orders the results by project field.

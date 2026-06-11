@@ -34,6 +34,7 @@ var (
 		{Name: "time", Type: field.TypeString},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "is_deleted", Type: field.TypeBool, Default: false},
+		{Name: "after_apply_update_script", Type: field.TypeString, Nullable: true},
 		{Name: "project_change_logs", Type: field.TypeInt, Nullable: true},
 	}
 	// ProjectChangeLogsTable holds the schema information for the "project_change_logs" table.
@@ -44,7 +45,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "project_change_logs_projects_change_logs",
-				Columns:    []*schema.Column{ProjectChangeLogsColumns[6]},
+				Columns:    []*schema.Column{ProjectChangeLogsColumns[7]},
 				RefColumns: []*schema.Column{ProjectsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},

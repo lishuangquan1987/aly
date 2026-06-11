@@ -3,12 +3,12 @@
 package ent
 
 import (
-	"zap/server/ent/project"
-	"zap/server/ent/projectchangelog"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+	"zap/server/ent/project"
+	"zap/server/ent/projectchangelog"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -29,6 +29,8 @@ type ProjectChangeLog struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// 是否被删除
 	IsDeleted bool `json:"is_deleted,omitempty"`
+	// 更新后执行的脚本（相对于应用目录）
+	AfterApplyUpdateScript string `json:"after_apply_update_script,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ProjectChangeLogQuery when eager-loading is set.
 	Edges               ProjectChangeLogEdges `json:"edges"`
@@ -67,7 +69,7 @@ func (*ProjectChangeLog) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case projectchangelog.FieldID:
 			values[i] = new(sql.NullInt64)
-		case projectchangelog.FieldVersion, projectchangelog.FieldTime:
+		case projectchangelog.FieldVersion, projectchangelog.FieldTime, projectchangelog.FieldAfterApplyUpdateScript:
 			values[i] = new(sql.NullString)
 		case projectchangelog.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -125,6 +127,12 @@ func (_m *ProjectChangeLog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field is_deleted", values[i])
 			} else if value.Valid {
 				_m.IsDeleted = value.Bool
+			}
+		case projectchangelog.FieldAfterApplyUpdateScript:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field after_apply_update_script", values[i])
+			} else if value.Valid {
+				_m.AfterApplyUpdateScript = value.String
 			}
 		case projectchangelog.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -188,6 +196,9 @@ func (_m *ProjectChangeLog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("is_deleted=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsDeleted))
+	builder.WriteString(", ")
+	builder.WriteString("after_apply_update_script=")
+	builder.WriteString(_m.AfterApplyUpdateScript)
 	builder.WriteByte(')')
 	return builder.String()
 }

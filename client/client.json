@@ -1,0 +1,11 @@
+{
+  "main_exe_relative_path": "../Langtian.DCS.UI.exe",
+  "must_close_process_name": [
+    "Langtian.DCS.UI",
+    "Langtian.DCS.FlowSetting",
+    "Langtian.DCS.EChartsDataDisplay",
+    "Langtian.DCS.Selection",
+    "langtian.dcs.login",
+    "langtian.dcs.tcpplugin_go"
+  ]
+}

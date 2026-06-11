@@ -3,13 +3,13 @@
 package ent
 
 import (
-	"zap/server/ent/project"
-	"zap/server/ent/projectchangelog"
 	"context"
 	"errors"
 	"fmt"
 	"reflect"
 	"sync"
+	"zap/server/ent/project"
+	"zap/server/ent/projectchangelog"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"

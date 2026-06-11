@@ -32,6 +32,7 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private int _uploadTotal;
     [ObservableProperty] private bool _isCliFound;
     [ObservableProperty] private string _cliPath = string.Empty;
+    [ObservableProperty] private string _afterApplyUpdateScript = string.Empty;
 
     public IAsyncRelayCommand RefreshCommand { get; }
     public IAsyncRelayCommand AddAllCommand { get; }
@@ -41,6 +42,7 @@ public partial class MainWindowViewModel : ObservableObject
     public IAsyncRelayCommand PublishCommand { get; }
     public IAsyncRelayCommand AddProjectCommand { get; }
     public IAsyncRelayCommand RemoveProjectCommand { get; }
+    public IAsyncRelayCommand EditProjectCommand { get; }
 
     public MainWindowViewModel(CliService cli, ConfigService cfg, IDialogService dialog)
     {
@@ -59,6 +61,7 @@ public partial class MainWindowViewModel : ObservableObject
         PublishCommand       = new AsyncRelayCommand(PublishAsync,       () => SelectedProject != null && !IsBusy && StagedFiles.Count > 0);
         AddProjectCommand    = new AsyncRelayCommand(AddProjectAsync);
         RemoveProjectCommand = new AsyncRelayCommand(RemoveProjectAsync, () => SelectedProject != null);
+        EditProjectCommand   = new AsyncRelayCommand(EditProjectAsync,   () => SelectedProject != null);
 
         LoadProjects();
     }
@@ -71,6 +74,7 @@ public partial class MainWindowViewModel : ObservableObject
         AddSelectedCommand.NotifyCanExecuteChanged();
         ResetSelectedCommand.NotifyCanExecuteChanged();
         PublishCommand.NotifyCanExecuteChanged();
+        EditProjectCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedProjectChanged(ProjectConfig? value)
@@ -268,16 +272,19 @@ public partial class MainWindowViewModel : ObservableObject
         if (StagedFiles.Count == 0) { StatusMessage = "暂存区为空，请先暂存文件"; return; }
 
         IsBusy = true;
+        IsUploading = true;
         StatusMessage = "发布中...";
         try
         {
-            var r = await _cli.PushAsync(projectPath, NewVersion, CommitMessage);
+            var r = await _cli.PushAsync(projectPath, NewVersion, CommitMessage, AfterApplyUpdateScript);
             if (r?.IsSuccess == true)
             {
-                StatusMessage = $"发布成功: {NewVersion}";
                 NewVersion = string.Empty;
                 CommitMessage = string.Empty;
+                AfterApplyUpdateScript = string.Empty;
+                StatusMessage = "发布成功，正在刷新...";
                 await RefetchDataAsync();
+                StatusMessage = $"发布成功";
             }
             else StatusMessage = $"发布失败: {r?.ErrorMsg}";
         }
@@ -286,7 +293,11 @@ public partial class MainWindowViewModel : ObservableObject
             StatusMessage = $"发布异常: {ex.Message}";
             Log.Error(ex, "发布异常");
         }
-        finally { IsBusy = false; }
+        finally
+        {
+            IsUploading = false;
+            IsBusy = false;
+        }
     }
 
     private async Task AddProjectAsync()
@@ -312,5 +323,18 @@ public partial class MainWindowViewModel : ObservableObject
         Projects.Remove(SelectedProject);
         SelectedProject = Projects.FirstOrDefault();
         return Task.CompletedTask;
+    }
+
+    private async Task EditProjectAsync()
+    {
+        if (SelectedProject == null) return;
+        var result = await _dialog.ShowEditProjectDialogAsync(SelectedProject);
+        if (result != null)
+        {
+            _cfg.UpdateProject(result);
+            var idx = Projects.IndexOf(SelectedProject);
+            if (idx >= 0) Projects[idx] = result;
+            SelectedProject = result;
+        }
     }
 }

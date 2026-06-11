@@ -3,14 +3,14 @@
 package ent
 
 import (
-	"zap/server/ent/predicate"
-	"zap/server/ent/project"
-	"zap/server/ent/projectchangelog"
 	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
+	"zap/server/ent/predicate"
+	"zap/server/ent/project"
+	"zap/server/ent/projectchangelog"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -904,21 +904,22 @@ func (m *ProjectMutation) ResetEdge(name string) error {
 // ProjectChangeLogMutation represents an operation that mutates the ProjectChangeLog nodes in the graph.
 type ProjectChangeLogMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *int
-	version        *string
-	logs           *[]string
-	appendlogs     []string
-	time           *string
-	created_at     *time.Time
-	is_deleted     *bool
-	clearedFields  map[string]struct{}
-	project        *int
-	clearedproject bool
-	done           bool
-	oldValue       func(context.Context) (*ProjectChangeLog, error)
-	predicates     []predicate.ProjectChangeLog
+	op                        Op
+	typ                       string
+	id                        *int
+	version                   *string
+	logs                      *[]string
+	appendlogs                []string
+	time                      *string
+	created_at                *time.Time
+	is_deleted                *bool
+	after_apply_update_script *string
+	clearedFields             map[string]struct{}
+	project                   *int
+	clearedproject            bool
+	done                      bool
+	oldValue                  func(context.Context) (*ProjectChangeLog, error)
+	predicates                []predicate.ProjectChangeLog
 }
 
 var _ ent.Mutation = (*ProjectChangeLogMutation)(nil)
@@ -1214,6 +1215,55 @@ func (m *ProjectChangeLogMutation) ResetIsDeleted() {
 	m.is_deleted = nil
 }
 
+// SetAfterApplyUpdateScript sets the "after_apply_update_script" field.
+func (m *ProjectChangeLogMutation) SetAfterApplyUpdateScript(s string) {
+	m.after_apply_update_script = &s
+}
+
+// AfterApplyUpdateScript returns the value of the "after_apply_update_script" field in the mutation.
+func (m *ProjectChangeLogMutation) AfterApplyUpdateScript() (r string, exists bool) {
+	v := m.after_apply_update_script
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAfterApplyUpdateScript returns the old "after_apply_update_script" field's value of the ProjectChangeLog entity.
+// If the ProjectChangeLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProjectChangeLogMutation) OldAfterApplyUpdateScript(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAfterApplyUpdateScript is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAfterApplyUpdateScript requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAfterApplyUpdateScript: %w", err)
+	}
+	return oldValue.AfterApplyUpdateScript, nil
+}
+
+// ClearAfterApplyUpdateScript clears the value of the "after_apply_update_script" field.
+func (m *ProjectChangeLogMutation) ClearAfterApplyUpdateScript() {
+	m.after_apply_update_script = nil
+	m.clearedFields[projectchangelog.FieldAfterApplyUpdateScript] = struct{}{}
+}
+
+// AfterApplyUpdateScriptCleared returns if the "after_apply_update_script" field was cleared in this mutation.
+func (m *ProjectChangeLogMutation) AfterApplyUpdateScriptCleared() bool {
+	_, ok := m.clearedFields[projectchangelog.FieldAfterApplyUpdateScript]
+	return ok
+}
+
+// ResetAfterApplyUpdateScript resets all changes to the "after_apply_update_script" field.
+func (m *ProjectChangeLogMutation) ResetAfterApplyUpdateScript() {
+	m.after_apply_update_script = nil
+	delete(m.clearedFields, projectchangelog.FieldAfterApplyUpdateScript)
+}
+
 // SetProjectID sets the "project" edge to the Project entity by id.
 func (m *ProjectChangeLogMutation) SetProjectID(id int) {
 	m.project = &id
@@ -1287,7 +1337,7 @@ func (m *ProjectChangeLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProjectChangeLogMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.version != nil {
 		fields = append(fields, projectchangelog.FieldVersion)
 	}
@@ -1302,6 +1352,9 @@ func (m *ProjectChangeLogMutation) Fields() []string {
 	}
 	if m.is_deleted != nil {
 		fields = append(fields, projectchangelog.FieldIsDeleted)
+	}
+	if m.after_apply_update_script != nil {
+		fields = append(fields, projectchangelog.FieldAfterApplyUpdateScript)
 	}
 	return fields
 }
@@ -1321,6 +1374,8 @@ func (m *ProjectChangeLogMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedAt()
 	case projectchangelog.FieldIsDeleted:
 		return m.IsDeleted()
+	case projectchangelog.FieldAfterApplyUpdateScript:
+		return m.AfterApplyUpdateScript()
 	}
 	return nil, false
 }
@@ -1340,6 +1395,8 @@ func (m *ProjectChangeLogMutation) OldField(ctx context.Context, name string) (e
 		return m.OldCreatedAt(ctx)
 	case projectchangelog.FieldIsDeleted:
 		return m.OldIsDeleted(ctx)
+	case projectchangelog.FieldAfterApplyUpdateScript:
+		return m.OldAfterApplyUpdateScript(ctx)
 	}
 	return nil, fmt.Errorf("unknown ProjectChangeLog field %s", name)
 }
@@ -1384,6 +1441,13 @@ func (m *ProjectChangeLogMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetIsDeleted(v)
 		return nil
+	case projectchangelog.FieldAfterApplyUpdateScript:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAfterApplyUpdateScript(v)
+		return nil
 	}
 	return fmt.Errorf("unknown ProjectChangeLog field %s", name)
 }
@@ -1413,7 +1477,11 @@ func (m *ProjectChangeLogMutation) AddField(name string, value ent.Value) error 
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *ProjectChangeLogMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(projectchangelog.FieldAfterApplyUpdateScript) {
+		fields = append(fields, projectchangelog.FieldAfterApplyUpdateScript)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -1426,6 +1494,11 @@ func (m *ProjectChangeLogMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *ProjectChangeLogMutation) ClearField(name string) error {
+	switch name {
+	case projectchangelog.FieldAfterApplyUpdateScript:
+		m.ClearAfterApplyUpdateScript()
+		return nil
+	}
 	return fmt.Errorf("unknown ProjectChangeLog nullable field %s", name)
 }
 
@@ -1447,6 +1520,9 @@ func (m *ProjectChangeLogMutation) ResetField(name string) error {
 		return nil
 	case projectchangelog.FieldIsDeleted:
 		m.ResetIsDeleted()
+		return nil
+	case projectchangelog.FieldAfterApplyUpdateScript:
+		m.ResetAfterApplyUpdateScript()
 		return nil
 	}
 	return fmt.Errorf("unknown ProjectChangeLog field %s", name)

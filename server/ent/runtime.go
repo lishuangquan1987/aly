@@ -3,10 +3,10 @@
 package ent
 
 import (
+	"time"
 	"zap/server/ent/project"
 	"zap/server/ent/projectchangelog"
 	"zap/server/ent/schema"
-	"time"
 )
 
 // The init function reads all schema descriptors with runtime code

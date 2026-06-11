@@ -113,11 +113,21 @@ public class CliService
     public Task<CliOutput<object>?> ResetAllAsync(string projectPath)
         => RunAsync<object>("reset --all", projectPath);
 
-    public Task<CliOutput<object>?> PushAsync(string projectPath, string version, string message)
-        => RunAsync<object>($"push --version \"{version}\" --message \"{message}\"", projectPath, 120000);
+    public Task<CliOutput<object>?> PushAsync(string projectPath, string version, string message, string afterApplyUpdateScript = "")
+    {
+        var args = $"push --version \"{version}\" --message \"{message}\"";
+        if (!string.IsNullOrWhiteSpace(afterApplyUpdateScript))
+            args += $" --after-apply-update-script \"{afterApplyUpdateScript}\"";
+        return RunAsync<object>(args, projectPath, 120000);
+    }
 
-    public Task<CliOutput<object>?> PublishAsync(string projectPath, string version, string message)
-        => RunAsync<object>($"publish --version \"{version}\" --message \"{message}\"", projectPath, 120000);
+    public Task<CliOutput<object>?> PublishAsync(string projectPath, string version, string message, string afterApplyUpdateScript = "")
+    {
+        var args = $"publish --version \"{version}\" --message \"{message}\"";
+        if (!string.IsNullOrWhiteSpace(afterApplyUpdateScript))
+            args += $" --after-apply-update-script \"{afterApplyUpdateScript}\"";
+        return RunAsync<object>(args, projectPath, 120000);
+    }
 
     public Task<CliOutput<List<ChangeLog>>?> GetLogAsync(string projectPath, int limit = 20)
         => RunAsync<List<ChangeLog>>($"log --limit {limit}", projectPath);
@@ -145,5 +155,25 @@ public class CliService
         if (ignoreFolders is { Count: > 0 }) args += $" --ignore-folders \"{string.Join(",", ignoreFolders)}\"";
         if (ignoreFiles is { Count: > 0 }) args += $" --ignore-files \"{string.Join(",", ignoreFiles)}\"";
         return RunAsync<ProjectInfo>(args, string.Empty);
+    }
+
+    // ── Config management (via CLI, never directly touches .updator/) ──
+
+    public Task<CliOutput<object>?> ConfigSetAsync(string projectPath, string key, string value)
+    {
+        Log.Information("CLI config set: Key={Key}, Value={Value}, Path={Path}", key, value, projectPath);
+        return RunAsync<object>($"config set {key} \"{value}\"", projectPath);
+    }
+
+    public Task<CliOutput<object>?> ConfigSetArrayAddAsync(string projectPath, string key, string item)
+    {
+        Log.Information("CLI config set-array add: Key={Key}, Item={Item}, Path={Path}", key, item, projectPath);
+        return RunAsync<object>($"config set-array {key} --add \"{item}\"", projectPath);
+    }
+
+    public Task<CliOutput<object>?> ConfigSetArrayRemoveAsync(string projectPath, string key, string item)
+    {
+        Log.Information("CLI config set-array remove: Key={Key}, Item={Item}, Path={Path}", key, item, projectPath);
+        return RunAsync<object>($"config set-array {key} --remove \"{item}\"", projectPath);
     }
 }

@@ -1,0 +1,160 @@
+<Window x:Class="ZapPublish.Views.Dialogs.EditProjectDialog"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ZapPublish.ViewModels"
+        xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        xmlns:sys="using:System"
+        x:DataType="vm:EditProjectDialogViewModel"
+        x:Name="Root"
+        Title="编辑项目"
+        Width="520" Height="500"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource SemiColorBg0}"
+        CanResize="False">
+    <Grid RowDefinitions="*,Auto" Margin="24,20">
+
+        <!-- Loading overlay -->
+        <Border Grid.RowSpan="2" IsVisible="{Binding IsBusy}"
+                Background="#80000000" ZIndex="100">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
+                <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                             Foreground="{DynamicResource SemiColorPrimary}"/>
+                <TextBlock Text="{Binding StatusMessage}" FontSize="13" Foreground="White"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer>
+            <StackPanel Spacing="16">
+
+                <!-- GUI 配置 -->
+                <Border CornerRadius="6" Padding="14,12"
+                        Background="{DynamicResource SemiColorBg1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <StackPanel Spacing="10">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <materialIcons:MaterialIcon Kind="Monitor" Width="14" Height="14"
+                                                         Foreground="{DynamicResource SemiColorText1}"/>
+                            <TextBlock Text="GUI 配置" FontWeight="SemiBold" FontSize="13"
+                                       Foreground="{DynamicResource SemiColorText0}"/>
+                        </StackPanel>
+
+                        <StackPanel>
+                            <TextBlock Text="显示名称" FontSize="12" Margin="0,0,0,4"
+                                       Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding DisplayName}" FontSize="13"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- CLI 配置 (.updator/) -->
+                <Border CornerRadius="6" Padding="14,12"
+                        Background="{DynamicResource SemiColorBg1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <StackPanel Spacing="10">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <materialIcons:MaterialIcon Kind="Cog" Width="14" Height="14"
+                                                         Foreground="{DynamicResource SemiColorText1}"/>
+                            <TextBlock Text="项目配置 (.updator/) — 通过 CLI 修改" FontWeight="SemiBold"
+                                       FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
+                        </StackPanel>
+
+                        <!-- Server URL -->
+                        <StackPanel>
+                            <TextBlock Text="服务端地址" FontSize="12" Margin="0,0,0,4"
+                                       Foreground="{DynamicResource SemiColorText2}"/>
+                            <StackPanel IsVisible="{Binding !IsEditingUrl}">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="{Binding ServerUrl}" VerticalAlignment="Center"
+                                               FontSize="13" TextTrimming="CharacterEllipsis"/>
+                                    <Button Grid.Column="1" Content="编辑" Margin="8,0,0,0"
+                                            Height="28" Padding="10,0"
+                                            Click="EditUrlBtn_Click"/>
+                                </Grid>
+                            </StackPanel>
+                            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsEditingUrl}">
+                                <TextBox Text="{Binding EditUrl}" FontSize="13"/>
+                                <Button Grid.Column="1" Content="保存" Margin="8,0,0,0"
+                                        Height="28" Padding="10,0"
+                                        Command="{Binding SaveUrlCommand}" Classes="Primary"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Project Name (read-only) -->
+                        <StackPanel>
+                            <TextBlock Text="项目名称（服务端）" FontSize="12" Margin="0,0,0,4"
+                                       Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Text="{Binding ProjectName}" FontSize="13"
+                                       Foreground="{DynamicResource SemiColorText0}" FontWeight="Medium"/>
+                        </StackPanel>
+
+                        <!-- Ignore Folders -->
+                        <StackPanel>
+                            <TextBlock Text="忽略文件夹" FontSize="12" Margin="0,0,0,4"
+                                       Foreground="{DynamicResource SemiColorText2}"/>
+                            <ItemsControl ItemsSource="{Binding IgnoreFolders}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                                            <TextBlock Text="{Binding}" VerticalAlignment="Center"
+                                                       FontSize="12"/>
+                                            <Button Grid.Column="1" Content="✕" Width="24" Height="24"
+                                                    FontSize="10" Padding="0"
+                                                    Command="{Binding #Root.DataContext.RemoveFolderCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+                                <TextBox Text="{Binding NewFolderItem}" Watermark="添加文件夹..." FontSize="12"/>
+                                <Button Grid.Column="1" Content="添加" Margin="6,0,0,0"
+                                        Height="28" Padding="8,0"
+                                        Command="{Binding #Root.DataContext.AddFolderCommand}"
+                                        CommandParameter="{Binding #Root.DataContext.NewFolderItem}"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Ignore Files -->
+                        <StackPanel>
+                            <TextBlock Text="忽略文件" FontSize="12" Margin="0,0,0,4"
+                                       Foreground="{DynamicResource SemiColorText2}"/>
+                            <ItemsControl ItemsSource="{Binding IgnoreFiles}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                                            <TextBlock Text="{Binding}" VerticalAlignment="Center"
+                                                       FontSize="12"/>
+                                            <Button Grid.Column="1" Content="✕" Width="24" Height="24"
+                                                    FontSize="10" Padding="0"
+                                                    Command="{Binding #Root.DataContext.RemoveFileCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+                                <TextBox Text="{Binding NewFileItem}" Watermark="添加文件规则..." FontSize="12"/>
+                                <Button Grid.Column="1" Content="添加" Margin="6,0,0,0"
+                                        Height="28" Padding="8,0"
+                                        Command="{Binding #Root.DataContext.AddFileCommand}"
+                                        CommandParameter="{Binding #Root.DataContext.NewFileItem}"/>
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+            <TextBlock Text="{Binding StatusMessage}" FontSize="11"
+                       VerticalAlignment="Center" Margin="0,0,12,0"
+                       Foreground="{DynamicResource SemiColorText2}"/>
+            <Button Content="取消" Height="32" Padding="16,0"
+                    Click="CancelBtn_Click"/>
+            <Button Content="保存" Height="32" Padding="16,0"
+                    Classes="Primary" Command="{Binding SaveCommand}"/>
+        </StackPanel>
+    </Grid>
+</Window>

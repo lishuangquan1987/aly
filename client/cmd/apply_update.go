@@ -15,11 +15,10 @@ import (
 func ApplyUpdate() {
 	fs := flag.NewFlagSet("apply_update", flag.ExitOnError)
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
-	mustCloseFlag := fs.String("must-close-process-name", "", "process names to close (comma separated)")
 	closeTimeoutFlag := fs.Int("close-timeout", 30, "timeout seconds for process close")
 	fs.Parse(os.Args[2:])
 
-	fc, err := loadFullConfig("", "", *mainExePathFlag, *mustCloseFlag)
+	fc, err := loadFullConfig("", "", *mainExePathFlag)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
@@ -60,8 +59,8 @@ func ApplyUpdate() {
 					util.AppendToLog(".", "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
 				}
 				// Run post-update script and launch main exe
-				if fc.Client.PostUpdateScript != "" {
-					runScript(filepath.Join(fc.MainFolder, fc.Client.PostUpdateScript))
+				if versionInfo.AfterApplyUpdateScript != "" {
+					runScript(filepath.Join(fc.MainFolder, versionInfo.AfterApplyUpdateScript))
 				}
 				launchMainExe(fc.ExeCfg)
 				printOutput(true, "", nil)
@@ -83,8 +82,8 @@ func ApplyUpdate() {
 	}
 
 	// Close processes gracefully
-	if len(fc.Client.MustCloseProcessName) > 0 {
-		closeProcessesGracefully(fc.Client.MustCloseProcessName, time.Duration(*closeTimeoutFlag)*time.Second)
+	if len(fc.ExeCfg.MustCloseProcessName) > 0 {
+		closeProcessesGracefully(fc.ExeCfg.MustCloseProcessName, time.Duration(*closeTimeoutFlag)*time.Second)
 	}
 
 	// Atomic replacement
@@ -164,9 +163,9 @@ func ApplyUpdate() {
 		return
 	}
 
-	// Run post_update_script if configured
-	if fc.Client.PostUpdateScript != "" {
-		runScript(filepath.Join(fc.MainFolder, fc.Client.PostUpdateScript))
+	// Run post-update script if configured
+	if versionInfo.AfterApplyUpdateScript != "" {
+		runScript(filepath.Join(fc.MainFolder, versionInfo.AfterApplyUpdateScript))
 	}
 
 	// Launch main exe

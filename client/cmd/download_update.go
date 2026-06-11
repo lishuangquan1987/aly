@@ -22,7 +22,7 @@ func DownloadUpdate() {
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
 	fs.Parse(os.Args[2:])
 
-	fc, err := loadFullConfig(*urlFlag, *projectNameFlag, *mainExePathFlag, "")
+	fc, err := loadFullConfig(*urlFlag, *projectNameFlag, *mainExePathFlag)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
@@ -181,6 +181,7 @@ func DownloadUpdate() {
 		versionInfo.VersionPrevious = versionInfo.Version
 		versionInfo.Version = newVersion
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
+		versionInfo.AfterApplyUpdateScript = latestLog.AfterApplyUpdateScript
 		if err := config.WriteVersion(versionInfo); err != nil {
 			printProgressFail(0, 0, "version.json", 0, fmt.Sprintf("write version: %v", err))
 			return

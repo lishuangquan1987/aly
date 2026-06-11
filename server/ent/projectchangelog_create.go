@@ -3,12 +3,12 @@
 package ent
 
 import (
-	"zap/server/ent/project"
-	"zap/server/ent/projectchangelog"
 	"context"
 	"errors"
 	"fmt"
 	"time"
+	"zap/server/ent/project"
+	"zap/server/ent/projectchangelog"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -63,6 +63,20 @@ func (_c *ProjectChangeLogCreate) SetIsDeleted(v bool) *ProjectChangeLogCreate {
 func (_c *ProjectChangeLogCreate) SetNillableIsDeleted(v *bool) *ProjectChangeLogCreate {
 	if v != nil {
 		_c.SetIsDeleted(*v)
+	}
+	return _c
+}
+
+// SetAfterApplyUpdateScript sets the "after_apply_update_script" field.
+func (_c *ProjectChangeLogCreate) SetAfterApplyUpdateScript(v string) *ProjectChangeLogCreate {
+	_c.mutation.SetAfterApplyUpdateScript(v)
+	return _c
+}
+
+// SetNillableAfterApplyUpdateScript sets the "after_apply_update_script" field if the given value is not nil.
+func (_c *ProjectChangeLogCreate) SetNillableAfterApplyUpdateScript(v *string) *ProjectChangeLogCreate {
+	if v != nil {
+		_c.SetAfterApplyUpdateScript(*v)
 	}
 	return _c
 }
@@ -193,6 +207,10 @@ func (_c *ProjectChangeLogCreate) createSpec() (*ProjectChangeLog, *sqlgraph.Cre
 	if value, ok := _c.mutation.IsDeleted(); ok {
 		_spec.SetField(projectchangelog.FieldIsDeleted, field.TypeBool, value)
 		_node.IsDeleted = value
+	}
+	if value, ok := _c.mutation.AfterApplyUpdateScript(); ok {
+		_spec.SetField(projectchangelog.FieldAfterApplyUpdateScript, field.TypeString, value)
+		_node.AfterApplyUpdateScript = value
 	}
 	if nodes := _c.mutation.ProjectIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

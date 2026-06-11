@@ -79,4 +79,24 @@ public class DialogService : IDialogService
         Log.Information("打开创建项目对话框: ServerUrl={Url}", serverUrl);
         return await dialog.ShowDialog<ProjectInfo?>(owner);
     }
+
+    public async Task<ProjectConfig?> ShowEditProjectDialogAsync(ProjectConfig project)
+    {
+        var owner = GetOwner();
+        if (owner == null)
+        {
+            Log.Warning("无法打开编辑项目对话框: MainWindow 不可用");
+            return null;
+        }
+
+        var cli = _sp.GetRequiredService<CliService>();
+        var dialog = new EditProjectDialog();
+        var vm = new EditProjectDialogViewModel(cli, project);
+
+        dialog.DataContext = vm;
+        vm.RequestClose += result => dialog.Close(result);
+
+        Log.Information("打开编辑项目对话框: DisplayName={Name}", project.DisplayName);
+        return await dialog.ShowDialog<ProjectConfig?>(owner);
+    }
 }
