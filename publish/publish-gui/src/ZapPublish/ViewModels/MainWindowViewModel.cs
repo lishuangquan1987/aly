@@ -285,7 +285,7 @@ public partial class MainWindowViewModel : ObservableObject
                 AfterApplyUpdateScript = string.Empty;
                 StatusMessage = "发布成功，正在刷新...";
                 await RefetchDataAsync();
-                StatusMessage = $"发布成功";
+                StatusMessage = $"发布成功 ({StagedFiles.Count} 暂存, {UnstagedFiles.Count} 未暂存)";
             }
             else StatusMessage = $"发布失败: {r?.ErrorMsg}";
         }

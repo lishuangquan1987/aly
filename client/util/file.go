@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // FileMD5 calculates the MD5 hash of a file.
@@ -75,8 +76,9 @@ func CopyFile(src, dst string, overwrite bool) error {
 	if statErr != nil {
 		return fmt.Errorf("获取源文件信息失败 %s: %v", src, statErr)
 	}
-	if chmodErr := dstFile.Chmod(srcInfo.Mode()); chmodErr != nil {
-		return fmt.Errorf("设置目标文件权限失败 %s: %v", dst, chmodErr)
+	// Chmod is not supported on Windows; ignore on unsupported platforms
+	if chmodErr := dstFile.Chmod(srcInfo.Mode()); chmodErr != nil && runtime.GOOS != "windows" {
+		return fmt.Errorf("chmod failed %s: %v", dst, chmodErr)
 	}
 
 	return nil
