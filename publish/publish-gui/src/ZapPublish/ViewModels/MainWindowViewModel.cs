@@ -87,6 +87,7 @@ public partial class MainWindowViewModel : ObservableObject
         ResetSelectedCommand.NotifyCanExecuteChanged();
         PublishCommand.NotifyCanExecuteChanged();
         RemoveProjectCommand.NotifyCanExecuteChanged();
+        EditProjectCommand.NotifyCanExecuteChanged();
         if (value != null) _ = RefreshAsync();
     }
 

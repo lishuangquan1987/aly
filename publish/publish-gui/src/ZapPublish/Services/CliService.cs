@@ -117,7 +117,7 @@ public class CliService
     {
         var args = $"push --version \"{version}\" --message \"{message}\"";
         if (!string.IsNullOrWhiteSpace(afterApplyUpdateScript))
-            args += $" --after-apply-update-script \"{afterApplyUpdateScript}\"";
+            args += $" --after-apply-update-script \"{afterApplyUpdateScript.Replace("\"", "\\\"")}\"";
         return RunAsync<object>(args, projectPath, 120000);
     }
 
@@ -125,7 +125,7 @@ public class CliService
     {
         var args = $"publish --version \"{version}\" --message \"{message}\"";
         if (!string.IsNullOrWhiteSpace(afterApplyUpdateScript))
-            args += $" --after-apply-update-script \"{afterApplyUpdateScript}\"";
+            args += $" --after-apply-update-script \"{afterApplyUpdateScript.Replace("\"", "\\\"")}\"";
         return RunAsync<object>(args, projectPath, 120000);
     }
 
