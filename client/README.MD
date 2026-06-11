@@ -27,7 +27,7 @@ PackageFolder/
 │   └── ...
 ├── UpdateFolder/                   # 更新程序文件夹
 │   ├── zap-update.exe
-│   ├── client.json                 # 精简配置（仅 main_exe_relative_path）
+│   ├── client.json                 # 精简配置（main_exe_relative_path + must_close_process_name）
 │   ├── version.json                # 版本状态机
 │   └── logs/
 ├── ApplicationFolder_1.0.0/        # 主程序文件夹 1.0.0 版本（回滚用）
@@ -205,12 +205,14 @@ client/
 zap-update.exe check_update [--url <url>] [--project-name <name>]
 ```
 
-**调用接口**：`GET {url}/api/project/get_project_change_logs/{projectName}`
+**调用接口**：
+- `GET {url}/api/project/get_project_by_name/{projectName}`（获取项目信息）
+- `GET {url}/api/project/get_project_change_logs/{projectName}`（获取变更日志）
 
 **实现**：
 1. 加载配置 + 读取 version.json
 2. 如果 `version_status` 为 `downloaded` 或 `applying`：有未完成的更新 --> 直接返回 `has_update=true`（current_version = 上一版本，new_version = 已下载的版本）
-3. `FindProjectByName()` --> 获取 project.id 和 `project.force_update`
+3. `GetProjectByName()` --> 获取项目信息和 `project.force_update`（独立接口，不再拉全量列表后本地过滤）
 4. `GetProjectChangeLogs()` --> 获取最新日志版本号
 5. `compareVersion()` 逐段数值比较：服务端版本 > 本地版本 --> `has_update=true`
 
@@ -307,10 +309,11 @@ zap-update.exe download_update [--url <url>] [--project-name <name>] [--main-exe
    - `version_previouse` 设为当前 `version` 的值（记录本次更新前的版本号）
    - `version` 设为新版本号（从接口中获取）
    - `version_status` 设为 `downloaded`
+   - `after_apply_update_script` 从服务端变更日志同步
 
 **返回 data**：
 
-成功：`{"isSuccess": true, "errorMsg": "", "data": {"version": "1.0.1"}}`
+成功：`{"isSuccess": true, "errorMsg": "", "data": null}`
 
 失败：`{"isSuccess": false, "errorMsg": "app.exe 校验失败，已重试 3 次", "data": null}`
 

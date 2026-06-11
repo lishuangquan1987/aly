@@ -79,20 +79,38 @@ func GetAllProjects(serverURL string) ([]model.Project, error) {
 	return projects, nil
 }
 
-// FindProjectByName 根据项目名称查找项目
-func FindProjectByName(serverURL string, name string) (*model.Project, error) {
-	projects, err := GetAllProjects(serverURL)
+// GetProjectByName 根据项目名称获取项目（走独立接口，不再拉全量列表）
+func GetProjectByName(serverURL string, name string) (*model.Project, error) {
+	u := fmt.Sprintf("%s/api/project/get_project_by_name/%s",
+		strings.TrimRight(serverURL, "/"), urlEncodePath(name))
+	data, err := doGet(u)
 	if err != nil {
 		return nil, err
 	}
 
-	for i := range projects {
-		if projects[i].Name == name && !projects[i].IsDeleted {
-			return &projects[i], nil
-		}
+	resp, err := parseResponse(data)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, fmt.Errorf("未找到项目: %s", name)
+	var project model.Project
+	if err := json.Unmarshal(resp.Data, &project); err != nil {
+		return nil, fmt.Errorf("解析项目信息失败: %v", err)
+	}
+
+	return &project, nil
+}
+
+// FindProjectByName 根据项目名称查找项目（使用独立接口，不再拉全量列表）
+func FindProjectByName(serverURL string, name string) (*model.Project, error) {
+	project, err := GetProjectByName(serverURL, name)
+	if err != nil {
+		return nil, err
+	}
+	if project.IsDeleted {
+		return nil, fmt.Errorf("未找到项目: %s", name)
+	}
+	return project, nil
 }
 
 // GetProjectChangeLogs 获取项目的变更日志（按项目名称）
