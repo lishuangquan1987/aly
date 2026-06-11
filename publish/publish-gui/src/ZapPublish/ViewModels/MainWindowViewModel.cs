@@ -18,12 +18,22 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IDialogService _dialog;
 
     [ObservableProperty] private ObservableCollection<ProjectConfig> _projects = new();
+    [NotifyCanExecuteChangedFor(nameof(AddSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(EditProjectCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveProjectCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PublishCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ResetSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ResetAllCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddAllCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddSelectedCommand))]
     [ObservableProperty] private ProjectConfig? _selectedProject;
     [ObservableProperty] private ObservableCollection<FileItem> _unstagedFiles = new();
     [ObservableProperty] private ObservableCollection<FileItem> _stagedFiles = new();
     [ObservableProperty] private ObservableCollection<ChangeLog> _changeLogs = new();
     [ObservableProperty] private string _statusMessage = "就绪";
+    [NotifyCanExecuteChangedFor(nameof(PublishCommand))]
     [ObservableProperty] private string _newVersion = string.Empty;
+    [NotifyCanExecuteChangedFor(nameof(PublishCommand))]
     [ObservableProperty] private string _commitMessage = string.Empty;
     [ObservableProperty] private string _currentVersion = string.Empty;
     [ObservableProperty] private bool _isBusy;
@@ -33,6 +43,11 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private bool _isCliFound;
     [ObservableProperty] private string _cliPath = string.Empty;
     [ObservableProperty] private string _afterApplyUpdateScript = string.Empty;
+
+    [NotifyCanExecuteChangedFor(nameof(AddSelectedCommand))]
+    [ObservableProperty] private FileItem? _selectedUnStagedFile;
+    [NotifyCanExecuteChangedFor(nameof(ResetSelectedCommand))]
+    [ObservableProperty] private FileItem? _selectedStagedFile;
 
     public IAsyncRelayCommand RefreshCommand { get; }
     public IAsyncRelayCommand AddAllCommand { get; }
@@ -53,17 +68,26 @@ public partial class MainWindowViewModel : ObservableObject
         CliPath = _cli.CliPath;
         Log.Information("MainWindowViewModel 初始化: CliFound={Found}, CliPath={Path}", IsCliFound, CliPath);
 
-        RefreshCommand       = new AsyncRelayCommand(RefreshAsync,       () => SelectedProject != null && !IsBusy);
-        AddAllCommand        = new AsyncRelayCommand(AddAllAsync,        () => SelectedProject != null && !IsBusy);
-        ResetAllCommand      = new AsyncRelayCommand(ResetAllAsync,      () => SelectedProject != null && !IsBusy);
-        AddSelectedCommand   = new AsyncRelayCommand(AddSelectedAsync,   () => SelectedProject != null && !IsBusy);
-        ResetSelectedCommand = new AsyncRelayCommand(ResetSelectedAsync, () => SelectedProject != null && !IsBusy);
-        PublishCommand       = new AsyncRelayCommand(PublishAsync,       () => SelectedProject != null && !IsBusy && StagedFiles.Count > 0);
-        AddProjectCommand    = new AsyncRelayCommand(AddProjectAsync);
+        RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => SelectedProject != null);
+        AddAllCommand = new AsyncRelayCommand(AddAllAsync, () => this.UnstagedFiles.Count > 0);
+        ResetAllCommand = new AsyncRelayCommand(ResetAllAsync, () => SelectedProject != null&&this.UnstagedFiles.Count>0);
+        AddSelectedCommand = new AsyncRelayCommand(AddSelectedAsync, () => SelectedProject != null && this.SelectedUnStagedFile != null);
+        ResetSelectedCommand = new AsyncRelayCommand(ResetSelectedAsync, () => SelectedProject != null && this.SelectedStagedFile != null);
+        PublishCommand = new AsyncRelayCommand(PublishAsync, () => SelectedProject != null && StagedFiles.Count > 0 && !string.IsNullOrEmpty(this.NewVersion) && !string.IsNullOrEmpty(CommitMessage));
+        AddProjectCommand = new AsyncRelayCommand(AddProjectAsync);
         RemoveProjectCommand = new AsyncRelayCommand(RemoveProjectAsync, () => SelectedProject != null);
-        EditProjectCommand   = new AsyncRelayCommand(EditProjectAsync,   () => SelectedProject != null);
+        EditProjectCommand = new AsyncRelayCommand(EditProjectAsync, () => SelectedProject != null);
+
+        this.UnstagedFiles.CollectionChanged += (_, _) => this.AddAllCommand.NotifyCanExecuteChanged();
+        this.StagedFiles.CollectionChanged += (_, _) =>
+        {
+            this.ResetAllCommand.NotifyCanExecuteChanged();
+            this.PublishCommand?.NotifyCanExecuteChanged();
+        };
 
         LoadProjects();
+
+
     }
 
     partial void OnIsBusyChanged(bool value)

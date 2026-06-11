@@ -7,6 +7,7 @@
         xmlns:conv="using:ZapPublish.Converters"
         xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         x:DataType="vm:MainWindowViewModel"
+        xmlns:u="https://irihi.tech/ursa"
         Title="版本发布工具"
         Width="1280" Height="800"
         MinWidth="1000" MinHeight="560"
@@ -43,14 +44,7 @@
                             <TextBlock Text="移除" FontSize="13" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Command="{Binding EditProjectCommand}" Height="30" Padding="12,0"
-                            Classes="Tertiary">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <materialIcons:MaterialIcon Kind="Cog" Width="16" Height="16"
-                                                    FontSize="16"/>
-                            <TextBlock Text="项目设置" FontSize="13" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
+                    
                     <Separator Width="1" Height="16" Margin="6,0"
                                Background="{DynamicResource SemiColorBorder}"/>
                 </StackPanel>
@@ -121,24 +115,20 @@
             </Border>
 
             <!-- CENTER: File panels -->
-            <Grid Grid.Column="1" RowDefinitions="*,*,Auto">
+            <Grid Grid.Column="1" RowDefinitions="*,*,Auto" >
 
                 <!-- Loading overlay -->
                 <Border Grid.RowSpan="3" IsVisible="{Binding IsBusy}"
-                        Background="#40000000" ZIndex="100">
-                    <Border VerticalAlignment="Center" HorizontalAlignment="Center"
-                            Background="{DynamicResource SemiColorBg1}"
-                            CornerRadius="12" Padding="32,24"
-                            BoxShadow="0 8 32 #20000000"
-                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                        <StackPanel Spacing="16" HorizontalAlignment="Center">
-                            <ProgressBar IsIndeterminate="True" Width="240" Height="4"
-                                         Foreground="{DynamicResource SemiColorPrimary}"/>
+                        Background="Transparent" ZIndex="100" >
+                    <StackPanel Spacing="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                           <!-- <ProgressBar IsIndeterminate="True" Width="240" Height="4"
+                                         Foreground="{DynamicResource SemiColorPrimary}"/>-->
+
+                            <u:Loading IsLoading="True" Background="Transparent"></u:Loading>
                             <TextBlock Text="{Binding StatusMessage}" FontSize="14"
                                        FontWeight="Medium" HorizontalAlignment="Center"
                                        Foreground="{DynamicResource SemiColorText0}"/>
-                        </StackPanel>
-                    </Border>
+                    </StackPanel>
                 </Border>
 
                 <!-- ── Unstaged ── -->
@@ -148,7 +138,7 @@
                                 BorderBrush="{DynamicResource SemiColorBorder}"
                                 BorderThickness="0,0,0,1"
                                 Background="{DynamicResource SemiColorBg1}">
-                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Height="28">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Height="28">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <materialIcons:MaterialIcon Kind="FileDocumentOutline"
                                                             Width="16" Height="16" FontSize="16"
@@ -159,7 +149,15 @@
                                         <Run Text="{Binding UnstagedFiles.Count}" FontWeight="Bold"/>
                                     </TextBlock>
                                 </StackPanel>
-                                <Button Grid.Column="2" Command="{Binding RefreshCommand}"
+                                <Button Command="{Binding EditProjectCommand}" Grid.Column="2" Height="28" Padding="10,0" Margin="0,0,4,0"
+                                    Classes="Tertiary">
+                                    <StackPanel Orientation="Horizontal" Grid.Column="2" Spacing="6">
+                                        <materialIcons:MaterialIcon Kind="Cog" Width="16" Height="16"
+                                                                FontSize="16"/>
+                                        <TextBlock Text="项目设置" FontSize="13" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="3" Command="{Binding RefreshCommand}"
                                         Height="28" Padding="10,0" Margin="0,0,4,0">
                                     <StackPanel Orientation="Horizontal" Spacing="4">
                                         <materialIcons:MaterialIcon Kind="Refresh"
@@ -167,7 +165,7 @@
                                         <TextBlock Text="刷新" FontSize="12"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Grid.Column="3" Command="{Binding AddSelectedCommand}"
+                                <Button Grid.Column="4" Command="{Binding AddSelectedCommand}"
                                         Height="28" Padding="10,0" Margin="0,0,4,0">
                                     <StackPanel Orientation="Horizontal" Spacing="4">
                                         <materialIcons:MaterialIcon Kind="ArrowUpBold"
@@ -175,7 +173,7 @@
                                         <TextBlock Text="暂存" FontSize="12"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Grid.Column="4" Command="{Binding AddAllCommand}"
+                                <Button Grid.Column="5" Command="{Binding AddAllCommand}"
                                         Classes="Primary" Height="28" Padding="10,0">
                                     <StackPanel Orientation="Horizontal" Spacing="4">
                                         <materialIcons:MaterialIcon Kind="ArrowUpBoldCircleOutline"
@@ -187,7 +185,7 @@
                         </Border>
 
                         <ListBox Grid.Row="1" ItemsSource="{Binding UnstagedFiles}"
-                                 Background="Transparent" Margin="4,2">
+                                 Background="Transparent" Margin="4,2" SelectedItem="{Binding SelectedUnStagedFile,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}">
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="local:FileItem">
                                     <Border Padding="10,5" Margin="0,1" CornerRadius="4">
@@ -263,7 +261,7 @@
                         </Border>
 
                         <ListBox Grid.Row="1" ItemsSource="{Binding StagedFiles}"
-                                 Background="Transparent" Margin="4,2">
+                                 Background="Transparent" Margin="4,2" SelectedItem="{Binding SelectedStagedFile,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}">
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="local:FileItem">
                                     <Border Padding="10,5" Margin="0,1" CornerRadius="4">
@@ -346,6 +344,7 @@
 
                         <Button Command="{Binding PublishCommand}"
                                 Classes="Primary" Height="36"
+                                HorizontalAlignment="Stretch"
                                 FontSize="14" FontWeight="SemiBold">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <materialIcons:MaterialIcon Kind="Upload" Width="18" Height="18"

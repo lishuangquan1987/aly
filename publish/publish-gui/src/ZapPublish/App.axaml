@@ -4,9 +4,11 @@
              xmlns:semi="https://irihi.tech/semi"
              xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:converters="using:ZapPublish.Converters"
+             xmlns:u="https://irihi.tech/ursa/themes/semi"
              RequestedThemeVariant="Light">
     <Application.Styles>
         <semi:SemiTheme Locale="zh-CN" />
+        <u:SemiTheme Locale="zh-CN" />
         <materialIcons:MaterialIconStyles />
     </Application.Styles>
     <Application.Resources>
