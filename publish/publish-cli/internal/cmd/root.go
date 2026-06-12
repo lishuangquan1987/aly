@@ -15,7 +15,6 @@ import (
 var (
 	serverURL   string
 	projectName string
-	projectID   int
 	jsonOutput  bool
 	quiet       bool
 )
@@ -25,7 +24,6 @@ type RuntimeConfig struct {
 	Shared  config.SharedConfig
 	Publish config.PublishConfig
 	Path    string // 当前工作目录（由调用者通过 cd / WorkingDirectory 指定）
-	ID      int    // 项目 ID（--id CLI 参数）
 }
 
 // printOutput 按 isSuccess/errorMsg/data 格式输出 JSON 到 stdout
@@ -90,7 +88,6 @@ func resolveConfig() (RuntimeConfig, error) {
 		Shared:  shared,
 		Publish: publish,
 		Path:    cwd,
-		ID:      projectID,
 	}, nil
 }
 
@@ -139,7 +136,6 @@ var RootCmd = &cobra.Command{
 func init() {
 	RootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "服务器地址")
 	RootCmd.PersistentFlags().StringVar(&projectName, "project", "", "项目名称")
-	RootCmd.PersistentFlags().IntVar(&projectID, "id", 0, "项目ID（直传，跳过名称查找）")
 	RootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "JSON 格式输出")
 	RootCmd.PersistentFlags().BoolVar(&quiet, "quiet", false, "静默模式")
 }

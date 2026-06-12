@@ -188,7 +188,11 @@ func runConfigList(cmd *cobra.Command, args []string) {
 }
 
 func runConfigPath(cmd *cobra.Command, args []string) {
-	cfg, _ := resolveConfig()
+	cfg, err := resolveConfig()
+	if err != nil {
+		outputResult(false, err.Error(), nil)
+		return
+	}
 	fmt.Println(config.UpdatorDir(cfg.Path))
 }
 
@@ -208,39 +212,37 @@ func applyConfigSet(cfg *RuntimeConfig, key, value string) {
 }
 
 func applyArrayOp(cfg *RuntimeConfig, key, add, remove string, clear bool) {
+	var target *[]string
 	switch key {
 	case "ignore.folders":
-		if clear {
-			cfg.Shared.IgnoreFolders = nil
-		}
-		if add != "" {
-			cfg.Shared.IgnoreFolders = append(cfg.Shared.IgnoreFolders, add)
-		}
-		if remove != "" {
-			var filtered []string
-			for _, f := range cfg.Shared.IgnoreFolders {
-				if f != remove {
-					filtered = append(filtered, f)
-				}
-			}
-			cfg.Shared.IgnoreFolders = filtered
-		}
+		target = &cfg.Shared.IgnoreFolders
 	case "ignore.files":
-		if clear {
-			cfg.Shared.IgnoreFiles = nil
-		}
-		if add != "" {
-			cfg.Shared.IgnoreFiles = append(cfg.Shared.IgnoreFiles, add)
-		}
-		if remove != "" {
-			var filtered []string
-			for _, f := range cfg.Shared.IgnoreFiles {
-				if f != remove {
-					filtered = append(filtered, f)
-				}
+		target = &cfg.Shared.IgnoreFiles
+	default:
+		return
+	}
+	applyStringSliceOp(target, add, remove, clear)
+}
+
+// applyStringSliceOp 对字符串切片执行 clear / add / remove 操作
+func applyStringSliceOp(target *[]string, add, remove string, clear bool) {
+	if target == nil {
+		return
+	}
+	if clear {
+		*target = nil
+	}
+	if add != "" {
+		*target = append(*target, add)
+	}
+	if remove != "" {
+		var filtered []string
+		for _, f := range *target {
+			if f != remove {
+				filtered = append(filtered, f)
 			}
-			cfg.Shared.IgnoreFiles = filtered
 		}
+		*target = filtered
 	}
 }
 

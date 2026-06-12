@@ -24,7 +24,6 @@ var (
 	pushAllVersion  string
 	pushAllMessage  []string
 	pushAllDryRun   bool
-	pushAllForce    bool
 	pushAllScript   string
 
 	pubVersion      string
@@ -83,7 +82,7 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 		if jsonOutput {
 			printOutput(false, "至少需要一条 --message", nil)
 		} else {
-			fmt.Fprintln(os.Stderr, "Error: 至少要一--message")
+			fmt.Fprintln(os.Stderr, "Error: 至少要一条 --message")
 		}
 		return false
 	}
@@ -112,7 +111,7 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 		for _, p := range filesToUpload {
 			printHumanLn("  %s", p)
 		}
-		printHumanLn("[DRY RUN] 将创建版 %s (%d 条日", version, len(messages))
+		printHumanLn("[DRY RUN] 将创建版本 %s (%d 条日志)", version, len(messages))
 		printHumanLn("[DRY RUN] 未实际推送任何内容。")
 		return false
 	}
@@ -183,7 +182,9 @@ func runPush(cmd *cobra.Command, args []string) {
 	}
 
 	if pushFiles(cfg, pushVersion, pushMessage, files, pushDryRun, pushForce, pushScript) {
-		staging.Clear(cfg.Path)
+		if err := staging.Clear(cfg.Path); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: 清理暂存区失败: %v (推送已成功)\n", err)
+		}
 	}
 }
 
@@ -216,7 +217,7 @@ func runPushAll(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	pushFiles(cfg, pushAllVersion, pushAllMessage, paths, pushAllDryRun, pushAllForce, pushAllScript)
+	pushFiles(cfg, pushAllVersion, pushAllMessage, paths, pushAllDryRun, false, pushAllScript)
 }
 
 func runPublish(cmd *cobra.Command, args []string) {
@@ -254,6 +255,8 @@ func runPublish(cmd *cobra.Command, args []string) {
 		return
 	}
 	if pushFiles(cfg, pubVersion, pubMessage, paths, pubDryRun, false, pubScript) {
-		staging.Clear(cfg.Path)
+		if err := staging.Clear(cfg.Path); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: 清理暂存区失败: %v (发布已成功)\n", err)
+		}
 	}
 }

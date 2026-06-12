@@ -28,11 +28,6 @@ func KillProcessesAndWait(names []string, timeout time.Duration) error {
 	return nil
 }
 
-// IsProcessRunning 检查指定名称的进程是否在运行（Unix 兼容实现）
-func IsProcessRunning(name string) (bool, error) {
-	return false, nil
-}
-
 // SendCloseMessageToProcess 向指定 PID 的所有可见顶层窗口发送 WM_CLOSE 消息（Unix 无窗口系统兼容）
 func SendCloseMessageToProcess(pid uint32) {
 	// Unix 系统无窗口消息机制，跳过

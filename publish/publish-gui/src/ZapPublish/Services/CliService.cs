@@ -105,7 +105,7 @@ public class CliService
         => RunAsync<StatusData>("status", projectPath);
 
     public Task<CliOutput<object>?> AddFilesAsync(string projectPath, List<string> files)
-        => RunAsync<object>($"add {string.Join(" ", files.Select(f => $"\"{f}\""))}", projectPath);
+        => RunAsync<object>($"add {string.Join(" ", files.Select(f => $"\"{f.Replace("\"", "\\\"")}\""))}", projectPath);
 
     public Task<CliOutput<object>?> AddAllAsync(string projectPath)
         => RunAsync<object>("add --all", projectPath);

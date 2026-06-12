@@ -116,8 +116,20 @@ func runDiff(cmd *cobra.Command, args []string) {
 		outputResult(false, err.Error(), nil)
 		return
 	}
-	// 合并暂存区文件
+	// 合并暂存区文件（与 runStatus 一致：从 unstaged 移除已暂存的）
 	sd.Staged = staging.LoadAsStatusItems(cfg.Path)
+	stagedPaths := make(map[string]bool, len(sd.Staged))
+	for _, s := range sd.Staged {
+		stagedPaths[s.RelativePath] = true
+	}
+	var filteredUnstaged []models.FileStatusItem
+	for _, u := range sd.Unstaged {
+		if !stagedPaths[u.RelativePath] {
+			filteredUnstaged = append(filteredUnstaged, u)
+		}
+	}
+	sd.Unstaged = filteredUnstaged
+
 	allFiles := make([]models.FileStatusItem, 0, len(sd.Staged)+len(sd.Unstaged)+len(sd.Unchanged))
 	allFiles = append(allFiles, sd.Staged...)
 	allFiles = append(allFiles, sd.Unstaged...)

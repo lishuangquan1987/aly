@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/utils-go/ngo/io/file"
 	"github.com/utils-go/ngo/io/fileinfo"
 	"github.com/utils-go/ngo/io/path"
 )
@@ -25,7 +24,7 @@ func GetAllFilesByProjectName(ctx *gin.Context) {
 		return
 	}
 
-	projectResult := service.GetProjectByName(projectNameDto.ProjectName)
+	projectResult := service.GetProjectByName(ctx.Request.Context(), projectNameDto.ProjectName)
 	if !projectResult.IsSuccess {
 		ctx.JSON(200, projectResult)
 		return
@@ -48,7 +47,10 @@ func GetAllFilesByProjectName(ctx *gin.Context) {
 			return nil
 		}
 		// 获取相对路径（正斜杠统一）
-		relPath, _ := filepath.Rel(workDir, absPath)
+		relPath, err := filepath.Rel(workDir, absPath)
+		if err != nil {
+			return err
+		}
 		relPath = strings.ReplaceAll(relPath, "\\", "/")
 
 		// 应用忽略文件夹规则
@@ -107,22 +109,22 @@ func DownloadFile(ctx *gin.Context) {
 		return
 	}
 
-	if !file.Exists(cleanPath) {
-		ctx.AbortWithStatus(http.StatusNotFound)
-		return
-	}
-
 	// 使用 http.ServeContent 支持 Range 请求（断点续传）
+	// 不预先检查文件是否存在，直接打开，避免 TOCTOU 竞态
 	fileReader, err := os.Open(cleanPath)
 	if err != nil {
-		ctx.AbortWithStatus(http.StatusNotFound)
+		if os.IsNotExist(err) {
+			ctx.AbortWithStatus(http.StatusNotFound)
+		} else {
+			ctx.AbortWithStatus(http.StatusInternalServerError)
+		}
 		return
 	}
 	defer fileReader.Close()
 
 	fileInfo, err := fileReader.Stat()
 	if err != nil {
-		ctx.AbortWithStatus(http.StatusNotFound)
+		ctx.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 

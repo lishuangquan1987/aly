@@ -1,12 +1,21 @@
+using Newtonsoft.Json;
+
 namespace ZapPublish.Models.Local;
 
 /// <summary>
-/// .updator/shared.json 的配置文件结构（当前仅读取 server_url 和 project_name，其余字段为完整性保留）
+/// .updator/shared.json 的配置文件结构
 /// </summary>
 public class SharedConfig
 {
-    public string server_url { get; set; } = string.Empty;
-    public string project_name { get; set; } = string.Empty;
-    public List<string> ignore_folders { get; set; } = new();
-    public List<string> ignore_files { get; set; } = new();
+    [JsonProperty("server_url")]
+    public string ServerUrl { get; set; } = string.Empty;
+
+    [JsonProperty("project_name")]
+    public string ProjectName { get; set; } = string.Empty;
+
+    [JsonProperty("ignore_folders")]
+    public List<string> IgnoreFolders { get; set; } = new();
+
+    [JsonProperty("ignore_files")]
+    public List<string> IgnoreFiles { get; set; } = new();
 }

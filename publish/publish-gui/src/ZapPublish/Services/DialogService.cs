@@ -36,7 +36,6 @@ public class DialogService : IDialogService
             return null;
         }
 
-        var cli = _sp.GetRequiredService<CliService>();
         var dialog = new AddProjectDialog();
 
         // browseFolderAsync 捕获 dialog 实例以访问 StorageProvider
@@ -47,7 +46,8 @@ public class DialogService : IDialogService
             return result.Count > 0 ? result[0].Path.LocalPath : null;
         });
 
-        var vm = new AddProjectDialogViewModel(cli, browseFolderAsync);
+        var vm = _sp.GetRequiredService<AddProjectDialogViewModel>();
+        vm.BrowseFolderAsync = browseFolderAsync;
 
         // 注入子对话框委托
         vm.ShowCreateProjectDialogAsync = async (serverUrl) =>
@@ -69,9 +69,9 @@ public class DialogService : IDialogService
             return null;
         }
 
-        var cli = _sp.GetRequiredService<CliService>();
         var dialog = new CreateProjectDialog();
-        var vm = new CreateProjectDialogViewModel(cli) { ServerUrl = serverUrl };
+        var vm = _sp.GetRequiredService<CreateProjectDialogViewModel>();
+        vm.ServerUrl = serverUrl;
 
         dialog.DataContext = vm;
         vm.RequestClose += result => dialog.Close(result);
@@ -89,9 +89,9 @@ public class DialogService : IDialogService
             return null;
         }
 
-        var cli = _sp.GetRequiredService<CliService>();
         var dialog = new EditProjectDialog();
-        var vm = new EditProjectDialogViewModel(cli, project);
+        var vm = _sp.GetRequiredService<EditProjectDialogViewModel>();
+        vm.LoadProject(project);
 
         dialog.DataContext = vm;
         vm.RequestClose += result => dialog.Close(result);

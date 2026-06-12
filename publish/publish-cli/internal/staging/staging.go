@@ -64,9 +64,12 @@ func AddWithStatus(projectPath string, relativePaths []string, statusMap map[str
 		// Staging file corrupted: backup and continue
 		savePath := stagingPath(projectPath)
 		backupPath := savePath + ".corrupted"
-		os.Rename(savePath, backupPath)
+		if renameErr := os.Rename(savePath, backupPath); renameErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to backup corrupted staging: %v\n", renameErr)
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: staged file corrupted, backed up to %s\n", backupPath)
+		}
 		current = nil
-		fmt.Fprintf(os.Stderr, "Warning: staged file corrupted, backed up to %s\n", backupPath)
 	}
 	existingMap := make(map[string]bool)
 	for _, f := range current {

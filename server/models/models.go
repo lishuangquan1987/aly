@@ -16,7 +16,7 @@ type FileInfo struct {
 type CommonResponse struct {
 	IsSuccess bool        `json:"isSuccess"`
 	ErrorMsg  string      `json:"errorMsg"`
-	Data      interface{} `json:"data"`
+	Data      any         `json:"data"`
 }
 
 func OK() CommonResponse {

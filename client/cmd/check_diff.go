@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	apiclient "zap/client/client"
 	"zap/client/config"
@@ -81,18 +82,33 @@ func CheckDiff() {
 			if info, err := os.Stat(localFullPath); err == nil {
 				localSize = info.Size()
 			}
-			localSHA256, _ := util.FileSHA256(localFullPath)
 			diffFiles = append(diffFiles, model.DiffFileItem{
 				Path:         relPath,
 				LocalMD5:     localMD5,
 				LocalSize:    localSize,
-				LocalSHA256:  localSHA256,
+				LocalSHA256:  "", // filled in parallel below
 				ServerMD5:    serverFiles[i].MD5,
 				ServerSize:   serverFiles[i].FileSize,
 				ServerSHA256: serverFiles[i].SHA256,
 			})
 		}
 	}
+
+	// Compute SHA256 in parallel for files that differ by MD5
+	var shaWg sync.WaitGroup
+	for i := range diffFiles {
+		if diffFiles[i].LocalMD5 == "" {
+			continue // file doesn't exist locally, no SHA256 needed
+		}
+		shaWg.Add(1)
+		go func(idx int) {
+			defer shaWg.Done()
+			localFullPath := filepath.Join(fc.MainFolder, filepathFromSlash(diffFiles[idx].Path))
+			sha256, _ := util.FileSHA256(localFullPath)
+			diffFiles[idx].LocalSHA256 = sha256
+		}(i)
+	}
+	shaWg.Wait()
 
 	printOutput(true, "", &model.CheckDiffData{
 		NewVersion: newVersion,

@@ -173,34 +173,63 @@ func (c *Client) GetAllFiles(projectName string) ([]models.FileInfo, error) {
 	return files, nil
 }
 
-// UploadFile 上传单个文件（multipart）
+// UploadFile 上传单个文件（multipart，流式传输避免大文件 OOM）
 func (c *Client) UploadFile(localPath, projectName, relativeFileName string) error {
 	file, err := os.Open(localPath)
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer file.Close()
 
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
+	writeErrCh := make(chan error, 1)
 
-	// file 字段
-	part, err := writer.CreateFormFile("file", filepath.Base(localPath))
-	if err != nil {
-		return err
+	// 在 goroutine 中写入 multipart 数据，通过 Pipe 流式传输
+	// file.Close 在 goroutine 内完成，避免主 goroutine 提前关闭文件
+	go func() {
+		defer file.Close()
+		var writeErr error
+		defer func() {
+			// panic recovery：确保 goroutine panic 不会导致 Pipe 静默成功
+			if r := recover(); r != nil {
+				writeErr = fmt.Errorf("panic in multipart writer: %v", r)
+			}
+			// 确保 writer 关闭以结束 multipart 边界
+			if closeErr := writer.Close(); closeErr != nil && writeErr == nil {
+				writeErr = closeErr
+			}
+			pw.CloseWithError(writeErr)
+			writeErrCh <- writeErr
+		}()
+
+		// file 字段
+		part, err := writer.CreateFormFile("file", filepath.Base(localPath))
+		if err != nil {
+			writeErr = fmt.Errorf("create form file: %w", err)
+			return
+		}
+		if _, err := io.Copy(part, file); err != nil {
+			writeErr = fmt.Errorf("copy file to part: %w", err)
+			return
+		}
+
+		// projectName 字段
+		if err := writer.WriteField("projectName", projectName); err != nil {
+			writeErr = fmt.Errorf("write projectName field: %w", err)
+			return
+		}
+		// relativeFileName 字段
+		if err := writer.WriteField("relativeFileName", relativeFileName); err != nil {
+			writeErr = fmt.Errorf("write relativeFileName field: %w", err)
+			return
+		}
+	}()
+
+	resp, err := c.hc.Post(c.ServerURL+"/api/file/upload_file", writer.FormDataContentType(), pr)
+	writeErr := <-writeErrCh
+	if writeErr != nil {
+		return fmt.Errorf("multipart write: %w", writeErr)
 	}
-	if _, err := io.Copy(part, file); err != nil {
-		return err
-	}
-
-	// projectName 字段
-	writer.WriteField("projectName", projectName)
-	// relativeFileName 字段
-	writer.WriteField("relativeFileName", relativeFileName)
-
-	writer.Close()
-
-	resp, err := c.hc.Post(c.ServerURL+"/api/file/upload_file", writer.FormDataContentType(), body)
 	if err != nil {
 		return fmt.Errorf("upload file: %w", err)
 	}

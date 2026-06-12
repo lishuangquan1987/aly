@@ -11,6 +11,15 @@ import (
 	"zap/client/util"
 )
 
+// logDir 返回日志目录，ExeDir 失败时 fallback 到当前目录
+func logDir() string {
+	dir, err := config.ExeDir()
+	if err != nil || dir == "" {
+		return "."
+	}
+	return dir
+}
+
 // ApplyUpdate applies a downloaded update with atomic replacement
 func ApplyUpdate() {
 	fs := flag.NewFlagSet("apply_update", flag.ExitOnError)
@@ -56,7 +65,7 @@ func ApplyUpdate() {
 				// Update status to applied
 				versionInfo.VersionStatus = config.VersionStatusApplied
 				if wErr := config.WriteVersion(versionInfo); wErr != nil {
-					util.AppendToLog(".", "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
+					util.AppendToLog(logDir(), "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
 				}
 				// Run post-update script and launch main exe
 				if versionInfo.AfterApplyUpdateScript != "" {
@@ -103,7 +112,7 @@ func ApplyUpdate() {
 	if err := util.CopyDirWithExclude(fc.MainFolder, versionDir, shouldSkipFile, shouldSkipFolder); err != nil {
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
-			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after copy fail: write version failed: %v", wErr))
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback after copy fail: write version failed: %v", wErr))
 		}
 		printOutput(false, fmt.Sprintf("copy to version dir: %v", err), nil)
 		return
@@ -114,27 +123,37 @@ func ApplyUpdate() {
 	if err != nil {
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
-			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after prevVersionDir err: write version failed: %v", wErr))
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback after prevVersionDir err: write version failed: %v", wErr))
 		}
 		printOutput(false, err.Error(), nil)
 		return
 	}
 	// Temporarily move old backup aside instead of deleting upfront (safer for power failure)
 	oldBackupTemp := prevVersionDir + ".old"
-	os.RemoveAll(oldBackupTemp)
+	if err := os.RemoveAll(oldBackupTemp); err != nil {
+		exeDir := logDir()
+		util.AppendToLog(exeDir, "update.log", fmt.Sprintf("remove old backup temp: %v", err))
+	}
 	if _, statErr := os.Stat(prevVersionDir); statErr == nil {
-		os.Rename(prevVersionDir, oldBackupTemp)
+		if err := os.Rename(prevVersionDir, oldBackupTemp); err != nil {
+			exeDir := logDir()
+			util.AppendToLog(exeDir, "update.log", fmt.Sprintf("backup rename to temp: %v", err))
+			// Continue anyway — the main rename will fail and trigger rollback
+		}
 	}
 
 	// Rename mainFolder -> prevVersionDir (backup)
 	if err := os.Rename(fc.MainFolder, prevVersionDir); err != nil {
 		// Restore old backup if it existed
 		if _, statErr := os.Stat(oldBackupTemp); statErr == nil {
-			os.Rename(oldBackupTemp, prevVersionDir)
+			if rerr := os.Rename(oldBackupTemp, prevVersionDir); rerr != nil {
+				exeDir := logDir()
+				util.AppendToLog(exeDir, "update.log", fmt.Sprintf("rollback restore backup: %v", rerr))
+			}
 		}
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
-			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after backup rename fail: write version failed: %v", wErr))
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback after backup rename fail: write version failed: %v", wErr))
 		}
 		printOutput(false, fmt.Sprintf("backup rename failed: %v", err), nil)
 		return
@@ -143,18 +162,27 @@ func ApplyUpdate() {
 	// Rename versionDir -> mainFolder
 	if err := os.Rename(versionDir, fc.MainFolder); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
-		os.Rename(prevVersionDir, fc.MainFolder)
-		os.Rename(oldBackupTemp, prevVersionDir)
+		if rerr := os.Rename(prevVersionDir, fc.MainFolder); rerr != nil {
+			exeDir := logDir()
+			util.AppendToLog(exeDir, "update.log", fmt.Sprintf("rollback main rename: %v", rerr))
+		}
+		if rerr := os.Rename(oldBackupTemp, prevVersionDir); rerr != nil {
+			exeDir := logDir()
+			util.AppendToLog(exeDir, "update.log", fmt.Sprintf("rollback backup restore: %v", rerr))
+		}
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
-			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after apply rename fail: write version failed: %v", wErr))
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback after apply rename fail: write version failed: %v", wErr))
 		}
 		printOutput(false, fmt.Sprintf("apply rename failed: %v", err), nil)
 		return
 	}
 
 	// Clean up old backup AFTER successful rename
-	os.RemoveAll(oldBackupTemp)
+	if err := os.RemoveAll(oldBackupTemp); err != nil {
+		exeDir := logDir()
+		util.AppendToLog(exeDir, "update.log", fmt.Sprintf("cleanup old backup: %v", err))
+	}
 
 	// Update version.json
 	versionInfo.VersionStatus = config.VersionStatusApplied

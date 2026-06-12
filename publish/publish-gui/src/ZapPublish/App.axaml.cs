@@ -42,6 +42,9 @@ public partial class App : Application
         svc.AddSingleton<ConfigService>();
         svc.AddSingleton<IDialogService, DialogService>();
         svc.AddTransient<MainWindowViewModel>();
+        svc.AddTransient<AddProjectDialogViewModel>();
+        svc.AddTransient<CreateProjectDialogViewModel>();
+        svc.AddTransient<EditProjectDialogViewModel>();
         Services = svc.BuildServiceProvider();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)

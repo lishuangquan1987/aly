@@ -401,14 +401,31 @@ func (s *MockServer) downloadFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "path required", http.StatusNotFound)
 		return
 	}
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+
+	// Prevent path traversal: ensure file is within dataDir
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+	absDataDir, err := filepath.Abs(s.dataDir)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	if !strings.HasPrefix(absPath, absDataDir + string(filepath.Separator)) && absPath != absDataDir {
+		http.Error(w, "access denied", http.StatusForbidden)
+		return
+	}
+
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
 		http.Error(w, "file not found", http.StatusNotFound)
 		return
 	}
-	fileName := filepath.Base(filePath)
+	fileName := filepath.Base(absPath)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
-	http.ServeFile(w, r, filePath)
+	http.ServeFile(w, r, absPath)
 }
 
 // ---------- Helpers ----------

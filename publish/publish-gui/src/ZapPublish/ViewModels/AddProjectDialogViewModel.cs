@@ -15,7 +15,7 @@ namespace ZapPublish.ViewModels;
 public partial class AddProjectDialogViewModel : ObservableObject
 {
     private readonly CliService _cli;
-    private readonly Func<Task<string?>> _browseFolderAsync;
+    internal Func<Task<string?>>? BrowseFolderAsync { get; set; }
 
     private string _serverProjectName = string.Empty;
     private bool _isInit;
@@ -40,10 +40,9 @@ public partial class AddProjectDialogViewModel : ObservableObject
     public IRelayCommand CancelCommand { get; }
     public IAsyncRelayCommand CreateOnServerCommand { get; }
 
-    public AddProjectDialogViewModel(CliService cli, Func<Task<string?>> browseFolderAsync)
+    public AddProjectDialogViewModel(CliService cli)
     {
         _cli = cli;
-        _browseFolderAsync = browseFolderAsync;
 
         FetchProjectsCommand = new AsyncRelayCommand(FetchProjectsAsync, () => !IsFetching);
         BrowseCommand = new AsyncRelayCommand(BrowseAsync);
@@ -67,7 +66,7 @@ public partial class AddProjectDialogViewModel : ObservableObject
         Log.Information("选择了服务端项目: Name={Name}, Id={Id}", value.Name, value.Id);
     }
 
-    partial void OnProjectPathChanged(string value)
+    async partial void OnProjectPathChanged(string value)
     {
         if (string.IsNullOrWhiteSpace(value) || !Directory.Exists(value))
         {
@@ -83,16 +82,17 @@ public partial class AddProjectDialogViewModel : ObservableObject
             _isInit = true;
             try
             {
-                var json = File.ReadAllText(sharedPath);
+                // 使用重试机制异步读取，防止 CLI 进程锁定文件（不阻塞 UI 线程）
+                var json = await ReadFileWithRetryAsync(sharedPath, maxRetries: 3);
                 var shared = JsonConvert.DeserializeObject<SharedConfig>(json);
                 if (shared != null)
                 {
-                    _serverProjectName = shared.project_name ?? "";
+                    _serverProjectName = shared.ProjectName ?? "";
                     // 如果用户还没填显示名称，自动用 project_name 填充
                     if (string.IsNullOrWhiteSpace(DisplayName))
-                        DisplayName = shared.project_name ?? "";
-                    if (!string.IsNullOrWhiteSpace(shared.server_url))
-                        ServerUrl = shared.server_url;
+                        DisplayName = shared.ProjectName ?? "";
+                    if (!string.IsNullOrWhiteSpace(shared.ServerUrl))
+                        ServerUrl = shared.ServerUrl;
                 }
             }
             catch (Exception ex)
@@ -113,7 +113,13 @@ public partial class AddProjectDialogViewModel : ObservableObject
 
     private async Task BrowseAsync()
     {
-        var path = await _browseFolderAsync();
+        var browseFolderAsync = BrowseFolderAsync;
+        if (browseFolderAsync == null)
+        {
+            Log.Warning("BrowseFolderAsync delegate is not set; browse action unavailable");
+            return;
+        }
+        var path = await browseFolderAsync();
         if (!string.IsNullOrWhiteSpace(path))
             ProjectPath = path;
     }
@@ -262,5 +268,24 @@ public partial class AddProjectDialogViewModel : ObservableObject
             cfg.DisplayName, cfg.ProjectPath, _isInit);
 
         RequestClose?.Invoke(cfg);
+    }
+
+    /// <summary>
+    /// 读取文件内容，如被锁定则自动重试（异步，不阻塞 UI 线程）
+    /// </summary>
+    private static async Task<string> ReadFileWithRetryAsync(string path, int maxRetries = 3, int delayMs = 50)
+    {
+        for (int i = 0; i < maxRetries; i++)
+        {
+            try
+            {
+                return File.ReadAllText(path);
+            }
+            catch (IOException) when (i < maxRetries - 1)
+            {
+                await Task.Delay(delayMs);
+            }
+        }
+        return File.ReadAllText(path);
     }
 }

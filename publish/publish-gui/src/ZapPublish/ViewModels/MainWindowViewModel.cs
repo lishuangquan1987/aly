@@ -17,6 +17,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly CliService _cli;
     private readonly ConfigService _cfg;
     private readonly IDialogService _dialog;
+    private CancellationTokenSource? _refreshCts;
 
     public IToastService? ToastService { get; set; }
 
@@ -34,7 +35,6 @@ public partial class MainWindowViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ResetSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(ResetAllCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddAllCommand))]
-    [NotifyCanExecuteChangedFor(nameof(AddSelectedCommand))]
     [ObservableProperty] private ProjectConfig? _selectedProject;
     [ObservableProperty] private ObservableCollection<FileItem> _unstagedFiles = new();
     [ObservableProperty] private ObservableCollection<FileItem> _stagedFiles = new();
@@ -79,7 +79,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => SelectedProject != null);
         AddAllCommand = new AsyncRelayCommand(AddAllAsync, () => this.UnstagedFiles.Count > 0);
-        ResetAllCommand = new AsyncRelayCommand(ResetAllAsync, () => SelectedProject != null&&this.UnstagedFiles.Count>0);
+        ResetAllCommand = new AsyncRelayCommand(ResetAllAsync, () => SelectedProject != null && this.StagedFiles.Count > 0);
         AddSelectedCommand = new AsyncRelayCommand(AddSelectedAsync, () => SelectedProject != null && this.SelectedUnStagedFile != null);
         ResetSelectedCommand = new AsyncRelayCommand(ResetSelectedAsync, () => SelectedProject != null && this.SelectedStagedFile != null);
         PublishCommand = new AsyncRelayCommand(PublishAsync, () => SelectedProject != null && StagedFiles.Count > 0 && !string.IsNullOrEmpty(this.NewVersion) && !string.IsNullOrEmpty(CommitMessage));
@@ -121,7 +121,11 @@ public partial class MainWindowViewModel : ObservableObject
         PublishCommand.NotifyCanExecuteChanged();
         RemoveProjectCommand.NotifyCanExecuteChanged();
         EditProjectCommand.NotifyCanExecuteChanged();
-        if (value != null) _ = RefreshAsync();
+        if (value != null) _ = RefreshAsync().ContinueWith(t =>
+        {
+            if (t.IsFaulted && t.Exception != null)
+                Log.Error(t.Exception, "RefreshAsync 未捕获异常");
+        }, TaskContinuationOptions.OnlyOnFaulted);
     }
 
     partial void OnStagedFilesChanged(ObservableCollection<FileItem> value)
@@ -165,25 +169,21 @@ public partial class MainWindowViewModel : ObservableObject
             }
 
             var d = result.Data;
-            var unstaged = new ObservableCollection<FileItem>();
-            var staged = new ObservableCollection<FileItem>();
-            foreach (var f in d.Unstaged ?? []) unstaged.Add(FileItem.FromCliItem(f));
-            foreach (var f in d.Staged ?? []) staged.Add(FileItem.FromCliItem(f));
-
-            UnstagedFiles = unstaged;
-            StagedFiles = staged;
+            UnstagedFiles.Clear();
+            StagedFiles.Clear();
+            foreach (var f in d.Unstaged ?? []) UnstagedFiles.Add(FileItem.FromCliItem(f));
+            foreach (var f in d.Staged ?? []) StagedFiles.Add(FileItem.FromCliItem(f));
 
             var logResult = await _cli.GetLogAsync(projectPath);
-            var logs = new ObservableCollection<ChangeLog>();
+            ChangeLogs.Clear();
             if (logResult?.Data != null)
                 foreach (var l in logResult.Data)
-                    logs.Add(l);
+                    ChangeLogs.Add(l);
 
-            ChangeLogs = logs;
-            if (logs.Count > 0)
-                CurrentVersion = logs[0].Version ?? string.Empty;
+            if (ChangeLogs.Count > 0)
+                CurrentVersion = ChangeLogs[0].Version ?? string.Empty;
 
-            StatusMessage = $"未暂存 {unstaged.Count}, 已暂存 {staged.Count}";
+            StatusMessage = $"未暂存 {UnstagedFiles.Count}, 已暂存 {StagedFiles.Count}";
             Log.Information("刷新完成: {Status}", StatusMessage);
         }
         catch (Exception ex)
@@ -197,8 +197,18 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task RefreshAsync()
     {
         if (IsBusy) return;
+        // 取消并释放上一次刷新
+        _refreshCts?.Cancel();
+        _refreshCts?.Dispose();
+        _refreshCts = new CancellationTokenSource();
+        var ct = _refreshCts.Token;
+
         IsBusy = true;
-        try { await RefetchDataAsync(); }
+        try
+        {
+            await RefetchDataAsync();
+            if (ct.IsCancellationRequested) return;
+        }
         finally { IsBusy = false; }
     }
 

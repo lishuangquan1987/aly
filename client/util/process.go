@@ -193,15 +193,6 @@ func KillProcessesAndWait(names []string, timeout time.Duration) error {
 	return nil
 }
 
-// IsProcessRunning 检查指定名称的进程是否在运行
-func IsProcessRunning(name string) (bool, error) {
-	pids, err := FindProcessesByName(name)
-	if err != nil {
-		return false, err
-	}
-	return len(pids) > 0, nil
-}
-
 // SendCloseMessageToProcess 向指定 PID 的所有可见顶层窗口发送 WM_CLOSE 消息
 func SendCloseMessageToProcess(pid uint32) {
 	pidPtr := pid

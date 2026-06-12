@@ -7,10 +7,10 @@ import (
 	"zap/server/internal/service"
 	"zap/server/models"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shirou/gopsutil/cpu"
@@ -66,17 +66,13 @@ func CreateProject(ctx *gin.Context) {
 	}
 
 	//插入
-	result := service.CreateProjectWithFirstLog(
+	result := service.CreateProjectWithFirstLog(ctx.Request.Context(),
 		createProjectDto.Name,
 		createProjectDto.Title,
 		createProjectDto.IsForceUpdate,
 		createProjectDto.IgnoreFolders,
 		createProjectDto.IgnoreFiles)
 
-	if !result.IsSuccess && strings.Contains(result.ErrorMsg, "UNIQUE") || strings.Contains(result.ErrorMsg, "unique") {
-		ctx.JSON(200, models.NG(fmt.Sprintf("项目名称:%s已存在", createProjectDto.Name)))
-		return
-	}
 	ctx.JSON(200, result)
 }
 
@@ -115,7 +111,7 @@ func UpdateProject(ctx *gin.Context) {
 	}
 
 	//更新
-	result := service.UpdateProject(
+	result := service.UpdateProject(ctx.Request.Context(),
 		updateProjectDto.Name,
 		updateProjectDto.Title,
 		updateProjectDto.IsForceUpdate,
@@ -150,7 +146,7 @@ func PublishVersion(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(200, service.PublishVersion(publishDto.ProjectName, publishDto.Version, publishDto.Logs, publishDto.Time, publishDto.AfterApplyUpdateScript))
+	ctx.JSON(200, service.PublishVersion(ctx.Request.Context(), publishDto.ProjectName, publishDto.Version, publishDto.Logs, publishDto.Time, publishDto.AfterApplyUpdateScript))
 }
 
 func DeleteProject(ctx *gin.Context) {
@@ -162,11 +158,11 @@ func DeleteProject(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(200, service.DeleteProject(projectNameDto.ProjectName))
+	ctx.JSON(200, service.DeleteProject(ctx.Request.Context(), projectNameDto.ProjectName))
 }
 
 func GetAllProjects(ctx *gin.Context) {
-	ctx.JSON(200, service.GetAllProjects())
+	ctx.JSON(200, service.GetAllProjects(ctx.Request.Context()))
 }
 
 func GetProjectByName(ctx *gin.Context) {
@@ -183,7 +179,7 @@ func GetProjectByName(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(200, service.GetProjectByName(projectNameDto.ProjectName))
+	ctx.JSON(200, service.GetProjectByName(ctx.Request.Context(), projectNameDto.ProjectName))
 }
 
 func GetProjectChangeLogs(ctx *gin.Context) {
@@ -200,7 +196,7 @@ func GetProjectChangeLogs(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(200, service.GetProjectChangeLogs(projectNameDto.ProjectName))
+	ctx.JSON(200, service.GetProjectChangeLogs(ctx.Request.Context(), projectNameDto.ProjectName))
 }
 
 func GetProjectOSInfo(ctx *gin.Context) {
@@ -229,45 +225,9 @@ func GetProjectOSInfo(ctx *gin.Context) {
 		return
 	}
 
-	platform, _, _, _ := host.PlatformInformation() //内核信息
-
-	infos, err := cpu.Info() //cpu信息工具类
-	var cpuName string
-	var cpuMhz float64
-	if err == nil && len(infos) > 0 {
-		cpuName = infos[0].ModelName
-		cpuMhz = infos[0].Mhz
-	} else {
-		cpuName = "unknown"
-	}
-
-	diskInfo, err := disk.Usage(workDir) //获取客户端更新文件所在盘的容量信息
-	var diskUsed, diskFree, diskTotal uint64
-	var diskUsedPercent float64
-	if err == nil {
-		diskUsed = diskInfo.Used
-		diskFree = diskInfo.Free
-		diskTotal = diskInfo.Total
-		diskUsedPercent = diskInfo.UsedPercent
-	}
-
-	serverOSInfo := make([]models.ServerOSInfo, 0)
-	serverOSInfo = append(serverOSInfo, models.ServerOSInfo{
-		OS:              runtime.GOOS,
-		Platform:        platform,
-		GOARCH:          runtime.GOARCH,
-		Version:         runtime.Version(),
-		NumCPU:          runtime.NumCPU(),
-		CPUName:         cpuName,
-		CPUMhz:          cpuMhz,
-		DiskUsed:        float64(diskUsed) / float64(1024*1024*1024), //Byte 转为操作系统的 Gib 单位
-		DiskFree:        float64(diskFree) / float64(1024*1024*1024),
-		DiskTotal:       float64(diskTotal) / float64(1024*1024*1024),
-		DiskUsedPercent: diskUsedPercent,
-	})
 	ctx.JSON(200, models.CommonResponse{
 		IsSuccess: true,
-		Data:      serverOSInfo,
+		Data:      collectOSInfo(workDir),
 	})
 }
 
@@ -280,6 +240,14 @@ func ServerInfo(ctx *gin.Context) {
 	}
 	workDir := filepath.Dir(exePath)
 
+	ctx.JSON(200, models.CommonResponse{
+		IsSuccess: true,
+		Data:      collectOSInfo(workDir),
+	})
+}
+
+// collectOSInfo 收集操作系统信息（CPU、磁盘等），供 GetProjectOSInfo 和 ServerInfo 共用
+func collectOSInfo(workDir string) []models.ServerOSInfo {
 	platform, _, _, _ := host.PlatformInformation()
 
 	infos, err := cpu.Info()
@@ -290,6 +258,9 @@ func ServerInfo(ctx *gin.Context) {
 		cpuMhz = infos[0].Mhz
 	} else {
 		cpuName = "unknown"
+		if err != nil {
+			log.Printf("collectOSInfo: failed to get CPU info: %v", err)
+		}
 	}
 
 	diskInfo, err := disk.Usage(workDir)
@@ -300,6 +271,8 @@ func ServerInfo(ctx *gin.Context) {
 		diskFree = diskInfo.Free
 		diskTotal = diskInfo.Total
 		diskUsedPercent = diskInfo.UsedPercent
+	} else {
+		log.Printf("collectOSInfo: failed to get disk usage for %s: %v", workDir, err)
 	}
 
 	serverOSInfo := make([]models.ServerOSInfo, 0)
@@ -316,8 +289,5 @@ func ServerInfo(ctx *gin.Context) {
 		DiskTotal:       float64(diskTotal) / float64(1024*1024*1024),
 		DiskUsedPercent: diskUsedPercent,
 	})
-	ctx.JSON(200, models.CommonResponse{
-		IsSuccess: true,
-		Data:      serverOSInfo,
-	})
+	return serverOSInfo
 }

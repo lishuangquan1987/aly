@@ -7,8 +7,10 @@ import (
 	"zap/server/internal/db"
 	"zap/server/models"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/utils-go/ngo/datetime"
 	"github.com/utils-go/ngo/io/path"
@@ -24,8 +26,7 @@ func GetProjectWorkPath(projectName string) (string, error) {
 	return path.Combine(dir, "data", projectName), nil
 }
 
-func CreateProjectWithFirstLog(name string, title string, isForceUpdate bool, ignoreFolders []string, ignoreFiles []string) models.CommonResponse {
-	ctx := context.Background()
+func CreateProjectWithFirstLog(ctx context.Context, name string, title string, isForceUpdate bool, ignoreFolders []string, ignoreFiles []string) models.CommonResponse {
 	var project *ent.Project
 	err := db.WithTx(ctx, func(tx *ent.Tx) error {
 		//插入项目
@@ -54,14 +55,17 @@ func CreateProjectWithFirstLog(name string, title string, isForceUpdate bool, ig
 		return err
 	})
 	if err != nil {
+		// 并发安全：UNIQUE 约束冲突时返回友好消息而非原始 DB 错误
+		if ent.IsConstraintError(err) {
+			return models.NG(fmt.Sprintf("项目名称:%s已存在", name))
+		}
 		return models.NGWithError(err)
 	}
 
 	return models.OKWithData(project)
 }
 
-func UpdateProject(name string, title string, isForceUpdate bool, ignoreFolders []string, ignoreFiles []string) models.CommonResponse {
-	ctx := context.Background()
+func UpdateProject(ctx context.Context, name string, title string, isForceUpdate bool, ignoreFolders []string, ignoreFiles []string) models.CommonResponse {
 	err := db.WithTx(ctx, func(tx *ent.Tx) error {
 		//更新项目
 		var err error
@@ -81,8 +85,7 @@ func UpdateProject(name string, title string, isForceUpdate bool, ignoreFolders 
 	return models.OK()
 }
 
-func GetAllProjects() models.CommonResponse {
-	ctx := context.Background()
+func GetAllProjects(ctx context.Context) models.CommonResponse {
 	projects, err := db.Client.Project.Query().Where(project.IsDeletedEQ(false)).All(ctx)
 	if err != nil {
 		return models.NGWithError(err)
@@ -91,8 +94,7 @@ func GetAllProjects() models.CommonResponse {
 	return models.OKWithData(projects)
 }
 
-func GetProjectChangeLogs(projectName string) models.CommonResponse {
-	ctx := context.Background()
+func GetProjectChangeLogs(ctx context.Context, projectName string) models.CommonResponse {
 	projectLogs, err := db.Client.ProjectChangeLog.
 		Query().
 		Where(projectchangelog.HasProjectWith(project.NameEQ(projectName)),
@@ -106,8 +108,7 @@ func GetProjectChangeLogs(projectName string) models.CommonResponse {
 	return models.OKWithData(projectLogs)
 }
 
-func GetProjectByName(projectName string) models.CommonResponse {
-	ctx := context.Background()
+func GetProjectByName(ctx context.Context, projectName string) models.CommonResponse {
 	p, err := db.Client.Project.Query().Where(project.NameEQ(projectName)).First(ctx)
 	if err != nil {
 		return models.NGWithError(err)
@@ -116,8 +117,13 @@ func GetProjectByName(projectName string) models.CommonResponse {
 	return models.OKWithData(p)
 }
 
-func PublishVersion(projectName string, version string, logs []string, time string, afterApplyUpdateScript string) models.CommonResponse {
-	ctx := context.Background()
+func PublishVersion(ctx context.Context, projectName string, version string, logs []string, timeStr string, afterApplyUpdateScript string) models.CommonResponse {
+	// 校验时间格式（必须匹配 "2006-01-02 15:04:05"）
+	if timeStr != "" {
+		if _, err := time.Parse("2006-01-02 15:04:05", timeStr); err != nil {
+			return models.NG("时间格式错误，正确格式: yyyy-MM-dd HH:mm:ss")
+		}
+	}
 	var changelog *ent.ProjectChangeLog
 	err := db.WithTx(ctx, func(tx *ent.Tx) error {
 		// 获取项目实体（用于关联变更日志）
@@ -138,7 +144,7 @@ func PublishVersion(projectName string, version string, logs []string, time stri
 			SetProject(p).
 			SetVersion(version).
 			SetLogs(logs).
-			SetTime(time)
+			SetTime(timeStr)
 		if afterApplyUpdateScript != "" {
 			create = create.SetAfterApplyUpdateScript(afterApplyUpdateScript)
 		}
@@ -152,8 +158,7 @@ func PublishVersion(projectName string, version string, logs []string, time stri
 	return models.OKWithData(changelog)
 }
 
-func DeleteProject(projectName string) models.CommonResponse {
-	ctx := context.Background()
+func DeleteProject(ctx context.Context, projectName string) models.CommonResponse {
 	_, err := db.Client.Project.Update().Where(project.NameEQ(projectName)).
 		SetIsDeleted(true).
 		Save(ctx)

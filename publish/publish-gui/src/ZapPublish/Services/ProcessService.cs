@@ -57,7 +57,16 @@ public class ProcessService
             catch (OperationCanceledException)
             {
                 proc.Kill();
-                await proc.WaitForExitAsync(CancellationToken.None);
+                try
+                {
+                    // 等待进程退出，加 5 秒超时防止无限挂起
+                    using var killCts = new CancellationTokenSource(5000);
+                    await proc.WaitForExitAsync(killCts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    Log.Warning("进程 Kill 后未在 5s 内退出: {File} {Args}", fileName, arguments);
+                }
                 Log.Warning("进程超时: {File} {Args}", fileName, arguments);
                 return new ProcessResult { Success = false, StandardError = "进程执行超时" };
             }

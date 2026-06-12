@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 )
 
 // FileMD5 calculates the MD5 hash of a file.
@@ -84,32 +85,16 @@ func CopyFile(src, dst string, overwrite bool) error {
 	return nil
 }
 
-// CopyDir copies an entire directory. overwrite controls whether to overwrite existing files.
-func CopyDir(srcDir, dstDir string, overwrite bool) error {
-	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		relPath, err := filepath.Rel(srcDir, path)
-		if err != nil {
-			return err
-		}
-
-		dstPath := filepath.Join(dstDir, relPath)
-
-		if info.IsDir() {
-			return os.MkdirAll(dstPath, 0755)
-		}
-
-		return CopyFile(path, dstPath, overwrite)
-	})
-}
-
 // LocalFileMD5Map returns a map of relativePath -> md5 for all files under root.
 // The "update" directory is excluded. Keys use forward slashes for cross-platform consistency.
+// MD5 computation is parallelized across multiple goroutines for better performance.
 func LocalFileMD5Map(root string) (map[string]string, error) {
-	result := make(map[string]string)
+	// Step 1: collect all file paths (serial walk, fast)
+	type fileEntry struct {
+		absPath string
+		relPath string
+	}
+	var files []fileEntry
 
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -135,16 +120,61 @@ func LocalFileMD5Map(root string) (map[string]string, error) {
 			return nil
 		}
 
-		md5, err := FileMD5(path)
-		if err != nil {
-			return fmt.Errorf("计算文件 MD5 失败 %s: %v", path, err)
-		}
-
-		result[relPath] = md5
+		files = append(files, fileEntry{absPath: path, relPath: relPath})
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return result, err
+	// Step 2: compute MD5 in parallel using a bounded worker pool
+	result := make(map[string]string)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	numWorkers := runtime.NumCPU()
+	if numWorkers < 2 {
+		numWorkers = 2
+	}
+	workCh := make(chan fileEntry, len(files))
+	errCh := make(chan error, len(files))
+
+	// Start workers (use continue instead of return to drain work channel)
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for fe := range workCh {
+				md5Val, md5Err := FileMD5(fe.absPath)
+				if md5Err != nil {
+					errCh <- fmt.Errorf("计算文件 MD5 失败 %s: %v", fe.absPath, md5Err)
+					continue
+				}
+				mu.Lock()
+				result[fe.relPath] = md5Val
+				mu.Unlock()
+			}
+		}()
+	}
+
+	// Send work
+	for _, fe := range files {
+		workCh <- fe
+	}
+	close(workCh)
+	wg.Wait()
+	close(errCh)
+
+	// Check for errors (collect all, not just the last one)
+	var md5Err error
+	for e := range errCh {
+		if md5Err == nil {
+			md5Err = fmt.Errorf("MD5计算失败: %v", e)
+		} else {
+			md5Err = fmt.Errorf("%v; %v", md5Err, e)
+		}
+	}
+
+	return result, md5Err
 }
 
 // hasPrefix checks if a string has the specified prefix.

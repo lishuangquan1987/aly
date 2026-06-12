@@ -174,20 +174,6 @@ func ShouldSkipFile(relPath string, ignoreFiles []string) bool {
 	return false
 }
 
-func splitProcessNames(s string) []string {
-	if s == "" {
-		return nil
-	}
-	var result []string
-	for _, name := range strings.Split(s, ",") {
-		name = strings.TrimSpace(name)
-		if name != "" {
-			result = append(result, name)
-		}
-	}
-	return result
-}
-
 func ioutilReadFile(path string) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {

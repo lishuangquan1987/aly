@@ -15,7 +15,7 @@ namespace ZapPublish.ViewModels;
 public partial class EditProjectDialogViewModel : ObservableObject
 {
     private readonly CliService _cli;
-    private readonly string _projectPath;
+    private string _projectPath = string.Empty;
 
     [ObservableProperty] private string _displayName = string.Empty;
     [ObservableProperty] private string _serverUrl = string.Empty;
@@ -40,11 +40,9 @@ public partial class EditProjectDialogViewModel : ObservableObject
     public IAsyncRelayCommand RemoveFileCommand { get; }
     public IAsyncRelayCommand SaveCommand { get; }
 
-    public EditProjectDialogViewModel(CliService cli, ProjectConfig project)
+    public EditProjectDialogViewModel(CliService cli)
     {
         _cli = cli;
-        _projectPath = project.ProjectPath;
-        DisplayName = project.DisplayName;
 
         SaveUrlCommand = new AsyncRelayCommand(SaveUrlAsync);
         AddFolderCommand = new AsyncRelayCommand<string?>(AddFolderAsync);
@@ -52,7 +50,16 @@ public partial class EditProjectDialogViewModel : ObservableObject
         AddFileCommand = new AsyncRelayCommand<string?>(AddFileAsync);
         RemoveFileCommand = new AsyncRelayCommand<string?>(RemoveFileAsync);
         SaveCommand = new AsyncRelayCommand(SaveAsync);
+    }
 
+    /// <summary>
+    /// 加载项目配置（由 DialogService 在创建后调用）
+    /// </summary>
+    public void LoadProject(ProjectConfig project)
+    {
+        if (project == null) throw new ArgumentNullException(nameof(project));
+        _projectPath = project.ProjectPath;
+        DisplayName = project.DisplayName;
         LoadCliConfig();
     }
 
@@ -71,10 +78,10 @@ public partial class EditProjectDialogViewModel : ObservableObject
             var cfg = JsonConvert.DeserializeObject<SharedConfig>(json);
             if (cfg != null)
             {
-                ServerUrl = cfg.server_url ?? "";
-                ProjectName = cfg.project_name ?? "";
-                IgnoreFolders = new ObservableCollection<string>(cfg.ignore_folders ?? []);
-                IgnoreFiles = new ObservableCollection<string>(cfg.ignore_files ?? []);
+                ServerUrl = cfg.ServerUrl ?? "";
+                ProjectName = cfg.ProjectName ?? "";
+                IgnoreFolders = new ObservableCollection<string>(cfg.IgnoreFolders ?? []);
+                IgnoreFiles = new ObservableCollection<string>(cfg.IgnoreFiles ?? []);
             }
         }
         catch (Exception ex)
@@ -181,13 +188,5 @@ public partial class EditProjectDialogViewModel : ObservableObject
         };
         RequestClose?.Invoke(result);
         return Task.CompletedTask;
-    }
-
-    private class SharedConfig
-    {
-        public string server_url { get; set; } = "";
-        public string project_name { get; set; } = "";
-        public string[]? ignore_folders { get; set; }
-        public string[]? ignore_files { get; set; }
     }
 }

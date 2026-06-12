@@ -58,31 +58,32 @@ func parseResponse(data []byte) (*model.CommonResponse, error) {
 	return &resp, nil
 }
 
-// GetAllProjects 获取所有项目列表
-func GetAllProjects(serverURL string) ([]model.Project, error) {
-	url := strings.TrimRight(serverURL, "/") + "/api/project/get_all_projects"
-	data, err := doGet(url)
+// buildAPIURL 校验并构建 API URL，确保 serverURL 格式合法
+func buildAPIURL(serverURL, path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("API 路径不能为空")
+	}
+	// 自动补全协议前缀，兼容旧配置（如 localhost:8080）
+	if !strings.Contains(serverURL, "://") {
+		serverURL = "http://" + serverURL
+	}
+	base, err := url.Parse(strings.TrimRight(serverURL, "/"))
 	if err != nil {
-		return nil, err
+		return "", fmt.Errorf("无效的服务器地址: %v", err)
 	}
-
-	resp, err := parseResponse(data)
-	if err != nil {
-		return nil, err
+	if base.Host == "" {
+		return "", fmt.Errorf("服务器地址缺少主机名")
 	}
-
-	var projects []model.Project
-	if err := json.Unmarshal(resp.Data, &projects); err != nil {
-		return nil, fmt.Errorf("解析项目列表失败: %v", err)
-	}
-
-	return projects, nil
+	// 仅使用 origin 部分，避免 serverURL 中的路径前缀导致重复
+	return base.Scheme + "://" + base.Host + "/" + strings.TrimPrefix(path, "/"), nil
 }
 
 // GetProjectByName 根据项目名称获取项目（走独立接口，不再拉全量列表）
 func GetProjectByName(serverURL string, name string) (*model.Project, error) {
-	u := fmt.Sprintf("%s/api/project/get_project_by_name/%s",
-		strings.TrimRight(serverURL, "/"), urlEncodePath(name))
+	u, err := buildAPIURL(serverURL, "api/project/get_project_by_name/"+urlEncodePath(name))
+	if err != nil {
+		return nil, err
+	}
 	data, err := doGet(u)
 	if err != nil {
 		return nil, err
@@ -116,9 +117,11 @@ func FindProjectByName(serverURL string, name string) (*model.Project, error) {
 // GetProjectChangeLogs 获取项目的变更日志（按项目名称）
 func GetProjectChangeLogs(serverURL string, projectName string) ([]model.ProjectChangeLog, error) {
 	pn := urlEncodePath(projectName)
-	url := fmt.Sprintf("%s/api/project/get_project_change_logs/%s",
-		strings.TrimRight(serverURL, "/"), pn)
-	data, err := doGet(url)
+	u, err := buildAPIURL(serverURL, "api/project/get_project_change_logs/"+pn)
+	if err != nil {
+		return nil, err
+	}
+	data, err := doGet(u)
 	if err != nil {
 		return nil, err
 	}
@@ -139,9 +142,11 @@ func GetProjectChangeLogs(serverURL string, projectName string) ([]model.Project
 // GetAllFiles 获取项目的所有文件列表（按项目名称）
 func GetAllFiles(serverURL string, projectName string) ([]model.FileInfo, error) {
 	pn := urlEncodePath(projectName)
-	url := fmt.Sprintf("%s/api/file/get_all_files/%s",
-		strings.TrimRight(serverURL, "/"), pn)
-	data, err := doGet(url)
+	u, err := buildAPIURL(serverURL, "api/file/get_all_files/"+pn)
+	if err != nil {
+		return nil, err
+	}
+	data, err := doGet(u)
 	if err != nil {
 		return nil, err
 	}
@@ -161,11 +166,12 @@ func GetAllFiles(serverURL string, projectName string) ([]model.FileInfo, error)
 
 // DownloadFile 从服务端下载文件并保存到本地
 func DownloadFile(serverURL string, serverFilePath string, localPath string) error {
-	url := fmt.Sprintf("%s/api/file/download_file?path=%s",
-		strings.TrimRight(serverURL, "/"),
-		urlEncodePath(serverFilePath))
+	u, err := buildAPIURL(serverURL, "api/file/download_file?path="+urlEncodePath(serverFilePath))
+	if err != nil {
+		return err
+	}
 
-	resp, err := httpClient.Get(url)
+	resp, err := httpClient.Get(u)
 	if err != nil {
 		return fmt.Errorf("下载请求失败: %v", err)
 	}
@@ -198,9 +204,10 @@ func DownloadFile(serverURL string, serverFilePath string, localPath string) err
 // DownloadFileWithResume downloads a file, resuming from partial download if a .part file exists.
 // largeFileThreshold is the size in bytes above which resume is attempted (e.g., 100*1024*1024 for 100MB).
 func DownloadFileWithResume(serverURL string, serverFilePath string, localPath string, serverFileSize int64, largeFileThreshold int64) error {
-	requestURL := fmt.Sprintf("%s/api/file/download_file?path=%s",
-		strings.TrimRight(serverURL, "/"),
-		urlEncodePath(serverFilePath))
+	requestURL, err := buildAPIURL(serverURL, "api/file/download_file?path="+urlEncodePath(serverFilePath))
+	if err != nil {
+		return err
+	}
 
 	// Ensure parent directory exists
 	dir := filepath.Dir(localPath)
@@ -309,7 +316,11 @@ func urlEncodePath(s string) string {
 	// 对路径的每个段进行 URL 编码，保留 / 分隔符
 	parts := strings.Split(s, "/")
 	for i := range parts {
-		parts[i] = url.QueryEscape(parts[i])
+		// 拒绝路径遍历
+		if parts[i] == ".." {
+			return ""
+		}
+		parts[i] = url.PathEscape(parts[i])
 	}
 	return strings.Join(parts, "/")
 }

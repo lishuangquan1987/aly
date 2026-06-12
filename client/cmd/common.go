@@ -91,7 +91,11 @@ func printProgress(index, total int, file, status string, fileSize int64, errMsg
 			Error:    errMsg,
 		},
 	}
-	bytes, _ := json.Marshal(out)
+	bytes, err := json.Marshal(out)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "JSON marshal error: %v\n", err)
+		return
+	}
 	fmt.Println(string(bytes))
 }
 
@@ -109,7 +113,11 @@ func printProgressFail(index, total int, file string, fileSize int64, errMsg str
 			Error:    errMsg,
 		},
 	}
-	bytes, _ := json.Marshal(out)
+	bytes, err := json.Marshal(out)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "JSON marshal error: %v\n", err)
+		return
+	}
 	fmt.Println(string(bytes))
 }
 
@@ -120,7 +128,11 @@ func printProgressDone() {
 		ErrMsg:    "",
 		Data:      nil,
 	}
-	bytes, _ := json.Marshal(out)
+	bytes, err := json.Marshal(out)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "JSON marshal error: %v\n", err)
+		return
+	}
 	fmt.Println(string(bytes))
 }
 
@@ -133,6 +145,7 @@ func stripVPrefix(v string) string {
 }
 
 // compareVersion 按 . 分割逐段数值比较：v1 > v2 返回 1，v1 < v2 返回 -1，相等返回 0
+// 非数字字段按 0 处理（如 "V1.0" 中 "V1" 的 "V" 前缀）
 func compareVersion(v1, v2 string) int {
 	parts1 := strings.Split(v1, ".")
 	parts2 := strings.Split(v2, ".")
