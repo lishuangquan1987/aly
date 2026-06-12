@@ -15,12 +15,17 @@
             <StackPanel Spacing="16">
                 <!-- Server URL + 获取项目 -->
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
-                        <materialIcons:MaterialIcon Kind="Server" Width="14" Height="14"
-                                                     Foreground="{DynamicResource SemiColorText1}"/>
-                        <TextBlock Text="服务端地址" FontWeight="Medium" FontSize="13"
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Grid.Column="0" Kind="Server"
+                                                    Width="14" Height="14"
+                                                    VerticalAlignment="Center"
+                                                    Margin="0,0,6,0"
+                                                    Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Grid.Column="1" Text="服务端地址"
+                                   FontWeight="Medium" FontSize="13"
+                                   VerticalAlignment="Center"
                                    Foreground="{DynamicResource SemiColorText0}"/>
-                    </StackPanel>
+                    </Grid>
                     <Grid ColumnDefinitions="*,Auto">
                         <TextBox Text="{Binding ServerUrl}" Watermark="http://localhost:2000" FontSize="13"/>
                         <Button Grid.Column="1" Command="{Binding FetchProjectsCommand}"
@@ -32,12 +37,17 @@
 
                 <!-- 服务端项目列表 -->
                 <StackPanel IsVisible="{Binding ShowProjectList}">
-                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
-                        <materialIcons:MaterialIcon Kind="FormatListBulleted" Width="14" Height="14"
-                                                     Foreground="{DynamicResource SemiColorText1}"/>
-                        <TextBlock Text="选择服务端项目" FontWeight="Medium" FontSize="13"
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Grid.Column="0" Kind="FormatListBulleted"
+                                                    Width="14" Height="14"
+                                                    VerticalAlignment="Center"
+                                                    Margin="0,0,6,0"
+                                                    Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Grid.Column="1" Text="选择服务端项目"
+                                   FontWeight="Medium" FontSize="13"
+                                   VerticalAlignment="Center"
                                    Foreground="{DynamicResource SemiColorText0}"/>
-                    </StackPanel>
+                    </Grid>
                     <Border BorderBrush="{DynamicResource SemiColorBorder}"
                             BorderThickness="1" CornerRadius="6" MaxHeight="150">
                         <ListBox ItemsSource="{Binding ServerProjects}"
@@ -87,24 +97,34 @@
 
                 <!-- Display Name -->
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
-                        <materialIcons:MaterialIcon Kind="FileDocumentOutline" Width="14" Height="14"
-                                                     Foreground="{DynamicResource SemiColorText1}"/>
-                        <TextBlock Text="显示名称" FontWeight="Medium" FontSize="13"
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Grid.Column="0" Kind="FileDocumentOutline"
+                                                    Width="14" Height="14"
+                                                    VerticalAlignment="Center"
+                                                    Margin="0,0,6,0"
+                                                    Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Grid.Column="1" Text="显示名称"
+                                   FontWeight="Medium" FontSize="13"
+                                   VerticalAlignment="Center"
                                    Foreground="{DynamicResource SemiColorText0}"/>
-                    </StackPanel>
+                    </Grid>
                     <TextBox Text="{Binding DisplayName}"
                              Watermark="例如 MyApp（本地别名，可自定义）" FontSize="13"/>
                 </StackPanel>
 
                 <!-- Local Path -->
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
-                        <materialIcons:MaterialIcon Kind="FolderOutline" Width="14" Height="14"
-                                                     Foreground="{DynamicResource SemiColorText1}"/>
-                        <TextBlock Text="本地路径" FontWeight="Medium" FontSize="13"
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Grid.Column="0" Kind="FolderOutline"
+                                                    Width="14" Height="14"
+                                                    VerticalAlignment="Center"
+                                                    Margin="0,0,6,0"
+                                                    Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Grid.Column="1" Text="本地路径"
+                                   FontWeight="Medium" FontSize="13"
+                                   VerticalAlignment="Center"
                                    Foreground="{DynamicResource SemiColorText0}"/>
-                    </StackPanel>
+                    </Grid>
                     <Grid ColumnDefinitions="*,Auto">
                         <TextBox Text="{Binding ProjectPath}"
                                  Watermark="C:\Projects\MyApp\build" FontSize="13"/>
@@ -124,12 +144,12 @@
         </ScrollViewer>
 
         <!-- Buttons -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal"
-                    HorizontalAlignment="Right" Spacing="8"
-                    Margin="0,20,0,0">
-            <Button Command="{Binding CancelCommand}" Content="取消" Height="32" Padding="16,0"/>
-            <Button Command="{Binding ConfirmCommand}" Content="添加项目"
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="0,20,0,0">
+            <TextBlock Grid.Column="0" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Command="{Binding CancelCommand}" Content="取消"
+                    Height="32" Padding="16,0" Margin="0,0,8,0"/>
+            <Button Grid.Column="2" Command="{Binding ConfirmCommand}" Content="添加项目"
                     Classes="Primary" Height="32" Padding="16,0"/>
-        </StackPanel>
+        </Grid>
     </Grid>
 </Window>

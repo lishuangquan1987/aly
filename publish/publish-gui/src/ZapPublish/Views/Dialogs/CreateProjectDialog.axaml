@@ -14,38 +14,55 @@
             <StackPanel Spacing="16">
                 <!-- 项目名称 -->
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
-                        <materialIcons:MaterialIcon Kind="FileDocumentOutline" Width="14" Height="14"
-                                                     Foreground="{DynamicResource SemiColorText1}"/>
-                        <TextBlock Text="项目名称" FontWeight="Medium" FontSize="13"
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Grid.Column="0" Kind="FileDocumentOutline"
+                                                    Width="14" Height="14"
+                                                    VerticalAlignment="Center"
+                                                    Margin="0,0,6,0"
+                                                    Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Grid.Column="1" Text="项目名称"
+                                   FontWeight="Medium" FontSize="13"
+                                   VerticalAlignment="Center"
                                    Foreground="{DynamicResource SemiColorText0}"/>
-                        <TextBlock Text="*" Foreground="{DynamicResource SemiColorDanger}" FontSize="13"/>
-                    </StackPanel>
+                        <TextBlock Grid.Column="2" Text="*"
+                                   Foreground="{DynamicResource SemiColorDanger}" FontSize="13"/>
+                    </Grid>
                     <TextBox Text="{Binding ProjectName}"
                              Watermark="例如 myapp（唯一标识，不可修改）" FontSize="13"/>
                 </StackPanel>
 
                 <!-- 项目标题 -->
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
-                        <materialIcons:MaterialIcon Kind="TextBoxOutline" Width="14" Height="14"
-                                                     Foreground="{DynamicResource SemiColorText1}"/>
-                        <TextBlock Text="项目标题" FontWeight="Medium" FontSize="13"
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Grid.Column="0" Kind="TextBoxOutline"
+                                                    Width="14" Height="14"
+                                                    VerticalAlignment="Center"
+                                                    Margin="0,0,6,0"
+                                                    Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Grid.Column="1" Text="项目标题"
+                                   FontWeight="Medium" FontSize="13"
+                                   VerticalAlignment="Center"
                                    Foreground="{DynamicResource SemiColorText0}"/>
-                        <TextBlock Text="*" Foreground="{DynamicResource SemiColorDanger}" FontSize="13"/>
-                    </StackPanel>
+                        <TextBlock Grid.Column="2" Text="*"
+                                   Foreground="{DynamicResource SemiColorDanger}" FontSize="13"/>
+                    </Grid>
                     <TextBox Text="{Binding ProjectTitle}"
                              Watermark="例如 我的应用（显示名称）" FontSize="13"/>
                 </StackPanel>
 
                 <!-- 强制更新 -->
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
-                        <materialIcons:MaterialIcon Kind="AlertCircleOutline" Width="14" Height="14"
-                                                     Foreground="{DynamicResource SemiColorText1}"/>
-                        <TextBlock Text="强制更新" FontWeight="Medium" FontSize="13"
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Grid.Column="0" Kind="AlertCircleOutline"
+                                                    Width="14" Height="14"
+                                                    VerticalAlignment="Center"
+                                                    Margin="0,0,6,0"
+                                                    Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Grid.Column="1" Text="强制更新"
+                                   FontWeight="Medium" FontSize="13"
+                                   VerticalAlignment="Center"
                                    Foreground="{DynamicResource SemiColorText0}"/>
-                    </StackPanel>
+                    </Grid>
                     <CheckBox IsChecked="{Binding ForceUpdate}"
                               Content="客户端检测到新版本时强制更新（跳过用户确认）"
                               FontSize="12"/>
@@ -53,12 +70,17 @@
 
                 <!-- 忽略文件夹 -->
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
-                        <materialIcons:MaterialIcon Kind="FolderRemoveOutline" Width="14" Height="14"
-                                                     Foreground="{DynamicResource SemiColorText1}"/>
-                        <TextBlock Text="忽略文件夹" FontWeight="Medium" FontSize="13"
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Grid.Column="0" Kind="FolderRemoveOutline"
+                                                    Width="14" Height="14"
+                                                    VerticalAlignment="Center"
+                                                    Margin="0,0,6,0"
+                                                    Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Grid.Column="1" Text="忽略文件夹"
+                                   FontWeight="Medium" FontSize="13"
+                                   VerticalAlignment="Center"
                                    Foreground="{DynamicResource SemiColorText0}"/>
-                    </StackPanel>
+                    </Grid>
                     <TextBox Text="{Binding IgnoreFolders}"
                              Watermark="多个文件夹用逗号分隔，例如 logs,temp,cache"
                              FontSize="13" AcceptsReturn="True" MinHeight="40"
@@ -70,12 +92,17 @@
 
                 <!-- 忽略文件 -->
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
-                        <materialIcons:MaterialIcon Kind="FileRemoveOutline" Width="14" Height="14"
-                                                     Foreground="{DynamicResource SemiColorText1}"/>
-                        <TextBlock Text="忽略文件" FontWeight="Medium" FontSize="13"
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Grid.Column="0" Kind="FileRemoveOutline"
+                                                    Width="14" Height="14"
+                                                    VerticalAlignment="Center"
+                                                    Margin="0,0,6,0"
+                                                    Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Grid.Column="1" Text="忽略文件"
+                                   FontWeight="Medium" FontSize="13"
+                                   VerticalAlignment="Center"
                                    Foreground="{DynamicResource SemiColorText0}"/>
-                    </StackPanel>
+                    </Grid>
                     <TextBox Text="{Binding IgnoreFiles}"
                              Watermark="多个文件用逗号分隔，例如 .DS_Store,Thumbs.db,*.log"
                              FontSize="13" AcceptsReturn="True" MinHeight="40"
@@ -94,12 +121,12 @@
         </ScrollViewer>
 
         <!-- Buttons -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal"
-                    HorizontalAlignment="Right" Spacing="8"
-                    Margin="0,20,0,0">
-            <Button Command="{Binding CancelCommand}" Content="取消" Height="32" Padding="16,0"/>
-            <Button Command="{Binding CreateCommand}" Content="创建项目"
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="0,20,0,0">
+            <TextBlock Grid.Column="0" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Command="{Binding CancelCommand}" Content="取消"
+                    Height="32" Padding="16,0" Margin="0,0,8,0"/>
+            <Button Grid.Column="2" Command="{Binding CreateCommand}" Content="创建项目"
                     Classes="Primary" Height="32" Padding="16,0"/>
-        </StackPanel>
+        </Grid>
     </Grid>
 </Window>

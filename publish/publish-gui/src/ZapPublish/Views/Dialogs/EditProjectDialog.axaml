@@ -27,36 +27,46 @@
             <StackPanel Spacing="16">
 
                 <!-- GUI 配置 -->
-                <Border CornerRadius="6" Padding="14,12"
-                        Background="{DynamicResource SemiColorBg1}"
-                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                    <StackPanel Spacing="10">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <materialIcons:MaterialIcon Kind="Monitor" Width="14" Height="14"
-                                                         Foreground="{DynamicResource SemiColorText1}"/>
-                            <TextBlock Text="GUI 配置" FontWeight="SemiBold" FontSize="13"
-                                       Foreground="{DynamicResource SemiColorText0}"/>
-                        </StackPanel>
+                    <Border CornerRadius="6"
+                            Background="{DynamicResource SemiColorBg1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="10" Margin="14,12">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <materialIcons:MaterialIcon Grid.Column="0" Kind="Monitor"
+                                                            Width="14" Height="14"
+                                                            VerticalAlignment="Center"
+                                                            Margin="0,0,6,0"
+                                                            Foreground="{DynamicResource SemiColorText1}"/>
+                                <TextBlock Grid.Column="1" Text="GUI 配置"
+                                           FontWeight="SemiBold" FontSize="13"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource SemiColorText0}"/>
+                            </Grid>
 
-                        <StackPanel>
-                            <TextBlock Text="显示名称" FontSize="12" Margin="0,0,0,4"
-                                       Foreground="{DynamicResource SemiColorText2}"/>
-                            <TextBox Text="{Binding DisplayName}" FontSize="13"/>
+                            <StackPanel>
+                                <TextBlock Text="显示名称" FontSize="12" Margin="0,0,0,4"
+                                           Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBox Text="{Binding DisplayName}" FontSize="13"/>
+                            </StackPanel>
                         </StackPanel>
-                    </StackPanel>
-                </Border>
+                    </Border>
 
                 <!-- CLI 配置 (.updator/) -->
-                <Border CornerRadius="6" Padding="14,12"
-                        Background="{DynamicResource SemiColorBg1}"
-                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                    <StackPanel Spacing="10">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <materialIcons:MaterialIcon Kind="Cog" Width="14" Height="14"
-                                                         Foreground="{DynamicResource SemiColorText1}"/>
-                            <TextBlock Text="项目配置 (.updator/) — 通过 CLI 修改" FontWeight="SemiBold"
-                                       FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
-                        </StackPanel>
+                    <Border CornerRadius="6"
+                            Background="{DynamicResource SemiColorBg1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="10" Margin="14,12">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <materialIcons:MaterialIcon Grid.Column="0" Kind="Cog"
+                                                            Width="14" Height="14"
+                                                            VerticalAlignment="Center"
+                                                            Margin="0,0,6,0"
+                                                            Foreground="{DynamicResource SemiColorText1}"/>
+                                <TextBlock Grid.Column="1" Text="项目配置 (.updator/) — 通过 CLI 修改"
+                                           FontWeight="SemiBold" FontSize="13"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource SemiColorText0}"/>
+                            </Grid>
 
                         <!-- Server URL -->
                         <StackPanel>
@@ -146,15 +156,14 @@
         </ScrollViewer>
 
         <!-- Buttons -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal"
-                    HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
-            <TextBlock Text="{Binding StatusMessage}" FontSize="11"
-                       VerticalAlignment="Center" Margin="0,0,12,0"
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,16,0,0">
+            <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" FontSize="11"
+                       VerticalAlignment="Center"
                        Foreground="{DynamicResource SemiColorText2}"/>
-            <Button Content="取消" Height="32" Padding="16,0"
+            <Button Grid.Column="1" Content="取消" Height="32" Padding="16,0" Margin="0,0,8,0"
                     Click="CancelBtn_Click"/>
-            <Button Content="保存" Height="32" Padding="16,0"
+            <Button Grid.Column="2" Content="保存" Height="32" Padding="16,0"
                     Classes="Primary" Command="{Binding SaveCommand}"/>
-        </StackPanel>
+        </Grid>
     </Grid>
 </Window>

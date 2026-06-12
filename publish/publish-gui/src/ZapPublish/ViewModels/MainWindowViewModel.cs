@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ZapPublish.Models.Cli;
@@ -16,6 +17,14 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly CliService _cli;
     private readonly ConfigService _cfg;
     private readonly IDialogService _dialog;
+
+    public IToastService? ToastService { get; set; }
+
+    private void ShowToast(Action<IToastService> action)
+    {
+        if (ToastService is null) return;
+        Dispatcher.UIThread.InvokeAsync(() => action(ToastService));
+    }
 
     [ObservableProperty] private ObservableCollection<ProjectConfig> _projects = new();
     [NotifyCanExecuteChangedFor(nameof(AddSelectedCommand))]
@@ -179,6 +188,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            ShowToast(s => s.ShowError("刷新异常，请查看日志"));
             StatusMessage = $"刷新异常: {ex.Message}";
             Log.Error(ex, "刷新异常");
         }
@@ -196,16 +206,26 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (IsBusy) return;
         var projectPath = SelectedProject?.ProjectPath;
-        if (string.IsNullOrWhiteSpace(projectPath)) { StatusMessage = "项目路径无效"; return; }
+        if (string.IsNullOrWhiteSpace(projectPath)) { ShowToast(s => s.ShowWarning("请先选择一个项目")); StatusMessage = "请先选择一个项目"; return; }
         IsBusy = true;
         try
         {
             var r = await _cli.AddAllAsync(projectPath);
-            StatusMessage = r?.IsSuccess == true ? "已添加所有变更" : $"添加失败: {r?.ErrorMsg}";
+            if (r?.IsSuccess == true)
+            {
+                ShowToast(s => s.ShowSuccess("已添加所有变更"));
+                StatusMessage = "已添加所有变更";
+            }
+            else
+            {
+                ShowToast(s => s.ShowError($"添加失败: {r?.ErrorMsg}"));
+                StatusMessage = $"添加失败: {r?.ErrorMsg}";
+            }
             await RefetchDataAsync();
         }
         catch (Exception ex)
         {
+            ShowToast(s => s.ShowError("暂存异常，请查看日志"));
             StatusMessage = $"暂存异常: {ex.Message}";
             Log.Error(ex, "暂存异常");
         }
@@ -216,16 +236,26 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (IsBusy) return;
         var projectPath = SelectedProject?.ProjectPath;
-        if (string.IsNullOrWhiteSpace(projectPath)) { StatusMessage = "项目路径无效"; return; }
+        if (string.IsNullOrWhiteSpace(projectPath)) { ShowToast(s => s.ShowWarning("请先选择一个项目")); StatusMessage = "请先选择一个项目"; return; }
         IsBusy = true;
         try
         {
             var r = await _cli.ResetAllAsync(projectPath);
-            StatusMessage = r?.IsSuccess == true ? "暂存区已清空" : $"重置失败: {r?.ErrorMsg}";
+            if (r?.IsSuccess == true)
+            {
+                ShowToast(s => s.ShowSuccess("暂存区已清空"));
+                StatusMessage = "暂存区已清空";
+            }
+            else
+            {
+                ShowToast(s => s.ShowError($"重置失败: {r?.ErrorMsg}"));
+                StatusMessage = $"重置失败: {r?.ErrorMsg}";
+            }
             await RefetchDataAsync();
         }
         catch (Exception ex)
         {
+            ShowToast(s => s.ShowError("重置异常，请查看日志"));
             StatusMessage = $"重置异常: {ex.Message}";
             Log.Error(ex, "重置异常");
         }
@@ -236,18 +266,28 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (IsBusy) return;
         var projectPath = SelectedProject?.ProjectPath;
-        if (string.IsNullOrWhiteSpace(projectPath)) { StatusMessage = "项目路径无效"; return; }
+        if (string.IsNullOrWhiteSpace(projectPath)) { ShowToast(s => s.ShowWarning("请先选择一个项目")); StatusMessage = "请先选择一个项目"; return; }
         var files = UnstagedFiles.Where(f => f.IsSelected).Select(f => f.RelativePath).ToList();
-        if (files.Count == 0) { StatusMessage = "请先勾选文件"; return; }
+        if (files.Count == 0) { ShowToast(s => s.ShowWarning("请先勾选文件")); StatusMessage = "请先勾选文件"; return; }
         IsBusy = true;
         try
         {
             var r = await _cli.AddFilesAsync(projectPath, files);
-            StatusMessage = r?.IsSuccess == true ? $"已暂存 {files.Count} 个文件" : $"添加失败: {r?.ErrorMsg}";
+            if (r?.IsSuccess == true)
+            {
+                ShowToast(s => s.ShowSuccess($"已暂存 {files.Count} 个文件"));
+                StatusMessage = $"已暂存 {files.Count} 个文件";
+            }
+            else
+            {
+                ShowToast(s => s.ShowError($"添加失败: {r?.ErrorMsg}"));
+                StatusMessage = $"添加失败: {r?.ErrorMsg}";
+            }
             await RefetchDataAsync();
         }
         catch (Exception ex)
         {
+            ShowToast(s => s.ShowError("暂存异常，请查看日志"));
             StatusMessage = $"暂存异常: {ex.Message}";
             Log.Error(ex, "暂存异常");
         }
@@ -258,9 +298,9 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (IsBusy) return;
         var projectPath = SelectedProject?.ProjectPath;
-        if (string.IsNullOrWhiteSpace(projectPath)) { StatusMessage = "项目路径无效"; return; }
+        if (string.IsNullOrWhiteSpace(projectPath)) { ShowToast(s => s.ShowWarning("请先选择一个项目")); StatusMessage = "请先选择一个项目"; return; }
         var toUnstage = StagedFiles.Where(f => f.IsSelected).Select(f => f.RelativePath).ToList();
-        if (toUnstage.Count == 0) { StatusMessage = "请先勾选文件"; return; }
+        if (toUnstage.Count == 0) { ShowToast(s => s.ShowWarning("请先勾选文件")); StatusMessage = "请先勾选文件"; return; }
         var keepStaged = StagedFiles.Where(f => !f.IsSelected).Select(f => f.RelativePath).ToList();
         IsBusy = true;
         try
@@ -269,17 +309,26 @@ public partial class MainWindowViewModel : ObservableObject
             if (keepStaged.Count > 0)
             {
                 var addResult = await _cli.AddFilesAsync(projectPath, keepStaged);
-                StatusMessage = addResult?.IsSuccess == true
-                    ? $"已取消暂存 {toUnstage.Count} 个文件"
-                    : $"部分文件暂存失败: {addResult?.ErrorMsg}";
+                if (addResult?.IsSuccess == true)
+                {
+                    ShowToast(s => s.ShowSuccess($"已取消暂存 {toUnstage.Count} 个文件"));
+                    StatusMessage = $"已取消暂存 {toUnstage.Count} 个文件";
+                }
+                else
+                {
+                    ShowToast(s => s.ShowError($"部分文件暂存失败: {addResult?.ErrorMsg}"));
+                    StatusMessage = $"部分文件暂存失败: {addResult?.ErrorMsg}";
+                }
             }
             else
             {
+                ShowToast(s => s.ShowSuccess($"已取消暂存 {toUnstage.Count} 个文件"));
                 StatusMessage = $"已取消暂存 {toUnstage.Count} 个文件";
             }
         }
         catch (Exception ex)
         {
+            ShowToast(s => s.ShowError("取消暂存异常，请查看日志"));
             StatusMessage = $"取消暂存异常: {ex.Message}";
             Log.Error(ex, "取消暂存异常");
         }
@@ -291,10 +340,10 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (IsBusy) return;
         var projectPath = SelectedProject?.ProjectPath;
-        if (string.IsNullOrWhiteSpace(projectPath)) { StatusMessage = "项目路径无效"; return; }
-        if (string.IsNullOrWhiteSpace(NewVersion)) { StatusMessage = "请输入版本号"; return; }
-        if (string.IsNullOrWhiteSpace(CommitMessage)) { StatusMessage = "请输入变更说明"; return; }
-        if (StagedFiles.Count == 0) { StatusMessage = "暂存区为空，请先暂存文件"; return; }
+        if (string.IsNullOrWhiteSpace(projectPath)) { ShowToast(s => s.ShowWarning("请先选择一个项目")); StatusMessage = "请先选择一个项目"; return; }
+        if (string.IsNullOrWhiteSpace(NewVersion)) { ShowToast(s => s.ShowWarning("请输入版本号")); StatusMessage = "请输入版本号"; return; }
+        if (string.IsNullOrWhiteSpace(CommitMessage)) { ShowToast(s => s.ShowWarning("请输入变更说明")); StatusMessage = "请输入变更说明"; return; }
+        if (StagedFiles.Count == 0) { ShowToast(s => s.ShowWarning("暂存区为空，请先暂存文件")); StatusMessage = "暂存区为空，请先暂存文件"; return; }
 
         IsBusy = true;
         IsUploading = true;
@@ -304,17 +353,25 @@ public partial class MainWindowViewModel : ObservableObject
             var r = await _cli.PushAsync(projectPath, NewVersion, CommitMessage, AfterApplyUpdateScript);
             if (r?.IsSuccess == true)
             {
+                var stagedCount = StagedFiles.Count;
+                var unstagedCount = UnstagedFiles.Count;
                 NewVersion = string.Empty;
                 CommitMessage = string.Empty;
                 AfterApplyUpdateScript = string.Empty;
                 StatusMessage = "发布成功，正在刷新...";
                 await RefetchDataAsync();
-                StatusMessage = $"发布成功 ({StagedFiles.Count} 暂存, {UnstagedFiles.Count} 未暂存)";
+                ShowToast(s => s.ShowSuccess($"发布成功 ({stagedCount} 暂存, {unstagedCount} 未暂存)"));
+                StatusMessage = $"发布成功 ({stagedCount} 暂存, {unstagedCount} 未暂存)";
             }
-            else StatusMessage = $"发布失败: {r?.ErrorMsg}";
+            else
+            {
+                ShowToast(s => s.ShowError($"发布失败: {r?.ErrorMsg}"));
+                StatusMessage = $"发布失败: {r?.ErrorMsg}";
+            }
         }
         catch (Exception ex)
         {
+            ShowToast(s => s.ShowError("发布异常，请查看日志"));
             StatusMessage = $"发布异常: {ex.Message}";
             Log.Error(ex, "发布异常");
         }
@@ -334,6 +391,7 @@ public partial class MainWindowViewModel : ObservableObject
             _cfg.AddProject(cfg);
             Projects.Add(cfg);
             SelectedProject = cfg;
+            ShowToast(s => s.ShowSuccess($"项目 \"{cfg.DisplayName}\" 已添加"));
         }
         else
         {
@@ -344,9 +402,11 @@ public partial class MainWindowViewModel : ObservableObject
     private Task RemoveProjectAsync()
     {
         if (SelectedProject == null) return Task.CompletedTask;
-        _cfg.RemoveProject(SelectedProject.DisplayName);
+        var name = SelectedProject.DisplayName;
+        _cfg.RemoveProject(name);
         Projects.Remove(SelectedProject);
         SelectedProject = Projects.FirstOrDefault();
+        ShowToast(s => s.ShowSuccess($"项目 \"{name}\" 已移除"));
         return Task.CompletedTask;
     }
 
@@ -360,6 +420,7 @@ public partial class MainWindowViewModel : ObservableObject
             var idx = Projects.IndexOf(SelectedProject);
             if (idx >= 0) Projects[idx] = result;
             SelectedProject = result;
+            ShowToast(s => s.ShowSuccess("项目配置已更新"));
         }
     }
 }
