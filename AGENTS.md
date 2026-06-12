@@ -62,6 +62,7 @@
 8. ❌ 不引用未使用的命名空间
 9. ❌ 不在生产代码中写 `Console.WriteLine`（用 Serilog）
 10. ❌ 不为了简单控件创建自定义 UserControl
+11.❌写出不兼容的代码。client为go1.10编写，需要兼容xp,这个必须遵守
 
 ---
 
