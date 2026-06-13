@@ -15,11 +15,12 @@ import (
 
 // 推送命令的 flag 变量
 var (
-	pushVersion string
-	pushMessage []string
-	pushDryRun  bool
-	pushForce   bool
-	pushScript  string
+	pushVersion        string
+	pushMessage        []string
+	pushDryRun         bool
+	pushForce          bool
+	pushScript         string
+	pushSetForceUpdate bool
 )
 
 func init() {
@@ -28,6 +29,7 @@ func init() {
 	cmdPush.Flags().BoolVar(&pushDryRun, "dry-run", false, "仅校验不实际推送")
 	cmdPush.Flags().BoolVar(&pushForce, "force", false, "跳过 MD5 复核强制上传")
 	cmdPush.Flags().StringVar(&pushScript, "after-apply-update-script", "", "更新后执行的脚本路径（相对于应用目录）")
+	cmdPush.Flags().BoolVar(&pushSetForceUpdate, "set-force-update", false, "推送后设置此版本为强制更新（客户端不再询问直接更新）")
 	cmdPush.MarkFlagRequired("version")
 
 	RootCmd.AddCommand(cmdPush)
@@ -150,6 +152,32 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 	return true
 }
 
+func setProjectForceUpdate(cfg RuntimeConfig) {
+	client := newAPIClient(cfg)
+	projects, err := client.GetAllProjects()
+	if err != nil {
+		printHumanLn("Warning: 获取项目列表失败，无法设置强制更新: %v", err)
+		return
+	}
+	for _, p := range projects {
+		if p.Name == cfg.Shared.ProjectName {
+			if err := client.UpdateProject(models.ProjectConfigRequest{
+				Name:          p.Name,
+				Title:         p.Title,
+				IsForceUpdate: true,
+				IgnoreFolders: p.IgnoreFolders,
+				IgnoreFiles:   p.IgnoreFiles,
+			}); err != nil {
+				printHumanLn("Warning: 设置强制更新失败: %v", err)
+			} else {
+				printHumanLn("已设置此项目为强制更新模式")
+			}
+			return
+		}
+	}
+	printHumanLn("Warning: 未找到项目 %s，无法设置强制更新", cfg.Shared.ProjectName)
+}
+
 func runPush(cmd *cobra.Command, args []string) {
 	cfg, err := resolveConfig()
 	if err != nil {
@@ -183,6 +211,9 @@ func runPush(cmd *cobra.Command, args []string) {
 	if pushFiles(cfg, pushVersion, pushMessage, files, pushDryRun, pushForce, pushScript) {
 		if err := staging.Clear(cfg.Path); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: 清理暂存区失败: %v (推送已成功)\n", err)
+		}
+		if pushSetForceUpdate {
+			setProjectForceUpdate(cfg)
 		}
 	}
 }

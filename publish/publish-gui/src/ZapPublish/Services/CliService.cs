@@ -113,11 +113,11 @@ public class CliService
     public Task<CliOutput<object>?> ResetAllAsync(string projectPath)
         => RunAsync<object>("reset --all", projectPath);
 
-    public Task<CliOutput<object>?> PushAsync(string projectPath, string version, string message, string afterApplyUpdateScript = "", bool force = false)
+    public Task<CliOutput<object>?> PushAsync(string projectPath, string version, string message, string afterApplyUpdateScript = "", bool setForceUpdate = false)
     {
         var args = $"push --version \"{version}\" --message \"{message}\"";
-        if (force)
-            args += " --force";
+        if (setForceUpdate)
+            args += " --set-force-update";
         if (!string.IsNullOrWhiteSpace(afterApplyUpdateScript))
             args += $" --after-apply-update-script \"{afterApplyUpdateScript.Replace("\"", "\\\"")}\"";
         return RunAsync<object>(args, projectPath, 120000);
