@@ -61,6 +61,7 @@ public partial class AddProjectDialogViewModel : ObservableObject
     partial void OnSelectedServerProjectChanged(ProjectInfo? value)
     {
         if (value == null) return;
+        _serverProjectName = value.Name;
         // 如果用户还没填显示名称，自动用 project name 填充
         if (string.IsNullOrWhiteSpace(DisplayName))
             DisplayName = value.Name;

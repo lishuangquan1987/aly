@@ -397,6 +397,10 @@ public partial class MainWindowViewModel : ObservableObject
             SelectedProject = cfg;
             await MessageBox.ShowAsync($"项目 \"{cfg.DisplayName}\" 已添加", "成功");
         }
+        else
+        {
+            await MessageBox.ShowAsync("无法打开项目对话框，请稍后重试", "错误");
+        }
     }
 
     private async Task AddLocalProjectAsync()
@@ -409,6 +413,10 @@ public partial class MainWindowViewModel : ObservableObject
             Projects.Add(cfg);
             SelectedProject = cfg;
             await MessageBox.ShowAsync($"项目 \"{cfg.DisplayName}\" 已添加", "成功");
+        }
+        else
+        {
+            await MessageBox.ShowAsync("无法打开项目对话框，请稍后重试", "错误");
         }
     }
 
