@@ -118,6 +118,14 @@ func (c *Client) UpdateProject(req models.ProjectConfigRequest) error {
 	return c.post("/api/project/update_project", req, nil)
 }
 
+// SetProjectForceUpdate 只更新项目的强制更新标记，不涉及其他字段
+func (c *Client) SetProjectForceUpdate(projectName string, forceUpdate bool) error {
+	return c.post("/api/project/set_force_update", map[string]interface{}{
+		"projectName": projectName,
+		"forceUpdate": forceUpdate,
+	}, nil)
+}
+
 // DeleteProject 软删除项目
 func (c *Client) DeleteProject(projectName string) error {
 	path := fmt.Sprintf("/api/project/delete_project/%s", url.PathEscape(projectName))

@@ -13,6 +13,7 @@ func InitRouter(r *gin.Engine) {
 		{
 			projectGroup.POST("create_project", controllers.CreateProject)
 			projectGroup.POST("update_project", controllers.UpdateProject)
+			projectGroup.POST("set_force_update", controllers.SetForceUpdate)
 			projectGroup.GET("get_all_projects", controllers.GetAllProjects)
 			projectGroup.GET("get_project_by_name/:projectName", controllers.GetProjectByName)
 			projectGroup.GET("get_project_change_logs/:projectName", controllers.GetProjectChangeLogs)

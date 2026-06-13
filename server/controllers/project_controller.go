@@ -182,6 +182,22 @@ func GetProjectByName(ctx *gin.Context) {
 	ctx.JSON(200, service.GetProjectByName(ctx.Request.Context(), projectNameDto.ProjectName))
 }
 
+func SetForceUpdate(ctx *gin.Context) {
+	var req struct {
+		ProjectName string `json:"projectName"`
+		ForceUpdate bool   `json:"forceUpdate"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(200, models.NGWithError(err))
+		return
+	}
+	if req.ProjectName == "" {
+		ctx.JSON(200, models.NG("项目名称不能为空"))
+		return
+	}
+	ctx.JSON(200, service.SetForceUpdate(ctx.Request.Context(), req.ProjectName, req.ForceUpdate))
+}
+
 func GetProjectChangeLogs(ctx *gin.Context) {
 	var projectNameDto struct {
 		ProjectName string `uri:"projectName" json:"projectName"`

@@ -154,28 +154,11 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 
 func setProjectForceUpdate(cfg RuntimeConfig) {
 	client := newAPIClient(cfg)
-	projects, err := client.GetAllProjects()
-	if err != nil {
-		printHumanLn("Warning: 获取项目列表失败，无法设置强制更新: %v", err)
-		return
+	if err := client.SetProjectForceUpdate(cfg.Shared.ProjectName, true); err != nil {
+		printHumanLn("Warning: 设置强制更新失败: %v", err)
+	} else {
+		printHumanLn("已设置此项目为强制更新模式")
 	}
-	for _, p := range projects {
-		if p.Name == cfg.Shared.ProjectName {
-			if err := client.UpdateProject(models.ProjectConfigRequest{
-				Name:          p.Name,
-				Title:         p.Title,
-				IsForceUpdate: true,
-				IgnoreFolders: p.IgnoreFolders,
-				IgnoreFiles:   p.IgnoreFiles,
-			}); err != nil {
-				printHumanLn("Warning: 设置强制更新失败: %v", err)
-			} else {
-				printHumanLn("已设置此项目为强制更新模式")
-			}
-			return
-		}
-	}
-	printHumanLn("Warning: 未找到项目 %s，无法设置强制更新", cfg.Shared.ProjectName)
 }
 
 func runPush(cmd *cobra.Command, args []string) {

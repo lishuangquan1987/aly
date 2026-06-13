@@ -85,6 +85,21 @@ func UpdateProject(ctx context.Context, name string, title string, isForceUpdate
 	return models.OK()
 }
 
+// SetForceUpdate 只更新项目的 force_update 字段，避免 read-modify-write 竞态
+func SetForceUpdate(ctx context.Context, projectName string, forceUpdate bool) models.CommonResponse {
+	err := db.WithTx(ctx, func(tx *ent.Tx) error {
+		_, err := tx.Project.Update().
+			Where(project.NameEQ(projectName)).
+			SetForceUpdate(forceUpdate).
+			Save(ctx)
+		return err
+	})
+	if err != nil {
+		return models.NGWithError(err)
+	}
+	return models.OK()
+}
+
 func GetAllProjects(ctx context.Context) models.CommonResponse {
 	projects, err := db.Client.Project.Query().Where(project.IsDeletedEQ(false)).All(ctx)
 	if err != nil {
