@@ -17,7 +17,6 @@ type SharedConfig struct {
 
 // PublishConfig publish-cli 专有配置（.updator/publish.json，本地不上传）
 type PublishConfig struct {
-	OutputFormat string `json:"output_format"` // human / json
 }
 
 // DefaultShared 返回默认共用配置
@@ -30,9 +29,7 @@ func DefaultShared() SharedConfig {
 
 // DefaultPublish 返回默认 publish-cli 配置
 func DefaultPublish() PublishConfig {
-	return PublishConfig{
-		OutputFormat: "human",
-	}
+	return PublishConfig{}
 }
 
 // UpdatorDir 返回 .updator/ 目录路径

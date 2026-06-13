@@ -52,6 +52,7 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private bool _isCliFound;
     [ObservableProperty] private string _cliPath = string.Empty;
     [ObservableProperty] private string _afterApplyUpdateScript = string.Empty;
+    [ObservableProperty] private bool _forcePush;
 
     [NotifyCanExecuteChangedFor(nameof(AddSelectedCommand))]
     [ObservableProperty] private FileItem? _selectedUnStagedFile;
@@ -360,7 +361,7 @@ public partial class MainWindowViewModel : ObservableObject
         StatusMessage = "发布中...";
         try
         {
-            var r = await _cli.PushAsync(projectPath, NewVersion, CommitMessage, AfterApplyUpdateScript);
+            var r = await _cli.PushAsync(projectPath, NewVersion, CommitMessage, AfterApplyUpdateScript, ForcePush);
             if (r?.IsSuccess == true)
             {
                 var stagedCount = StagedFiles.Count;

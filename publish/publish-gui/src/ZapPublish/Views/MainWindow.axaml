@@ -309,6 +309,9 @@
                                  Watermark="更新后执行的脚本路径（可选，相对于应用目录）"
                                  FontSize="13" Height="30"/>
 
+                        <CheckBox IsChecked="{Binding ForcePush}" Content="强制推送（跳过暂存区 MD5 复核）"
+                                  FontSize="12" Foreground="{DynamicResource SemiColorWarning}"/>
+
                         <!-- Progress -->
                         <Border IsVisible="{Binding IsUploading}" CornerRadius="6"
                                 Padding="10,8" Background="{DynamicResource SemiColorFill0}"

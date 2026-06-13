@@ -152,7 +152,11 @@ func runStaged(cmd *cobra.Command, args []string) {
 		outputResult(false, err.Error(), nil)
 		return
 	}
-	items := staging.LoadAsStatusItems(cfg.Path)
+	items, err := staging.Load(cfg.Path)
+	if err != nil {
+		outputResult(false, fmt.Sprintf("failed to load staging: %v", err), nil)
+		return
+	}
 	if jsonOutput {
 		printOutput(true, "", items)
 		return

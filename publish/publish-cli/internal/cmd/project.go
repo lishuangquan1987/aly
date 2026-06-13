@@ -149,7 +149,7 @@ func runProjectCreate(cmd *cobra.Command, args []string) {
 	ignoreFoldersStr, _ := cmd.Flags().GetString("ignore-folders")
 	ignoreFilesStr, _ := cmd.Flags().GetString("ignore-files")
 
-	req := models.CreateProjectRequest{
+	req := models.ProjectConfigRequest{
 		Name:          name,
 		Title:         title,
 		IsForceUpdate: forceUpdate,
@@ -186,7 +186,7 @@ func runProjectUpdate(cmd *cobra.Command, args []string) {
 	ignoreFoldersStr, _ := cmd.Flags().GetString("ignore-folders")
 	ignoreFilesStr, _ := cmd.Flags().GetString("ignore-files")
 
-	req := models.UpdateProjectRequest{
+	req := models.ProjectConfigRequest{
 		Name:          name,
 		Title:         title,
 		IsForceUpdate: forceUpdate,

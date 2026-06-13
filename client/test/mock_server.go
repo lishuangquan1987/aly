@@ -38,13 +38,14 @@ type Project struct {
 	IsDeleted     bool     `json:"is_deleted"`
 }
 
-type ChangeLog struct {
-	ID        int      `json:"id"`
-	Version   string   `json:"version"`
-	Logs      []string `json:"logs"`
-	Time      string   `json:"time"`
-	CreatedAt string   `json:"created_at"`
-	IsDeleted bool     `json:"is_deleted"`
+type ProjectChangeLog struct {
+	ID                      int      `json:"id"`
+	Version                 string   `json:"version"`
+	Logs                    []string `json:"logs"`
+	Time                    string   `json:"time"`
+	CreatedAt               string   `json:"created_at"`
+	IsDeleted               bool     `json:"is_deleted"`
+	AfterApplyUpdateScript  string   `json:"after_apply_update_script"`
 }
 
 type FileInfo struct {
@@ -69,7 +70,7 @@ type CreateProjectReq struct {
 type MockServer struct {
 	mu           sync.Mutex
 	projects     []Project
-	changeLogs   []ChangeLog
+	changeLogs   []ProjectChangeLog
 	nextPID      int
 	nextCLID     int
 	dataDir      string // where uploaded files are stored
@@ -155,7 +156,7 @@ func (s *MockServer) createProject(w http.ResponseWriter, r *http.Request) {
 	s.projects = append(s.projects, proj)
 
 	// Create first change log
-	cl := ChangeLog{
+	cl := ProjectChangeLog{
 		ID:        s.nextCLID,
 		Version:   "V1.0.0",
 		Logs:      []string{"第一次创建"},
@@ -254,7 +255,7 @@ func (s *MockServer) getChangeLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var logs []ChangeLog
+	var logs []ProjectChangeLog
 	for _, cl := range s.changeLogs {
 		if !cl.IsDeleted {
 			logs = append(logs, cl)
@@ -469,9 +470,10 @@ func (s *MockServer) addChangeLog(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 
 	var req struct {
-		ProjectID int      `json:"projectId"`
-		Version   string   `json:"version"`
-		Logs      []string `json:"logs"`
+		ProjectID               int      `json:"projectId"`
+		Version                 string   `json:"version"`
+		Logs                    []string `json:"logs"`
+		AfterApplyUpdateScript  string   `json:"afterApplyUpdateScript"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.json(w, CommonResponse{IsSuccess: false, ErrorMsg: err.Error()})
@@ -491,13 +493,14 @@ func (s *MockServer) addChangeLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cl := ChangeLog{
-		ID:        s.nextCLID,
-		Version:   req.Version,
-		Logs:      req.Logs,
-		Time:      time.Now().Format("2006-01-02 15:04:05"),
-		CreatedAt: time.Now().Format("2006-01-02T15:04:05Z"),
-		IsDeleted: false,
+	cl := ProjectChangeLog{
+		ID:                     s.nextCLID,
+		Version:                req.Version,
+		Logs:                   req.Logs,
+		Time:                   time.Now().Format("2006-01-02 15:04:05"),
+		CreatedAt:              time.Now().Format("2006-01-02T15:04:05Z"),
+		IsDeleted:              false,
+		AfterApplyUpdateScript: req.AfterApplyUpdateScript,
 	}
 	s.nextCLID++
 	s.changeLogs = append(s.changeLogs, cl)

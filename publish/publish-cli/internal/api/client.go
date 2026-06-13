@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	"zap/publish-cli/pkg/models"
 )
@@ -24,7 +25,7 @@ type Client struct {
 func NewClient(serverURL string) *Client {
 	return &Client{
 		ServerURL: serverURL,
-		hc:        &http.Client{},
+		hc:        &http.Client{Timeout: 120 * time.Second},
 	}
 }
 
@@ -104,7 +105,7 @@ func (c *Client) GetAllProjects() ([]models.Project, error) {
 }
 
 // CreateProject 创建项目
-func (c *Client) CreateProject(req models.CreateProjectRequest) (*models.Project, error) {
+func (c *Client) CreateProject(req models.ProjectConfigRequest) (*models.Project, error) {
 	var project models.Project
 	if err := c.post("/api/project/create_project", req, &project); err != nil {
 		return nil, err
@@ -113,7 +114,7 @@ func (c *Client) CreateProject(req models.CreateProjectRequest) (*models.Project
 }
 
 // UpdateProject 更新项目配置
-func (c *Client) UpdateProject(req models.UpdateProjectRequest) error {
+func (c *Client) UpdateProject(req models.ProjectConfigRequest) error {
 	return c.post("/api/project/update_project", req, nil)
 }
 

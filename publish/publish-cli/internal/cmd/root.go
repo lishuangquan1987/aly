@@ -7,6 +7,7 @@ import (
 
 	"zap/publish-cli/internal/api"
 	"zap/publish-cli/internal/config"
+	"zap/publish-cli/internal/staging"
 	"zap/publish-cli/pkg/models"
 
 	"github.com/spf13/cobra"
@@ -119,6 +120,28 @@ func outputResult(success bool, errMsg string, data interface{}) {
 	} else if !success {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", errMsg)
 	}
+}
+
+// mergeStagedIntoStatusData 从暂存区加载 staged 文件，并从 unstaged 中移除已暂存的条目
+func mergeStagedIntoStatusData(sd *models.StatusData, projectPath string) {
+	stagedItems, err := staging.Load(projectPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load staging: %v\n", err)
+		return
+	}
+	stagedPaths := make(map[string]bool, len(stagedItems))
+	for _, s := range stagedItems {
+		stagedPaths[s.RelativePath] = true
+	}
+	sd.Staged = stagedItems
+
+	var filtered []models.FileStatusItem
+	for _, u := range sd.Unstaged {
+		if !stagedPaths[u.RelativePath] {
+			filtered = append(filtered, u)
+		}
+	}
+	sd.Unstaged = filtered
 }
 
 // RootCmd 根命令

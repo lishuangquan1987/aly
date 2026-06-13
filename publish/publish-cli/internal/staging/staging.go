@@ -12,12 +12,8 @@ import (
 )
 
 // StagedFile represents a staged file entry.
-type StagedFile struct {
-	RelativePath string `json:"relativePath"`
-	Status       string `json:"status"`
-	LocalMd5     string `json:"localMd5"`
-	LocalSize    int64  `json:"localSize"`
-}
+// 与 models.FileStatusItem 结构一致，用类型别名保持语义清晰
+type StagedFile = models.FileStatusItem
 
 // Load reads the staged file list.
 func Load(projectPath string) ([]StagedFile, error) {
@@ -151,25 +147,6 @@ func Verify(projectPath string) (conflicts []string, err error) {
 		}
 	}
 	return
-}
-
-// LoadAsStatusItems loads the staging area as FileStatusItem list (for status command).
-func LoadAsStatusItems(projectPath string) []models.FileStatusItem {
-	files, err := Load(projectPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to load staging: %v\n", err)
-		return nil
-	}
-	var items []models.FileStatusItem
-	for _, f := range files {
-		items = append(items, models.FileStatusItem{
-			RelativePath: f.RelativePath,
-			Status:       f.Status,
-			LocalMd5:     f.LocalMd5,
-			LocalSize:    f.LocalSize,
-		})
-	}
-	return items
 }
 
 func stagingPath(projectPath string) string {

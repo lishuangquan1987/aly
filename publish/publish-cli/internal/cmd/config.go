@@ -184,7 +184,7 @@ func runConfigList(cmd *cobra.Command, args []string) {
 	printHumanLn("project.name    = %s", cfg.Shared.ProjectName)
 	printHumanLn("ignore.folders  = %v", cfg.Shared.IgnoreFolders)
 	printHumanLn("ignore.files    = %v", cfg.Shared.IgnoreFiles)
-	printHumanLn("output.format   = %s", cfg.Publish.OutputFormat)
+
 }
 
 func runConfigPath(cmd *cobra.Command, args []string) {
@@ -204,8 +204,6 @@ func applyConfigSet(cfg *RuntimeConfig, key, value string) {
 		cfg.Shared.ServerURL = value
 	case "project.name":
 		cfg.Shared.ProjectName = value
-	case "output.format":
-		cfg.Publish.OutputFormat = value
 	default:
 		fmt.Printf("Warning: unknown config key '%s'\n", key)
 	}
@@ -252,8 +250,6 @@ func getConfigValue(cfg *RuntimeConfig, key string) string {
 		return cfg.Shared.ServerURL
 	case "project.name":
 		return cfg.Shared.ProjectName
-	case "output.format":
-		return cfg.Publish.OutputFormat
 	default:
 		return ""
 	}

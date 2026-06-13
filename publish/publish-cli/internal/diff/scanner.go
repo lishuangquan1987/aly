@@ -1,30 +1,48 @@
 package diff
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"zap/publish-cli/pkg/models"
 )
 
+// fileEntry 遍历阶段收集的文件信息（不含哈希）
+type fileEntry struct {
+	absPath string
+	relPath string
+	size    int64
+	modTime string
+}
+
 // ScanDirectory 递归扫描目录，返回文件列表（应用忽略规则）
+// 哈希计算使用 worker goroutine 并行执行以加速大规模目录扫描。
 func ScanDirectory(root string, ignoreFolders, ignoreFiles []string) ([]models.LocalFile, error) {
-	var files []models.LocalFile
+	// 阶段 1：遍历目录收集文件条目（不计算哈希）
+	var entries []fileEntry
 	err := filepath.Walk(root, func(absPath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if info.IsDir() {
-			// 跳过 .updator 和 .publish-cli 元数据目录
-			if info.Name() == ".updator" || info.Name() == ".publish-cli" {
+			if info.Name() == ".publish-cli" {
 				return filepath.SkipDir
 			}
-			// 应用忽略文件夹规则
+			// .updator/ 目录不整体跳过，因为 shared.json 是 client 端配置需要上传
+			// 但跳过 staging/（本地暂存元数据）和 publish.json（CLI 专有）
+			if info.Name() == "staging" {
+				relPath, _ := filepath.Rel(root, absPath)
+				if strings.HasPrefix(filepath.ToSlash(relPath), ".updator/") {
+					return filepath.SkipDir
+				}
+			}
 			relPath, _ := filepath.Rel(root, absPath)
 			relPath = filepath.ToSlash(relPath)
 			for _, ignoreFolder := range ignoreFolders {
@@ -34,34 +52,82 @@ func ScanDirectory(root string, ignoreFolders, ignoreFiles []string) ([]models.L
 			}
 			return nil
 		}
-		// 获取相对路径
 		relPath, _ := filepath.Rel(root, absPath)
 		relPath = filepath.ToSlash(relPath)
 
-		// 应用忽略文件规则
+		// .updator/publish.json 是 CLI 专有配置，不上传到服务端
+		if relPath == ".updator/publish.json" {
+			return nil
+		}
+
 		for _, ignoreFile := range ignoreFiles {
 			if matchFile(relPath, ignoreFile) {
 				return nil
 			}
 		}
-
-		// 计算 MD5 和 SHA256
-		md5Str, sha256Str, err := hashFile(absPath)
-		if err != nil {
-			return fmt.Errorf("hash %s: %w", absPath, err)
-		}
-
-		files = append(files, models.LocalFile{
-			AbsolutePath: absPath,
-			RelativePath: relPath,
-			Size:         info.Size(),
-			ModTime:      info.ModTime().Format("2006-01-02 15:04:05"),
-			MD5:          md5Str,
-			SHA256:       sha256Str,
+		entries = append(entries, fileEntry{
+			absPath: absPath,
+			relPath: relPath,
+			size:    info.Size(),
+			modTime: info.ModTime().Format("2006-01-02 15:04:05"),
 		})
 		return nil
 	})
-	return files, err
+	if err != nil {
+		return nil, err
+	}
+
+	// 阶段 2：并行计算哈希
+	numWorkers := runtime.NumCPU() * 2
+	sem := make(chan struct{}, numWorkers)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	type hashResult struct {
+		idx    int
+		md5    string
+		sha256 string
+		err    error
+	}
+	results := make(chan hashResult, len(entries))
+
+	for i, e := range entries {
+		sem <- struct{}{}
+		go func(idx int, e fileEntry) {
+			defer func() { <-sem }()
+			select {
+			case <-ctx.Done():
+				results <- hashResult{idx: idx, err: ctx.Err()}
+				return
+			default:
+			}
+			md5Str, sha256Str, err := HashFile(e.absPath)
+			results <- hashResult{idx: idx, md5: md5Str, sha256: sha256Str, err: err}
+		}(i, e)
+	}
+
+	// 收集结果
+	files := make([]models.LocalFile, len(entries))
+	for i := 0; i < len(entries); i++ {
+		r := <-results
+		if r.err != nil {
+			cancel()
+			// 继续消费完剩余结果避免 goroutine 泄漏
+			for j := i + 1; j < len(entries); j++ {
+				<-results
+			}
+			return nil, fmt.Errorf("hash %s: %w", entries[r.idx].absPath, r.err)
+		}
+		files[r.idx] = models.LocalFile{
+			AbsolutePath: entries[r.idx].absPath,
+			RelativePath: entries[r.idx].relPath,
+			Size:         entries[r.idx].size,
+			ModTime:      entries[r.idx].modTime,
+			MD5:          r.md5,
+			SHA256:       r.sha256,
+		}
+	}
+	return files, nil
 }
 
 // Diff 比对本地与服务端文件列表
@@ -115,7 +181,19 @@ func Diff(localFiles []models.LocalFile, serverFiles []models.FileInfo) []models
 
 // HashFile 计算单个文件的 MD5 和 SHA256
 func HashFile(path string) (md5Str, sha256Str string, err error) {
-	return hashFile(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return "", "", err
+	}
+	defer f.Close()
+
+	md5h := md5.New()
+	sha256h := sha256.New()
+	w := io.MultiWriter(md5h, sha256h)
+	if _, err := io.Copy(w, f); err != nil {
+		return "", "", err
+	}
+	return fmt.Sprintf("%x", md5h.Sum(nil)), fmt.Sprintf("%x", sha256h.Sum(nil)), nil
 }
 
 // RunStatus 执行完整 status 流程：扫描 → 查询 → 比对
@@ -150,24 +228,6 @@ func RunStatus(projectPath string, ignoreFolders []string, ignoreFiles []string,
 		}
 	}
 	return sd, nil
-}
-
-// ─── 内部工具函数 ──────────────────────────────────────────────────────
-
-func hashFile(path string) (string, string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", "", err
-	}
-	defer f.Close()
-
-	md5h := md5.New()
-	sha256h := sha256.New()
-	w := io.MultiWriter(md5h, sha256h)
-	if _, err := io.Copy(w, f); err != nil {
-		return "", "", err
-	}
-	return fmt.Sprintf("%x", md5h.Sum(nil)), fmt.Sprintf("%x", sha256h.Sum(nil)), nil
 }
 
 // isSubPath 判断 child 是否是 parent 的子路径（路径前缀匹配）

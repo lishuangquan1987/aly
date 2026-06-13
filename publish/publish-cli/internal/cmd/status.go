@@ -2,7 +2,6 @@
 
 import (
 	"zap/publish-cli/internal/diff"
-	"zap/publish-cli/internal/staging"
 	"zap/publish-cli/pkg/models"
 
 	"github.com/spf13/cobra"
@@ -49,21 +48,7 @@ func runStatus(cmd *cobra.Command, args []string) {
 		return
 	}
 	// 合并暂存区文件：从 unstaged 移除已暂存的，放入 staged
-	stagedItems := staging.LoadAsStatusItems(cfg.Path)
-	stagedPaths := make(map[string]bool, len(stagedItems))
-	for _, s := range stagedItems {
-		stagedPaths[s.RelativePath] = true
-	}
-	sd.Staged = stagedItems
-
-	// 从 unstaged 中移除已暂存的文件
-	var filteredUnstaged []models.FileStatusItem
-	for _, u := range sd.Unstaged {
-		if !stagedPaths[u.RelativePath] {
-			filteredUnstaged = append(filteredUnstaged, u)
-		}
-	}
-	sd.Unstaged = filteredUnstaged
+	mergeStagedIntoStatusData(sd, cfg.Path)
 
 	if jsonOutput {
 		printOutput(true, "", sd)
@@ -117,18 +102,7 @@ func runDiff(cmd *cobra.Command, args []string) {
 		return
 	}
 	// 合并暂存区文件（与 runStatus 一致：从 unstaged 移除已暂存的）
-	sd.Staged = staging.LoadAsStatusItems(cfg.Path)
-	stagedPaths := make(map[string]bool, len(sd.Staged))
-	for _, s := range sd.Staged {
-		stagedPaths[s.RelativePath] = true
-	}
-	var filteredUnstaged []models.FileStatusItem
-	for _, u := range sd.Unstaged {
-		if !stagedPaths[u.RelativePath] {
-			filteredUnstaged = append(filteredUnstaged, u)
-		}
-	}
-	sd.Unstaged = filteredUnstaged
+	mergeStagedIntoStatusData(sd, cfg.Path)
 
 	allFiles := make([]models.FileStatusItem, 0, len(sd.Staged)+len(sd.Unstaged)+len(sd.Unchanged))
 	allFiles = append(allFiles, sd.Staged...)

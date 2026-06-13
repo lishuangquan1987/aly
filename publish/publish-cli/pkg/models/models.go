@@ -62,17 +62,8 @@ type ServerOSInfo struct {
 
 // ─── 请求 DTO（POST 请求体，camelCase）───────────────────────────────────
 
-// CreateProjectRequest POST /api/project/create_project
-type CreateProjectRequest struct {
-	Name          string   `json:"name"`
-	Title         string   `json:"title"`
-	IsForceUpdate bool     `json:"isForceUpdate"`
-	IgnoreFolders []string `json:"ignoreFolders"`
-	IgnoreFiles   []string `json:"ignoreFiles"`
-}
-
-// UpdateProjectRequest POST /api/project/update_project
-type UpdateProjectRequest struct {
+// ProjectConfigRequest POST /api/project/create_project 和 update_project 共用
+type ProjectConfigRequest struct {
 	Name          string   `json:"name"`
 	Title         string   `json:"title"`
 	IsForceUpdate bool     `json:"isForceUpdate"`
