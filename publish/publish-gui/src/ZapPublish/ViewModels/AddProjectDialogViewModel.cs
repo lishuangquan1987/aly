@@ -4,11 +4,11 @@ using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Newtonsoft.Json;
 using ZapPublish.Models.Cli;
 using ZapPublish.Models.Local;
 using ZapPublish.Services;
 using Serilog;
+using Ursa.Controls;
 
 namespace ZapPublish.ViewModels;
 
@@ -61,7 +61,6 @@ public partial class AddProjectDialogViewModel : ObservableObject
     partial void OnSelectedServerProjectChanged(ProjectInfo? value)
     {
         if (value == null) return;
-        _serverProjectName = value.Name;
         // 如果用户还没填显示名称，自动用 project name 填充
         if (string.IsNullOrWhiteSpace(DisplayName))
             DisplayName = value.Name;
@@ -73,7 +72,6 @@ public partial class AddProjectDialogViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(value) || !Directory.Exists(value))
         {
             _isInit = false;
-            _serverProjectName = string.Empty;
             ShowInitStatus = false;
             return;
         }
@@ -88,7 +86,6 @@ public partial class AddProjectDialogViewModel : ObservableObject
         else
         {
             _isInit = false;
-            _serverProjectName = string.Empty;
             InitStatusMessage = "";
             ShowInitStatus = false;
         }
@@ -105,6 +102,8 @@ public partial class AddProjectDialogViewModel : ObservableObject
         var path = await browseFolderAsync();
         if (!string.IsNullOrWhiteSpace(path))
             ProjectPath = path;
+        
+        
     }
 
     private async Task FetchProjectsAsync()
@@ -251,28 +250,9 @@ public partial class AddProjectDialogViewModel : ObservableObject
             ProjectPath = projectPath
         };
 
-        Log.Information("项目初始化完成: DisplayName={Name}, Path={Path}",
-            cfg.DisplayName, cfg.ProjectPath);
+        Log.Information("项目初始化完成: DisplayName={Name}, Path={Path}, Server={Server}, Project={Proj}",
+            cfg.DisplayName, cfg.ProjectPath, serverUrl, _serverProjectName);
 
         RequestClose?.Invoke(cfg);
-    }
-
-    /// <summary>
-    /// 读取文件内容，如被锁定则自动重试（异步，不阻塞 UI 线程）
-    /// </summary>
-    private static async Task<string> ReadFileWithRetryAsync(string path, int maxRetries = 3, int delayMs = 50)
-    {
-        for (int i = 0; i < maxRetries; i++)
-        {
-            try
-            {
-                return File.ReadAllText(path);
-            }
-            catch (IOException) when (i < maxRetries - 1)
-            {
-                await Task.Delay(delayMs);
-            }
-        }
-        return File.ReadAllText(path);
     }
 }
