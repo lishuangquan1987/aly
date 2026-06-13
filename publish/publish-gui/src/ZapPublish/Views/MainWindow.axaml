@@ -32,7 +32,13 @@
                     <Button Command="{Binding AddProjectCommand}" Classes="Primary" Height="30" Padding="12,0">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <materialIcons:MaterialIcon Kind="PlusCircleOutline" Width="16" Height="16"/>
-                            <TextBlock Text="添加项目" FontSize="13" VerticalAlignment="Center"/>
+                            <TextBlock Text="初始化项目" FontSize="13" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding AddLocalProjectCommand}" Height="30" Padding="12,0">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <materialIcons:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16"/>
+                            <TextBlock Text="添加本地项目" FontSize="13" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Command="{Binding RemoveProjectCommand}" Height="30" Padding="12,0"

@@ -30,6 +30,8 @@ public partial class AddProjectDialogViewModel : ObservableObject
     [ObservableProperty] private bool _showCreateButton;
     [ObservableProperty] private string _initStatusMessage = string.Empty;
     [ObservableProperty] private bool _showInitStatus;
+    [ObservableProperty] private string _ignoreFolders = string.Empty;
+    [ObservableProperty] private string _ignoreFiles = string.Empty;
 
     /// <summary>View 订阅此事件以关闭对话框并返回结果</summary>
     public event Action<ProjectConfig?>? RequestClose;
@@ -80,34 +82,15 @@ public partial class AddProjectDialogViewModel : ObservableObject
         if (File.Exists(sharedPath))
         {
             _isInit = true;
-            try
-            {
-                // 使用重试机制异步读取，防止 CLI 进程锁定文件（不阻塞 UI 线程）
-                var json = await ReadFileWithRetryAsync(sharedPath, maxRetries: 3);
-                var shared = JsonConvert.DeserializeObject<SharedConfig>(json);
-                if (shared != null)
-                {
-                    _serverProjectName = shared.ProjectName ?? "";
-                    // 如果用户还没填显示名称，自动用 project_name 填充
-                    if (string.IsNullOrWhiteSpace(DisplayName))
-                        DisplayName = shared.ProjectName ?? "";
-                    if (!string.IsNullOrWhiteSpace(shared.ServerUrl))
-                        ServerUrl = shared.ServerUrl;
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "读取 .updator/shared.json 失败: {Path}", sharedPath);
-            }
-            InitStatusMessage = "✅ 已检测到 .updator/ 配置（项目已初始化）";
+            InitStatusMessage = "❌ 该文件夹已初始化，请使用「添加本地项目」功能";
             ShowInitStatus = true;
         }
         else
         {
             _isInit = false;
             _serverProjectName = string.Empty;
-            InitStatusMessage = "⚠ 未检测到 .updator/ 配置，需填写服务端信息进行初始化";
-            ShowInitStatus = true;
+            InitStatusMessage = "";
+            ShowInitStatus = false;
         }
     }
 
@@ -238,24 +221,28 @@ public partial class AddProjectDialogViewModel : ObservableObject
             return;
         }
 
-        // 情况1：项目未初始化，需运行 config init
-        if (!_isInit)
+        // 初始化流程不允许 .updator 已存在，必须使用「添加本地项目」
+        if (_isInit)
         {
-            var serverUrl = ServerUrl?.Trim();
-            if (string.IsNullOrWhiteSpace(serverUrl) || string.IsNullOrWhiteSpace(_serverProjectName))
-            {
-                StatusMessage = "项目未初始化。请填写服务端地址并选择/创建服务端项目。";
-                return;
-            }
+            StatusMessage = "该文件夹已初始化，请使用「添加本地项目」功能。";
+            return;
+        }
 
-            Log.Information("项目未初始化，执行 config init: Server={Server}, Project={Name}, Path={Path}",
-                serverUrl, _serverProjectName, projectPath);
-            var initResult = await _cli.ConfigInitAsync(projectPath, serverUrl, _serverProjectName);
-            if (initResult?.IsSuccess != true)
-            {
-                StatusMessage = $"初始化 .updator/ 失败: {initResult?.ErrorMsg}";
-                return;
-            }
+        var serverUrl = ServerUrl?.Trim();
+        if (string.IsNullOrWhiteSpace(serverUrl) || string.IsNullOrWhiteSpace(_serverProjectName))
+        {
+            StatusMessage = "请填写服务端地址并选择/创建服务端项目。";
+            return;
+        }
+
+        Log.Information("执行 config init: Server={Server}, Project={Name}, Path={Path}",
+            serverUrl, _serverProjectName, projectPath);
+        var initResult = await _cli.ConfigInitAsync(projectPath, serverUrl, _serverProjectName,
+            IgnoreFolders?.Trim() ?? "", IgnoreFiles?.Trim() ?? "");
+        if (initResult?.IsSuccess != true)
+        {
+            StatusMessage = $"初始化 .updator/ 失败: {initResult?.ErrorMsg}";
+            return;
         }
 
         var cfg = new ProjectConfig
@@ -264,8 +251,8 @@ public partial class AddProjectDialogViewModel : ObservableObject
             ProjectPath = projectPath
         };
 
-        Log.Information("添加项目: DisplayName={Name}, Path={Path}, WasInit={Init}",
-            cfg.DisplayName, cfg.ProjectPath, _isInit);
+        Log.Information("项目初始化完成: DisplayName={Name}, Path={Path}",
+            cfg.DisplayName, cfg.ProjectPath);
 
         RequestClose?.Invoke(cfg);
     }

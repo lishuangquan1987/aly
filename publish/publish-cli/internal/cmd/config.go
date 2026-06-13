@@ -14,9 +14,14 @@ var (
 	setArrayAdd    string
 	setArrayRemove string
 	setArrayClear  bool
+
+	ignoreFoldersInit string
+	ignoreFilesInit   string
 )
 
 func init() {
+	cmdConfigInit.Flags().StringVar(&ignoreFoldersInit, "ignore-folders", "", "忽略的文件夹（逗号分隔）")
+	cmdConfigInit.Flags().StringVar(&ignoreFilesInit, "ignore-files", "", "忽略的文件（逗号分隔）")
 	cmdConfigInit.MarkFlagRequired("project")
 
 	RootCmd.AddCommand(cmdConfig)
@@ -74,6 +79,13 @@ func runConfigInit(cmd *cobra.Command, args []string) {
 	if err != nil {
 		outputResult(false, err.Error(), nil)
 		return
+	}
+	// 应用 --ignore-folders 和 --ignore-files（逗号分隔）
+	if ignoreFoldersInit != "" {
+		cfg.Shared.IgnoreFolders = parseCSV(ignoreFoldersInit)
+	}
+	if ignoreFilesInit != "" {
+		cfg.Shared.IgnoreFiles = parseCSV(ignoreFilesInit)
 	}
 	if err := config.SaveShared(cfg.Path, cfg.Shared); err != nil {
 		outputResult(false, err.Error(), nil)

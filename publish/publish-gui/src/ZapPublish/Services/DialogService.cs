@@ -60,6 +60,34 @@ public class DialogService : IDialogService
         return await dialog.ShowDialog<ProjectConfig?>(owner);
     }
 
+    public async Task<ProjectConfig?> ShowAddLocalProjectDialogAsync()
+    {
+        var owner = GetOwner();
+        if (owner == null)
+        {
+            Log.Warning("无法打开添加本地项目对话框: MainWindow 不可用");
+            return null;
+        }
+
+        var dialog = new AddLocalProjectDialog();
+
+        var browseFolderAsync = new Func<Task<string?>>(async () =>
+        {
+            var result = await dialog.StorageProvider.OpenFolderPickerAsync(
+                new FolderPickerOpenOptions { Title = "选择已初始化的项目文件夹" });
+            return result.Count > 0 ? result[0].Path.LocalPath : null;
+        });
+
+        var vm = new AddLocalProjectDialogViewModel();
+        vm.BrowseFolderAsync = browseFolderAsync;
+
+        dialog.DataContext = vm;
+        vm.RequestClose += result => dialog.Close(result);
+
+        Log.Information("打开添加本地项目对话框");
+        return await dialog.ShowDialog<ProjectConfig?>(owner);
+    }
+
     public async Task<ProjectInfo?> ShowCreateProjectDialogAsync(string serverUrl)
     {
         var owner = GetOwner();

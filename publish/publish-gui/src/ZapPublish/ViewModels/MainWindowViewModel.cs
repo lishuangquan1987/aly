@@ -66,6 +66,7 @@ public partial class MainWindowViewModel : ObservableObject
     public IAsyncRelayCommand ResetSelectedCommand { get; }
     public IAsyncRelayCommand PublishCommand { get; }
     public IAsyncRelayCommand AddProjectCommand { get; }
+    public IAsyncRelayCommand AddLocalProjectCommand { get; }
     public IAsyncRelayCommand RemoveProjectCommand { get; }
     public IAsyncRelayCommand EditProjectCommand { get; }
 
@@ -85,6 +86,7 @@ public partial class MainWindowViewModel : ObservableObject
         ResetSelectedCommand = new AsyncRelayCommand(ResetSelectedAsync, () => SelectedProject != null && this.SelectedStagedFile != null);
         PublishCommand = new AsyncRelayCommand(PublishAsync, () => SelectedProject != null && StagedFiles.Count > 0 && !string.IsNullOrEmpty(this.NewVersion) && !string.IsNullOrEmpty(CommitMessage));
         AddProjectCommand = new AsyncRelayCommand(AddProjectAsync);
+        AddLocalProjectCommand = new AsyncRelayCommand(AddLocalProjectAsync);
         RemoveProjectCommand = new AsyncRelayCommand(RemoveProjectAsync, () => SelectedProject != null);
         EditProjectCommand = new AsyncRelayCommand(EditProjectAsync, () => SelectedProject != null);
 
@@ -397,6 +399,23 @@ public partial class MainWindowViewModel : ObservableObject
     {
         Log.Information("打开添加项目对话框");
         var cfg = await _dialog.ShowAddProjectDialogAsync();
+        if (cfg != null)
+        {
+            _cfg.AddProject(cfg);
+            Projects.Add(cfg);
+            SelectedProject = cfg;
+            ShowToast(s => s.ShowSuccess($"项目 \"{cfg.DisplayName}\" 已添加"));
+        }
+        else
+        {
+            StatusMessage = "无法打开对话框";
+        }
+    }
+
+    private async Task AddLocalProjectAsync()
+    {
+        Log.Information("打开添加本地项目对话框");
+        var cfg = await _dialog.ShowAddLocalProjectDialogAsync();
         if (cfg != null)
         {
             _cfg.AddProject(cfg);

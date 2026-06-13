@@ -134,9 +134,13 @@ public class CliService
     public Task<CliOutput<List<ChangeLog>>?> GetLogAsync(string projectPath, int limit = 20)
         => RunAsync<List<ChangeLog>>($"log --limit {limit}", projectPath);
 
-    public Task<CliOutput<object>?> ConfigInitAsync(string projectPath, string serverUrl, string projectName)
+    public Task<CliOutput<object>?> ConfigInitAsync(string projectPath, string serverUrl, string projectName, string ignoreFolders = "", string ignoreFiles = "")
     {
         var args = $"config init --server \"{serverUrl}\" --project \"{projectName}\"";
+        if (!string.IsNullOrWhiteSpace(ignoreFolders))
+            args += $" --ignore-folders \"{ignoreFolders}\"";
+        if (!string.IsNullOrWhiteSpace(ignoreFiles))
+            args += $" --ignore-files \"{ignoreFiles}\"";
         return RunAsync<object>(args, projectPath);
     }
 
