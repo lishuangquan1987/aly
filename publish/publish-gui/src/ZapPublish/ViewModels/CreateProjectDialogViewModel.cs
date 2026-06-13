@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Ursa.Controls;
 using ZapPublish.Models.Cli;
 using ZapPublish.Services;
 using Serilog;
@@ -49,19 +50,19 @@ public partial class CreateProjectDialogViewModel : ObservableObject
 
         if (string.IsNullOrEmpty(name))
         {
-            StatusMessage = "请填写项目名称";
+            await MessageBox.ShowAsync("请填写项目名称", "提示");
             return;
         }
         if (string.IsNullOrEmpty(title))
         {
-            StatusMessage = "请填写项目标题";
+            await MessageBox.ShowAsync("请填写项目标题", "提示");
             return;
         }
 
         // 防止 CLI 参数注入
         if (name.Contains('"') || title.Contains('"'))
         {
-            StatusMessage = "项目名称和标题不能包含双引号";
+            await MessageBox.ShowAsync("项目名称和标题不能包含双引号", "提示");
             return;
         }
 
@@ -88,13 +89,13 @@ public partial class CreateProjectDialogViewModel : ObservableObject
             }
             else
             {
-                StatusMessage = $"创建失败: {result?.ErrorMsg}";
+                await MessageBox.ShowAsync($"创建失败: {result?.ErrorMsg}", "错误");
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "创建项目异常");
-            StatusMessage = "创建项目时发生异常，请重试或联系管理员";
+            await MessageBox.ShowAsync("创建项目时发生异常，请重试或联系管理员", "错误");
         }
         finally
         {

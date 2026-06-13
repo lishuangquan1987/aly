@@ -1,11 +1,11 @@
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json;
+using Ursa.Controls;
 using ZapPublish.Models.Local;
 using ZapPublish.Services;
 using Serilog;
@@ -25,7 +25,6 @@ public partial class EditProjectDialogViewModel : ObservableObject
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _statusMessage = string.Empty;
 
-    // Edit-in-place fields
     [ObservableProperty] private bool _isEditingUrl;
     [ObservableProperty] private string _editUrl = string.Empty;
     [ObservableProperty] private string _newFolderItem = string.Empty;
@@ -52,9 +51,6 @@ public partial class EditProjectDialogViewModel : ObservableObject
         SaveCommand = new AsyncRelayCommand(SaveAsync);
     }
 
-    /// <summary>
-    /// 加载项目配置（由 DialogService 在创建后调用）
-    /// </summary>
     public void LoadProject(ProjectConfig project)
     {
         if (project == null) throw new ArgumentNullException(nameof(project));
@@ -63,12 +59,12 @@ public partial class EditProjectDialogViewModel : ObservableObject
         LoadCliConfig();
     }
 
-    private void LoadCliConfig()
+    private async void LoadCliConfig()
     {
         var sharedPath = Path.Combine(_projectPath, ".updator", "shared.json");
         if (!File.Exists(sharedPath))
         {
-            StatusMessage = ".updator/shared.json 不存在，项目可能未初始化";
+            await MessageBox.ShowAsync(".updator/shared.json 不存在，项目可能未初始化", "错误");
             return;
         }
 
@@ -87,7 +83,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Error(ex, "读取 shared.json 失败");
-            StatusMessage = $"读取配置失败: {ex.Message}";
+            await MessageBox.ShowAsync($"读取配置失败: {ex.Message}", "错误");
         }
     }
 
@@ -102,9 +98,12 @@ public partial class EditProjectDialogViewModel : ObservableObject
             {
                 ServerUrl = EditUrl.Trim();
                 IsEditingUrl = false;
-                StatusMessage = "服务端地址已更新";
+                await MessageBox.ShowAsync("服务端地址已更新", "成功");
             }
-            else StatusMessage = $"更新失败: {r?.ErrorMsg}";
+            else
+            {
+                await MessageBox.ShowAsync($"更新失败: {r?.ErrorMsg}", "错误");
+            }
         }
         finally { IsBusy = false; }
     }
@@ -122,7 +121,10 @@ public partial class EditProjectDialogViewModel : ObservableObject
                 NewFolderItem = string.Empty;
                 StatusMessage = "已添加";
             }
-            else StatusMessage = $"添加失败: {r?.ErrorMsg}";
+            else
+            {
+                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误");
+            }
         }
         finally { IsBusy = false; }
     }
@@ -139,7 +141,10 @@ public partial class EditProjectDialogViewModel : ObservableObject
                 IgnoreFolders.Remove(item);
                 StatusMessage = "已移除";
             }
-            else StatusMessage = $"移除失败: {r?.ErrorMsg}";
+            else
+            {
+                await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误");
+            }
         }
         finally { IsBusy = false; }
     }
@@ -157,7 +162,10 @@ public partial class EditProjectDialogViewModel : ObservableObject
                 NewFileItem = string.Empty;
                 StatusMessage = "已添加";
             }
-            else StatusMessage = $"添加失败: {r?.ErrorMsg}";
+            else
+            {
+                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误");
+            }
         }
         finally { IsBusy = false; }
     }
@@ -174,7 +182,10 @@ public partial class EditProjectDialogViewModel : ObservableObject
                 IgnoreFiles.Remove(item);
                 StatusMessage = "已移除";
             }
-            else StatusMessage = $"移除失败: {r?.ErrorMsg}";
+            else
+            {
+                await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误");
+            }
         }
         finally { IsBusy = false; }
     }

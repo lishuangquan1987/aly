@@ -60,7 +60,6 @@ public partial class AddProjectDialogViewModel : ObservableObject
     partial void OnSelectedServerProjectChanged(ProjectInfo? value)
     {
         if (value == null) return;
-        // 如果用户还没填显示名称，自动用 project name 填充
         if (string.IsNullOrWhiteSpace(DisplayName))
             DisplayName = value.Name;
         Log.Information("选择了服务端项目: Name={Name}, Id={Id}", value.Name, value.Id);
@@ -98,7 +97,6 @@ public partial class AddProjectDialogViewModel : ObservableObject
             Log.Warning("BrowseFolderAsync delegate is not set; browse action unavailable");
             return;
         }
-
         var path = await browseFolderAsync();
         if (!string.IsNullOrWhiteSpace(path))
             ProjectPath = path;
@@ -109,7 +107,7 @@ public partial class AddProjectDialogViewModel : ObservableObject
         var serverUrl = ServerUrl?.Trim();
         if (string.IsNullOrEmpty(serverUrl))
         {
-            StatusMessage = "请先填写服务端地址";
+            await MessageBox.ShowAsync("请先填写服务端地址", "提示");
             return;
         }
 
@@ -126,7 +124,7 @@ public partial class AddProjectDialogViewModel : ObservableObject
 
             if (result == null)
             {
-                StatusMessage = "未收到服务端响应，请检查地址是否正确";
+                await MessageBox.ShowAsync("未收到服务端响应，请检查地址是否正确", "错误");
                 ShowCreateButton = true;
                 ShowProjectList = false;
                 return;
@@ -134,7 +132,7 @@ public partial class AddProjectDialogViewModel : ObservableObject
 
             if (!result.IsSuccess)
             {
-                StatusMessage = $"获取失败: {result.ErrorMsg}";
+                await MessageBox.ShowAsync($"获取失败: {result.ErrorMsg}", "错误");
                 ShowCreateButton = true;
                 ShowProjectList = false;
                 return;
@@ -159,7 +157,7 @@ public partial class AddProjectDialogViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Error(ex, "获取服务端项目异常: {ServerUrl}", serverUrl);
-            StatusMessage = $"获取异常: {ex.Message}";
+            await MessageBox.ShowAsync($"获取异常: {ex.Message}", "错误");
             ShowCreateButton = true;
             ShowProjectList = false;
         }
@@ -174,15 +172,14 @@ public partial class AddProjectDialogViewModel : ObservableObject
         var serverUrl = ServerUrl?.Trim();
         if (string.IsNullOrEmpty(serverUrl))
         {
-            StatusMessage = "请先填写服务端地址";
+            await MessageBox.ShowAsync("请先填写服务端地址", "提示");
             return;
         }
 
-        // 由于需要打开子对话框，这里委托给外部处理
         Log.Information("请求创建服务端项目: ServerUrl={ServerUrl}", serverUrl);
         if (ShowCreateProjectDialogAsync == null)
         {
-            StatusMessage = "无法打开创建项目对话框";
+            await MessageBox.ShowAsync("无法打开创建项目对话框", "错误");
             return;
         }
 
@@ -191,7 +188,7 @@ public partial class AddProjectDialogViewModel : ObservableObject
         if (newProject != null)
         {
             DisplayName = newProject.Name;
-            StatusMessage = $"项目 \"{newProject.Name}\" 创建成功";
+            await MessageBox.ShowAsync($"项目 \"{newProject.Name}\" 创建成功", "成功");
             Log.Information("创建项目完成，自动填充: Name={Name}, Id={Id}", newProject.Name, newProject.Id);
             await FetchProjectsAsync();
         }
@@ -208,27 +205,26 @@ public partial class AddProjectDialogViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(displayName) ||
             string.IsNullOrWhiteSpace(projectPath))
         {
-            StatusMessage = "请填写显示名称和本地路径。";
+            await MessageBox.ShowAsync("请填写显示名称和本地路径", "提示");
             return;
         }
 
         if (!Directory.Exists(projectPath))
         {
-            StatusMessage = "指定的路径不存在。";
+            await MessageBox.ShowAsync("指定的路径不存在", "提示");
             return;
         }
 
-        // 初始化流程不允许 .updator 已存在，必须使用「添加本地项目」
         if (_isInit)
         {
-            StatusMessage = "该文件夹已初始化，请使用「添加本地项目」功能。";
+            await MessageBox.ShowAsync("该文件夹已初始化，请使用「添加本地项目」功能", "提示");
             return;
         }
 
         var serverUrl = ServerUrl?.Trim();
-        if (string.IsNullOrWhiteSpace(serverUrl) || string.IsNullOrWhiteSpace(SelectedServerProject?.Name))
+        if (string.IsNullOrWhiteSpace(serverUrl) || SelectedServerProject == null)
         {
-            StatusMessage = "请填写服务端地址并选择/创建服务端项目。";
+            await MessageBox.ShowAsync("请填写服务端地址并选择/创建服务端项目", "提示");
             return;
         }
 
@@ -238,7 +234,7 @@ public partial class AddProjectDialogViewModel : ObservableObject
             IgnoreFolders?.Trim() ?? "", IgnoreFiles?.Trim() ?? "");
         if (initResult?.IsSuccess != true)
         {
-            StatusMessage = $"初始化 .updator/ 失败: {initResult?.ErrorMsg}";
+            await MessageBox.ShowAsync($"初始化 .updator/ 失败: {initResult?.ErrorMsg}", "错误");
             return;
         }
 
