@@ -222,7 +222,7 @@ public partial class AddProjectDialogViewModel : ObservableObject
         }
 
         var serverUrl = ServerUrl?.Trim();
-        if (string.IsNullOrWhiteSpace(serverUrl) || SelectedServerProject == null)
+        if (string.IsNullOrWhiteSpace(serverUrl) || SelectedServerProject == null || string.IsNullOrWhiteSpace(SelectedServerProject.Name))
         {
             await MessageBox.ShowAsync("请填写服务端地址并选择/创建服务端项目", "提示");
             return;

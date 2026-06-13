@@ -56,10 +56,13 @@ public partial class EditProjectDialogViewModel : ObservableObject
         if (project == null) throw new ArgumentNullException(nameof(project));
         _projectPath = project.ProjectPath;
         DisplayName = project.DisplayName;
-        LoadCliConfig();
+        _ = LoadCliConfigAsync().ContinueWith(t =>
+        {
+            if (t.IsFaulted) Log.Error(t.Exception, "LoadCliConfig failed");
+        }, TaskScheduler.Default);
     }
 
-    private async void LoadCliConfig()
+    private async Task LoadCliConfigAsync()
     {
         var sharedPath = Path.Combine(_projectPath, ".updator", "shared.json");
         if (!File.Exists(sharedPath))

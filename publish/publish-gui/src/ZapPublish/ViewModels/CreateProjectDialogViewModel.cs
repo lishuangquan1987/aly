@@ -89,12 +89,14 @@ public partial class CreateProjectDialogViewModel : ObservableObject
             }
             else
             {
+                StatusMessage = string.Empty;
                 await MessageBox.ShowAsync($"创建失败: {result?.ErrorMsg}", "错误");
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "创建项目异常");
+            StatusMessage = string.Empty;
             await MessageBox.ShowAsync("创建项目时发生异常，请重试或联系管理员", "错误");
         }
         finally
