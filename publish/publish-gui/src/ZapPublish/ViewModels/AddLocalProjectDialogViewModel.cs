@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -26,6 +27,8 @@ public partial class AddLocalProjectDialogViewModel : ObservableObject
     public IAsyncRelayCommand ConfirmCommand { get; }
     public IRelayCommand CancelCommand { get; }
 
+    private CancellationTokenSource? _pathChangedCts;
+
     public AddLocalProjectDialogViewModel()
     {
         BrowseCommand = new AsyncRelayCommand(BrowseAsync);
@@ -35,6 +38,11 @@ public partial class AddLocalProjectDialogViewModel : ObservableObject
 
     async partial void OnProjectPathChanged(string value)
     {
+        // 取消上一次未完成的异步操作，防止竞态
+        _pathChangedCts?.Cancel();
+        _pathChangedCts = new CancellationTokenSource();
+        var ct = _pathChangedCts.Token;
+
         if (string.IsNullOrWhiteSpace(value) || !Directory.Exists(value))
         {
             ShowInitStatus = false;
@@ -46,13 +54,18 @@ public partial class AddLocalProjectDialogViewModel : ObservableObject
         {
             try
             {
-                var json = await ReadFileWithRetryAsync(sharedPath);
+                var json = await ReadFileWithRetryAsync(sharedPath, ct: ct);
+                ct.ThrowIfCancellationRequested();
                 var shared = JsonConvert.DeserializeObject<SharedConfig>(json);
                 if (shared != null)
                 {
                     if (string.IsNullOrWhiteSpace(DisplayName))
                         DisplayName = shared.ProjectName ?? "";
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                return; // 被新路径替换，静默退出
             }
             catch (Exception ex)
             {
@@ -88,6 +101,7 @@ public partial class AddLocalProjectDialogViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(projectPath) || !Directory.Exists(projectPath))
         {
             InitStatusMessage = "请选择有效的项目文件夹";
+            ShowInitStatus = true;
             return;
         }
 
@@ -95,6 +109,7 @@ public partial class AddLocalProjectDialogViewModel : ObservableObject
         if (!File.Exists(sharedPath))
         {
             InitStatusMessage = "❌ 该文件夹未初始化，无法添加（缺少 .updator/shared.json）";
+            ShowInitStatus = true;
             return;
         }
 
@@ -108,19 +123,21 @@ public partial class AddLocalProjectDialogViewModel : ObservableObject
         RequestClose?.Invoke(cfg);
     }
 
-    private static async Task<string> ReadFileWithRetryAsync(string path, int maxRetries = 3, int delayMs = 50)
+    private static async Task<string> ReadFileWithRetryAsync(string path, int maxRetries = 3, int delayMs = 50, CancellationToken ct = default)
     {
         for (int i = 0; i < maxRetries; i++)
         {
+            ct.ThrowIfCancellationRequested();
             try
             {
-                return File.ReadAllText(path);
+                return await File.ReadAllTextAsync(path, ct);
             }
             catch (IOException) when (i < maxRetries - 1)
             {
-                await Task.Delay(delayMs);
+                await Task.Delay(delayMs, ct);
             }
         }
-        return File.ReadAllText(path);
+        ct.ThrowIfCancellationRequested();
+        return await File.ReadAllTextAsync(path, ct);
     }
 }

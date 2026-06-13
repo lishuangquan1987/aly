@@ -17,7 +17,6 @@ public partial class AddProjectDialogViewModel : ObservableObject
     private readonly CliService _cli;
     internal Func<Task<string?>>? BrowseFolderAsync { get; set; }
 
-    private string _serverProjectName = string.Empty;
     private bool _isInit;
     [ObservableProperty] private string _serverUrl = string.Empty;
     [ObservableProperty] private ObservableCollection<ProjectInfo> _serverProjects = new();
@@ -61,7 +60,6 @@ public partial class AddProjectDialogViewModel : ObservableObject
     partial void OnSelectedServerProjectChanged(ProjectInfo? value)
     {
         if (value == null) return;
-        _serverProjectName = value.Name;
         // 如果用户还没填显示名称，自动用 project name 填充
         if (string.IsNullOrWhiteSpace(DisplayName))
             DisplayName = value.Name;
@@ -100,11 +98,10 @@ public partial class AddProjectDialogViewModel : ObservableObject
             Log.Warning("BrowseFolderAsync delegate is not set; browse action unavailable");
             return;
         }
+
         var path = await browseFolderAsync();
         if (!string.IsNullOrWhiteSpace(path))
             ProjectPath = path;
-        
-        
     }
 
     private async Task FetchProjectsAsync()
@@ -188,11 +185,11 @@ public partial class AddProjectDialogViewModel : ObservableObject
             StatusMessage = "无法打开创建项目对话框";
             return;
         }
+
         var newProject = await ShowCreateProjectDialogAsync.Invoke(serverUrl);
 
         if (newProject != null)
         {
-            _serverProjectName = newProject.Name;
             DisplayName = newProject.Name;
             StatusMessage = $"项目 \"{newProject.Name}\" 创建成功";
             Log.Information("创建项目完成，自动填充: Name={Name}, Id={Id}", newProject.Name, newProject.Id);
@@ -229,15 +226,15 @@ public partial class AddProjectDialogViewModel : ObservableObject
         }
 
         var serverUrl = ServerUrl?.Trim();
-        if (string.IsNullOrWhiteSpace(serverUrl) || string.IsNullOrWhiteSpace(_serverProjectName))
+        if (string.IsNullOrWhiteSpace(serverUrl) || string.IsNullOrWhiteSpace(SelectedServerProject?.Name))
         {
             StatusMessage = "请填写服务端地址并选择/创建服务端项目。";
             return;
         }
 
         Log.Information("执行 config init: Server={Server}, Project={Name}, Path={Path}",
-            serverUrl, _serverProjectName, projectPath);
-        var initResult = await _cli.ConfigInitAsync(projectPath, serverUrl, _serverProjectName,
+            serverUrl, SelectedServerProject.Name, projectPath);
+        var initResult = await _cli.ConfigInitAsync(projectPath, serverUrl, SelectedServerProject.Name,
             IgnoreFolders?.Trim() ?? "", IgnoreFiles?.Trim() ?? "");
         if (initResult?.IsSuccess != true)
         {
@@ -252,7 +249,7 @@ public partial class AddProjectDialogViewModel : ObservableObject
         };
 
         Log.Information("项目初始化完成: DisplayName={Name}, Path={Path}, Server={Server}, Project={Proj}",
-            cfg.DisplayName, cfg.ProjectPath, serverUrl, _serverProjectName);
+            cfg.DisplayName, cfg.ProjectPath, serverUrl, SelectedServerProject.Name);
 
         RequestClose?.Invoke(cfg);
     }

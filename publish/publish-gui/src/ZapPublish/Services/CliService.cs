@@ -138,9 +138,9 @@ public class CliService
     {
         var args = $"config init --server \"{serverUrl}\" --project \"{projectName}\"";
         if (!string.IsNullOrWhiteSpace(ignoreFolders))
-            args += $" --ignore-folders \"{ignoreFolders}\"";
+            args += $" --ignore-folders \"{ignoreFolders.Replace("\"", "\\\"")}\"";
         if (!string.IsNullOrWhiteSpace(ignoreFiles))
-            args += $" --ignore-files \"{ignoreFiles}\"";
+            args += $" --ignore-files \"{ignoreFiles.Replace("\"", "\\\"")}\"";
         return RunAsync<object>(args, projectPath);
     }
 
