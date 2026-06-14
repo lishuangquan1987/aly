@@ -52,13 +52,13 @@ public partial class ProjectTabViewModel : ObservableObject
         _cli = cli;
 
         var pp = project.ProjectPath;
-        RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !string.IsNullOrWhiteSpace(pp));
-        AddAllCommand = new AsyncRelayCommand(AddAllAsync, () => UnstagedFiles.Count > 0);
-        ResetAllCommand = new AsyncRelayCommand(ResetAllAsync, () => StagedFiles.Count > 0);
-        AddSelectedCommand = new AsyncRelayCommand(AddSelectedAsync, () => SelectedUnStagedFile != null);
-        ResetSelectedCommand = new AsyncRelayCommand(ResetSelectedAsync, () => SelectedStagedFile != null);
+        RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(pp));
+        AddAllCommand = new AsyncRelayCommand(AddAllAsync, () => !IsBusy && UnstagedFiles.Count > 0);
+        ResetAllCommand = new AsyncRelayCommand(ResetAllAsync, () => !IsBusy && StagedFiles.Count > 0);
+        AddSelectedCommand = new AsyncRelayCommand(AddSelectedAsync, () => !IsBusy && SelectedUnStagedFile != null);
+        ResetSelectedCommand = new AsyncRelayCommand(ResetSelectedAsync, () => !IsBusy && SelectedStagedFile != null);
         PublishCommand = new AsyncRelayCommand(PublishAsync,
-            () => StagedFiles.Count > 0 && !string.IsNullOrWhiteSpace(NewVersion) && !string.IsNullOrWhiteSpace(CommitMessage));
+            () => !IsBusy && StagedFiles.Count > 0 && !string.IsNullOrWhiteSpace(NewVersion) && !string.IsNullOrWhiteSpace(CommitMessage));
 
         UnstagedFiles.CollectionChanged += (_, _) => AddAllCommand.NotifyCanExecuteChanged();
         StagedFiles.CollectionChanged += (_, _) =>
@@ -106,7 +106,7 @@ public partial class ProjectTabViewModel : ObservableObject
             var result = await _cli.GetStatusAsync(projectPath);
             if (result?.Data == null)
             {
-                StatusMessage = $"刷新失败: {result?.ErrorMsg ?? "无数据返回"}";
+                StatusMessage = $"刷新失败: {result?.ErrorMsg ?? "未知错误"}";
                 return;
             }
 
@@ -152,8 +152,8 @@ public partial class ProjectTabViewModel : ObservableObject
             }
             else
             {
-                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-                StatusMessage = $"添加失败: {r?.ErrorMsg}";
+                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
+                StatusMessage = $"添加失败: {r?.ErrorMsg ?? "未知错误"}";
             }
             await FetchDataAsync();
         }
@@ -182,8 +182,8 @@ public partial class ProjectTabViewModel : ObservableObject
             }
             else
             {
-                await MessageBox.ShowAsync($"重置失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-                StatusMessage = $"重置失败: {r?.ErrorMsg}";
+                await MessageBox.ShowAsync($"重置失败: {r?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
+                StatusMessage = $"重置失败: {r?.ErrorMsg ?? "未知错误"}";
             }
             await FetchDataAsync();
         }
@@ -214,8 +214,8 @@ public partial class ProjectTabViewModel : ObservableObject
             }
             else
             {
-                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-                StatusMessage = $"添加失败: {r?.ErrorMsg}";
+                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
+                StatusMessage = $"添加失败: {r?.ErrorMsg ?? "未知错误"}";
             }
             await FetchDataAsync();
         }
@@ -239,7 +239,14 @@ public partial class ProjectTabViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            await _cli.ResetAllAsync(Project.ProjectPath);
+            var resetResult = await _cli.ResetAllAsync(Project.ProjectPath);
+            if (resetResult?.IsSuccess != true)
+            {
+                var errMsg = resetResult?.ErrorMsg ?? "未知错误";
+                await MessageBox.ShowAsync($"重置失败: {errMsg}", "错误", MessageBoxIcon.Error);
+                StatusMessage = $"取消暂存失败: {errMsg}";
+                return;
+            }
             if (keepStaged.Count > 0)
             {
                 var addResult = await _cli.AddFilesAsync(Project.ProjectPath, keepStaged);
@@ -250,8 +257,8 @@ public partial class ProjectTabViewModel : ObservableObject
                 }
                 else
                 {
-                    await MessageBox.ShowAsync($"部分文件暂存失败: {addResult?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-                    StatusMessage = $"部分文件暂存失败: {addResult?.ErrorMsg}";
+                    await MessageBox.ShowAsync($"部分文件暂存失败: {addResult?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
+                    StatusMessage = $"部分文件暂存失败: {addResult?.ErrorMsg ?? "未知错误"}";
                 }
             }
             else
@@ -299,8 +306,8 @@ public partial class ProjectTabViewModel : ObservableObject
             }
             else
             {
-                await MessageBox.ShowAsync($"发布失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-                StatusMessage = $"发布失败: {r?.ErrorMsg}";
+                await MessageBox.ShowAsync($"发布失败: {r?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
+                StatusMessage = $"发布失败: {r?.ErrorMsg ?? "未知错误"}";
             }
         }
         catch (Exception ex)

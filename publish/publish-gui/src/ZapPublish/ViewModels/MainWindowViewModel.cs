@@ -67,7 +67,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             tab = new ProjectTabViewModel(value, _cli);
             Tabs.Add(tab);
-            _ = tab.RefreshAsync(); // 首次创建时自动刷新
+            FireAndForget(tab.RefreshAsync(), "RefreshAsync");
         }
         SelectedTab = tab;
     }
@@ -87,8 +87,17 @@ public partial class MainWindowViewModel : ObservableObject
         if (Projects.Count > 0)
         {
             SelectedProject = Projects[0];
-            _ = Tabs[0].RefreshAsync();
+            FireAndForget(Tabs[0].RefreshAsync(), "初始RefreshAsync");
         }
+    }
+
+    private void FireAndForget(Task task, string context)
+    {
+        _ = task.ContinueWith(t =>
+        {
+            if (t.IsFaulted && t.Exception != null)
+                Log.Error(t.Exception, "{Context}", context);
+        }, TaskContinuationOptions.OnlyOnFaulted);
     }
 
     // ── Project CRUD ─────────────────────────────────────
@@ -105,7 +114,7 @@ public partial class MainWindowViewModel : ObservableObject
             Tabs.Add(tab);
             SelectedTab = tab;
             SelectedProject = cfg;
-            _ = tab.RefreshAsync();
+            FireAndForget(tab.RefreshAsync(), "RefreshAsync");
             await MessageBox.ShowAsync($"项目 \"{cfg.DisplayName}\" 已添加", "成功", MessageBoxIcon.Success);
         }
     }
@@ -122,7 +131,7 @@ public partial class MainWindowViewModel : ObservableObject
             Tabs.Add(tab);
             SelectedTab = tab;
             SelectedProject = cfg;
-            _ = tab.RefreshAsync();
+            FireAndForget(tab.RefreshAsync(), "RefreshAsync");
             await MessageBox.ShowAsync($"项目 \"{cfg.DisplayName}\" 已添加", "成功", MessageBoxIcon.Success);
         }
     }
