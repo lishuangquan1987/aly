@@ -345,6 +345,12 @@ public partial class ProjectTabViewModel : ObservableObject
                 await MessageBox.ShowAsync("项目配置已更新", "成功", MessageBoxIcon.Success);
             }
         }
+        catch (Exception ex)
+        {
+            await MessageBox.ShowAsync($"编辑项目异常: {ex.Message}", "错误", MessageBoxIcon.Error);
+            StatusMessage = $"编辑项目异常: {ex.Message}";
+            Log.Error(ex, "编辑项目异常");
+        }
         finally { IsBusy = false; }
     }
 }
