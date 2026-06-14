@@ -99,14 +99,6 @@ public partial class MainWindowViewModel : ObservableObject
         SelectedTab = tab;
     }
 
-    partial void OnSelectedTabChanged(ProjectTabViewModel? value)
-    {
-        if (value != null && SelectedProject != value.Project)
-        {
-            SelectedProject = value.Project;
-        }
-    }
-
     private void LoadProjects()
     {
         Log.Information("加载本地项目配置");
@@ -192,18 +184,13 @@ public partial class MainWindowViewModel : ObservableObject
         if (idx < 0) return;
 
         Tabs.RemoveAt(idx);
-        // 如果关闭的是当前选中的 tab，切换到相邻 tab
+        // 如果关闭的是当前选中的 tab，切换到相邻 tab（sidebar 选中项不变）
         if (SelectedTab == tab)
         {
             if (Tabs.Count > 0)
-            {
                 SelectedTab = Tabs[Math.Min(idx, Tabs.Count - 1)];
-                SelectedProject = SelectedTab.Project;
-            }
             else
-            {
                 SelectedTab = null;
-            }
         }
     }
 
