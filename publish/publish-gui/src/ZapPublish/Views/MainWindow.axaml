@@ -1,4 +1,5 @@
 <Window x:Class="ZapPublish.Views.MainWindow"
+        x:Name="Root"
         xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:ZapPublish.ViewModels"
@@ -72,7 +73,7 @@
         </Border>
 
         <!-- ═══ MAIN BODY ═══ -->
-        <Grid Grid.Row="1" ColumnDefinitions="224,*,300">
+        <Grid Grid.Row="1" ColumnDefinitions="224,*">
 
             <!-- LEFT: Project sidebar -->
             <Border Grid.Column="0"
@@ -117,291 +118,285 @@
                 </Grid>
             </Border>
 
-            <!-- CENTER: File panels -->
-            <Grid Grid.Column="1" RowDefinitions="*,*,Auto">
-
-                <!-- Loading overlay -->
-                <Border Grid.RowSpan="3" IsVisible="{Binding IsBusy}"
-                        Background="Transparent" ZIndex="100">
-                    <StackPanel Spacing="16" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <u:Loading IsLoading="True" Background="Transparent"/>
-                        <TextBlock Text="{Binding StatusMessage}" FontSize="14"
-                                   FontWeight="Medium" HorizontalAlignment="Center"
-                                   Foreground="{DynamicResource SemiColorText0}"/>
-                    </StackPanel>
-                </Border>
-
-                <!-- ── Unstaged ── -->
-                <Grid Grid.Row="0" RowDefinitions="Auto,*">
-                    <Border Padding="14,0"
-                            Background="{DynamicResource SemiColorBg1}"
-                            BorderBrush="{DynamicResource SemiColorBorder}"
-                            BorderThickness="0,0,0,1">
-                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Height="36">
-                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <materialIcons:MaterialIcon Kind="FileDocumentOutline"
-                                                            Width="16" Height="16"
-                                                            Foreground="{DynamicResource SemiColorText2}"/>
-                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13"
-                                           Foreground="{DynamicResource SemiColorText0}">
-                                    <Run Text="未暂存 "/>
-                                    <Run Text="{Binding UnstagedFiles.Count}" FontWeight="Bold"/>
-                                </TextBlock>
-                            </StackPanel>
-                            <Button Grid.Column="2" Command="{Binding EditProjectCommand}"
-                                    Height="28" Padding="10,0" Margin="0,0,4,0"
-                                    Classes="Tertiary">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <materialIcons:MaterialIcon Kind="Cog" Width="16" Height="16"/>
-                                    <TextBlock Text="项目设置" FontSize="13" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Column="3" Command="{Binding RefreshCommand}"
-                                    Height="28" Padding="10,0" Margin="0,0,4,0">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <materialIcons:MaterialIcon Kind="Refresh" Width="14" Height="14"/>
-                                    <TextBlock Text="刷新" FontSize="12"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Column="4" Command="{Binding AddSelectedCommand}"
-                                    Height="28" Padding="10,0" Margin="0,0,4,0">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <materialIcons:MaterialIcon Kind="ArrowUpBold" Width="14" Height="14"/>
-                                    <TextBlock Text="暂存" FontSize="12"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Column="5" Command="{Binding AddAllCommand}"
-                                    Classes="Primary" Height="28" Padding="10,0">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <materialIcons:MaterialIcon Kind="ArrowUpBoldCircleOutline" Width="14" Height="14"/>
-                                    <TextBlock Text="全部" FontSize="12"/>
-                                </StackPanel>
-                            </Button>
-                        </Grid>
-                    </Border>
-
-                    <ListBox Grid.Row="1" ItemsSource="{Binding UnstagedFiles}"
-                             Background="Transparent" Margin="4,2"
-                             SelectedItem="{Binding SelectedUnStagedFile,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate x:DataType="local:FileItem">
-                                <Border Padding="10,5" Margin="0,1" CornerRadius="4">
-                                    <Grid ColumnDefinitions="Auto,*,Auto,72,72">
-                                        <CheckBox IsChecked="{Binding IsSelected}"
-                                                  VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding RelativePath}"
-                                                   VerticalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   FontSize="12"/>
-                                        <Border Grid.Column="2" CornerRadius="3" Padding="8,3" Margin="6,0"
-                                                Background="{Binding Status, Converter={StaticResource StatusColor}}">
-                                            <TextBlock Text="{Binding StatusDisplay}" FontSize="10"
-                                                       FontWeight="Medium" Foreground="White"/>
-                                        </Border>
-                                        <TextBlock Grid.Column="3"
-                                                   Text="{Binding LocalSize, Converter={StaticResource BytesToSize}}"
-                                                   HorizontalAlignment="Right"
-                                                   VerticalAlignment="Center"
-                                                   FontSize="11" Margin="0,0,8,0"
-                                                   Foreground="{DynamicResource SemiColorText2}"/>
-                                        <TextBlock Grid.Column="4"
-                                                   Text="{Binding ServerSize, Converter={StaticResource BytesToSize}}"
-                                                   HorizontalAlignment="Right"
-                                                   VerticalAlignment="Center"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource SemiColorText2}"/>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </Grid>
-
-                <!-- ── Staged ── -->
-                <Grid Grid.Row="1" RowDefinitions="Auto,*">
-                    <Border Padding="14,0"
-                            Background="{DynamicResource SemiColorBg1}"
-                            BorderBrush="{DynamicResource SemiColorBorder}"
-                            BorderThickness="0,1,0,1">
-                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" Height="36">
-                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <materialIcons:MaterialIcon Kind="FileCheckOutline"
-                                                            Width="16" Height="16"
-                                                            Foreground="{DynamicResource SemiColorSuccess}"/>
-                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13"
-                                           Foreground="{DynamicResource SemiColorText0}">
-                                    <Run Text="已暂存 "/>
-                                    <Run Text="{Binding StagedFiles.Count}" FontWeight="Bold"/>
-                                </TextBlock>
-                            </StackPanel>
-                            <Button Grid.Column="2" Command="{Binding ResetSelectedCommand}"
-                                    Height="28" Padding="10,0" Margin="0,0,4,0">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <materialIcons:MaterialIcon Kind="ArrowDownBold" Width="14" Height="14"/>
-                                    <TextBlock Text="取消暂存" FontSize="12"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Column="3" Command="{Binding ResetAllCommand}"
-                                    Height="28" Padding="10,0"
-                                    Foreground="{DynamicResource SemiColorDanger}">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <materialIcons:MaterialIcon Kind="CloseCircleOutline" Width="14" Height="14"/>
-                                    <TextBlock Text="全部" FontSize="12"/>
-                                </StackPanel>
-                            </Button>
-                        </Grid>
-                    </Border>
-
-                    <ListBox Grid.Row="1" ItemsSource="{Binding StagedFiles}"
-                             Background="Transparent" Margin="4,2"
-                             SelectedItem="{Binding SelectedStagedFile,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate x:DataType="local:FileItem">
-                                <Border Padding="10,5" Margin="0,1" CornerRadius="4">
-                                    <Grid ColumnDefinitions="Auto,*,Auto,72">
-                                        <CheckBox IsChecked="{Binding IsSelected}"
-                                                  VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding RelativePath}"
-                                                   VerticalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   FontSize="12"/>
-                                        <Border Grid.Column="2" CornerRadius="3" Padding="8,3" Margin="6,0"
-                                                Background="{Binding Status, Converter={StaticResource StatusColor}}">
-                                            <TextBlock Text="{Binding StatusDisplay}" FontSize="10"
-                                                       FontWeight="Medium" Foreground="White"/>
-                                        </Border>
-                                        <TextBlock Grid.Column="3"
-                                                   Text="{Binding LocalSize, Converter={StaticResource BytesToSize}}"
-                                                   HorizontalAlignment="Right"
-                                                   VerticalAlignment="Center"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource SemiColorText2}"/>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </Grid>
-
-                <!-- ── Publish bar ── -->
-                <Border Grid.Row="2" Padding="14,12"
-                        Background="{DynamicResource SemiColorBg1}"
+            <!-- RIGHT: TabControl with per-project tabs -->
+            <TabControl Grid.Column="1"
+                        ItemsSource="{Binding Tabs}"
+                        SelectedItem="{Binding SelectedTab}"
+                        Background="Transparent"
                         BorderBrush="{DynamicResource SemiColorBorder}"
-                        BorderThickness="0,1,0,0">
-                    <StackPanel Spacing="10">
-                        <Grid ColumnDefinitions="Auto,*,Auto" Height="30">
-                            <TextBlock Text="版本号" VerticalAlignment="Center"
-                                       FontSize="13" FontWeight="Medium" Margin="0,0,10,0"
-                                       Foreground="{DynamicResource SemiColorText1}"/>
-                            <TextBox Grid.Column="1" Text="{Binding NewVersion}"
-                                     Watermark="例如 V1.0.1"
-                                     VerticalContentAlignment="Center" FontSize="13"/>
-                            <StackPanel Grid.Column="2" Orientation="Horizontal"
-                                        VerticalAlignment="Center" Margin="12,0,0,0">
-                                <materialIcons:MaterialIcon Kind="TagOutline" Width="14" Height="14"
-                                                            Foreground="{DynamicResource SemiColorText2}"/>
-                                <TextBlock Text="{Binding CurrentVersion}"
-                                           FontSize="12" Margin="6,0,0,0"
-                                           Foreground="{DynamicResource SemiColorText2}"/>
-                            </StackPanel>
-                        </Grid>
+                        BorderThickness="0,0,0,0">
+                <TabControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ProjectTabViewModel">
+                        <StackPanel Orientation="Horizontal" Spacing="6" Height="28" VerticalAlignment="Center">
+                            <materialIcons:MaterialIcon Kind="FolderOutline" Width="12" Height="12"/>
+                            <TextBlock Text="{Binding Project.DisplayName}" FontSize="13" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </TabControl.ItemTemplate>
 
-                        <TextBox Text="{Binding CommitMessage}"
-                                 Watermark="描述此版本的变更内容..."
-                                 MinHeight="52" AcceptsReturn="True"
-                                 TextWrapping="Wrap" FontSize="13"/>
+                <TabControl.ContentTemplate>
+                    <DataTemplate x:DataType="vm:ProjectTabViewModel">
+                        <Grid ColumnDefinitions="*,300">
+                            <!-- CENTER: File panels + publish -->
+                            <Grid Grid.Column="0" RowDefinitions="*,*,Auto">
 
-                        <TextBox Text="{Binding AfterApplyUpdateScript}"
-                                 Watermark="更新后执行的脚本路径（可选，相对于应用目录）"
-                                 FontSize="13" Height="30"/>
-
-                        <CheckBox IsChecked="{Binding SetForceUpdate}" Content="强制更新（客户端不再询问直接更新）"
-                                  FontSize="12" Foreground="{DynamicResource SemiColorWarning}"/>
-
-                        <!-- Progress -->
-                        <Border IsVisible="{Binding IsUploading}" CornerRadius="6"
-                                Padding="10,8" Background="{DynamicResource SemiColorFill0}"
-                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                            <StackPanel Spacing="6">
-                                <ProgressBar IsIndeterminate="True" Height="3"
-                                             Foreground="{DynamicResource SemiColorPrimary}"/>
-                                <TextBlock FontSize="11" HorizontalAlignment="Center">
-                                    <Run Text="{Binding StatusMessage}" FontWeight="Medium"
-                                         Foreground="{DynamicResource SemiColorText0}"/>
-                                </TextBlock>
-                            </StackPanel>
-                        </Border>
-
-                        <Button Command="{Binding PublishCommand}"
-                                Classes="Primary" Height="36"
-                                HorizontalAlignment="Stretch"
-                                FontSize="14" FontWeight="SemiBold">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <materialIcons:MaterialIcon Kind="Upload" Width="18" Height="18"/>
-                                <TextBlock Text="发布暂存文件" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
-                </Border>
-            </Grid>
-
-            <!-- RIGHT: History -->
-            <Border Grid.Column="2"
-                    Background="{DynamicResource SemiColorBg1}"
-                    BorderBrush="{DynamicResource SemiColorBorder}"
-                    BorderThickness="1,0,0,0">
-                <Grid RowDefinitions="Auto,*">
-                    <Border Padding="14,10"
-                            BorderBrush="{DynamicResource SemiColorBorder}"
-                            BorderThickness="0,0,0,1">
-                        <Grid ColumnDefinitions="Auto,8,*">
-                            <materialIcons:MaterialIcon Grid.Column="0" Kind="History"
-                                                        Width="16" Height="16"
-                                                        VerticalAlignment="Center"
-                                                        Foreground="{DynamicResource SemiColorText1}"/>
-                            <TextBlock Grid.Column="2" Text="版本历史"
-                                       FontWeight="SemiBold" FontSize="14"
-                                       VerticalAlignment="Center"
-                                       Foreground="{DynamicResource SemiColorText0}"/>
-                        </Grid>
-                    </Border>
-
-                    <ListBox Grid.Row="1" ItemsSource="{Binding ChangeLogs}"
-                             Background="Transparent" Margin="4,2">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate x:DataType="cli:ChangeLog">
-                                <Border Padding="12,10" Margin="0,1" CornerRadius="6">
-                                    <StackPanel>
-                                        <Grid ColumnDefinitions="Auto,*,Auto">
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <materialIcons:MaterialIcon Kind="Tag"
-                                                                            Width="14" Height="14"
-                                                                            Foreground="{DynamicResource SemiColorPrimary}"/>
-                                                <TextBlock Text="{Binding Version}"
-                                                           FontWeight="SemiBold" FontSize="13"
-                                                           Foreground="{DynamicResource SemiColorText0}"/>
-                                            </StackPanel>
-                                            <TextBlock Grid.Column="2" Text="{Binding Time}"
-                                                       FontSize="10"
-                                                       Foreground="{DynamicResource SemiColorText3}"/>
-                                        </Grid>
-                                        <ItemsControl ItemsSource="{Binding Logs}" Margin="20,4,0,0">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="x:String">
-                                                    <TextBlock Text="{Binding}" FontSize="11"
-                                                               Foreground="{DynamicResource SemiColorText2}"
-                                                               Margin="0,1,0,0"
-                                                               TextWrapping="Wrap"/>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
+                                <!-- Loading overlay -->
+                                <Border Grid.RowSpan="3" IsVisible="{Binding IsBusy}"
+                                        Background="Transparent" ZIndex="100">
+                                    <StackPanel Spacing="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <u:Loading IsLoading="True" Background="Transparent"/>
+                                        <TextBlock Text="{Binding StatusMessage}" FontSize="14"
+                                                   FontWeight="Medium" HorizontalAlignment="Center"
+                                                   Foreground="{DynamicResource SemiColorText0}"/>
                                     </StackPanel>
                                 </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </Grid>
-            </Border>
+
+                                <!-- ── Unstaged ── -->
+                                <Grid Grid.Row="0" RowDefinitions="Auto,*">
+                                    <Border Padding="14,0"
+                                            Background="{DynamicResource SemiColorBg1}"
+                                            BorderBrush="{DynamicResource SemiColorBorder}"
+                                            BorderThickness="0,0,0,1">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Height="36">
+                                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                <materialIcons:MaterialIcon Kind="FileDocumentOutline"
+                                                                            Width="16" Height="16"
+                                                                            Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13"
+                                                           Foreground="{DynamicResource SemiColorText0}">
+                                                    <Run Text="未暂存 "/>
+                                                    <Run Text="{Binding UnstagedFiles.Count}" FontWeight="Bold"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Command="{Binding #Root.DataContext.EditProjectCommand}"
+                                                    Height="28" Padding="10,0" Margin="0,0,4,0" Classes="Tertiary">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <materialIcons:MaterialIcon Kind="Cog" Width="16" Height="16"/>
+                                                    <TextBlock Text="项目设置" FontSize="13" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Grid.Column="3" Command="{Binding RefreshCommand}"
+                                                    Height="28" Padding="10,0" Margin="0,0,4,0">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <materialIcons:MaterialIcon Kind="Refresh" Width="14" Height="14"/>
+                                                    <TextBlock Text="刷新" FontSize="12"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Grid.Column="4" Command="{Binding AddSelectedCommand}"
+                                                    Height="28" Padding="10,0" Margin="0,0,4,0">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <materialIcons:MaterialIcon Kind="ArrowUpBold" Width="14" Height="14"/>
+                                                    <TextBlock Text="暂存" FontSize="12"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Grid.Column="5" Command="{Binding AddAllCommand}"
+                                                    Classes="Primary" Height="28" Padding="10,0" Margin="0,0,4,0">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <materialIcons:MaterialIcon Kind="ArrowUpBoldCircleOutline" Width="14" Height="14"/>
+                                                    <TextBlock Text="全部" FontSize="12"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+
+                                    <ListBox Grid.Row="1" ItemsSource="{Binding UnstagedFiles}"
+                                             Background="Transparent" Margin="4,2"
+                                             SelectedItem="{Binding SelectedUnStagedFile,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="local:FileItem">
+                                                <Border Padding="10,5" Margin="0,1" CornerRadius="4">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto,72,72">
+                                                        <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding RelativePath}" VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis" FontSize="12"/>
+                                                        <Border Grid.Column="2" CornerRadius="3" Padding="8,3" Margin="6,0"
+                                                                Background="{Binding Status, Converter={StaticResource StatusColor}}">
+                                                            <TextBlock Text="{Binding StatusDisplay}" FontSize="10" FontWeight="Medium" Foreground="White"/>
+                                                        </Border>
+                                                        <TextBlock Grid.Column="3" Text="{Binding LocalSize, Converter={StaticResource BytesToSize}}"
+                                                                   HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="11" Margin="0,0,8,0"
+                                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="4" Text="{Binding ServerSize, Converter={StaticResource BytesToSize}}"
+                                                                   HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="11"
+                                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Grid>
+
+                                <!-- ── Staged ── -->
+                                <Grid Grid.Row="1" RowDefinitions="Auto,*">
+                                    <Border Padding="14,0"
+                                            Background="{DynamicResource SemiColorBg1}"
+                                            BorderBrush="{DynamicResource SemiColorBorder}"
+                                            BorderThickness="0,1,0,1">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" Height="36">
+                                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                <materialIcons:MaterialIcon Kind="FileCheckOutline" Width="16" Height="16"
+                                                                            Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13"
+                                                           Foreground="{DynamicResource SemiColorText0}">
+                                                    <Run Text="已暂存 "/>
+                                                    <Run Text="{Binding StagedFiles.Count}" FontWeight="Bold"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Command="{Binding ResetSelectedCommand}" Height="28" Padding="10,0" Margin="0,0,4,0">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <materialIcons:MaterialIcon Kind="ArrowDownBold" Width="14" Height="14"/>
+                                                    <TextBlock Text="取消暂存" FontSize="12"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Grid.Column="3" Command="{Binding ResetAllCommand}" Height="28" Padding="10,0"
+                                                    Foreground="{DynamicResource SemiColorDanger}">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <materialIcons:MaterialIcon Kind="CloseCircleOutline" Width="14" Height="14"/>
+                                                    <TextBlock Text="全部" FontSize="12"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+
+                                    <ListBox Grid.Row="1" ItemsSource="{Binding StagedFiles}"
+                                             Background="Transparent" Margin="4,2"
+                                             SelectedItem="{Binding SelectedStagedFile,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="local:FileItem">
+                                                <Border Padding="10,5" Margin="0,1" CornerRadius="4">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto,72">
+                                                        <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding RelativePath}" VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis" FontSize="12"/>
+                                                        <Border Grid.Column="2" CornerRadius="3" Padding="8,3" Margin="6,0"
+                                                                Background="{Binding Status, Converter={StaticResource StatusColor}}">
+                                                            <TextBlock Text="{Binding StatusDisplay}" FontSize="10" FontWeight="Medium" Foreground="White"/>
+                                                        </Border>
+                                                        <TextBlock Grid.Column="3" Text="{Binding LocalSize, Converter={StaticResource BytesToSize}}"
+                                                                   HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="11"
+                                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Grid>
+
+                                <!-- ── Publish bar ── -->
+                                <Border Grid.Row="2" Padding="14,12"
+                                        Background="{DynamicResource SemiColorBg1}"
+                                        BorderBrush="{DynamicResource SemiColorBorder}"
+                                        BorderThickness="0,1,0,0">
+                                    <StackPanel Spacing="10">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" Height="30">
+                                            <TextBlock Text="版本号" VerticalAlignment="Center"
+                                                       FontSize="13" FontWeight="Medium" Margin="0,0,10,0"
+                                                       Foreground="{DynamicResource SemiColorText1}"/>
+                                            <TextBox Grid.Column="1" Text="{Binding NewVersion}"
+                                                     Watermark="例如 V1.0.1" VerticalContentAlignment="Center" FontSize="13"/>
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                                <materialIcons:MaterialIcon Kind="TagOutline" Width="14" Height="14"
+                                                                            Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="{Binding CurrentVersion}" FontSize="12" Margin="6,0,0,0"
+                                                           Foreground="{DynamicResource SemiColorText2}"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <TextBox Text="{Binding CommitMessage}"
+                                                 Watermark="描述此版本的变更内容..."
+                                                 MinHeight="52" AcceptsReturn="True"
+                                                 TextWrapping="Wrap" FontSize="13"/>
+
+                                        <TextBox Text="{Binding AfterApplyUpdateScript}"
+                                                 Watermark="更新后执行的脚本路径（可选，相对于应用目录）"
+                                                 FontSize="13" Height="30"/>
+
+                                        <CheckBox IsChecked="{Binding SetForceUpdate}" Content="强制更新（客户端不再询问直接更新）"
+                                                  FontSize="12" Foreground="{DynamicResource SemiColorWarning}"/>
+
+                                        <Border IsVisible="{Binding IsUploading}" CornerRadius="6"
+                                                Padding="10,8" Background="{DynamicResource SemiColorFill0}"
+                                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <StackPanel Spacing="6">
+                                                <ProgressBar IsIndeterminate="True" Height="3"
+                                                             Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                <TextBlock FontSize="11" HorizontalAlignment="Center">
+                                                    <Run Text="{Binding StatusMessage}" FontWeight="Medium"
+                                                         Foreground="{DynamicResource SemiColorText0}"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Button Command="{Binding PublishCommand}"
+                                                Classes="Primary" Height="36"
+                                                HorizontalAlignment="Stretch"
+                                                FontSize="14" FontWeight="SemiBold">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <materialIcons:MaterialIcon Kind="Upload" Width="18" Height="18"/>
+                                                <TextBlock Text="发布暂存文件" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
+                            <!-- RIGHT: History -->
+                            <Border Grid.Column="1"
+                                    Background="{DynamicResource SemiColorBg1}"
+                                    BorderBrush="{DynamicResource SemiColorBorder}"
+                                    BorderThickness="1,0,0,0">
+                                <Grid RowDefinitions="Auto,*">
+                                    <Border Padding="14,10"
+                                            BorderBrush="{DynamicResource SemiColorBorder}"
+                                            BorderThickness="0,0,0,1">
+                                        <Grid ColumnDefinitions="Auto,8,*">
+                                            <materialIcons:MaterialIcon Grid.Column="0" Kind="History"
+                                                                        Width="16" Height="16"
+                                                                        VerticalAlignment="Center"
+                                                                        Foreground="{DynamicResource SemiColorText1}"/>
+                                            <TextBlock Grid.Column="2" Text="版本历史"
+                                                       FontWeight="SemiBold" FontSize="14"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource SemiColorText0}"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <ListBox Grid.Row="1" ItemsSource="{Binding ChangeLogs}"
+                                             Background="Transparent" Margin="4,2">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="cli:ChangeLog">
+                                                <Border Padding="12,10" Margin="0,1" CornerRadius="6">
+                                                    <StackPanel>
+                                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                <materialIcons:MaterialIcon Kind="Tag" Width="14" Height="14"
+                                                                                            Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                                <TextBlock Text="{Binding Version}" FontWeight="SemiBold" FontSize="13"
+                                                                           Foreground="{DynamicResource SemiColorText0}"/>
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Column="2" Text="{Binding Time}" FontSize="10"
+                                                                       Foreground="{DynamicResource SemiColorText3}"/>
+                                                        </Grid>
+                                                        <ItemsControl ItemsSource="{Binding Logs}" Margin="20,4,0,0">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="x:String">
+                                                                    <TextBlock Text="{Binding}" FontSize="11"
+                                                                               Foreground="{DynamicResource SemiColorText2}"
+                                                                               Margin="0,1,0,0" TextWrapping="Wrap"/>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </TabControl.ContentTemplate>
+            </TabControl>
         </Grid>
 
         <!-- ═══ STATUS BAR ═══ -->
@@ -413,7 +408,7 @@
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <materialIcons:MaterialIcon Kind="InformationOutline" Width="12" Height="12"
                                                 Foreground="{DynamicResource SemiColorText3}"/>
-                    <TextBlock Text="{Binding StatusMessage}" FontSize="11"
+                    <TextBlock Text="{Binding SelectedTab.StatusMessage}" FontSize="11"
                                Foreground="{DynamicResource SemiColorText2}"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
@@ -421,24 +416,21 @@
                     <Ellipse Width="6" Height="6" Fill="{DynamicResource SemiColorWarning}"/>
                     <TextBlock Text="未暂存：" FontSize="11"
                                Foreground="{DynamicResource SemiColorText3}"/>
-                    <TextBlock Text="{Binding UnstagedFiles.Count}" FontSize="11"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource SemiColorWarning}"/>
+                    <TextBlock Text="{Binding SelectedTab.UnstagedFiles.Count}" FontSize="11"
+                               FontWeight="SemiBold" Foreground="{DynamicResource SemiColorWarning}"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
                             VerticalAlignment="Center" Margin="12,0">
                     <Ellipse Width="6" Height="6" Fill="{DynamicResource SemiColorSuccess}"/>
                     <TextBlock Text="已暂存：" FontSize="11"
                                Foreground="{DynamicResource SemiColorText3}"/>
-                    <TextBlock Text="{Binding StagedFiles.Count}" FontSize="11"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource SemiColorSuccess}"/>
+                    <TextBlock Text="{Binding SelectedTab.StagedFiles.Count}" FontSize="11"
+                               FontWeight="SemiBold" Foreground="{DynamicResource SemiColorSuccess}"/>
                 </StackPanel>
                 <TextBlock Grid.Column="3" Text="{Binding SelectedProject.ProjectPath}"
                            FontSize="10" VerticalAlignment="Center"
                            Foreground="{DynamicResource SemiColorText3}"
-                           Margin="12,0,0,0"
-                           TextTrimming="CharacterEllipsis"/>
+                           Margin="12,0,0,0" TextTrimming="CharacterEllipsis"/>
             </Grid>
         </Border>
     </Grid>
