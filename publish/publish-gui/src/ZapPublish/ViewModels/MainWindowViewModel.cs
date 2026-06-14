@@ -31,6 +31,7 @@ public partial class MainWindowViewModel : ObservableObject
     public IAsyncRelayCommand AddLocalProjectCommand { get; }
     public IAsyncRelayCommand RemoveProjectCommand { get; }
     public IAsyncRelayCommand EditProjectCommand { get; }
+    public IRelayCommand<ProjectTabViewModel> CloseTabCommand { get; }
 
     public MainWindowViewModel(CliService cli, ConfigService cfg, IDialogService dialog)
     {
@@ -45,6 +46,7 @@ public partial class MainWindowViewModel : ObservableObject
         AddLocalProjectCommand = new AsyncRelayCommand(AddLocalProjectAsync);
         RemoveProjectCommand = new AsyncRelayCommand(RemoveProjectAsync, () => SelectedProject != null);
         EditProjectCommand = new AsyncRelayCommand(EditProjectAsync, () => SelectedProject != null);
+        CloseTabCommand = new RelayCommand<ProjectTabViewModel>(CloseTab);
 
         LoadProjects();
     }
@@ -80,15 +82,10 @@ public partial class MainWindowViewModel : ObservableObject
         {
             Log.Debug("加载项目: DisplayName={Name}, Path={Path}", c.DisplayName, c.ProjectPath);
             Projects.Add(c);
-            // 为每个项目预创建 tab（加速切换）
-            Tabs.Add(new ProjectTabViewModel(c, _cli));
         }
         Log.Information("共加载 {Count} 个项目", Projects.Count);
         if (Projects.Count > 0)
-        {
-            SelectedProject = Projects[0];
-            FireAndForget(Tabs[0].RefreshAsync(), "初始RefreshAsync");
-        }
+            SelectedProject = Projects[0]; // 触发 OnSelectedProjectChanged 按需创建 tab
     }
 
     private void FireAndForget(Task task, string context)
@@ -144,11 +141,32 @@ public partial class MainWindowViewModel : ObservableObject
 
         // 清理对应 tab
         var tab = Tabs.FirstOrDefault(t => t.Project == SelectedProject);
-        if (tab != null) Tabs.Remove(tab);
+        if (tab != null)
+        {
+            SelectedTab = null;
+            Tabs.Remove(tab);
+        }
 
         Projects.Remove(SelectedProject);
         SelectedProject = Projects.FirstOrDefault();
         await MessageBox.ShowAsync($"项目 \"{name}\" 已移除", "成功", MessageBoxIcon.Success);
+    }
+
+    private void CloseTab(ProjectTabViewModel? tab)
+    {
+        if (tab == null) return;
+        var idx = Tabs.IndexOf(tab);
+        if (idx < 0) return;
+
+        Tabs.RemoveAt(idx);
+        // 如果关闭的是当前选中的 tab，切换到相邻 tab
+        if (SelectedTab == tab)
+        {
+            if (Tabs.Count > 0)
+                SelectedTab = Tabs[Math.Min(idx, Tabs.Count - 1)];
+            else
+                SelectedTab = null;
+        }
     }
 
     private async Task EditProjectAsync()
