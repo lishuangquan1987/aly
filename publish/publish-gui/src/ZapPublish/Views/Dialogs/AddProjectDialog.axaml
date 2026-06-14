@@ -85,10 +85,11 @@
                     </Border>
                 </StackPanel>
 
-                <!-- 获取状态 / 空结果提示 -->
-                <StackPanel IsVisible="{Binding ShowCreateButton}" Spacing="6">
+                <!-- 创建服务端项目（始终可见） -->
+                <StackPanel Spacing="6">
                     <TextBlock Text="{Binding StatusMessage}" FontSize="12"
-                               Foreground="{DynamicResource SemiColorText2}"/>
+                               Foreground="{DynamicResource SemiColorText2}"
+                               IsVisible="{Binding ShowCreateButton}"/>
                     <Button Command="{Binding CreateOnServerCommand}"
                             Content="在服务端新建项目"
                             Height="32" Padding="12,0"

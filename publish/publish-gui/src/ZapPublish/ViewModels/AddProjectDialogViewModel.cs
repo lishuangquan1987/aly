@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -139,19 +140,13 @@ public partial class AddProjectDialogViewModel : ObservableObject
             }
 
             var projects = result.Data ?? new();
-            if (projects.Count == 0)
-            {
-                ServerProjects.Clear();
-                ShowProjectList = false;
-                StatusMessage = "服务端暂无项目，可点击下方按钮创建";
-                ShowCreateButton = true;
-                return;
-            }
-
             ServerProjects = new ObservableCollection<ProjectInfo>(projects);
-            ShowProjectList = true;
-            ShowCreateButton = false;
-            StatusMessage = string.Empty;
+            ShowProjectList = projects.Count > 0;
+            ShowCreateButton = true;
+            if (projects.Count == 0)
+                StatusMessage = "服务端暂无项目，可点击下方按钮创建";
+            else
+                StatusMessage = string.Empty;
             Log.Information("获取到 {Count} 个项目", projects.Count);
         }
         catch (Exception ex)
@@ -191,6 +186,10 @@ public partial class AddProjectDialogViewModel : ObservableObject
             await MessageBox.ShowAsync($"项目 \"{newProject.Name}\" 创建成功", "成功");
             Log.Information("创建项目完成，自动填充: Name={Name}, Id={Id}", newProject.Name, newProject.Id);
             await FetchProjectsAsync();
+            // 自动选中刚创建的项目
+            var created = ServerProjects.FirstOrDefault(p => p.Name == newProject.Name);
+            if (created != null)
+                SelectedServerProject = created;
         }
     }
 
