@@ -183,7 +183,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            await MessageBox.ShowAsync($"刷新异常: {ex.Message}", "错误");
+            await MessageBox.ShowAsync($"刷新异常: {ex.Message}", "错误", MessageBoxIcon.Error);
             StatusMessage = $"刷新异常: {ex.Message}";
             Log.Error(ex, "刷新异常");
         }
@@ -210,26 +210,26 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (IsBusy) return;
         var projectPath = SelectedProject?.ProjectPath;
-        if (string.IsNullOrWhiteSpace(projectPath)) { await MessageBox.ShowAsync("请先选择一个项目", "提示"); StatusMessage = "请先选择一个项目"; return; }
+        if (string.IsNullOrWhiteSpace(projectPath)) { await MessageBox.ShowAsync("请先选择一个项目", "提示", MessageBoxIcon.Warning); StatusMessage = "请先选择一个项目"; return; }
         IsBusy = true;
         try
         {
             var r = await _cli.AddAllAsync(projectPath);
             if (r?.IsSuccess == true)
             {
-                await MessageBox.ShowAsync("已添加所有变更", "成功");
+                await MessageBox.ShowAsync("已添加所有变更", "成功", MessageBoxIcon.Success);
                 StatusMessage = "已添加所有变更";
             }
             else
             {
-                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误");
+                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
                 StatusMessage = $"添加失败: {r?.ErrorMsg}";
             }
             await RefetchDataAsync();
         }
         catch (Exception ex)
         {
-            await MessageBox.ShowAsync($"暂存异常: {ex.Message}", "错误");
+            await MessageBox.ShowAsync($"暂存异常: {ex.Message}", "错误", MessageBoxIcon.Error);
             StatusMessage = $"暂存异常: {ex.Message}";
             Log.Error(ex, "暂存异常");
         }
@@ -240,26 +240,26 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (IsBusy) return;
         var projectPath = SelectedProject?.ProjectPath;
-        if (string.IsNullOrWhiteSpace(projectPath)) { await MessageBox.ShowAsync("请先选择一个项目", "提示"); StatusMessage = "请先选择一个项目"; return; }
+        if (string.IsNullOrWhiteSpace(projectPath)) { await MessageBox.ShowAsync("请先选择一个项目", "提示", MessageBoxIcon.Warning); StatusMessage = "请先选择一个项目"; return; }
         IsBusy = true;
         try
         {
             var r = await _cli.ResetAllAsync(projectPath);
             if (r?.IsSuccess == true)
             {
-                await MessageBox.ShowAsync("暂存区已清空", "成功");
+                await MessageBox.ShowAsync("暂存区已清空", "成功", MessageBoxIcon.Success);
                 StatusMessage = "暂存区已清空";
             }
             else
             {
-                await MessageBox.ShowAsync($"重置失败: {r?.ErrorMsg}", "错误");
+                await MessageBox.ShowAsync($"重置失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
                 StatusMessage = $"重置失败: {r?.ErrorMsg}";
             }
             await RefetchDataAsync();
         }
         catch (Exception ex)
         {
-            await MessageBox.ShowAsync($"重置异常: {ex.Message}", "错误");
+            await MessageBox.ShowAsync($"重置异常: {ex.Message}", "错误", MessageBoxIcon.Error);
             StatusMessage = $"重置异常: {ex.Message}";
             Log.Error(ex, "重置异常");
         }
@@ -270,28 +270,28 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (IsBusy) return;
         var projectPath = SelectedProject?.ProjectPath;
-        if (string.IsNullOrWhiteSpace(projectPath)) { await MessageBox.ShowAsync("请先选择一个项目", "提示"); StatusMessage = "请先选择一个项目"; return; }
+        if (string.IsNullOrWhiteSpace(projectPath)) { await MessageBox.ShowAsync("请先选择一个项目", "提示", MessageBoxIcon.Warning); StatusMessage = "请先选择一个项目"; return; }
         var files = UnstagedFiles.Where(f => f.IsSelected).Select(f => f.RelativePath).ToList();
-        if (files.Count == 0) { await MessageBox.ShowAsync("请先勾选文件", "提示"); StatusMessage = "请先勾选文件"; return; }
+        if (files.Count == 0) { await MessageBox.ShowAsync("请先勾选文件", "提示", MessageBoxIcon.Warning); StatusMessage = "请先勾选文件"; return; }
         IsBusy = true;
         try
         {
             var r = await _cli.AddFilesAsync(projectPath, files);
             if (r?.IsSuccess == true)
             {
-                await MessageBox.ShowAsync($"已暂存 {files.Count} 个文件", "成功");
+                await MessageBox.ShowAsync($"已暂存 {files.Count} 个文件", "成功", MessageBoxIcon.Success);
                 StatusMessage = $"已暂存 {files.Count} 个文件";
             }
             else
             {
-                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误");
+                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
                 StatusMessage = $"添加失败: {r?.ErrorMsg}";
             }
             await RefetchDataAsync();
         }
         catch (Exception ex)
         {
-            await MessageBox.ShowAsync($"暂存异常: {ex.Message}", "错误");
+            await MessageBox.ShowAsync($"暂存异常: {ex.Message}", "错误", MessageBoxIcon.Error);
             StatusMessage = $"暂存异常: {ex.Message}";
             Log.Error(ex, "暂存异常");
         }
@@ -302,9 +302,9 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (IsBusy) return;
         var projectPath = SelectedProject?.ProjectPath;
-        if (string.IsNullOrWhiteSpace(projectPath)) { await MessageBox.ShowAsync("请先选择一个项目", "提示"); StatusMessage = "请先选择一个项目"; return; }
+        if (string.IsNullOrWhiteSpace(projectPath)) { await MessageBox.ShowAsync("请先选择一个项目", "提示", MessageBoxIcon.Warning); StatusMessage = "请先选择一个项目"; return; }
         var toUnstage = StagedFiles.Where(f => f.IsSelected).Select(f => f.RelativePath).ToList();
-        if (toUnstage.Count == 0) { await MessageBox.ShowAsync("请先勾选文件", "提示"); StatusMessage = "请先勾选文件"; return; }
+        if (toUnstage.Count == 0) { await MessageBox.ShowAsync("请先勾选文件", "提示", MessageBoxIcon.Warning); StatusMessage = "请先勾选文件"; return; }
         var keepStaged = StagedFiles.Where(f => !f.IsSelected).Select(f => f.RelativePath).ToList();
         IsBusy = true;
         try
@@ -315,24 +315,24 @@ public partial class MainWindowViewModel : ObservableObject
                 var addResult = await _cli.AddFilesAsync(projectPath, keepStaged);
                 if (addResult?.IsSuccess == true)
                 {
-                    await MessageBox.ShowAsync($"已取消暂存 {toUnstage.Count} 个文件", "成功");
+                    await MessageBox.ShowAsync($"已取消暂存 {toUnstage.Count} 个文件", "成功", MessageBoxIcon.Success);
                     StatusMessage = $"已取消暂存 {toUnstage.Count} 个文件";
                 }
                 else
                 {
-                    await MessageBox.ShowAsync($"部分文件暂存失败: {addResult?.ErrorMsg}", "错误");
+                    await MessageBox.ShowAsync($"部分文件暂存失败: {addResult?.ErrorMsg}", "错误", MessageBoxIcon.Error);
                     StatusMessage = $"部分文件暂存失败: {addResult?.ErrorMsg}";
                 }
             }
             else
             {
-                await MessageBox.ShowAsync($"已取消暂存 {toUnstage.Count} 个文件", "成功");
+                await MessageBox.ShowAsync($"已取消暂存 {toUnstage.Count} 个文件", "成功", MessageBoxIcon.Success);
                 StatusMessage = $"已取消暂存 {toUnstage.Count} 个文件";
             }
         }
         catch (Exception ex)
         {
-            await MessageBox.ShowAsync($"取消暂存异常: {ex.Message}", "错误");
+            await MessageBox.ShowAsync($"取消暂存异常: {ex.Message}", "错误", MessageBoxIcon.Error);
             StatusMessage = $"取消暂存异常: {ex.Message}";
             Log.Error(ex, "取消暂存异常");
         }
@@ -344,10 +344,10 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (IsBusy) return;
         var projectPath = SelectedProject?.ProjectPath;
-        if (string.IsNullOrWhiteSpace(projectPath)) { await MessageBox.ShowAsync("请先选择一个项目", "提示"); StatusMessage = "请先选择一个项目"; return; }
-        if (string.IsNullOrWhiteSpace(NewVersion)) { await MessageBox.ShowAsync("请输入版本号", "提示"); StatusMessage = "请输入版本号"; return; }
-        if (string.IsNullOrWhiteSpace(CommitMessage)) { await MessageBox.ShowAsync("请输入变更说明", "提示"); StatusMessage = "请输入变更说明"; return; }
-        if (StagedFiles.Count == 0) { await MessageBox.ShowAsync("暂存区为空，请先暂存文件", "提示"); StatusMessage = "暂存区为空，请先暂存文件"; return; }
+        if (string.IsNullOrWhiteSpace(projectPath)) { await MessageBox.ShowAsync("请先选择一个项目", "提示", MessageBoxIcon.Warning); StatusMessage = "请先选择一个项目"; return; }
+        if (string.IsNullOrWhiteSpace(NewVersion)) { await MessageBox.ShowAsync("请输入版本号", "提示", MessageBoxIcon.Warning); StatusMessage = "请输入版本号"; return; }
+        if (string.IsNullOrWhiteSpace(CommitMessage)) { await MessageBox.ShowAsync("请输入变更说明", "提示", MessageBoxIcon.Warning); StatusMessage = "请输入变更说明"; return; }
+        if (StagedFiles.Count == 0) { await MessageBox.ShowAsync("暂存区为空，请先暂存文件", "提示", MessageBoxIcon.Warning); StatusMessage = "暂存区为空，请先暂存文件"; return; }
 
         IsBusy = true;
         IsUploading = true;
@@ -364,18 +364,18 @@ public partial class MainWindowViewModel : ObservableObject
                 AfterApplyUpdateScript = string.Empty;
                 StatusMessage = "发布成功，正在刷新...";
                 await RefetchDataAsync();
-                await MessageBox.ShowAsync($"发布成功 ({stagedCount} 暂存, {unstagedCount} 未暂存)", "成功");
+                await MessageBox.ShowAsync($"发布成功 ({stagedCount} 暂存, {unstagedCount} 未暂存)", "成功", MessageBoxIcon.Success);
                 StatusMessage = $"发布成功 ({stagedCount} 暂存, {unstagedCount} 未暂存)";
             }
             else
             {
-                await MessageBox.ShowAsync($"发布失败: {r?.ErrorMsg}", "错误");
+                await MessageBox.ShowAsync($"发布失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
                 StatusMessage = $"发布失败: {r?.ErrorMsg}";
             }
         }
         catch (Exception ex)
         {
-            await MessageBox.ShowAsync($"发布异常: {ex.Message}", "错误");
+            await MessageBox.ShowAsync($"发布异常: {ex.Message}", "错误", MessageBoxIcon.Error);
             StatusMessage = $"发布异常: {ex.Message}";
             Log.Error(ex, "发布异常");
         }
@@ -395,11 +395,11 @@ public partial class MainWindowViewModel : ObservableObject
             _cfg.AddProject(cfg);
             Projects.Add(cfg);
             SelectedProject = cfg;
-            await MessageBox.ShowAsync($"项目 \"{cfg.DisplayName}\" 已添加", "成功");
+            await MessageBox.ShowAsync($"项目 \"{cfg.DisplayName}\" 已添加", "成功", MessageBoxIcon.Success);
         }
         else
         {
-            await MessageBox.ShowAsync("无法打开项目对话框，请稍后重试", "错误");
+            await MessageBox.ShowAsync("无法打开项目对话框，请稍后重试", "错误", MessageBoxIcon.Error);
         }
     }
 
@@ -412,11 +412,11 @@ public partial class MainWindowViewModel : ObservableObject
             _cfg.AddProject(cfg);
             Projects.Add(cfg);
             SelectedProject = cfg;
-            await MessageBox.ShowAsync($"项目 \"{cfg.DisplayName}\" 已添加", "成功");
+            await MessageBox.ShowAsync($"项目 \"{cfg.DisplayName}\" 已添加", "成功", MessageBoxIcon.Success);
         }
         else
         {
-            await MessageBox.ShowAsync("无法打开项目对话框，请稍后重试", "错误");
+            await MessageBox.ShowAsync("无法打开项目对话框，请稍后重试", "错误", MessageBoxIcon.Error);
         }
     }
 
@@ -427,7 +427,7 @@ public partial class MainWindowViewModel : ObservableObject
         _cfg.RemoveProject(name);
         Projects.Remove(SelectedProject);
         SelectedProject = Projects.FirstOrDefault();
-        await MessageBox.ShowAsync($"项目 \"{name}\" 已移除", "成功");
+        await MessageBox.ShowAsync($"项目 \"{name}\" 已移除", "成功", MessageBoxIcon.Success);
     }
 
     private async Task EditProjectAsync()
@@ -440,7 +440,7 @@ public partial class MainWindowViewModel : ObservableObject
             var idx = Projects.IndexOf(SelectedProject);
             if (idx >= 0) Projects[idx] = result;
             SelectedProject = result;
-            await MessageBox.ShowAsync("项目配置已更新", "成功");
+            await MessageBox.ShowAsync("项目配置已更新", "成功", MessageBoxIcon.Success);
         }
     }
 }

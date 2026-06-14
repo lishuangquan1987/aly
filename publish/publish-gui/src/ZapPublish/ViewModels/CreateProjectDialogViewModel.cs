@@ -50,19 +50,19 @@ public partial class CreateProjectDialogViewModel : ObservableObject
 
         if (string.IsNullOrEmpty(name))
         {
-            await MessageBox.ShowAsync("请填写项目名称", "提示");
+            await MessageBox.ShowAsync("请填写项目名称", "提示", MessageBoxIcon.Warning);
             return;
         }
         if (string.IsNullOrEmpty(title))
         {
-            await MessageBox.ShowAsync("请填写项目标题", "提示");
+            await MessageBox.ShowAsync("请填写项目标题", "提示", MessageBoxIcon.Warning);
             return;
         }
 
         // 防止 CLI 参数注入
         if (name.Contains('"') || title.Contains('"'))
         {
-            await MessageBox.ShowAsync("项目名称和标题不能包含双引号", "提示");
+            await MessageBox.ShowAsync("项目名称和标题不能包含双引号", "提示", MessageBoxIcon.Warning);
             return;
         }
 
@@ -90,14 +90,14 @@ public partial class CreateProjectDialogViewModel : ObservableObject
             else
             {
                 StatusMessage = string.Empty;
-                await MessageBox.ShowAsync($"创建失败: {result?.ErrorMsg}", "错误");
+                await MessageBox.ShowAsync($"创建失败: {result?.ErrorMsg}", "错误", MessageBoxIcon.Error);
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "创建项目异常");
             StatusMessage = string.Empty;
-            await MessageBox.ShowAsync("创建项目时发生异常，请重试或联系管理员", "错误");
+            await MessageBox.ShowAsync("创建项目时发生异常，请重试或联系管理员", "错误", MessageBoxIcon.Error);
         }
         finally
         {

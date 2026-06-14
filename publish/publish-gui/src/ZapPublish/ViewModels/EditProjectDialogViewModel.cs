@@ -67,7 +67,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
         var sharedPath = Path.Combine(_projectPath, ".updator", "shared.json");
         if (!File.Exists(sharedPath))
         {
-            await MessageBox.ShowAsync(".updator/shared.json 不存在，项目可能未初始化", "错误");
+            await MessageBox.ShowAsync(".updator/shared.json 不存在，项目可能未初始化", "错误", MessageBoxIcon.Error);
             return;
         }
 
@@ -86,7 +86,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Error(ex, "读取 shared.json 失败");
-            await MessageBox.ShowAsync($"读取配置失败: {ex.Message}", "错误");
+            await MessageBox.ShowAsync($"读取配置失败: {ex.Message}", "错误", MessageBoxIcon.Error);
         }
     }
 
@@ -101,11 +101,11 @@ public partial class EditProjectDialogViewModel : ObservableObject
             {
                 ServerUrl = EditUrl.Trim();
                 IsEditingUrl = false;
-                await MessageBox.ShowAsync("服务端地址已更新", "成功");
+                await MessageBox.ShowAsync("服务端地址已更新", "成功", MessageBoxIcon.Success);
             }
             else
             {
-                await MessageBox.ShowAsync($"更新失败: {r?.ErrorMsg}", "错误");
+                await MessageBox.ShowAsync($"更新失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
             }
         }
         finally { IsBusy = false; }
@@ -126,7 +126,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
             }
             else
             {
-                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误");
+                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
             }
         }
         finally { IsBusy = false; }
@@ -146,7 +146,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
             }
             else
             {
-                await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误");
+                await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
             }
         }
         finally { IsBusy = false; }
@@ -167,7 +167,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
             }
             else
             {
-                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误");
+                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
             }
         }
         finally { IsBusy = false; }
@@ -187,7 +187,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
             }
             else
             {
-                await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误");
+                await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
             }
         }
         finally { IsBusy = false; }
