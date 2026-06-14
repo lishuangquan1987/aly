@@ -44,6 +44,14 @@ func UploadFile(ctx *gin.Context) {
 		return
 	}
 
+	// 如果项目文件夹不存在则自动创建
+	if !directory.Exists(workDir) {
+		if err := directory.CreateDirectory(workDir); err != nil {
+			ctx.JSON(200, models.NGWithError(err))
+			return
+		}
+	}
+
 	fileName := stringUtils.Replace(fileInfo.RelativeFileName, "\\", "/")
 	// 路径穿越防护：规范化路径并验证在 workDir 内
 	rawPath := path.Combine(workDir, fileName)

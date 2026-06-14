@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shirou/gopsutil/cpu"
@@ -36,6 +37,16 @@ func CreateProject(ctx *gin.Context) {
 	//判断项目名称是否为空
 	if createProjectDto.Name == "" {
 		ctx.JSON(200, models.NG("项目名称不能为空"))
+		return
+	}
+
+	// 校验项目名称：不能包含路径分隔符和特殊字符
+	if strings.Contains(createProjectDto.Name, "/") || strings.Contains(createProjectDto.Name, "\\") {
+		ctx.JSON(200, models.NG("项目名称不能包含路径分隔符"))
+		return
+	}
+	if strings.ContainsAny(createProjectDto.Name, ":\"<>|?*") {
+		ctx.JSON(200, models.NG("项目名称不能包含特殊字符"))
 		return
 	}
 

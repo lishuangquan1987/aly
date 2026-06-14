@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/utils-go/ngo/io/directory"
 	"github.com/utils-go/ngo/io/fileinfo"
 	"github.com/utils-go/ngo/io/path"
 )
@@ -39,6 +40,11 @@ func GetAllFilesByProjectName(ctx *gin.Context) {
 	}
 
 	var fileInfos []models.FileInfo
+	// 如果项目文件夹不存在（如项目刚创建还未上传文件），返回空列表
+	if !directory.Exists(workDir) {
+		ctx.JSON(200, models.OKWithData(fileInfos))
+		return
+	}
 	err = filepath.Walk(workDir, func(absPath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
