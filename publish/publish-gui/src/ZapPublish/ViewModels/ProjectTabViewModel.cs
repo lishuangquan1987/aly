@@ -93,12 +93,8 @@ public partial class ProjectTabViewModel : ObservableObject
         _refreshCts?.Dispose();
         _refreshCts = new CancellationTokenSource();
 
-        IsBusy = true;
-        try
-        {
-            await FetchDataAsync();
-        }
-        finally { IsBusy = false; }
+        await FetchDataAsync();
+        
     }
 
     private async Task FetchDataAsync()
@@ -106,13 +102,14 @@ public partial class ProjectTabViewModel : ObservableObject
         var projectPath = Project.ProjectPath;
         StatusMessage = "刷新中...";
         Log.Information("开始刷新: Project={Name}, Path={Path}", Project.DisplayName, projectPath);
-
+        IsBusy = true;
         try
         {
             var result = await _cli.GetStatusAsync(projectPath);
             if (result?.Data == null)
             {
                 StatusMessage = $"刷新失败: {result?.ErrorMsg ?? "未知错误"}";
+                await MessageBox.ShowAsync(StatusMessage, "错误", MessageBoxIcon.Error);
                 return;
             }
 
@@ -139,6 +136,10 @@ public partial class ProjectTabViewModel : ObservableObject
             await MessageBox.ShowAsync($"刷新异常: {ex.Message}", "错误", MessageBoxIcon.Error);
             StatusMessage = $"刷新异常: {ex.Message}";
             Log.Error(ex, "刷新异常");
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 
@@ -306,21 +307,21 @@ public partial class ProjectTabViewModel : ObservableObject
                 CommitMessage = string.Empty;
                 AfterApplyUpdateScript = string.Empty;
                 StatusMessage = "发布成功，正在刷新...";
-                await FetchDataAsync();
                 await MessageBox.ShowAsync($"发布成功 ({stagedCount} 暂存, {unstagedCount} 未暂存)", "成功", MessageBoxIcon.Success);
                 StatusMessage = $"发布成功 ({stagedCount} 暂存, {unstagedCount} 未暂存)";
+                await FetchDataAsync();
             }
             else
             {
-                await MessageBox.ShowAsync($"发布失败: {r?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
                 StatusMessage = $"发布失败: {r?.ErrorMsg ?? "未知错误"}";
+                await MessageBox.ShowAsync($"发布失败: {r?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
             }
         }
         catch (Exception ex)
         {
-            await MessageBox.ShowAsync($"发布异常: {ex.Message}", "错误", MessageBoxIcon.Error);
             StatusMessage = $"发布异常: {ex.Message}";
             Log.Error(ex, "发布异常");
+            await MessageBox.ShowAsync($"发布异常: {ex.Message}", "错误", MessageBoxIcon.Error);
         }
         finally
         {
