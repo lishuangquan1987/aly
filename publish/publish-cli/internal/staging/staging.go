@@ -16,7 +16,7 @@ import (
 // 与 models.FileStatusItem 结构一致，用类型别名保持语义清晰
 type StagedFile = models.FileStatusItem
 
-// Load reads the staged file list.
+// Load reads the staged file list (按路径排序).
 func Load(projectPath string) ([]StagedFile, error) {
 	path := stagingPath(projectPath)
 	data, err := os.ReadFile(path)
@@ -30,6 +30,9 @@ func Load(projectPath string) ([]StagedFile, error) {
 	if err := json.Unmarshal(data, &files); err != nil {
 		return nil, fmt.Errorf("parse staged-files.json: %w", err)
 	}
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].RelativePath < files[j].RelativePath
+	})
 	return files, nil
 }
 

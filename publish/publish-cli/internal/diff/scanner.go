@@ -78,6 +78,11 @@ func ScanDirectory(root string, ignoreFolders, ignoreFiles []string) ([]models.L
 		return nil, err
 	}
 
+	// 按相对路径排序 entries，确保并行哈希结果也是有序的
+	sort.SliceStable(entries, func(i, j int) bool {
+		return entries[i].relPath < entries[j].relPath
+	})
+
 	// 阶段 2：并行计算哈希
 	numWorkers := runtime.NumCPU() * 2
 	sem := make(chan struct{}, numWorkers)
