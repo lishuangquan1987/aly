@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"zap/publish-cli/internal/diff"
@@ -32,13 +33,16 @@ func Load(projectPath string) ([]StagedFile, error) {
 	return files, nil
 }
 
-// Save writes the staged file list.
+// Save writes the staged file list (按路径排序保存).
 func Save(projectPath string, files []StagedFile) error {
 	path := stagingPath(projectPath)
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].RelativePath < files[j].RelativePath
+	})
 	data, err := json.MarshalIndent(files, "", "  ")
 	if err != nil {
 		return err

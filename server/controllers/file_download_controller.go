@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -95,6 +96,11 @@ func GetAllFilesByProjectName(ctx *gin.Context) {
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
+
+	// 按相对路径排序，确保每次返回顺序一致
+	sort.Slice(fileInfos, func(i, j int) bool {
+		return fileInfos[i].FileRelativePath < fileInfos[j].FileRelativePath
+	})
 
 	ctx.JSON(200, models.OKWithData(fileInfos))
 }
