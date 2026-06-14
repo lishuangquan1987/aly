@@ -163,9 +163,14 @@ public partial class MainWindowViewModel : ObservableObject
         if (SelectedTab == tab)
         {
             if (Tabs.Count > 0)
+            {
                 SelectedTab = Tabs[Math.Min(idx, Tabs.Count - 1)];
+                SelectedProject = SelectedTab.Project;
+            }
             else
+            {
                 SelectedTab = null;
+            }
         }
     }
 
