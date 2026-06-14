@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
 	"zap/publish-cli/pkg/models"
@@ -142,15 +143,22 @@ func Diff(localFiles []models.LocalFile, serverFiles []models.FileInfo) []models
 	}
 
 	var diffs []models.FileDiff
-	allPaths := make(map[string]bool)
+	allPathsSet := make(map[string]bool)
 	for p := range localMap {
-		allPaths[p] = true
+		allPathsSet[p] = true
 	}
 	for p := range serverMap {
-		allPaths[p] = true
+		allPathsSet[p] = true
 	}
 
-	for path := range allPaths {
+	// 收集所有路径并排序，确保每次输出顺序一致
+	allPaths := make([]string, 0, len(allPathsSet))
+	for p := range allPathsSet {
+		allPaths = append(allPaths, p)
+	}
+	sort.Strings(allPaths)
+
+	for _, path := range allPaths {
 		local, hasLocal := localMap[path]
 		server, hasServer := serverMap[path]
 

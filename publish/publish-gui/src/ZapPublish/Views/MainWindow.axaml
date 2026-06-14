@@ -212,17 +212,20 @@
                                 Text="{Binding Project.DisplayName}"
                                 VerticalAlignment="Center" />
                             <Button
-                                Command="{Binding #Root.DataContext.CloseTabCommand}"
-                                CommandParameter="{Binding .}"
-                                Height="18" Width="18" Padding="0"
-                                Margin="4,0,0,0"
                                 Background="Transparent"
                                 BorderThickness="0"
-                                Classes="Tertiary">
+                                Classes="Tertiary"
+                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CloseTabCommand}"
+                                CommandParameter="{Binding .}"
+                                Height="18"
+                                Margin="4,0,0,0"
+                                Padding="0"
+                                Width="18">
                                 <materialIcons:MaterialIcon
+                                    Foreground="{DynamicResource SemiColorText2}"
+                                    Height="10"
                                     Kind="Close"
-                                    Width="10" Height="10"
-                                    Foreground="{DynamicResource SemiColorText2}"/>
+                                    Width="10" />
                             </Button>
                         </StackPanel>
                     </DataTemplate>
@@ -261,7 +264,7 @@
                                         BorderBrush="{DynamicResource SemiColorBorder}"
                                         BorderThickness="0,0,0,1"
                                         Padding="14,0">
-                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Height="36">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Height="36">
                                             <StackPanel
                                                 Orientation="Horizontal"
                                                 Spacing="6"
@@ -282,7 +285,7 @@
                                             </StackPanel>
                                             <Button
                                                 Classes="Tertiary"
-                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).EditProjectCommand}"
+                                                Command="{Binding EditProjectCommand}"
                                                 Grid.Column="2"
                                                 Height="28"
                                                 Margin="0,0,4,0"

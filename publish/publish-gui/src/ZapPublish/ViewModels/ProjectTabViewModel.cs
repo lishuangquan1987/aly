@@ -45,6 +45,10 @@ public partial class ProjectTabViewModel : ObservableObject
     public IAsyncRelayCommand AddSelectedCommand { get; }
     public IAsyncRelayCommand ResetSelectedCommand { get; }
     public IAsyncRelayCommand PublishCommand { get; }
+    public IAsyncRelayCommand EditProjectCommand { get; }
+
+    /// <summary>由 MainWindowViewModel 注入，用于打开编辑项目对话框</summary>
+    public Func<ProjectConfig, Task<ProjectConfig?>>? EditProjectAsync { get; set; }
 
     public ProjectTabViewModel(ProjectConfig project, CliService cli)
     {
@@ -59,6 +63,7 @@ public partial class ProjectTabViewModel : ObservableObject
         ResetSelectedCommand = new AsyncRelayCommand(ResetSelectedAsync, () => !IsBusy && SelectedStagedFile != null);
         PublishCommand = new AsyncRelayCommand(PublishAsync,
             () => !IsBusy && StagedFiles.Count > 0 && !string.IsNullOrWhiteSpace(NewVersion) && !string.IsNullOrWhiteSpace(CommitMessage));
+        EditProjectCommand = new AsyncRelayCommand(EditProjectCmdAsync, () => !IsBusy);
 
         UnstagedFiles.CollectionChanged += (_, _) => AddAllCommand.NotifyCanExecuteChanged();
         StagedFiles.CollectionChanged += (_, _) =>
@@ -76,6 +81,7 @@ public partial class ProjectTabViewModel : ObservableObject
         AddSelectedCommand.NotifyCanExecuteChanged();
         ResetSelectedCommand.NotifyCanExecuteChanged();
         PublishCommand.NotifyCanExecuteChanged();
+        EditProjectCommand.NotifyCanExecuteChanged();
     }
 
     // ── Refresh ──────────────────────────────────────────
@@ -321,5 +327,24 @@ public partial class ProjectTabViewModel : ObservableObject
             IsUploading = false;
             IsBusy = false;
         }
+    }
+
+    // ── EditProject ───────────────────────────────────────
+
+    private async Task EditProjectCmdAsync()
+    {
+        if (IsBusy) return;
+        var editAsync = EditProjectAsync;
+        if (editAsync == null) return;
+        IsBusy = true;
+        try
+        {
+            var result = await editAsync(Project);
+            if (result != null)
+            {
+                await MessageBox.ShowAsync("项目配置已更新", "成功", MessageBoxIcon.Success);
+            }
+        }
+        finally { IsBusy = false; }
     }
 }

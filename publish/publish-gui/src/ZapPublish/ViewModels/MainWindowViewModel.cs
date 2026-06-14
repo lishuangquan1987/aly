@@ -51,6 +51,31 @@ public partial class MainWindowViewModel : ObservableObject
         LoadProjects();
     }
 
+    private ProjectTabViewModel CreateTab(ProjectConfig project)
+    {
+        var tab = new ProjectTabViewModel(project, _cli);
+        tab.EditProjectAsync = async (cfg) =>
+        {
+            var result = await _dialog.ShowEditProjectDialogAsync(cfg);
+            if (result != null)
+            {
+                _cfg.UpdateProject(result);
+                var idx = Projects.IndexOf(project);
+                if (idx >= 0) Projects[idx] = result;
+                // 替换旧的 tab 引用（OnSelectedProjectChanged 会重建 tab）
+                var oldTab = Tabs.FirstOrDefault(t => t.Project == project);
+                if (oldTab != null)
+                {
+                    SelectedTab = null;
+                    Tabs.Remove(oldTab);
+                }
+                SelectedProject = result;
+            }
+            return result;
+        };
+        return tab;
+    }
+
     partial void OnSelectedProjectChanged(ProjectConfig? value)
     {
         Log.Information("切换项目: {Name}", value?.DisplayName ?? "(无)");
@@ -67,11 +92,19 @@ public partial class MainWindowViewModel : ObservableObject
         var tab = Tabs.FirstOrDefault(t => t.Project == value);
         if (tab == null)
         {
-            tab = new ProjectTabViewModel(value, _cli);
+            tab = CreateTab(value);
             Tabs.Add(tab);
             FireAndForget(tab.RefreshAsync(), "RefreshAsync");
         }
         SelectedTab = tab;
+    }
+
+    partial void OnSelectedTabChanged(ProjectTabViewModel? value)
+    {
+        if (value != null && SelectedProject != value.Project)
+        {
+            SelectedProject = value.Project;
+        }
     }
 
     private void LoadProjects()
@@ -107,10 +140,10 @@ public partial class MainWindowViewModel : ObservableObject
         {
             _cfg.AddProject(cfg);
             Projects.Add(cfg);
-            var tab = new ProjectTabViewModel(cfg, _cli);
+            var tab = CreateTab(cfg);
             Tabs.Add(tab);
-            SelectedTab = tab;
             SelectedProject = cfg;
+            SelectedTab = tab;
             FireAndForget(tab.RefreshAsync(), "RefreshAsync");
             await MessageBox.ShowAsync($"项目 \"{cfg.DisplayName}\" 已添加", "成功", MessageBoxIcon.Success);
         }
@@ -124,10 +157,10 @@ public partial class MainWindowViewModel : ObservableObject
         {
             _cfg.AddProject(cfg);
             Projects.Add(cfg);
-            var tab = new ProjectTabViewModel(cfg, _cli);
+            var tab = CreateTab(cfg);
             Tabs.Add(tab);
-            SelectedTab = tab;
             SelectedProject = cfg;
+            SelectedTab = tab;
             FireAndForget(tab.RefreshAsync(), "RefreshAsync");
             await MessageBox.ShowAsync($"项目 \"{cfg.DisplayName}\" 已添加", "成功", MessageBoxIcon.Success);
         }
