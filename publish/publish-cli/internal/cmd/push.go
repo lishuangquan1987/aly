@@ -154,12 +154,16 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 	return true
 }
 
-func setProjectForceUpdate(cfg RuntimeConfig) {
+func setProjectForceUpdate(cfg RuntimeConfig, forceUpdate bool) {
 	client := newAPIClient(cfg)
-	if err := client.SetProjectForceUpdate(cfg.Shared.ProjectName, true); err != nil {
+	if err := client.SetProjectForceUpdate(cfg.Shared.ProjectName, forceUpdate); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: 设置强制更新失败: %v\n", err)
 	} else if !jsonOutput {
-		printHumanLn("已设置此项目为强制更新模式")
+		if forceUpdate {
+			printHumanLn("已设置此项目为强制更新模式")
+		} else {
+			printHumanLn("已取消此项目的强制更新模式")
+		}
 	}
 }
 
@@ -197,8 +201,6 @@ func runPush(cmd *cobra.Command, args []string) {
 		if err := staging.Clear(cfg.Path); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: 清理暂存区失败: %v (推送已成功)\n", err)
 		}
-		if pushSetForceUpdate {
-			setProjectForceUpdate(cfg)
-		}
+		setProjectForceUpdate(cfg, pushSetForceUpdate)
 	}
 }
