@@ -34,9 +34,7 @@ public partial class ProjectTabViewModel : ObservableObject
     [ObservableProperty] private string _afterApplyUpdateScript = string.Empty;
     [ObservableProperty] private bool _setForceUpdate;
 
-    [NotifyCanExecuteChangedFor(nameof(AddSelectedCommand))]
     [ObservableProperty] private FileItem? _selectedUnStagedFile;
-    [NotifyCanExecuteChangedFor(nameof(ResetSelectedCommand))]
     [ObservableProperty] private FileItem? _selectedStagedFile;
 
     public IAsyncRelayCommand RefreshCommand { get; }
@@ -59,16 +57,21 @@ public partial class ProjectTabViewModel : ObservableObject
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(pp));
         AddAllCommand = new AsyncRelayCommand(AddAllAsync, () => !IsBusy && UnstagedFiles.Count > 0);
         ResetAllCommand = new AsyncRelayCommand(ResetAllAsync, () => !IsBusy && StagedFiles.Count > 0);
-        AddSelectedCommand = new AsyncRelayCommand(AddSelectedAsync, () => !IsBusy && SelectedUnStagedFile != null);
-        ResetSelectedCommand = new AsyncRelayCommand(ResetSelectedAsync, () => !IsBusy && SelectedStagedFile != null);
+        AddSelectedCommand = new AsyncRelayCommand(AddSelectedAsync, () => !IsBusy && UnstagedFiles.Count > 0);
+        ResetSelectedCommand = new AsyncRelayCommand(ResetSelectedAsync, () => !IsBusy && StagedFiles.Count > 0);
         PublishCommand = new AsyncRelayCommand(PublishAsync,
             () => !IsBusy && StagedFiles.Count > 0 && !string.IsNullOrWhiteSpace(NewVersion) && !string.IsNullOrWhiteSpace(CommitMessage));
         EditProjectCommand = new AsyncRelayCommand(EditProjectCmdAsync, () => !IsBusy);
 
-        UnstagedFiles.CollectionChanged += (_, _) => AddAllCommand.NotifyCanExecuteChanged();
+        UnstagedFiles.CollectionChanged += (_, _) =>
+        {
+            AddAllCommand.NotifyCanExecuteChanged();
+            AddSelectedCommand.NotifyCanExecuteChanged();
+        };
         StagedFiles.CollectionChanged += (_, _) =>
         {
             ResetAllCommand.NotifyCanExecuteChanged();
+            ResetSelectedCommand.NotifyCanExecuteChanged();
             PublishCommand.NotifyCanExecuteChanged();
         };
     }

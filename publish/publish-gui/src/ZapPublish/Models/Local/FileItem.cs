@@ -23,7 +23,7 @@ public partial class FileItem : ObservableObject
     private string _serverMd5 = string.Empty;
 
     [ObservableProperty]
-    private bool _isSelected = true;
+    private bool _isSelected = false;
 
     public string StatusDisplay => Status switch
     {
@@ -40,7 +40,6 @@ public partial class FileItem : ObservableObject
         LocalSize = item.LocalSize,
         ServerSize = item.ServerSize,
         LocalMd5 = item.LocalMd5,
-        ServerMd5 = item.ServerMd5,
-        IsSelected = item.Status is "new" or "modified"
+        ServerMd5 = item.ServerMd5
     };
 }
