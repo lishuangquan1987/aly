@@ -40,7 +40,7 @@ const (
 	// It exists in this package in order to avoid circular dependency with the "projectchangelog" package.
 	ChangeLogsInverseTable = "project_change_logs"
 	// ChangeLogsColumn is the table column denoting the change_logs relation/edge.
-	ChangeLogsColumn = "project_change_logs"
+	ChangeLogsColumn = "project_id"
 )
 
 // Columns holds all SQL columns for project fields.

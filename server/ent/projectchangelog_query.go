@@ -24,7 +24,6 @@ type ProjectChangeLogQuery struct {
 	inters      []Interceptor
 	predicates  []predicate.ProjectChangeLog
 	withProject *ProjectQuery
-	withFKs     bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -299,12 +298,12 @@ func (_q *ProjectChangeLogQuery) WithProject(opts ...func(*ProjectQuery)) *Proje
 // Example:
 //
 //	var v []struct {
-//		Version string `json:"version,omitempty"`
+//		ProjectID int `json:"project_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.ProjectChangeLog.Query().
-//		GroupBy(projectchangelog.FieldVersion).
+//		GroupBy(projectchangelog.FieldProjectID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *ProjectChangeLogQuery) GroupBy(field string, fields ...string) *ProjectChangeLogGroupBy {
@@ -322,11 +321,11 @@ func (_q *ProjectChangeLogQuery) GroupBy(field string, fields ...string) *Projec
 // Example:
 //
 //	var v []struct {
-//		Version string `json:"version,omitempty"`
+//		ProjectID int `json:"project_id,omitempty"`
 //	}
 //
 //	client.ProjectChangeLog.Query().
-//		Select(projectchangelog.FieldVersion).
+//		Select(projectchangelog.FieldProjectID).
 //		Scan(ctx, &v)
 func (_q *ProjectChangeLogQuery) Select(fields ...string) *ProjectChangeLogSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
@@ -370,18 +369,11 @@ func (_q *ProjectChangeLogQuery) prepareQuery(ctx context.Context) error {
 func (_q *ProjectChangeLogQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*ProjectChangeLog, error) {
 	var (
 		nodes       = []*ProjectChangeLog{}
-		withFKs     = _q.withFKs
 		_spec       = _q.querySpec()
 		loadedTypes = [1]bool{
 			_q.withProject != nil,
 		}
 	)
-	if _q.withProject != nil {
-		withFKs = true
-	}
-	if withFKs {
-		_spec.Node.Columns = append(_spec.Node.Columns, projectchangelog.ForeignKeys...)
-	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*ProjectChangeLog).scanValues(nil, columns)
 	}
@@ -413,10 +405,7 @@ func (_q *ProjectChangeLogQuery) loadProject(ctx context.Context, query *Project
 	ids := make([]int, 0, len(nodes))
 	nodeids := make(map[int][]*ProjectChangeLog)
 	for i := range nodes {
-		if nodes[i].project_change_logs == nil {
-			continue
-		}
-		fk := *nodes[i].project_change_logs
+		fk := nodes[i].ProjectID
 		if _, ok := nodeids[fk]; !ok {
 			ids = append(ids, fk)
 		}
@@ -433,7 +422,7 @@ func (_q *ProjectChangeLogQuery) loadProject(ctx context.Context, query *Project
 	for _, n := range neighbors {
 		nodes, ok := nodeids[n.ID]
 		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "project_change_logs" returned %v`, n.ID)
+			return fmt.Errorf(`unexpected foreign-key "project_id" returned %v`, n.ID)
 		}
 		for i := range nodes {
 			assign(nodes[i], n)
@@ -466,6 +455,9 @@ func (_q *ProjectChangeLogQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != projectchangelog.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withProject != nil {
+			_spec.Node.AddColumnOnce(projectchangelog.FieldProjectID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

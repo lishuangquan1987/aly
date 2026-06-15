@@ -27,6 +27,7 @@ type Project struct {
 // ProjectChangeLog 对应服务端 ent 生成的 ProjectChangeLog 结构
 type ProjectChangeLog struct {
 	ID                      int      `json:"id"`
+	ProjectID               int      `json:"project_id"`
 	Version                 string   `json:"version"`
 	Logs                    []string `json:"logs"`
 	Time                    string   `json:"time"`

@@ -16,6 +16,7 @@ type ProjectChangeLog struct {
 // Fields of the ProjectChangeLog.
 func (ProjectChangeLog) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("project_id").Optional().Comment("关联项目ID"),
 		field.String("version").Comment("版本号"),
 		field.JSON("logs", []string{}).Comment("变更日志集合"),
 		field.String("time").Comment("变更时间"),
@@ -28,6 +29,6 @@ func (ProjectChangeLog) Fields() []ent.Field {
 // Edges of the ProjectChangeLog.
 func (ProjectChangeLog) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.From("project", Project.Type).Ref("change_logs").Unique(),
+		edge.From("project", Project.Type).Ref("change_logs").Unique().Field("project_id"),
 	}
 }

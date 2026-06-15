@@ -19,6 +19,8 @@ type ProjectChangeLog struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// 关联项目ID
+	ProjectID int `json:"project_id,omitempty"`
 	// 版本号
 	Version string `json:"version,omitempty"`
 	// 变更日志集合
@@ -33,9 +35,8 @@ type ProjectChangeLog struct {
 	AfterApplyUpdateScript string `json:"after_apply_update_script,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ProjectChangeLogQuery when eager-loading is set.
-	Edges               ProjectChangeLogEdges `json:"edges"`
-	project_change_logs *int
-	selectValues        sql.SelectValues
+	Edges        ProjectChangeLogEdges `json:"edges"`
+	selectValues sql.SelectValues
 }
 
 // ProjectChangeLogEdges holds the relations/edges for other nodes in the graph.
@@ -67,14 +68,12 @@ func (*ProjectChangeLog) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case projectchangelog.FieldIsDeleted:
 			values[i] = new(sql.NullBool)
-		case projectchangelog.FieldID:
+		case projectchangelog.FieldID, projectchangelog.FieldProjectID:
 			values[i] = new(sql.NullInt64)
 		case projectchangelog.FieldVersion, projectchangelog.FieldTime, projectchangelog.FieldAfterApplyUpdateScript:
 			values[i] = new(sql.NullString)
 		case projectchangelog.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case projectchangelog.ForeignKeys[0]: // project_change_logs
-			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -96,6 +95,12 @@ func (_m *ProjectChangeLog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case projectchangelog.FieldProjectID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field project_id", values[i])
+			} else if value.Valid {
+				_m.ProjectID = int(value.Int64)
+			}
 		case projectchangelog.FieldVersion:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field version", values[i])
@@ -133,13 +138,6 @@ func (_m *ProjectChangeLog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field after_apply_update_script", values[i])
 			} else if value.Valid {
 				_m.AfterApplyUpdateScript = value.String
-			}
-		case projectchangelog.ForeignKeys[0]:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for edge-field project_change_logs", value)
-			} else if value.Valid {
-				_m.project_change_logs = new(int)
-				*_m.project_change_logs = int(value.Int64)
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -182,6 +180,9 @@ func (_m *ProjectChangeLog) String() string {
 	var builder strings.Builder
 	builder.WriteString("ProjectChangeLog(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("project_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ProjectID))
+	builder.WriteString(", ")
 	builder.WriteString("version=")
 	builder.WriteString(_m.Version)
 	builder.WriteString(", ")

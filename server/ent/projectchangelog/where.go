@@ -55,6 +55,11 @@ func IDLTE(id int) predicate.ProjectChangeLog {
 	return predicate.ProjectChangeLog(sql.FieldLTE(FieldID, id))
 }
 
+// ProjectID applies equality check predicate on the "project_id" field. It's identical to ProjectIDEQ.
+func ProjectID(v int) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldEQ(FieldProjectID, v))
+}
+
 // Version applies equality check predicate on the "version" field. It's identical to VersionEQ.
 func Version(v string) predicate.ProjectChangeLog {
 	return predicate.ProjectChangeLog(sql.FieldEQ(FieldVersion, v))
@@ -78,6 +83,36 @@ func IsDeleted(v bool) predicate.ProjectChangeLog {
 // AfterApplyUpdateScript applies equality check predicate on the "after_apply_update_script" field. It's identical to AfterApplyUpdateScriptEQ.
 func AfterApplyUpdateScript(v string) predicate.ProjectChangeLog {
 	return predicate.ProjectChangeLog(sql.FieldEQ(FieldAfterApplyUpdateScript, v))
+}
+
+// ProjectIDEQ applies the EQ predicate on the "project_id" field.
+func ProjectIDEQ(v int) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldEQ(FieldProjectID, v))
+}
+
+// ProjectIDNEQ applies the NEQ predicate on the "project_id" field.
+func ProjectIDNEQ(v int) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldNEQ(FieldProjectID, v))
+}
+
+// ProjectIDIn applies the In predicate on the "project_id" field.
+func ProjectIDIn(vs ...int) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldIn(FieldProjectID, vs...))
+}
+
+// ProjectIDNotIn applies the NotIn predicate on the "project_id" field.
+func ProjectIDNotIn(vs ...int) predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldNotIn(FieldProjectID, vs...))
+}
+
+// ProjectIDIsNil applies the IsNil predicate on the "project_id" field.
+func ProjectIDIsNil() predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldIsNull(FieldProjectID))
+}
+
+// ProjectIDNotNil applies the NotNil predicate on the "project_id" field.
+func ProjectIDNotNil() predicate.ProjectChangeLog {
+	return predicate.ProjectChangeLog(sql.FieldNotNull(FieldProjectID))
 }
 
 // VersionEQ applies the EQ predicate on the "version" field.

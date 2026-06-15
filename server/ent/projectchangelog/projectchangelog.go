@@ -14,6 +14,8 @@ const (
 	Label = "project_change_log"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldProjectID holds the string denoting the project_id field in the database.
+	FieldProjectID = "project_id"
 	// FieldVersion holds the string denoting the version field in the database.
 	FieldVersion = "version"
 	// FieldLogs holds the string denoting the logs field in the database.
@@ -36,12 +38,13 @@ const (
 	// It exists in this package in order to avoid circular dependency with the "project" package.
 	ProjectInverseTable = "projects"
 	// ProjectColumn is the table column denoting the project relation/edge.
-	ProjectColumn = "project_change_logs"
+	ProjectColumn = "project_id"
 )
 
 // Columns holds all SQL columns for projectchangelog fields.
 var Columns = []string{
 	FieldID,
+	FieldProjectID,
 	FieldVersion,
 	FieldLogs,
 	FieldTime,
@@ -50,21 +53,10 @@ var Columns = []string{
 	FieldAfterApplyUpdateScript,
 }
 
-// ForeignKeys holds the SQL foreign-keys that are owned by the "project_change_logs"
-// table and are not defined as standalone fields in the schema.
-var ForeignKeys = []string{
-	"project_change_logs",
-}
-
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
 	for i := range Columns {
 		if column == Columns[i] {
-			return true
-		}
-	}
-	for i := range ForeignKeys {
-		if column == ForeignKeys[i] {
 			return true
 		}
 	}
@@ -84,6 +76,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByProjectID orders the results by the project_id field.
+func ByProjectID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProjectID, opts...).ToFunc()
 }
 
 // ByVersion orders the results by the version field.

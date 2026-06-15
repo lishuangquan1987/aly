@@ -26,11 +26,11 @@ func init() {
 	projectchangelogFields := schema.ProjectChangeLog{}.Fields()
 	_ = projectchangelogFields
 	// projectchangelogDescCreatedAt is the schema descriptor for created_at field.
-	projectchangelogDescCreatedAt := projectchangelogFields[3].Descriptor()
+	projectchangelogDescCreatedAt := projectchangelogFields[4].Descriptor()
 	// projectchangelog.DefaultCreatedAt holds the default value on creation for the created_at field.
 	projectchangelog.DefaultCreatedAt = projectchangelogDescCreatedAt.Default.(func() time.Time)
 	// projectchangelogDescIsDeleted is the schema descriptor for is_deleted field.
-	projectchangelogDescIsDeleted := projectchangelogFields[4].Descriptor()
+	projectchangelogDescIsDeleted := projectchangelogFields[5].Descriptor()
 	// projectchangelog.DefaultIsDeleted holds the default value on creation for the is_deleted field.
 	projectchangelog.DefaultIsDeleted = projectchangelogDescIsDeleted.Default.(bool)
 }

@@ -1020,6 +1020,55 @@ func (m *ProjectChangeLogMutation) IDs(ctx context.Context) ([]int, error) {
 	}
 }
 
+// SetProjectID sets the "project_id" field.
+func (m *ProjectChangeLogMutation) SetProjectID(i int) {
+	m.project = &i
+}
+
+// ProjectID returns the value of the "project_id" field in the mutation.
+func (m *ProjectChangeLogMutation) ProjectID() (r int, exists bool) {
+	v := m.project
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProjectID returns the old "project_id" field's value of the ProjectChangeLog entity.
+// If the ProjectChangeLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProjectChangeLogMutation) OldProjectID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProjectID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProjectID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProjectID: %w", err)
+	}
+	return oldValue.ProjectID, nil
+}
+
+// ClearProjectID clears the value of the "project_id" field.
+func (m *ProjectChangeLogMutation) ClearProjectID() {
+	m.project = nil
+	m.clearedFields[projectchangelog.FieldProjectID] = struct{}{}
+}
+
+// ProjectIDCleared returns if the "project_id" field was cleared in this mutation.
+func (m *ProjectChangeLogMutation) ProjectIDCleared() bool {
+	_, ok := m.clearedFields[projectchangelog.FieldProjectID]
+	return ok
+}
+
+// ResetProjectID resets all changes to the "project_id" field.
+func (m *ProjectChangeLogMutation) ResetProjectID() {
+	m.project = nil
+	delete(m.clearedFields, projectchangelog.FieldProjectID)
+}
+
 // SetVersion sets the "version" field.
 func (m *ProjectChangeLogMutation) SetVersion(s string) {
 	m.version = &s
@@ -1264,27 +1313,15 @@ func (m *ProjectChangeLogMutation) ResetAfterApplyUpdateScript() {
 	delete(m.clearedFields, projectchangelog.FieldAfterApplyUpdateScript)
 }
 
-// SetProjectID sets the "project" edge to the Project entity by id.
-func (m *ProjectChangeLogMutation) SetProjectID(id int) {
-	m.project = &id
-}
-
 // ClearProject clears the "project" edge to the Project entity.
 func (m *ProjectChangeLogMutation) ClearProject() {
 	m.clearedproject = true
+	m.clearedFields[projectchangelog.FieldProjectID] = struct{}{}
 }
 
 // ProjectCleared reports if the "project" edge to the Project entity was cleared.
 func (m *ProjectChangeLogMutation) ProjectCleared() bool {
-	return m.clearedproject
-}
-
-// ProjectID returns the "project" edge ID in the mutation.
-func (m *ProjectChangeLogMutation) ProjectID() (id int, exists bool) {
-	if m.project != nil {
-		return *m.project, true
-	}
-	return
+	return m.ProjectIDCleared() || m.clearedproject
 }
 
 // ProjectIDs returns the "project" edge IDs in the mutation.
@@ -1337,7 +1374,10 @@ func (m *ProjectChangeLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProjectChangeLogMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
+	if m.project != nil {
+		fields = append(fields, projectchangelog.FieldProjectID)
+	}
 	if m.version != nil {
 		fields = append(fields, projectchangelog.FieldVersion)
 	}
@@ -1364,6 +1404,8 @@ func (m *ProjectChangeLogMutation) Fields() []string {
 // schema.
 func (m *ProjectChangeLogMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case projectchangelog.FieldProjectID:
+		return m.ProjectID()
 	case projectchangelog.FieldVersion:
 		return m.Version()
 	case projectchangelog.FieldLogs:
@@ -1385,6 +1427,8 @@ func (m *ProjectChangeLogMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ProjectChangeLogMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case projectchangelog.FieldProjectID:
+		return m.OldProjectID(ctx)
 	case projectchangelog.FieldVersion:
 		return m.OldVersion(ctx)
 	case projectchangelog.FieldLogs:
@@ -1406,6 +1450,13 @@ func (m *ProjectChangeLogMutation) OldField(ctx context.Context, name string) (e
 // type.
 func (m *ProjectChangeLogMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case projectchangelog.FieldProjectID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProjectID(v)
+		return nil
 	case projectchangelog.FieldVersion:
 		v, ok := value.(string)
 		if !ok {
@@ -1455,13 +1506,16 @@ func (m *ProjectChangeLogMutation) SetField(name string, value ent.Value) error 
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *ProjectChangeLogMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *ProjectChangeLogMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
 	return nil, false
 }
 
@@ -1478,6 +1532,9 @@ func (m *ProjectChangeLogMutation) AddField(name string, value ent.Value) error 
 // mutation.
 func (m *ProjectChangeLogMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(projectchangelog.FieldProjectID) {
+		fields = append(fields, projectchangelog.FieldProjectID)
+	}
 	if m.FieldCleared(projectchangelog.FieldAfterApplyUpdateScript) {
 		fields = append(fields, projectchangelog.FieldAfterApplyUpdateScript)
 	}
@@ -1495,6 +1552,9 @@ func (m *ProjectChangeLogMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ProjectChangeLogMutation) ClearField(name string) error {
 	switch name {
+	case projectchangelog.FieldProjectID:
+		m.ClearProjectID()
+		return nil
 	case projectchangelog.FieldAfterApplyUpdateScript:
 		m.ClearAfterApplyUpdateScript()
 		return nil
@@ -1506,6 +1566,9 @@ func (m *ProjectChangeLogMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ProjectChangeLogMutation) ResetField(name string) error {
 	switch name {
+	case projectchangelog.FieldProjectID:
+		m.ResetProjectID()
+		return nil
 	case projectchangelog.FieldVersion:
 		m.ResetVersion()
 		return nil

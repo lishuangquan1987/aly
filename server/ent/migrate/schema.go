@@ -35,7 +35,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "is_deleted", Type: field.TypeBool, Default: false},
 		{Name: "after_apply_update_script", Type: field.TypeString, Nullable: true},
-		{Name: "project_change_logs", Type: field.TypeInt, Nullable: true},
+		{Name: "project_id", Type: field.TypeInt, Nullable: true},
 	}
 	// ProjectChangeLogsTable holds the schema information for the "project_change_logs" table.
 	ProjectChangeLogsTable = &schema.Table{

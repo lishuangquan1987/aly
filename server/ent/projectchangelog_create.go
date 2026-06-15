@@ -21,6 +21,20 @@ type ProjectChangeLogCreate struct {
 	hooks    []Hook
 }
 
+// SetProjectID sets the "project_id" field.
+func (_c *ProjectChangeLogCreate) SetProjectID(v int) *ProjectChangeLogCreate {
+	_c.mutation.SetProjectID(v)
+	return _c
+}
+
+// SetNillableProjectID sets the "project_id" field if the given value is not nil.
+func (_c *ProjectChangeLogCreate) SetNillableProjectID(v *int) *ProjectChangeLogCreate {
+	if v != nil {
+		_c.SetProjectID(*v)
+	}
+	return _c
+}
+
 // SetVersion sets the "version" field.
 func (_c *ProjectChangeLogCreate) SetVersion(v string) *ProjectChangeLogCreate {
 	_c.mutation.SetVersion(v)
@@ -77,20 +91,6 @@ func (_c *ProjectChangeLogCreate) SetAfterApplyUpdateScript(v string) *ProjectCh
 func (_c *ProjectChangeLogCreate) SetNillableAfterApplyUpdateScript(v *string) *ProjectChangeLogCreate {
 	if v != nil {
 		_c.SetAfterApplyUpdateScript(*v)
-	}
-	return _c
-}
-
-// SetProjectID sets the "project" edge to the Project entity by ID.
-func (_c *ProjectChangeLogCreate) SetProjectID(id int) *ProjectChangeLogCreate {
-	_c.mutation.SetProjectID(id)
-	return _c
-}
-
-// SetNillableProjectID sets the "project" edge to the Project entity by ID if the given value is not nil.
-func (_c *ProjectChangeLogCreate) SetNillableProjectID(id *int) *ProjectChangeLogCreate {
-	if id != nil {
-		_c = _c.SetProjectID(*id)
 	}
 	return _c
 }
@@ -226,7 +226,7 @@ func (_c *ProjectChangeLogCreate) createSpec() (*ProjectChangeLog, *sqlgraph.Cre
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.project_change_logs = &nodes[0]
+		_node.ProjectID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

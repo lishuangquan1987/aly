@@ -30,6 +30,26 @@ func (_u *ProjectChangeLogUpdate) Where(ps ...predicate.ProjectChangeLog) *Proje
 	return _u
 }
 
+// SetProjectID sets the "project_id" field.
+func (_u *ProjectChangeLogUpdate) SetProjectID(v int) *ProjectChangeLogUpdate {
+	_u.mutation.SetProjectID(v)
+	return _u
+}
+
+// SetNillableProjectID sets the "project_id" field if the given value is not nil.
+func (_u *ProjectChangeLogUpdate) SetNillableProjectID(v *int) *ProjectChangeLogUpdate {
+	if v != nil {
+		_u.SetProjectID(*v)
+	}
+	return _u
+}
+
+// ClearProjectID clears the value of the "project_id" field.
+func (_u *ProjectChangeLogUpdate) ClearProjectID() *ProjectChangeLogUpdate {
+	_u.mutation.ClearProjectID()
+	return _u
+}
+
 // SetVersion sets the "version" field.
 func (_u *ProjectChangeLogUpdate) SetVersion(v string) *ProjectChangeLogUpdate {
 	_u.mutation.SetVersion(v)
@@ -115,20 +135,6 @@ func (_u *ProjectChangeLogUpdate) SetNillableAfterApplyUpdateScript(v *string) *
 // ClearAfterApplyUpdateScript clears the value of the "after_apply_update_script" field.
 func (_u *ProjectChangeLogUpdate) ClearAfterApplyUpdateScript() *ProjectChangeLogUpdate {
 	_u.mutation.ClearAfterApplyUpdateScript()
-	return _u
-}
-
-// SetProjectID sets the "project" edge to the Project entity by ID.
-func (_u *ProjectChangeLogUpdate) SetProjectID(id int) *ProjectChangeLogUpdate {
-	_u.mutation.SetProjectID(id)
-	return _u
-}
-
-// SetNillableProjectID sets the "project" edge to the Project entity by ID if the given value is not nil.
-func (_u *ProjectChangeLogUpdate) SetNillableProjectID(id *int) *ProjectChangeLogUpdate {
-	if id != nil {
-		_u = _u.SetProjectID(*id)
-	}
 	return _u
 }
 
@@ -259,6 +265,26 @@ type ProjectChangeLogUpdateOne struct {
 	mutation *ProjectChangeLogMutation
 }
 
+// SetProjectID sets the "project_id" field.
+func (_u *ProjectChangeLogUpdateOne) SetProjectID(v int) *ProjectChangeLogUpdateOne {
+	_u.mutation.SetProjectID(v)
+	return _u
+}
+
+// SetNillableProjectID sets the "project_id" field if the given value is not nil.
+func (_u *ProjectChangeLogUpdateOne) SetNillableProjectID(v *int) *ProjectChangeLogUpdateOne {
+	if v != nil {
+		_u.SetProjectID(*v)
+	}
+	return _u
+}
+
+// ClearProjectID clears the value of the "project_id" field.
+func (_u *ProjectChangeLogUpdateOne) ClearProjectID() *ProjectChangeLogUpdateOne {
+	_u.mutation.ClearProjectID()
+	return _u
+}
+
 // SetVersion sets the "version" field.
 func (_u *ProjectChangeLogUpdateOne) SetVersion(v string) *ProjectChangeLogUpdateOne {
 	_u.mutation.SetVersion(v)
@@ -344,20 +370,6 @@ func (_u *ProjectChangeLogUpdateOne) SetNillableAfterApplyUpdateScript(v *string
 // ClearAfterApplyUpdateScript clears the value of the "after_apply_update_script" field.
 func (_u *ProjectChangeLogUpdateOne) ClearAfterApplyUpdateScript() *ProjectChangeLogUpdateOne {
 	_u.mutation.ClearAfterApplyUpdateScript()
-	return _u
-}
-
-// SetProjectID sets the "project" edge to the Project entity by ID.
-func (_u *ProjectChangeLogUpdateOne) SetProjectID(id int) *ProjectChangeLogUpdateOne {
-	_u.mutation.SetProjectID(id)
-	return _u
-}
-
-// SetNillableProjectID sets the "project" edge to the Project entity by ID if the given value is not nil.
-func (_u *ProjectChangeLogUpdateOne) SetNillableProjectID(id *int) *ProjectChangeLogUpdateOne {
-	if id != nil {
-		_u = _u.SetProjectID(*id)
-	}
 	return _u
 }
 
