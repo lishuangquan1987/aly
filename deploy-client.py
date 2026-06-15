@@ -18,7 +18,7 @@ def wsl(cmd):
 
 # ── Step 1: Copy to WSL ────────────────────────
 print("=" * 50)
-print("  [1/4] Copy client to WSL ...")
+print("  [1/5] Copy client to WSL ...")
 wsl(f"rm -rf {WSL_SRC}")
 wsl(f"mkdir -p {WSL_GOPATH}/src/zap")
 r = wsl(f"cp -r {SRC_LINUX} {WSL_SRC}")
@@ -28,7 +28,7 @@ print("  Done")
 print()
 
 # ── Step 2: Build (XP 32-bit) ──────────────────
-print("  [2/4] Building zap-update.exe (GOARCH=386) ...")
+print("  [2/5] Building zap-update.exe (GOARCH=386) ...")
 build = (
     f"cd {WSL_SRC} && "
     f"GOROOT={WSL_GOROOT} GOPATH={WSL_GOPATH} GOOS=windows GOARCH=386 "
@@ -40,8 +40,8 @@ if r.returncode != 0:
 print("  Build OK")
 print()
 
-# ── Step 3: Copy output ────────────────────────
-print(f"  [3/4] Copy to {DST_WIN} ...")
+# ── Step 3: Copy output (OTDR3001) ─────────────
+print(f"  [3/5] Copy to {DST_WIN} ...")
 wsl(f"mkdir -p {DST_LINUX}")
 r = wsl(f"cp -f {WSL_SRC}/zap-update.exe {DST_LINUX}/")
 if r.returncode != 0:
@@ -52,12 +52,24 @@ size = int(r.stdout.strip())
 print(f"  Done ({size / 1024 / 1024:.1f} MB)")
 print()
 
-# ── Step 4: Clean ──────────────────────────────
-print("  [4/4] Clean WSL ...")
+# ── Step 4: Copy output (PK8000) ───────────────
+DST2_WIN   = "E:/Yofc/Code/OTDR/PK8000/YOFC.OTDRPK8000/YOFC.OTDRPK8000/bin/UpdateFolder"
+DST2_LINUX = "/mnt/e/Yofc/Code/OTDR/PK8000/YOFC.OTDRPK8000/YOFC.OTDRPK8000/bin/UpdateFolder"
+print(f"  [4/5] Copy to {DST2_WIN} ...")
+wsl(f"mkdir -p {DST2_LINUX}")
+r = wsl(f"cp -f {WSL_SRC}/zap-update.exe {DST2_LINUX}/")
+if r.returncode != 0:
+    sys.exit(1)
+print("  Done")
+print()
+
+# ── Step 5: Clean ──────────────────────────────
+print("  [5/5] Clean WSL ...")
 wsl(f"rm -rf {WSL_SRC}")
 print("  Done")
 print()
 
 print("=" * 50)
 print(f"  Deployed: {DST_WIN}/zap-update.exe")
+print(f"  Deployed: {DST2_WIN}/zap-update.exe")
 print("=" * 50)
