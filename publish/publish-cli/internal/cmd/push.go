@@ -155,8 +155,8 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 func setProjectForceUpdate(cfg RuntimeConfig) {
 	client := newAPIClient(cfg)
 	if err := client.SetProjectForceUpdate(cfg.Shared.ProjectName, true); err != nil {
-		printHumanLn("Warning: 设置强制更新失败: %v", err)
-	} else {
+		fmt.Fprintf(os.Stderr, "Warning: 设置强制更新失败: %v\n", err)
+	} else if !jsonOutput {
 		printHumanLn("已设置此项目为强制更新模式")
 	}
 }
