@@ -137,19 +137,19 @@ func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVe
 		})
 	} else {
 		// 服务器有新版本：需要重新下载，补拿 ForceUpdate
-		var forceUpdate *bool
+		forceUpdate := false
 		project, projectErr := apiclient.FindProjectByName(fc.Shared.ServerURL, fc.Shared.ProjectName)
 		if projectErr != nil {
 			fmt.Fprintf(os.Stderr, "check_update: FindProjectByName failed: %v\n", projectErr)
 		} else {
-			forceUpdate = &project.ForceUpdate
+			forceUpdate = project.ForceUpdate
 		}
 		printOutput(true, "", &model.CheckUpdateData{
 			HasUpdate:          true,
 			NeedDownloadUpdate: true,
 			CurrentVersion:     localVersion,
 			NewVersion:         serverVersion,
-			ForceUpdate:        forceUpdate,
+			ForceUpdate:        &forceUpdate,
 		})
 	}
 }
