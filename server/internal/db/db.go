@@ -146,6 +146,8 @@ func migrateProjectChangeLogFK(database *sql.DB) error {
 					return fmt.Errorf("commit retry tx: %w", err)
 				}
 			}
+			// 数据迁移完毕，尝试删除旧列
+			dropOldColumn(database)
 		}
 		return nil
 	}
@@ -172,5 +174,18 @@ func migrateProjectChangeLogFK(database *sql.DB) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit migration tx: %w", err)
 	}
+	// 迁移成功，清理旧列
+	if hasOldFK {
+		dropOldColumn(database)
+	}
 	return nil
+}
+
+// dropOldColumn 删除旧 FK 列 project_change_logs（SQLite ≥3.35 支持 DROP COLUMN）
+func dropOldColumn(database *sql.DB) {
+	if _, err := database.Exec(`ALTER TABLE project_change_logs DROP COLUMN project_change_logs`); err != nil {
+		log.Printf("migrateProjectChangeLogFK: failed to drop old column (non-fatal, may need manual cleanup): %v", err)
+	} else {
+		log.Println("migrateProjectChangeLogFK: old column project_change_logs dropped")
+	}
 }
