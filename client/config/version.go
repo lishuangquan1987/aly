@@ -15,35 +15,11 @@ const (
 )
 
 // VersionInfo represents the version.json structure.
-// Supports both "version_previous" (new) and "version_previouse" (old, for backward compatibility).
 type VersionInfo struct {
 	VersionPrevious        string `json:"version_previous"`
 	Version                string `json:"version"`
 	VersionStatus          string `json:"version_status"`
 	AfterApplyUpdateScript string `json:"after_apply_update_script,omitempty"`
-}
-
-// UnmarshalJSON supports both "version_previous" and "version_previouse" keys.
-func (v *VersionInfo) UnmarshalJSON(data []byte) error {
-	type alias VersionInfo // avoid recursion
-	var a alias
-	if err := json.Unmarshal(data, &a); err != nil {
-		return err
-	}
-	*v = VersionInfo(a)
-
-	// Also try the legacy key
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil // non-fatal
-	}
-	if legacyRaw, ok := raw["version_previouse"]; ok && v.VersionPrevious == "" {
-		var legacyVal string
-		if err := json.Unmarshal(legacyRaw, &legacyVal); err == nil {
-			v.VersionPrevious = legacyVal
-		}
-	}
-	return nil
 }
 
 func versionPath() (string, error) {

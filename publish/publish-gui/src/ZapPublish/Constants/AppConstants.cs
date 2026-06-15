@@ -28,8 +28,8 @@ public static class FileStatus
 /// </summary>
 public static class AppConstants
 {
-    public const string AppName = "Publish GUI";
-    public const string AppTitle = "Publish GUI - 版本发布工具";
+    public const string AppName = "ZapPublish";
+    public const string AppTitle = "ZapPublish - 版本发布工具";
     public const string ConfigDirectoryName = "ZapPublish";
     public const string ConfigFileName = "config.json";
     public const string LogDirectoryName = "logs";

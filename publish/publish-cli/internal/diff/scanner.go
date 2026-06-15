@@ -33,9 +33,6 @@ func ScanDirectory(root string, ignoreFolders, ignoreFiles []string) ([]models.L
 			return err
 		}
 		if info.IsDir() {
-			if info.Name() == ".publish-cli" {
-				return filepath.SkipDir
-			}
 			// .updator/ 目录不整体跳过，因为 shared.json 是 client 端配置需要上传
 			// 但跳过 staging/（本地暂存元数据）和 publish.json（CLI 专有）
 			if info.Name() == "staging" {
