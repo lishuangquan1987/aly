@@ -40,6 +40,7 @@ type Project struct {
 
 type ProjectChangeLog struct {
 	ID                      int      `json:"id"`
+	ProjectID               int      `json:"project_id"`
 	Version                 string   `json:"version"`
 	Logs                    []string `json:"logs"`
 	Time                    string   `json:"time"`

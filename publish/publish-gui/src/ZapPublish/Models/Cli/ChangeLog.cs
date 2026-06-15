@@ -7,6 +7,9 @@ public class ChangeLog
     [JsonProperty("id")]
     public int Id { get; set; }
 
+    [JsonProperty("project_id")]
+    public int ProjectId { get; set; }
+
     [JsonProperty("version")]
     public string Version { get; set; } = string.Empty;
 
