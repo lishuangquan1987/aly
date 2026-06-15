@@ -90,16 +90,17 @@ func InitDB() {
 		log.Fatalf("failed creating schema resources: %v", err)
 	}
 	// 迁移：为已有数据库补充 project_id 列（v2 从 project_change_logs 重命名为 project_id）
-	migrateProjectChangeLogFK(db)
+	if err := migrateProjectChangeLogFK(db); err != nil {
+		log.Fatalf("failed migrating project_change_logs FK: %v", err)
+	}
 }
 
 // migrateProjectChangeLogFK 将 project_change_logs 表的旧 FK 列名 project_change_logs 迁移为 project_id
-func migrateProjectChangeLogFK(database *sql.DB) {
+func migrateProjectChangeLogFK(database *sql.DB) error {
 	// 查询 project_change_logs 表已有列
 	rows, err := database.Query(`PRAGMA table_info('project_change_logs')`)
 	if err != nil {
-		log.Printf("migrateProjectChangeLogFK: failed to query table_info: %v", err)
-		return
+		return fmt.Errorf("query table_info: %w", err)
 	}
 	defer rows.Close()
 
@@ -121,8 +122,7 @@ func migrateProjectChangeLogFK(database *sql.DB) {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("migrateProjectChangeLogFK: error iterating table_info: %v", err)
-		return
+		return fmt.Errorf("iterate table_info: %w", err)
 	}
 
 	// 已有 project_id 列：检查是否有未迁移的数据（上次迁移可能中断）
@@ -130,43 +130,47 @@ func migrateProjectChangeLogFK(database *sql.DB) {
 		if hasOldFK {
 			var nullCount int
 			if err := database.QueryRow(`SELECT COUNT(*) FROM project_change_logs WHERE project_id IS NULL AND project_change_logs IS NOT NULL`).Scan(&nullCount); err != nil {
-				log.Printf("migrateProjectChangeLogFK: failed to check unmigrated rows: %v", err)
-				return
+				return fmt.Errorf("check unmigrated rows: %w", err)
 			}
 			if nullCount > 0 {
 				log.Printf("migrateProjectChangeLogFK: found %d unmigrated rows, retrying data copy", nullCount)
-				if _, err := database.Exec(`UPDATE project_change_logs SET project_id = project_change_logs WHERE project_id IS NULL`); err != nil {
-					log.Printf("migrateProjectChangeLogFK: failed to copy remaining data: %v", err)
+				tx, err := database.Begin()
+				if err != nil {
+					return fmt.Errorf("begin retry tx: %w", err)
+				}
+				if _, err := tx.Exec(`UPDATE project_change_logs SET project_id = project_change_logs WHERE project_id IS NULL`); err != nil {
+					tx.Rollback()
+					return fmt.Errorf("copy remaining data: %w", err)
+				}
+				if err := tx.Commit(); err != nil {
+					return fmt.Errorf("commit retry tx: %w", err)
 				}
 			}
 		}
-		return
+		return nil
 	}
 
 	// 在事务中执行迁移以确保原子性
 	tx, err := database.Begin()
 	if err != nil {
-		log.Printf("migrateProjectChangeLogFK: failed to begin transaction: %v", err)
-		return
+		return fmt.Errorf("begin migration tx: %w", err)
 	}
 	defer tx.Rollback()
 
 	// 添加 project_id 列（含外键约束）
 	if _, err := tx.Exec(`ALTER TABLE project_change_logs ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL`); err != nil {
-		log.Printf("migrateProjectChangeLogFK: failed to add project_id column: %v", err)
-		return
+		return fmt.Errorf("add project_id column: %w", err)
 	}
 
 	// 从旧列迁移数据
 	if hasOldFK {
 		if _, err := tx.Exec(`UPDATE project_change_logs SET project_id = project_change_logs`); err != nil {
-			log.Printf("migrateProjectChangeLogFK: failed to copy data: %v", err)
-			return
+			return fmt.Errorf("copy data: %w", err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.Printf("migrateProjectChangeLogFK: failed to commit transaction: %v", err)
-		return
+		return fmt.Errorf("commit migration tx: %w", err)
 	}
+	return nil
 }
