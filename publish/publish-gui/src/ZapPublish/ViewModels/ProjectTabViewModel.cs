@@ -116,7 +116,9 @@ public partial class ProjectTabViewModel : ObservableObject
             var d = result.Data;
             UnstagedFiles.Clear();
             StagedFiles.Clear();
-            foreach (var f in d.Unstaged ?? []) UnstagedFiles.Add(FileItem.FromCliItem(f));
+            foreach (var f in d.Unstaged ?? [])
+                if (f.Status != "deleted")
+                    UnstagedFiles.Add(FileItem.FromCliItem(f));
             foreach (var f in d.Staged ?? []) StagedFiles.Add(FileItem.FromCliItem(f));
 
             var logResult = await _cli.GetLogAsync(projectPath);
@@ -154,7 +156,6 @@ public partial class ProjectTabViewModel : ObservableObject
             var r = await _cli.AddAllAsync(Project.ProjectPath);
             if (r?.IsSuccess == true)
             {
-                await MessageBox.ShowAsync("已添加所有变更", "成功", MessageBoxIcon.Success);
                 StatusMessage = "已添加所有变更";
             }
             else
@@ -184,7 +185,6 @@ public partial class ProjectTabViewModel : ObservableObject
             var r = await _cli.ResetAllAsync(Project.ProjectPath);
             if (r?.IsSuccess == true)
             {
-                await MessageBox.ShowAsync("暂存区已清空", "成功", MessageBoxIcon.Success);
                 StatusMessage = "暂存区已清空";
             }
             else
@@ -216,7 +216,6 @@ public partial class ProjectTabViewModel : ObservableObject
             var r = await _cli.AddFilesAsync(Project.ProjectPath, files);
             if (r?.IsSuccess == true)
             {
-                await MessageBox.ShowAsync($"已暂存 {files.Count} 个文件", "成功", MessageBoxIcon.Success);
                 StatusMessage = $"已暂存 {files.Count} 个文件";
             }
             else
@@ -259,7 +258,6 @@ public partial class ProjectTabViewModel : ObservableObject
                 var addResult = await _cli.AddFilesAsync(Project.ProjectPath, keepStaged);
                 if (addResult?.IsSuccess == true)
                 {
-                    await MessageBox.ShowAsync($"已取消暂存 {toUnstage.Count} 个文件", "成功", MessageBoxIcon.Success);
                     StatusMessage = $"已取消暂存 {toUnstage.Count} 个文件";
                 }
                 else
@@ -270,7 +268,6 @@ public partial class ProjectTabViewModel : ObservableObject
             }
             else
             {
-                await MessageBox.ShowAsync($"已取消暂存 {toUnstage.Count} 个文件", "成功", MessageBoxIcon.Success);
                 StatusMessage = $"已取消暂存 {toUnstage.Count} 个文件";
             }
         }
