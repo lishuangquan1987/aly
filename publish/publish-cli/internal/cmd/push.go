@@ -107,7 +107,9 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 				<-sem
 			}()
 			absPath := filepath.Join(cfg.Path, filepath.FromSlash(relPath))
-			printHumanLn("Uploading: %s", relPath)
+			if !jsonOutput {
+				printHumanLn("Uploading: %s", relPath)
+			}
 			err := client.UploadFile(absPath, cfg.Shared.ProjectName, relPath)
 			uploadCh <- uploadResult{path: relPath, err: err}
 		}(p)
