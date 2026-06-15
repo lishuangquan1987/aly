@@ -62,16 +62,19 @@ func DownloadUpdate() {
 	}
 	currentVersion := stripVPrefix(versionInfo.Version)
 
-	// Guard: if this exact version was already downloaded, skip re-download
-	if versionInfo.VersionStatus == config.VersionStatusDownloaded &&
-		currentVersion == newVersion {
-		printOutput(true, "", &model.DownloadUpdateData{Version: newVersion})
-		return
-	}
-
-	if compareVersion(newVersion, currentVersion) <= 0 {
-		printOutput(false, "already at latest version", nil)
-		return
+	// Guard: if this exact version was already downloaded, skip re-download.
+	// Exception: when status is "applying" (crash recovery), allow re-download
+	// even if same version, since downloaded files may be corrupted.
+	if versionInfo.VersionStatus != config.VersionStatusApplying {
+		if versionInfo.VersionStatus == config.VersionStatusDownloaded &&
+			currentVersion == newVersion {
+			printOutput(true, "", &model.DownloadUpdateData{Version: newVersion})
+			return
+		}
+		if compareVersion(newVersion, currentVersion) <= 0 {
+			printOutput(false, "already at latest version", nil)
+			return
+		}
 	}
 
 	serverFiles, err := apiclient.GetAllFiles(fc.Shared.ServerURL, fc.Shared.ProjectName)

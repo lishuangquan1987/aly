@@ -57,10 +57,11 @@ type Output struct {
 
 // CheckUpdateData 是 check_update 命令 data 字段
 type CheckUpdateData struct {
-	HasUpdate      bool   `json:"has_update"`
-	CurrentVersion string `json:"current_version"`
-	NewVersion     string `json:"new_version,omitempty"`
-	ForceUpdate    *bool  `json:"force_update,omitempty"`
+	HasUpdate          bool   `json:"has_update"`
+	NeedDownloadUpdate bool   `json:"need_download_update"`
+	CurrentVersion     string `json:"current_version"`
+	NewVersion         string `json:"new_version,omitempty"`
+	ForceUpdate        *bool  `json:"force_update,omitempty"`
 }
 
 // DiffFileItem 表示 check_diff 输出中的单个差异文件
