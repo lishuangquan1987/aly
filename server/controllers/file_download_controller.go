@@ -5,6 +5,7 @@ import (
 	"zap/server/internal/service"
 	"zap/server/internal/utils"
 	"zap/server/models"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -112,12 +113,16 @@ func matchIgnoreFile(relPath, pattern string) bool {
 	if relPath == pattern {
 		return true
 	}
-	if matched, _ := filepath.Match(pattern, relPath); matched {
+	if matched, err := filepath.Match(pattern, relPath); matched {
 		return true
+	} else if err != nil {
+		log.Printf("WARN: invalid ignore pattern %q: %v", pattern, err)
 	}
 	base := filepath.Base(relPath)
-	if matched, _ := filepath.Match(pattern, base); matched {
+	if matched, err := filepath.Match(pattern, base); matched {
 		return true
+	} else if err != nil {
+		log.Printf("WARN: invalid ignore pattern %q: %v", pattern, err)
 	}
 	if strings.HasPrefix(pattern, "*") {
 		return strings.HasSuffix(relPath, pattern[1:])

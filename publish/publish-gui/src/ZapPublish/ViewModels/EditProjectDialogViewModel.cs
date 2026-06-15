@@ -207,11 +207,15 @@ public partial class EditProjectDialogViewModel : ObservableObject
             var r = await _cli.ProjectUpdateAsync(ServerUrl, ProjectName, ProjectName,
                 false, IgnoreFolders.ToList(), IgnoreFiles.ToList());
             if (r?.IsSuccess != true)
+            {
                 Log.Warning("同步 ignore 到服务端失败: {Error}", r?.ErrorMsg);
+                StatusMessage = "本地已更新，但服务端同步失败";
+            }
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "同步 ignore 到服务端异常");
+            StatusMessage = "本地已更新，但服务端同步异常";
         }
     }
 
