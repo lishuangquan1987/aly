@@ -163,6 +163,19 @@ public class CliService
         return RunAsync<ProjectInfo>(args, string.Empty);
     }
 
+    public Task<CliOutput<object>?> ProjectUpdateAsync(
+        string serverUrl, string name, string title, bool forceUpdate,
+        List<string>? ignoreFolders = null, List<string>? ignoreFiles = null)
+    {
+        Log.Information("更新服务端项目: ServerUrl={Url}, Name={Name}, IgnoreFolders={Folders}, IgnoreFiles={Files}",
+            serverUrl, name, ignoreFolders?.Count ?? 0, ignoreFiles?.Count ?? 0);
+        var args = $"project update --server \"{serverUrl}\" --name \"{name}\" --title \"{title}\"";
+        if (forceUpdate) args += " --force-update";
+        if (ignoreFolders is { Count: > 0 }) args += $" --ignore-folders \"{string.Join(",", ignoreFolders)}\"";
+        if (ignoreFiles is { Count: > 0 }) args += $" --ignore-files \"{string.Join(",", ignoreFiles)}\"";
+        return RunAsync<object>(args, string.Empty);
+    }
+
     // ── Config management (via CLI, never directly touches .updator/) ──
 
     public Task<CliOutput<object>?> ConfigSetAsync(string projectPath, string key, string value)

@@ -66,9 +66,9 @@ func GetAllFilesByProjectName(ctx *gin.Context) {
 				return nil
 			}
 		}
-		// 应用忽略文件规则
+		// 应用忽略文件规则（支持 glob 匹配）
 		for _, ignoreFile := range p.IgnoreFiles {
-			if ignoreFile == relPath {
+			if matchIgnoreFile(relPath, ignoreFile) {
 				return nil
 			}
 		}
@@ -103,6 +103,26 @@ func GetAllFilesByProjectName(ctx *gin.Context) {
 	})
 
 	ctx.JSON(200, models.OKWithData(fileInfos))
+}
+
+// matchIgnoreFile 判断文件路径是否匹配忽略规则
+// 与 publish-cli scanner.go 的 matchFile 保持一致的逻辑：
+// 精确匹配 → glob 匹配（全路径）→ glob 匹配（文件名）→ *.ext 后缀匹配
+func matchIgnoreFile(relPath, pattern string) bool {
+	if relPath == pattern {
+		return true
+	}
+	if matched, _ := filepath.Match(pattern, relPath); matched {
+		return true
+	}
+	base := filepath.Base(relPath)
+	if matched, _ := filepath.Match(pattern, base); matched {
+		return true
+	}
+	if strings.HasPrefix(pattern, "*") {
+		return strings.HasSuffix(relPath, pattern[1:])
+	}
+	return false
 }
 
 func DownloadFile(ctx *gin.Context) {

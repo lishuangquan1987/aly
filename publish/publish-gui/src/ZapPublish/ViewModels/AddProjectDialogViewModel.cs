@@ -178,7 +178,8 @@ public partial class AddProjectDialogViewModel : ObservableObject
             return;
         }
 
-        var newProject = await ShowCreateProjectDialogAsync.Invoke(serverUrl);
+        var newProject = await ShowCreateProjectDialogAsync.Invoke(serverUrl,
+            IgnoreFolders?.Trim() ?? "", IgnoreFiles?.Trim() ?? "");
 
         if (newProject != null)
         {
@@ -194,7 +195,7 @@ public partial class AddProjectDialogViewModel : ObservableObject
     }
 
     /// <summary>由 DialogService 注入，用于打开创建项目子对话框</summary>
-    public Func<string, Task<ProjectInfo?>>? ShowCreateProjectDialogAsync { get; set; }
+    public Func<string, string, string, Task<ProjectInfo?>>? ShowCreateProjectDialogAsync { get; set; }
 
     private async Task ConfirmAsync()
     {

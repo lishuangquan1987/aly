@@ -8,6 +8,6 @@ public interface IDialogService
 {
     Task<ProjectConfig?> ShowAddProjectDialogAsync();
     Task<ProjectConfig?> ShowAddLocalProjectDialogAsync();
-    Task<ProjectInfo?> ShowCreateProjectDialogAsync(string serverUrl);
+    Task<ProjectInfo?> ShowCreateProjectDialogAsync(string serverUrl, string ignoreFolders = "", string ignoreFiles = "");
     Task<ProjectConfig?> ShowEditProjectDialogAsync(ProjectConfig project);
 }

@@ -123,6 +123,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
                 IgnoreFolders.Add(item.Trim());
                 NewFolderItem = string.Empty;
                 StatusMessage = "已添加";
+                await SyncIgnoreToServerAsync();
             }
             else
             {
@@ -143,6 +144,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
             {
                 IgnoreFolders.Remove(item);
                 StatusMessage = "已移除";
+                await SyncIgnoreToServerAsync();
             }
             else
             {
@@ -164,6 +166,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
                 IgnoreFiles.Add(item.Trim());
                 NewFileItem = string.Empty;
                 StatusMessage = "已添加";
+                await SyncIgnoreToServerAsync();
             }
             else
             {
@@ -184,6 +187,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
             {
                 IgnoreFiles.Remove(item);
                 StatusMessage = "已移除";
+                await SyncIgnoreToServerAsync();
             }
             else
             {
@@ -191,6 +195,24 @@ public partial class EditProjectDialogViewModel : ObservableObject
             }
         }
         finally { IsBusy = false; }
+    }
+
+    /// <summary>将当前的 ignore 设置同步到服务端</summary>
+    private async Task SyncIgnoreToServerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(ServerUrl) || string.IsNullOrWhiteSpace(ProjectName))
+            return;
+        try
+        {
+            var r = await _cli.ProjectUpdateAsync(ServerUrl, ProjectName, ProjectName,
+                false, IgnoreFolders.ToList(), IgnoreFiles.ToList());
+            if (r?.IsSuccess != true)
+                Log.Warning("同步 ignore 到服务端失败: {Error}", r?.ErrorMsg);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "同步 ignore 到服务端异常");
+        }
     }
 
     private Task SaveAsync()

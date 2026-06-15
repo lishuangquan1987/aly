@@ -50,8 +50,8 @@ public class DialogService : IDialogService
         vm.BrowseFolderAsync = browseFolderAsync;
 
         // 注入子对话框委托
-        vm.ShowCreateProjectDialogAsync = async (serverUrl) =>
-            await ShowCreateProjectDialogAsync(serverUrl);
+        vm.ShowCreateProjectDialogAsync = async (serverUrl, ignoreFolders, ignoreFiles) =>
+            await ShowCreateProjectDialogAsync(serverUrl, ignoreFolders, ignoreFiles);
 
         dialog.DataContext = vm;
         vm.RequestClose += result => dialog.Close(result);
@@ -88,7 +88,7 @@ public class DialogService : IDialogService
         return await dialog.ShowDialog<ProjectConfig?>(owner);
     }
 
-    public async Task<ProjectInfo?> ShowCreateProjectDialogAsync(string serverUrl)
+    public async Task<ProjectInfo?> ShowCreateProjectDialogAsync(string serverUrl, string ignoreFolders = "", string ignoreFiles = "")
     {
         var owner = GetOwner();
         if (owner == null)
@@ -100,6 +100,8 @@ public class DialogService : IDialogService
         var dialog = new CreateProjectDialog();
         var vm = _sp.GetRequiredService<CreateProjectDialogViewModel>();
         vm.ServerUrl = serverUrl;
+        vm.IgnoreFolders = ignoreFolders;
+        vm.IgnoreFiles = ignoreFiles;
 
         dialog.DataContext = vm;
         vm.RequestClose += result => dialog.Close(result);
