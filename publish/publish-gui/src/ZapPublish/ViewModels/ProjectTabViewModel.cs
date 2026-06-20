@@ -89,26 +89,36 @@ public partial class ProjectTabViewModel : ObservableObject
 
     // ── Refresh ──────────────────────────────────────────
 
+    // _refreshLock 保护 _refreshCts。IsBusy 仅在 UI 线程上修改。
+    private readonly object _refreshLock = new();
+
     public async Task RefreshAsync()
     {
-        if (IsBusy) return;
-        _refreshCts?.Cancel();
-        _refreshCts?.Dispose();
-        _refreshCts = new CancellationTokenSource();
+        CancellationTokenSource newCts;
+        lock (_refreshLock)
+        {
+            if (IsBusy) return;
+            IsBusy = true;
+            _refreshCts?.Cancel();
+            _refreshCts?.Dispose();
+            newCts = new CancellationTokenSource();
+            _refreshCts = newCts;
+        }
 
-        await FetchDataAsync();
-        
+        await FetchDataAsync(newCts.Token);
     }
 
-    private async Task FetchDataAsync()
+    private async Task FetchDataAsync(CancellationToken cancellationToken)
     {
         var projectPath = Project.ProjectPath;
         StatusMessage = "刷新中...";
         Log.Information("开始刷新: Project={Name}, Path={Path}", Project.DisplayName, projectPath);
-        IsBusy = true;
         try
         {
             var result = await _cli.GetStatusAsync(projectPath);
+            if (cancellationToken.IsCancellationRequested)
+                return;
+
             if (result?.Data == null)
             {
                 StatusMessage = $"刷新失败: {result?.ErrorMsg ?? "未知错误"}";
@@ -125,6 +135,9 @@ public partial class ProjectTabViewModel : ObservableObject
             foreach (var f in d.Staged ?? []) StagedFiles.Add(FileItem.FromCliItem(f));
 
             var logResult = await _cli.GetLogAsync(projectPath);
+            if (cancellationToken.IsCancellationRequested)
+                return;
+
             ChangeLogs.Clear();
             if (logResult?.Data != null)
                 foreach (var l in logResult.Data)
@@ -138,6 +151,8 @@ public partial class ProjectTabViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            if (cancellationToken.IsCancellationRequested)
+                return;
             await MessageBox.ShowAsync($"刷新异常: {ex.Message}", "错误", MessageBoxIcon.Error);
             StatusMessage = $"刷新异常: {ex.Message}";
             Log.Error(ex, "刷新异常");
@@ -166,7 +181,7 @@ public partial class ProjectTabViewModel : ObservableObject
                 await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
                 StatusMessage = $"添加失败: {r?.ErrorMsg ?? "未知错误"}";
             }
-            await FetchDataAsync();
+            await FetchDataAsync(CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -195,7 +210,7 @@ public partial class ProjectTabViewModel : ObservableObject
                 await MessageBox.ShowAsync($"重置失败: {r?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
                 StatusMessage = $"重置失败: {r?.ErrorMsg ?? "未知错误"}";
             }
-            await FetchDataAsync();
+            await FetchDataAsync(CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -226,7 +241,7 @@ public partial class ProjectTabViewModel : ObservableObject
                 await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
                 StatusMessage = $"添加失败: {r?.ErrorMsg ?? "未知错误"}";
             }
-            await FetchDataAsync();
+            await FetchDataAsync(CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -281,7 +296,7 @@ public partial class ProjectTabViewModel : ObservableObject
             Log.Error(ex, "取消暂存异常");
         }
         finally { IsBusy = false; }
-        await FetchDataAsync();
+        await FetchDataAsync(CancellationToken.None);
     }
 
     // ── Publish ──────────────────────────────────────────
@@ -309,7 +324,7 @@ public partial class ProjectTabViewModel : ObservableObject
                 StatusMessage = "发布成功，正在刷新...";
                 await MessageBox.ShowAsync($"发布成功 ({stagedCount} 暂存, {unstagedCount} 未暂存)", "成功", MessageBoxIcon.Success);
                 StatusMessage = $"发布成功 ({stagedCount} 暂存, {unstagedCount} 未暂存)";
-                await FetchDataAsync();
+                await FetchDataAsync(CancellationToken.None);
             }
             else
             {

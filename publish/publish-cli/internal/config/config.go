@@ -16,6 +16,7 @@ type SharedConfig struct {
 }
 
 // PublishConfig publish-cli 专有配置（.updator/publish.json，本地不上传）
+// 当前为空结构体，作为未来扩展的占位（如 HTTP 超时、并发数等 CLI 专有设置）
 type PublishConfig struct {
 }
 

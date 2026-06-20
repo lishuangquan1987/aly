@@ -2,11 +2,17 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Platform.Storage;
 using Ursa.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
+using ZapPublish.Models.Cli;
 using ZapPublish.Models.Local;
 using ZapPublish.Services;
+using ZapPublish.Views.Dialogs;
 using Serilog;
 
 namespace ZapPublish.ViewModels;
@@ -15,7 +21,7 @@ public partial class MainWindowViewModel : ObservableObject
 {
     private readonly CliService _cli;
     private readonly ConfigService _cfg;
-    private readonly IDialogService _dialog;
+    private readonly IServiceProvider _sp;
 
     [ObservableProperty] private ObservableCollection<ProjectConfig> _projects = new();
     [NotifyCanExecuteChangedFor(nameof(RemoveProjectCommand))]
@@ -33,11 +39,11 @@ public partial class MainWindowViewModel : ObservableObject
     public IAsyncRelayCommand EditProjectCommand { get; }
     public IRelayCommand<ProjectTabViewModel> CloseTabCommand { get; }
 
-    public MainWindowViewModel(CliService cli, ConfigService cfg, IDialogService dialog)
+    public MainWindowViewModel(CliService cli, ConfigService cfg, IServiceProvider sp)
     {
         _cli = cli;
         _cfg = cfg;
-        _dialog = dialog;
+        _sp = sp;
         IsCliFound = _cli.Found;
         CliPath = _cli.CliPath;
         Log.Information("MainWindowViewModel 初始化: CliFound={Found}, CliPath={Path}", IsCliFound, CliPath);
@@ -51,12 +57,101 @@ public partial class MainWindowViewModel : ObservableObject
         LoadProjects();
     }
 
+    private Window? GetOwner()
+    {
+        var lifetime = Avalonia.Application.Current?.ApplicationLifetime
+            as IClassicDesktopStyleApplicationLifetime;
+        var owner = lifetime?.MainWindow;
+        if (owner == null)
+            Log.Warning("GetOwner 返回 null，对话框无法显示");
+        return owner;
+    }
+
+    private async Task<ProjectConfig?> ShowAddProjectDialogAsync()
+    {
+        var owner = GetOwner();
+        if (owner == null) return null;
+
+        var dialog = new AddProjectDialog();
+        var browseFolderAsync = new Func<Task<string?>>(async () =>
+        {
+            var result = await dialog.StorageProvider.OpenFolderPickerAsync(
+                new FolderPickerOpenOptions { Title = "选择项目文件夹" });
+            return result.Count > 0 ? result[0].Path.LocalPath : null;
+        });
+
+        var vm = _sp.GetRequiredService<AddProjectDialogViewModel>();
+        vm.BrowseFolderAsync = browseFolderAsync;
+        vm.ShowCreateProjectDialogAsync = async (serverUrl, ignoreFolders, ignoreFiles) =>
+            await ShowCreateProjectDialogAsync(dialog, serverUrl, ignoreFolders, ignoreFiles);
+
+        dialog.DataContext = vm;
+        vm.RequestClose += result => dialog.Close(result);
+
+        Log.Information("打开添加项目对话框");
+        return await dialog.ShowDialog<ProjectConfig?>(owner);
+    }
+
+    private async Task<ProjectConfig?> ShowAddLocalProjectDialogAsync()
+    {
+        var owner = GetOwner();
+        if (owner == null) return null;
+
+        var dialog = new AddLocalProjectDialog();
+        var browseFolderAsync = new Func<Task<string?>>(async () =>
+        {
+            var result = await dialog.StorageProvider.OpenFolderPickerAsync(
+                new FolderPickerOpenOptions { Title = "选择已初始化的项目文件夹" });
+            return result.Count > 0 ? result[0].Path.LocalPath : null;
+        });
+
+        var vm = _sp.GetRequiredService<AddLocalProjectDialogViewModel>();
+        vm.BrowseFolderAsync = browseFolderAsync;
+
+        dialog.DataContext = vm;
+        vm.RequestClose += result => dialog.Close(result);
+
+        Log.Information("打开添加本地项目对话框");
+        return await dialog.ShowDialog<ProjectConfig?>(owner);
+    }
+
+    private async Task<ProjectInfo?> ShowCreateProjectDialogAsync(Window owner, string serverUrl, string ignoreFolders = "", string ignoreFiles = "")
+    {
+        var dialog = new CreateProjectDialog();
+        var vm = _sp.GetRequiredService<CreateProjectDialogViewModel>();
+        vm.ServerUrl = serverUrl;
+        vm.IgnoreFolders = ignoreFolders;
+        vm.IgnoreFiles = ignoreFiles;
+
+        dialog.DataContext = vm;
+        vm.RequestClose += result => dialog.Close(result);
+
+        Log.Information("打开创建项目对话框: ServerUrl={Url}", serverUrl);
+        return await dialog.ShowDialog<ProjectInfo?>(owner);
+    }
+
+    private async Task<ProjectConfig?> ShowEditProjectDialogAsync(ProjectConfig project)
+    {
+        var owner = GetOwner();
+        if (owner == null) return null;
+
+        var dialog = new EditProjectDialog();
+        var vm = _sp.GetRequiredService<EditProjectDialogViewModel>();
+        vm.LoadProject(project);
+
+        dialog.DataContext = vm;
+        vm.RequestClose += result => dialog.Close(result);
+
+        Log.Information("打开编辑项目对话框: DisplayName={Name}", project.DisplayName);
+        return await dialog.ShowDialog<ProjectConfig?>(owner);
+    }
+
     private ProjectTabViewModel CreateTab(ProjectConfig project)
     {
         var tab = new ProjectTabViewModel(project, _cli);
         tab.EditProjectAsync = async (cfg) =>
         {
-            var result = await _dialog.ShowEditProjectDialogAsync(cfg);
+            var result = await ShowEditProjectDialogAsync(cfg);
             if (result != null)
             {
                 _cfg.UpdateProject(result);
@@ -127,7 +222,7 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task AddProjectAsync()
     {
         Log.Information("打开初始化项目对话框");
-        var cfg = await _dialog.ShowAddProjectDialogAsync();
+        var cfg = await ShowAddProjectDialogAsync();
         if (cfg != null)
         {
             _cfg.AddProject(cfg);
@@ -144,7 +239,7 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task AddLocalProjectAsync()
     {
         Log.Information("打开添加本地项目对话框");
-        var cfg = await _dialog.ShowAddLocalProjectDialogAsync();
+        var cfg = await ShowAddLocalProjectDialogAsync();
         if (cfg != null)
         {
             _cfg.AddProject(cfg);
@@ -162,7 +257,8 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (SelectedProject == null) return;
         var name = SelectedProject.DisplayName;
-        _cfg.RemoveProject(name);
+        var path = SelectedProject.ProjectPath;
+        _cfg.RemoveProject(path);
 
         // 清理对应 tab
         var tab = Tabs.FirstOrDefault(t => t.Project == SelectedProject);
@@ -198,7 +294,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (SelectedProject == null) return;
         var oldProject = SelectedProject;
-        var result = await _dialog.ShowEditProjectDialogAsync(SelectedProject);
+        var result = await ShowEditProjectDialogAsync(SelectedProject);
         if (result != null)
         {
             _cfg.UpdateProject(result);

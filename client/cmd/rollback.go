@@ -108,15 +108,21 @@ func Rollback() {
 	}
 	// Temporarily move old backup aside instead of deleting upfront (safer for power failure)
 	oldBackupTemp := prevVersionDir + ".old"
-	os.RemoveAll(oldBackupTemp)
+	if err := os.RemoveAll(oldBackupTemp); err != nil {
+		util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: remove old backup temp failed: %v", err))
+	}
 	if _, statErr := os.Stat(prevVersionDir); statErr == nil {
-		os.Rename(prevVersionDir, oldBackupTemp)
+		if err := os.Rename(prevVersionDir, oldBackupTemp); err != nil {
+			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: rename prevVersionDir to oldBackupTemp failed: %v", err))
+		}
 	}
 
 	// Rename mainFolder -> prevVersionDir (backup current)
 	if err := os.Rename(fc.MainFolder, prevVersionDir); err != nil {
 		if _, statErr := os.Stat(oldBackupTemp); statErr == nil {
-			os.Rename(oldBackupTemp, prevVersionDir)
+			if rErr := os.Rename(oldBackupTemp, prevVersionDir); rErr != nil {
+				util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: restore oldBackupTemp to prevVersionDir failed: %v", rErr))
+			}
 		}
 		versionInfo.VersionStatus = config.VersionStatusApplied
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
@@ -129,8 +135,12 @@ func Rollback() {
 	// Rename versionDir -> mainFolder (activate rollback target)
 	if err := os.Rename(versionDir, fc.MainFolder); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
-		os.Rename(prevVersionDir, fc.MainFolder)
-		os.Rename(oldBackupTemp, prevVersionDir)
+		if rErr := os.Rename(prevVersionDir, fc.MainFolder); rErr != nil {
+			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: restore prevVersionDir to mainFolder failed: %v", rErr))
+		}
+		if rErr := os.Rename(oldBackupTemp, prevVersionDir); rErr != nil {
+			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: restore oldBackupTemp to prevVersionDir failed: %v", rErr))
+		}
 		versionInfo.VersionStatus = config.VersionStatusApplied
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
 			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after apply rename fail: write version failed: %v", wErr))
@@ -140,7 +150,9 @@ func Rollback() {
 	}
 
 	// Clean up old backup AFTER successful rename
-	os.RemoveAll(oldBackupTemp)
+	if err := os.RemoveAll(oldBackupTemp); err != nil {
+		util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: cleanup oldBackupTemp failed: %v", err))
+	}
 
 	// Update version.json
 	versionInfo.VersionPrevious = oldVersion

@@ -123,14 +123,6 @@ public class CliService
         return RunAsync<object>(args, projectPath, 120000);
     }
 
-    public Task<CliOutput<object>?> PublishAsync(string projectPath, string version, string message, string afterApplyUpdateScript = "")
-    {
-        var args = $"publish --version \"{version}\" --message \"{message}\"";
-        if (!string.IsNullOrWhiteSpace(afterApplyUpdateScript))
-            args += $" --after-apply-update-script \"{afterApplyUpdateScript.Replace("\"", "\\\"")}\"";
-        return RunAsync<object>(args, projectPath, 120000);
-    }
-
     public Task<CliOutput<List<ChangeLog>>?> GetLogAsync(string projectPath, int limit = 20)
         => RunAsync<List<ChangeLog>>($"log --limit {limit}", projectPath);
 

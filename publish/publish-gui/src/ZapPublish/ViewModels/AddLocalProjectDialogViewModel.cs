@@ -12,7 +12,7 @@ namespace ZapPublish.ViewModels;
 
 public partial class AddLocalProjectDialogViewModel : ObservableObject
 {
-    /// <summary>由 DialogService 注入，用于打开系统文件夹选择器</summary>
+    /// <summary>由调用方注入，用于打开系统文件夹选择器</summary>
     internal Func<Task<string?>>? BrowseFolderAsync { get; set; }
 
     [ObservableProperty] private string _displayName = string.Empty;

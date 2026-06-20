@@ -109,6 +109,8 @@ func GetAllFilesByProjectName(ctx *gin.Context) {
 // matchIgnoreFile 判断文件路径是否匹配忽略规则
 // 与 publish-cli scanner.go 的 matchFile 保持一致的逻辑：
 // 精确匹配 → glob 匹配（全路径）→ glob 匹配（文件名）→ *.ext 后缀匹配
+// 注意：pattern 为 "*" 时，suffix 为空，strings.HasSuffix 恒返回 true，
+// 即忽略所有文件（类似 .gitignore 的 * 规则），这是有意设计。
 func matchIgnoreFile(relPath, pattern string) bool {
 	if relPath == pattern {
 		return true
@@ -140,7 +142,7 @@ func DownloadFile(ctx *gin.Context) {
 		ctx.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	dataDir := filepath.Join(filepath.Dir(exePath), "data")
+	dataDir := filepath.Join(filepath.Dir(exePath), service.DataDirName)
 	if !strings.HasPrefix(cleanPath, dataDir+string(filepath.Separator)) && cleanPath != dataDir {
 		ctx.AbortWithStatus(http.StatusNotFound)
 		return

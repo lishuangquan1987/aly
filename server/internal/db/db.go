@@ -76,6 +76,7 @@ func InitDB() {
 		log.Fatalf("failed opening connection to sqlite: %v", err)
 	}
 	// SQLite 单写入者限制：防止并发写入导致 "database is locked"
+	// SetMaxOpenConns(1) 是 SQLite 的合理限制，确保同一时间只有一个写连接
 	db.SetMaxOpenConns(1)
 	// Enable foreign keys (required by modernc.org/sqlite)
 	_, err = db.Exec("PRAGMA foreign_keys = ON")
@@ -112,6 +113,7 @@ func migrateProjectChangeLogFK(database *sql.DB) error {
 		var dflt sql.NullString
 		var pk int
 		if err := rows.Scan(&cid, &name, &colType, &notNull, &dflt, &pk); err != nil {
+			log.Printf("migrateProjectChangeLogFK: failed to scan table_info row: %v", err)
 			continue
 		}
 		if name == "project_id" {

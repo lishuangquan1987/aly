@@ -127,7 +127,6 @@ func DownloadUpdate() {
 		printProgress(idx+1, total, relPath, "START", serverFile.FileSize, "")
 
 		// Download with retry up to 3 times
-		downloaded := false
 		var lastErr string
 		for retry := 0; retry < 3; retry++ {
 			if err := apiclient.DownloadFileWithResume(fc.Shared.ServerURL, serverFile.FileAbsolutePath, localPath, serverFile.FileSize, largeFileThreshold); err != nil {
@@ -160,7 +159,6 @@ func DownloadUpdate() {
 			}
 
 			if localMD5 == serverFile.MD5 && localSHA256 == serverFile.SHA256 {
-				downloaded = true
 				break
 			}
 
@@ -173,10 +171,6 @@ func DownloadUpdate() {
 				return
 			}
 			os.Remove(localPath)
-		}
-
-		if !downloaded {
-			return
 		}
 
 		printProgress(idx+1, total, relPath, "DONE", serverFile.FileSize, "")

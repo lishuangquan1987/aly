@@ -1,7 +1,9 @@
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json;
@@ -67,7 +69,8 @@ public partial class EditProjectDialogViewModel : ObservableObject
         var sharedPath = Path.Combine(_projectPath, ".updator", "shared.json");
         if (!File.Exists(sharedPath))
         {
-            await MessageBox.ShowAsync(".updator/shared.json 不存在，项目可能未初始化", "错误", MessageBoxIcon.Error);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                MessageBox.ShowAsync(".updator/shared.json 不存在，项目可能未初始化", "错误", MessageBoxIcon.Error));
             return;
         }
 
@@ -77,16 +80,21 @@ public partial class EditProjectDialogViewModel : ObservableObject
             var cfg = JsonConvert.DeserializeObject<SharedConfig>(json);
             if (cfg != null)
             {
-                ServerUrl = cfg.ServerUrl ?? "";
-                ProjectName = cfg.ProjectName ?? "";
-                IgnoreFolders = new ObservableCollection<string>(cfg.IgnoreFolders ?? []);
-                IgnoreFiles = new ObservableCollection<string>(cfg.IgnoreFiles ?? []);
+                // 在 UI 线程上设置属性，避免跨线程访问
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    ServerUrl = cfg.ServerUrl ?? "";
+                    ProjectName = cfg.ProjectName ?? "";
+                    IgnoreFolders = new ObservableCollection<string>(cfg.IgnoreFolders ?? []);
+                    IgnoreFiles = new ObservableCollection<string>(cfg.IgnoreFiles ?? []);
+                });
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "读取 shared.json 失败");
-            await MessageBox.ShowAsync($"读取配置失败: {ex.Message}", "错误", MessageBoxIcon.Error);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                MessageBox.ShowAsync($"读取配置失败: {ex.Message}", "错误", MessageBoxIcon.Error));
         }
     }
 
@@ -197,14 +205,29 @@ public partial class EditProjectDialogViewModel : ObservableObject
         finally { IsBusy = false; }
     }
 
-    /// <summary>将当前的 ignore 设置同步到服务端</summary>
+    /// <summary>将当前的 ignore 设置同步到服务端（保留服务端原有 title，不覆盖）</summary>
     private async Task SyncIgnoreToServerAsync()
     {
         if (string.IsNullOrWhiteSpace(ServerUrl) || string.IsNullOrWhiteSpace(ProjectName))
             return;
         try
         {
-            var r = await _cli.ProjectUpdateAsync(ServerUrl, ProjectName, ProjectName,
+            // 先获取服务端项目信息，避免将 title 覆盖为 projectName
+            var listResult = await _cli.ProjectListAsync(ServerUrl);
+            if (listResult?.IsSuccess != true || listResult.Data == null)
+            {
+                Log.Warning("同步 ignore 前获取项目列表失败: {Error}", listResult?.ErrorMsg);
+                StatusMessage = "本地已更新，但服务端同步失败";
+                return;
+            }
+            var serverProject = listResult.Data.FirstOrDefault(p => p.Name == ProjectName);
+            if (serverProject == null)
+            {
+                Log.Warning("服务端未找到项目: {Name}", ProjectName);
+                StatusMessage = "本地已更新，但服务端未找到该项目";
+                return;
+            }
+            var r = await _cli.ProjectUpdateAsync(ServerUrl, ProjectName, serverProject.Title,
                 false, IgnoreFolders.ToList(), IgnoreFiles.ToList());
             if (r?.IsSuccess != true)
             {

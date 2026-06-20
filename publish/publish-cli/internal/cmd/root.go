@@ -1,4 +1,4 @@
-﻿package cmd
+package cmd
 
 import (
 	"encoding/json"
@@ -36,8 +36,10 @@ func printOutput(success bool, errMsg string, data interface{}) {
 	}
 	bytes, err := json.Marshal(out)
 	if err != nil {
+		// 序列化失败时输出一个固定的错误 JSON，避免 os.Exit 阻止 defer 执行
 		fmt.Fprintf(os.Stderr, "JSON marshal error: %v\n", err)
-		os.Exit(1)
+		fmt.Println(`{"isSuccess":false,"errorMsg":"internal output error","data":null}`)
+		return
 	}
 	fmt.Println(string(bytes))
 }

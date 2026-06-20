@@ -82,6 +82,9 @@ func ScanDirectory(root string, ignoreFolders, ignoreFiles []string) ([]models.L
 
 	// 阶段 2：并行计算哈希
 	numWorkers := runtime.NumCPU() * 2
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
 	sem := make(chan struct{}, numWorkers)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

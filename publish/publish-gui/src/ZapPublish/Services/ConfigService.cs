@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using ZapPublish.Models.Local;
 using Serilog;
 using System;
@@ -14,7 +14,67 @@ public class ConfigService
 
     private static readonly string ConfigFile = Path.Combine(ConfigDir, "config.json");
 
+    private readonly object _lock = new();
+
     public List<ProjectConfig> LoadProjects()
+    {
+        lock (_lock)
+        {
+            return LoadProjectsUnlocked();
+        }
+    }
+
+    public void SaveProjects(List<ProjectConfig> projects)
+    {
+        lock (_lock)
+        {
+            SaveProjectsUnlocked(projects);
+        }
+    }
+
+    public void AddProject(ProjectConfig project)
+    {
+        Log.Information("添加项目到配置: DisplayName={Name}, Path={Path}", project.DisplayName, project.ProjectPath);
+        lock (_lock)
+        {
+            var projects = LoadProjectsUnlocked();
+            projects.Add(project);
+            SaveProjectsUnlocked(projects);
+        }
+    }
+
+    public void RemoveProject(string projectPath)
+    {
+        Log.Information("从配置移除项目: Path={Path}", projectPath);
+        lock (_lock)
+        {
+            var projects = LoadProjectsUnlocked();
+            projects.RemoveAll(p => p.ProjectPath == projectPath);
+            SaveProjectsUnlocked(projects);
+        }
+    }
+
+    public void UpdateProject(ProjectConfig project)
+    {
+        Log.Information("更新项目配置: DisplayName={Name}, Path={Path}", project.DisplayName, project.ProjectPath);
+        lock (_lock)
+        {
+            var projects = LoadProjectsUnlocked();
+            // 按 ProjectPath 匹配（唯一标识），而非 DisplayName（可重名/可重命名）
+            var index = projects.FindIndex(p => p.ProjectPath == project.ProjectPath);
+            if (index >= 0)
+            {
+                projects[index] = project;
+                SaveProjectsUnlocked(projects);
+            }
+            else
+            {
+                Log.Warning("更新项目配置失败: 未找到 Path={Path}", project.ProjectPath);
+            }
+        }
+    }
+
+    private List<ProjectConfig> LoadProjectsUnlocked()
     {
         try
         {
@@ -37,7 +97,7 @@ public class ConfigService
         }
     }
 
-    public void SaveProjects(List<ProjectConfig> projects)
+    private void SaveProjectsUnlocked(List<ProjectConfig> projects)
     {
         try
         {
@@ -49,38 +109,6 @@ public class ConfigService
         catch (Exception ex)
         {
             Log.Error(ex, "保存配置失败: {Path}", ConfigFile);
-        }
-    }
-
-    public void AddProject(ProjectConfig project)
-    {
-        Log.Information("添加项目到配置: DisplayName={Name}", project.DisplayName);
-        var projects = LoadProjects();
-        projects.Add(project);
-        SaveProjects(projects);
-    }
-
-    public void RemoveProject(string displayName)
-    {
-        Log.Information("从配置移除项目: DisplayName={Name}", displayName);
-        var projects = LoadProjects();
-        projects.RemoveAll(p => p.DisplayName == displayName);
-        SaveProjects(projects);
-    }
-
-    public void UpdateProject(ProjectConfig project)
-    {
-        Log.Information("更新项目配置: DisplayName={Name}", project.DisplayName);
-        var projects = LoadProjects();
-        var index = projects.FindIndex(p => p.DisplayName == project.DisplayName);
-        if (index >= 0)
-        {
-            projects[index] = project;
-            SaveProjects(projects);
-        }
-        else
-        {
-            Log.Warning("更新项目配置失败: 未找到 DisplayName={Name}", project.DisplayName);
         }
     }
 }

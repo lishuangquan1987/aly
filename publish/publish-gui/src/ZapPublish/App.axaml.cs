@@ -20,7 +20,17 @@ public partial class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         var logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
-        Directory.CreateDirectory(logDir);
+        try
+        {
+            Directory.CreateDirectory(logDir);
+        }
+        catch (Exception ex)
+        {
+            // 日志目录创建失败时使用系统临时目录作为回退
+            logDir = Path.Combine(Path.GetTempPath(), "ZapPublish", "logs");
+            try { Directory.CreateDirectory(logDir); } catch { }
+            System.Diagnostics.Debug.WriteLine($"创建日志目录失败，回退到 {logDir}: {ex.Message}");
+        }
         Log.Logger = new LoggerConfiguration()
 #if DEBUG
             .MinimumLevel.Debug()
@@ -40,9 +50,9 @@ public partial class App : Application
         svc.AddSingleton<ProcessService>();
         svc.AddSingleton<CliService>();
         svc.AddSingleton<ConfigService>();
-        svc.AddSingleton<IDialogService, DialogService>();
         svc.AddTransient<MainWindowViewModel>();
         svc.AddTransient<AddProjectDialogViewModel>();
+        svc.AddTransient<AddLocalProjectDialogViewModel>();
         svc.AddTransient<CreateProjectDialogViewModel>();
         svc.AddTransient<EditProjectDialogViewModel>();
         Services = svc.BuildServiceProvider();

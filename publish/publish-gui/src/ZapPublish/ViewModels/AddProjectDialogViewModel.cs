@@ -194,7 +194,7 @@ public partial class AddProjectDialogViewModel : ObservableObject
         }
     }
 
-    /// <summary>由 DialogService 注入，用于打开创建项目子对话框</summary>
+    /// <summary>由调用方注入，用于打开创建项目子对话框</summary>
     public Func<string, string, string, Task<ProjectInfo?>>? ShowCreateProjectDialogAsync { get; set; }
 
     private async Task ConfirmAsync()

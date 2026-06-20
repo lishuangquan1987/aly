@@ -25,7 +25,7 @@ type Client struct {
 func NewClient(serverURL string) *Client {
 	return &Client{
 		ServerURL: serverURL,
-		hc:        &http.Client{Timeout: 120 * time.Second},
+		hc:        &http.Client{Timeout: 500 * time.Second},
 	}
 }
 
@@ -39,7 +39,10 @@ func (c *Client) get(path string, result interface{}) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("GET %s returned HTTP %d (failed to read body: %v)", path, resp.StatusCode, readErr)
+		}
 		return fmt.Errorf("GET %s returned HTTP %d: %s", path, resp.StatusCode, string(body))
 	}
 
@@ -72,7 +75,10 @@ func (c *Client) post(path string, reqBody interface{}, result interface{}) erro
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("POST %s returned HTTP %d (failed to read body: %v)", path, resp.StatusCode, readErr)
+		}
 		return fmt.Errorf("POST %s returned HTTP %d: %s", path, resp.StatusCode, string(body))
 	}
 
@@ -245,7 +251,10 @@ func (c *Client) UploadFile(localPath, projectName, relativeFileName string) err
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("upload file returned HTTP %d (failed to read body: %v)", resp.StatusCode, readErr)
+		}
 		return fmt.Errorf("upload file returned HTTP %d: %s", resp.StatusCode, string(respBody))
 	}
 

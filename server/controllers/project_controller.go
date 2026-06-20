@@ -1,24 +1,44 @@
 package controllers
 
 import (
+	"fmt"
+	"regexp"
+	"strings"
 	"zap/server/ent"
 	"zap/server/ent/project"
 	"zap/server/internal/db"
 	"zap/server/internal/service"
 	"zap/server/models"
-	"fmt"
-	"log"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/disk"
-	"github.com/shirou/gopsutil/host"
 	"github.com/utils-go/ngo/io/directory"
 )
+
+// validProjectName 项目名称白名单：字母、数字、下划线、短横线，1-64 字符
+var validProjectName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+// validateProjectName 校验项目名称：白名单 + Windows 保留名检查
+func validateProjectName(name string) error {
+	if name == "" {
+		return fmt.Errorf("项目名称不能为空")
+	}
+	if !validProjectName.MatchString(name) {
+		return fmt.Errorf("项目名称只能包含字母、数字、下划线和短横线，长度1-64")
+	}
+	// Windows 保留名检查
+	reserved := map[string]bool{
+		"CON": true, "PRN": true, "AUX": true, "NUL": true,
+		"COM1": true, "COM2": true, "COM3": true, "COM4": true,
+		"COM5": true, "COM6": true, "COM7": true, "COM8": true, "COM9": true,
+		"LPT1": true, "LPT2": true, "LPT3": true, "LPT4": true,
+		"LPT5": true, "LPT6": true, "LPT7": true, "LPT8": true, "LPT9": true,
+	}
+	upper := strings.ToUpper(name)
+	if reserved[upper] {
+		return fmt.Errorf("项目名称不能使用系统保留名: %s", name)
+	}
+	return nil
+}
 
 func CreateProject(ctx *gin.Context) {
 	var createProjectDto struct {
@@ -34,19 +54,9 @@ func CreateProject(ctx *gin.Context) {
 		return
 	}
 
-	//判断项目名称是否为空
-	if createProjectDto.Name == "" {
-		ctx.JSON(200, models.NG("项目名称不能为空"))
-		return
-	}
-
-	// 校验项目名称：不能包含路径分隔符和特殊字符
-	if strings.Contains(createProjectDto.Name, "/") || strings.Contains(createProjectDto.Name, "\\") {
-		ctx.JSON(200, models.NG("项目名称不能包含路径分隔符"))
-		return
-	}
-	if strings.ContainsAny(createProjectDto.Name, ":\"<>|?*") {
-		ctx.JSON(200, models.NG("项目名称不能包含特殊字符"))
+	// 校验项目名称
+	if err := validateProjectName(createProjectDto.Name); err != nil {
+		ctx.JSON(200, models.NG(err.Error()))
 		return
 	}
 
@@ -99,8 +109,8 @@ func UpdateProject(ctx *gin.Context) {
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
-	if updateProjectDto.Name == "" {
-		ctx.JSON(200, models.NG("项目名称不能为空"))
+	if err := validateProjectName(updateProjectDto.Name); err != nil {
+		ctx.JSON(200, models.NG(err.Error()))
 		return
 	}
 
@@ -110,8 +120,8 @@ func UpdateProject(ctx *gin.Context) {
 		return
 	}
 
-	//判断项目是否存在
-	_, err := db.Client.Project.Query().Where(project.NameEQ(updateProjectDto.Name)).First(ctx)
+	//判断项目是否存在（仅未软删除的项目）
+	_, err := db.Client.Project.Query().Where(project.NameEQ(updateProjectDto.Name), project.IsDeletedEQ(false)).First(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			ctx.JSON(200, models.NG("项目不存在"))
@@ -130,34 +140,6 @@ func UpdateProject(ctx *gin.Context) {
 		updateProjectDto.IgnoreFiles)
 
 	ctx.JSON(200, result)
-}
-
-func PublishVersion(ctx *gin.Context) {
-	var publishDto struct {
-		ProjectName             string   `json:"projectName"`
-		Version                 string   `json:"version"`
-		Logs                    []string `json:"logs"`
-		Time                    string   `json:"time"`
-		AfterApplyUpdateScript  string   `json:"afterApplyUpdateScript"`
-	}
-	if err := ctx.ShouldBindJSON(&publishDto); err != nil {
-		ctx.JSON(200, models.NGWithError(err))
-		return
-	}
-	if publishDto.ProjectName == "" {
-		ctx.JSON(200, models.NG("项目名称不能为空"))
-		return
-	}
-	if publishDto.Version == "" {
-		ctx.JSON(200, models.NG("版本号不能为空"))
-		return
-	}
-	if len(publishDto.Version) > 50 {
-		ctx.JSON(200, models.NG("版本号长度不能超过50个字符"))
-		return
-	}
-
-	ctx.JSON(200, service.PublishVersion(ctx.Request.Context(), publishDto.ProjectName, publishDto.Version, publishDto.Logs, publishDto.Time, publishDto.AfterApplyUpdateScript))
 }
 
 func DeleteProject(ctx *gin.Context) {
@@ -185,8 +167,8 @@ func GetProjectByName(ctx *gin.Context) {
 		return
 	}
 
-	if projectNameDto.ProjectName == "" {
-		ctx.JSON(200, models.NG("项目名称不能为空"))
+	if err := validateProjectName(projectNameDto.ProjectName); err != nil {
+		ctx.JSON(200, models.NG(err.Error()))
 		return
 	}
 
@@ -202,119 +184,9 @@ func SetForceUpdate(ctx *gin.Context) {
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
-	if req.ProjectName == "" {
-		ctx.JSON(200, models.NG("项目名称不能为空"))
+	if err := validateProjectName(req.ProjectName); err != nil {
+		ctx.JSON(200, models.NG(err.Error()))
 		return
 	}
 	ctx.JSON(200, service.SetForceUpdate(ctx.Request.Context(), req.ProjectName, req.ForceUpdate))
-}
-
-func GetProjectChangeLogs(ctx *gin.Context) {
-	var projectNameDto struct {
-		ProjectName string `uri:"projectName" json:"projectName"`
-	}
-	if err := ctx.BindUri(&projectNameDto); err != nil {
-		ctx.JSON(200, models.NGWithError(err))
-		return
-	}
-
-	if projectNameDto.ProjectName == "" {
-		ctx.JSON(200, models.NG("项目名称不能为空"))
-		return
-	}
-
-	ctx.JSON(200, service.GetProjectChangeLogs(ctx.Request.Context(), projectNameDto.ProjectName))
-}
-
-func GetProjectOSInfo(ctx *gin.Context) {
-	var projectNameUrl struct {
-		ProjectName string `uri:"projectName" json:"projectName"`
-	}
-	if err := ctx.BindUri(&projectNameUrl); err != nil {
-		ctx.JSON(200, models.NGWithError(err))
-		return
-	}
-
-	// 直接查询以便区分 "不存在" 和 "其他错误"
-	p, err := db.Client.Project.Query().Where(project.NameEQ(projectNameUrl.ProjectName)).First(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			ctx.JSON(200, models.NG("项目不存在"))
-		} else {
-			ctx.JSON(200, models.NGWithError(err))
-		}
-		return
-	}
-
-	workDir, err := service.GetProjectWorkPath(p.Name)
-	if err != nil {
-		ctx.JSON(200, models.NGWithError(err))
-		return
-	}
-
-	ctx.JSON(200, models.CommonResponse{
-		IsSuccess: true,
-		Data:      collectOSInfo(workDir),
-	})
-}
-
-// ServerInfo 获取服务器基本信息（无需指定项目）
-func ServerInfo(ctx *gin.Context) {
-	exePath, err := os.Executable()
-	if err != nil {
-		ctx.JSON(200, models.NGWithError(err))
-		return
-	}
-	workDir := filepath.Dir(exePath)
-
-	ctx.JSON(200, models.CommonResponse{
-		IsSuccess: true,
-		Data:      collectOSInfo(workDir),
-	})
-}
-
-// collectOSInfo 收集操作系统信息（CPU、磁盘等），供 GetProjectOSInfo 和 ServerInfo 共用
-func collectOSInfo(workDir string) []models.ServerOSInfo {
-	platform, _, _, _ := host.PlatformInformation()
-
-	infos, err := cpu.Info()
-	var cpuName string
-	var cpuMhz float64
-	if err == nil && len(infos) > 0 {
-		cpuName = infos[0].ModelName
-		cpuMhz = infos[0].Mhz
-	} else {
-		cpuName = "unknown"
-		if err != nil {
-			log.Printf("collectOSInfo: failed to get CPU info: %v", err)
-		}
-	}
-
-	diskInfo, err := disk.Usage(workDir)
-	var diskUsed, diskFree, diskTotal uint64
-	var diskUsedPercent float64
-	if err == nil {
-		diskUsed = diskInfo.Used
-		diskFree = diskInfo.Free
-		diskTotal = diskInfo.Total
-		diskUsedPercent = diskInfo.UsedPercent
-	} else {
-		log.Printf("collectOSInfo: failed to get disk usage for %s: %v", workDir, err)
-	}
-
-	serverOSInfo := make([]models.ServerOSInfo, 0)
-	serverOSInfo = append(serverOSInfo, models.ServerOSInfo{
-		OS:              runtime.GOOS,
-		Platform:        platform,
-		GOARCH:          runtime.GOARCH,
-		Version:         runtime.Version(),
-		NumCPU:          runtime.NumCPU(),
-		CPUName:         cpuName,
-		CPUMhz:          cpuMhz,
-		DiskUsed:        float64(diskUsed) / float64(1024*1024*1024),
-		DiskFree:        float64(diskFree) / float64(1024*1024*1024),
-		DiskTotal:       float64(diskTotal) / float64(1024*1024*1024),
-		DiskUsedPercent: diskUsedPercent,
-	})
-	return serverOSInfo
 }

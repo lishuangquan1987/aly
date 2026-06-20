@@ -67,6 +67,15 @@ public class ProcessService
                 {
                     Log.Warning("进程 Kill 后未在 5s 内退出: {File} {Args}", fileName, arguments);
                 }
+                // 等待 stdout/stderr 读取任务完成，避免未观察异常和丢失错误信息
+                try
+                {
+                    await Task.WhenAll(stdoutTask, stderrTask);
+                }
+                catch (Exception readEx)
+                {
+                    Log.Warning(readEx, "超时后读取 stdout/stderr 异常: {File} {Args}", fileName, arguments);
+                }
                 Log.Warning("进程超时: {File} {Args}", fileName, arguments);
                 return new ProcessResult { Success = false, StandardError = "进程执行超时" };
             }

@@ -1,9 +1,16 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"zap/server/internal/db"
 	"zap/server/routers"
@@ -30,7 +37,29 @@ func main() {
 	r := gin.Default()
 	routers.InitRouter(r)
 
-	fmt.Printf("启动中,监听端口:%d\r\n", port)
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: r,
+	}
 
-	log.Fatal(r.Run(fmt.Sprintf(":%d", port)))
+	// 启动服务器（非阻塞）
+	go func() {
+		fmt.Printf("启动中,监听端口:%d\r\n", port)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	// 等待中断信号优雅关闭
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("正在关闭服务器...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("服务器强制关闭: %v", err)
+	}
+	log.Println("服务器已退出")
 }

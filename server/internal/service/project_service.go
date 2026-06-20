@@ -16,6 +16,13 @@ import (
 	"github.com/utils-go/ngo/io/path"
 )
 
+const (
+	// DefaultVersion 创建项目时的初始版本号
+	DefaultVersion = "V1.0.0"
+	// DataDirName 服务端数据存储目录名
+	DataDirName = "data"
+)
+
 func GetProjectWorkPath(projectName string) (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
@@ -23,7 +30,7 @@ func GetProjectWorkPath(projectName string) (string, error) {
 	}
 	dir := filepath.Dir(exe)
 
-	return path.Combine(dir, "data", projectName), nil
+	return path.Combine(dir, DataDirName, projectName), nil
 }
 
 func CreateProjectWithFirstLog(ctx context.Context, name string, title string, isForceUpdate bool, ignoreFolders []string, ignoreFiles []string) models.CommonResponse {
@@ -34,7 +41,7 @@ func CreateProjectWithFirstLog(ctx context.Context, name string, title string, i
 		project, err = tx.Project.Create().
 			SetName(name).
 			SetTitle(title).
-			SetVersion("V1.0.0").
+			SetVersion(DefaultVersion).
 			SetForceUpdate(isForceUpdate).
 			SetIgnoreFolders(ignoreFolders).
 			SetIgnoreFiles(ignoreFiles).
@@ -46,7 +53,7 @@ func CreateProjectWithFirstLog(ctx context.Context, name string, title string, i
 		timeStr := datetime.Now().ToStringWithFormat("yyyy-MM-dd HH:mm:ss")
 		_, err = tx.ProjectChangeLog.Create().
 			SetProject(project).
-			SetVersion("V1.0.0").
+			SetVersion(DefaultVersion).
 			SetLogs([]string{
 				"第一次创建",
 			}).
@@ -67,10 +74,10 @@ func CreateProjectWithFirstLog(ctx context.Context, name string, title string, i
 
 func UpdateProject(ctx context.Context, name string, title string, isForceUpdate bool, ignoreFolders []string, ignoreFiles []string) models.CommonResponse {
 	err := db.WithTx(ctx, func(tx *ent.Tx) error {
-		//更新项目
+		//更新项目（仅未软删除的项目）
 		var err error
 		_, err = tx.Project.Update().
-			Where(project.NameEQ(name)).
+			Where(project.NameEQ(name), project.IsDeletedEQ(false)).
 			SetTitle(title).
 			SetForceUpdate(isForceUpdate).
 			SetIgnoreFolders(ignoreFolders).
@@ -88,11 +95,17 @@ func UpdateProject(ctx context.Context, name string, title string, isForceUpdate
 // SetForceUpdate 只更新项目的 force_update 字段，避免 read-modify-write 竞态
 func SetForceUpdate(ctx context.Context, projectName string, forceUpdate bool) models.CommonResponse {
 	err := db.WithTx(ctx, func(tx *ent.Tx) error {
-		_, err := tx.Project.Update().
-			Where(project.NameEQ(projectName)).
+		affected, err := tx.Project.Update().
+			Where(project.NameEQ(projectName), project.IsDeletedEQ(false)).
 			SetForceUpdate(forceUpdate).
 			Save(ctx)
-		return err
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return fmt.Errorf("项目不存在: %s", projectName)
+		}
+		return nil
 	})
 	if err != nil {
 		return models.NGWithError(err)
@@ -141,14 +154,14 @@ func PublishVersion(ctx context.Context, projectName string, version string, log
 	}
 	var changelog *ent.ProjectChangeLog
 	err := db.WithTx(ctx, func(tx *ent.Tx) error {
-		// 获取项目实体（用于关联变更日志）
-		p, err := tx.Project.Query().Where(project.NameEQ(projectName)).First(ctx)
+		// 获取项目实体（用于关联变更日志，仅未软删除的项目）
+		p, err := tx.Project.Query().Where(project.NameEQ(projectName), project.IsDeletedEQ(false)).First(ctx)
 		if err != nil {
 			return err
 		}
 		// 更新项目版本号
 		_, err = tx.Project.Update().
-			Where(project.NameEQ(projectName)).
+			Where(project.NameEQ(projectName), project.IsDeletedEQ(false)).
 			SetVersion(version).
 			Save(ctx)
 		if err != nil {

@@ -174,7 +174,11 @@ func compareVersion(v1, v2 string) int {
 // closeProcessesGracefully 优雅关闭进程：先 WM_CLOSE，超时后强杀
 func closeProcessesGracefully(names []string, timeout time.Duration) {
 	for _, name := range names {
-		pids, _ := util.FindProcessesByName(name)
+		pids, err := util.FindProcessesByName(name)
+		if err != nil {
+			util.AppendToLog(".", "update.log", fmt.Sprintf("closeProcessesGracefully: find process %s failed: %v", name, err))
+			continue
+		}
 		for _, pid := range pids {
 			util.SendCloseMessageToProcess(pid)
 		}

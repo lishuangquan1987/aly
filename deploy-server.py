@@ -38,8 +38,21 @@ password = None
 print("       Connected.\n")
 
 # Step 2: Kill old process FIRST so file is not locked
+# 优雅关闭：先 SIGTERM，等待 5s，仍存活则 SIGKILL
 print(f"[2/5] Stopping port {PORT} ...")
-ssh.exec_command(f"lsof -ti :{PORT} | xargs -r kill -9 2>/dev/null; sleep 2; echo OK", timeout=15)
+_, stop_out, _ = ssh.exec_command(
+    f"pids=$(lsof -ti :{PORT}); "
+    f"if [ -n \"$pids\" ]; then "
+    f"  kill -TERM $pids 2>/dev/null; "
+    f"  for i in $(seq 1 5); do "
+    f"    sleep 1; "
+    f"    if ! kill -0 $pids 2>/dev/null; then break; fi; "
+    f"  done; "
+    f"  kill -9 $pids 2>/dev/null; "
+    f"fi; "
+    f"sleep 1; echo OK",
+    timeout=15)
+stop_out.channel.recv_exit_status()
 print("       done\n")
 
 # Step 3: Upload (file is now unlocked)

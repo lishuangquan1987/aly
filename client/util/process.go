@@ -4,6 +4,7 @@ package util
 
 import (
 	"fmt"
+	"os"
 	"syscall"
 	"time"
 	"unsafe"
@@ -120,14 +121,20 @@ func KillProcess(pid uint32) error {
 // WaitForProcessExit 等待指定 PID 的进程退出
 // 返回 true 表示进程已退出，false 表示超时
 func WaitForProcessExit(pid uint32, timeout time.Duration) bool {
-	handle, _, _ := procOpenProcess.Call(
+	handle, _, callErr := procOpenProcess.Call(
 		uintptr(SYNCHRONIZE),
 		0,
 		uintptr(pid),
 	)
 	if handle == 0 {
-		// 进程可能已经退出
-		return true
+		// OpenProcess 失败：通过错误码区分原因
+		// ERROR_INVALID_PARAMETER (87) 通常表示进程不存在
+		// ERROR_ACCESS_DENIED (5) 表示进程存在但权限不足
+		if errno, ok := callErr.(syscall.Errno); ok && errno == 87 {
+			return true // 进程已退出
+		}
+		// 权限不足或其他错误，无法判断进程状态，保守返回 false
+		return false
 	}
 	defer procCloseHandle.Call(handle)
 
@@ -159,7 +166,9 @@ func KillProcessesAndWait(names []string, timeout time.Duration) error {
 
 	// 终止所有进程
 	for _, pid := range allPIDs {
-		KillProcess(pid)
+		if err := KillProcess(pid); err != nil {
+			fmt.Fprintf(os.Stderr, "KillProcess %d failed: %v\n", pid, err)
+		}
 	}
 
 	// 等待所有进程退出
@@ -186,7 +195,9 @@ func KillProcessesAndWait(names []string, timeout time.Duration) error {
 	// 超时后强制终止残留进程
 	for _, pid := range allPIDs {
 		if !dead[pid] {
-			KillProcess(pid)
+			if err := KillProcess(pid); err != nil {
+				fmt.Fprintf(os.Stderr, "KillProcess (force) %d failed: %v\n", pid, err)
+			}
 		}
 	}
 

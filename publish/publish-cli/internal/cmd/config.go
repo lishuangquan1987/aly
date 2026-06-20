@@ -1,4 +1,4 @@
-﻿package cmd
+package cmd
 
 import (
 	"fmt"
@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	configKey   string
-	configValue string
+	configKey      string
+	configValue    string
 	setArrayAdd    string
 	setArrayRemove string
 	setArrayClear  bool
@@ -117,7 +117,10 @@ func runConfigSet(cmd *cobra.Command, args []string) {
 		outputResult(false, err.Error(), nil)
 		return
 	}
-	applyConfigSet(&cfg, key, value)
+	if err := applyConfigSet(&cfg, key, value); err != nil {
+		outputResult(false, err.Error(), nil)
+		return
+	}
 	if err := config.SaveShared(cfg.Path, cfg.Shared); err != nil {
 		outputResult(false, err.Error(), nil)
 		return
@@ -144,7 +147,10 @@ func runConfigSetArray(cmd *cobra.Command, args []string) {
 		outputResult(false, err.Error(), nil)
 		return
 	}
-	applyArrayOp(&cfg, key, setArrayAdd, setArrayRemove, setArrayClear)
+	if err := applyArrayOp(&cfg, key, setArrayAdd, setArrayRemove, setArrayClear); err != nil {
+		outputResult(false, err.Error(), nil)
+		return
+	}
 	if err := config.SaveShared(cfg.Path, cfg.Shared); err != nil {
 		outputResult(false, err.Error(), nil)
 		return
@@ -162,7 +168,7 @@ func runConfigSetArray(cmd *cobra.Command, args []string) {
 
 func runConfigGet(cmd *cobra.Command, args []string) {
 	if len(args) < 1 {
-		fmt.Println("Usage: zap-publish config get <key>")
+		outputResult(false, "Usage: zap-publish config get <key>", nil)
 		return
 	}
 	key := args[0]
@@ -176,7 +182,7 @@ func runConfigGet(cmd *cobra.Command, args []string) {
 		printOutput(true, "", map[string]string{key: val})
 		return
 	}
-	fmt.Println(val)
+	printHumanLn("%s", val)
 }
 
 func runConfigList(cmd *cobra.Command, args []string) {
@@ -205,23 +211,28 @@ func runConfigPath(cmd *cobra.Command, args []string) {
 		outputResult(false, err.Error(), nil)
 		return
 	}
-	fmt.Println(config.UpdatorDir(cfg.Path))
+	if jsonOutput {
+		printOutput(true, "", map[string]string{"path": config.UpdatorDir(cfg.Path)})
+		return
+	}
+	printHumanLn("%s", config.UpdatorDir(cfg.Path))
 }
 
-//  helpers 
+//  helpers
 
-func applyConfigSet(cfg *RuntimeConfig, key, value string) {
+func applyConfigSet(cfg *RuntimeConfig, key, value string) error {
 	switch key {
 	case "server.url":
 		cfg.Shared.ServerURL = value
 	case "project.name":
 		cfg.Shared.ProjectName = value
 	default:
-		fmt.Printf("Warning: unknown config key '%s'\n", key)
+		return fmt.Errorf("unknown config key '%s'", key)
 	}
+	return nil
 }
 
-func applyArrayOp(cfg *RuntimeConfig, key, add, remove string, clear bool) {
+func applyArrayOp(cfg *RuntimeConfig, key, add, remove string, clear bool) error {
 	var target *[]string
 	switch key {
 	case "ignore.folders":
@@ -229,9 +240,10 @@ func applyArrayOp(cfg *RuntimeConfig, key, add, remove string, clear bool) {
 	case "ignore.files":
 		target = &cfg.Shared.IgnoreFiles
 	default:
-		return
+		return fmt.Errorf("unknown config key '%s'", key)
 	}
 	applyStringSliceOp(target, add, remove, clear)
+	return nil
 }
 
 // applyStringSliceOp 对字符串切片执行 clear / add / remove 操作
