@@ -14,8 +14,9 @@ import (
 	"github.com/utils-go/ngo/io/directory"
 )
 
-// validProjectName 项目名称白名单：字母、数字、下划线、短横线，1-64 字符
-var validProjectName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+// validProjectName 项目名称合法性：只要能创建为文件夹名即可
+// 禁止 Windows/Linux 文件系统非法字符：< > : " / \ | ? *
+var validProjectName = regexp.MustCompile(`^[^<>:"/\\|?*]{1,64}$`)
 
 // validateProjectName 校验项目名称：白名单 + Windows 保留名检查
 func validateProjectName(name string) error {
@@ -23,7 +24,7 @@ func validateProjectName(name string) error {
 		return fmt.Errorf("项目名称不能为空")
 	}
 	if !validProjectName.MatchString(name) {
-		return fmt.Errorf("项目名称只能包含字母、数字、下划线和短横线，长度1-64")
+		return fmt.Errorf("项目名称包含非法字符或长度不在1-64范围内")
 	}
 	// Windows 保留名检查
 	reserved := map[string]bool{
