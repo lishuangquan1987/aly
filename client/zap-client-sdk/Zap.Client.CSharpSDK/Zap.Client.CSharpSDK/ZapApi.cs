@@ -44,13 +44,13 @@ namespace Zap.Client.CSharpSDK
                         StandardErrorEncoding = Encoding.UTF8
                     };
 
-                    CancellationTokenSource cts = new CancellationTokenSource();
+                    using (var cts = new CancellationTokenSource())
                     using (var process = new Process { StartInfo = psi })
                     {
                         process.Start();
                         process.Exited += (s, e) => cts.Cancel();
 
-                        int downloadCount = 0;
+                        int doneCount = 0;
                         while (!cts.IsCancellationRequested)
                         {
                             var stdoutTask = process.StandardOutput.ReadLine();
@@ -62,28 +62,27 @@ namespace Zap.Client.CSharpSDK
                                     return ZapResponse.NG(result.ErrorMsg);
                                 }
 
-                                if (result.Data == null)//完成
+                                if (result.Data == null)// finish
                                 {
                                     return ZapResponse.OK();
                                 }
-                                if (result.Data.Status == "DONE")
+                                // Count DONE + SKIP as completed files for accurate progress
+                                if (result.Data.Status == "DONE" || result.Data.Status == "SKIP")
                                 {
-                                    downloadCount++;
-                                    progress?.Invoke(result.Data.File, downloadCount / (double)result.Data.Total);
+                                    doneCount++;
+                                    progress?.Invoke(result.Data.File, doneCount / (double)result.Data.Total);
                                 }
                             }
                         }
-
                     }
 
-                    return ZapResponse.NG("异常中断");
+                    return ZapResponse.NG("Download interrupted");
                 }
                 catch (Exception ex)
                 {
                     return ZapResponse.NG(ex);
                 }
             });
-
         }
 
         /// <summary>应用更新（原子替换），会关闭主进程并重启。返回 OperationResult（无 data）。</summary>
