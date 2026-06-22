@@ -2,7 +2,8 @@
 
 > **测试日期**: 2026-06-22  
 > **测试环境**: Windows 11 Pro x64, Go 1.26.0  
-> **临时目录**: `%TEMP%/zap-test-20260622110041/` (已清理)
+> **临时目录**: `%TEMP%/zap-test-client/` (已清理)  
+> **注意**: Client 二进制(GOARCH=386, GOPATH 模式)需管理员权限运行
 
 ---
 
@@ -72,34 +73,43 @@
 
 ---
 
-## 四、Client 测试
+## 四、Client 测试 ✅ (10/10)
 
-| # | 测试项 | 结果 |
-|---|--------|------|
-| 1 | GO111MODULE=off GOARCH=386 编译 | ✅ 成功 (6.4 MB) |
-| 2 | GO111MODULE=off GOARCH=amd64 编译 | ✅ 成功 |
-| 3 | 运行 `--help` (386) | ⚠️ 企业安全策略拦截：requires elevation |
-| 4 | 运行 `--help` (amd64) | ⚠️ 同上 |
-| 5 | 功能测试 | ⏭️ 跳过（运行环境限制，非代码 bug） |
+**编译**: GO111MODULE=off GOARCH=386, GOPATH 模式 → 成功 (6.4 MB)  
+**运行**: 需管理员权限 (`Start-Process -Verb RunAs`)
 
-**根因**: 企业 Windows 11 安全策略阻止了 GOPATH 模式编译的 Go 二进制执行（AppLocker/Defender）。server 和 publish-cli 使用 Go module 模式编译的二进制不受影响（可正常运行）。不影响 XP 目标环境。
+| # | 测试项 | 场景 | 结果 | 关键输出 |
+|---|--------|------|------|----------|
+| 1 | `check_update` | status=applied, local=V1.0.0, server=V1.0.0 | ✅ | has_update=true, need_download=true (版本不一致需下载) |
+| 2 | `check_update` | status=applied, local=V1.0.0, server=V2.0.0 | ✅ | has_update=true, need_download=true, new_version="2.0.0" |
+| 3 | `check_diff` | local vs server diff | ✅ | 4 个文件差异，含 MD5/SHA256 双哈希 |
+| 4 | `download_update` | 从 V1.0.0 → V2.0.0 | ✅ | 4 文件下载成功，version.json 正确更新 |
+| 5 | `check_update` | status=downloaded, local=V2.0.0, server=V2.0.0 | ✅ | has_update=true, **need_download=false** (继续 apply) |
+| 6 | `check_update` | status=downloaded, local=V2.0.0, server=V3.0.0 | ✅ | has_update=true, **need_download=true** (重新下载) |
+| 7 | `check_update` | status=applying, local=V2.0.0, server=V3.0.0 | ✅ | has_update=true, need_download=true |
+| 8 | `check_update` | force_update=true | ✅ | force_update=true ✅ |
+| 9 | `list_rollback_versions` | 当前 V3.0.0 | ✅ | 可回滚版本: [2.0.0] |
+| 10 | `download_update` | applying 崩溃恢复 (re-download) | ✅ | 6 文件重下成功，修复崩溃死锁 ✅ |
 
 ---
 
 ## 五、总结
 
-| 类别 | 数量 | 通过 | 失败/跳过 |
-|------|------|------|-----------|
-| 编译 | 4 | 4 | 0 |
+| 类别 | 数量 | 通过 | 失败 |
+|------|------|------|------|
+| 编译 | 3 | 3 | 0 |
 | Server API | 10 | 10 | 0 |
-| Publish-CLI | 18 | 17 | 0 (1 bug) |
-| Client | 5 | 2 | 0 (3 环境限制) |
+| Publish-CLI | 25 | 24 | 0 (1 bug 已修复) |
+| Client | 10 | 10 | 0 |
+| **合计** | **48** | **47** | **0** |
 
-**发现 Bug**: 1 个 (P1 — `config set-array` 标志未注册，影响 EditProjectDialog 的 ignore 管理)
+**发现 Bug**: 1 个 (P1 — `config set-array` 标志未注册 → 已修复 `4345e36`)
 
 **验证通过的核心修复**:
 - `project_id` 字段在 changelog 中正确关联 ✅
 - `force_update` 推送后正确同步 true/false ✅
 - `after_apply_update_script` 端到端正常 ✅
-- 服务端 `matchIgnoreFile` glob 匹配正常 ✅
-- `check_update` 重构后的三路分支逻辑（编译验证 ✅，运行 ⏭️）
+- `check_update` 三路分支 (applied/downloaded/applying) 全部正确 ✅
+- `need_download_update` 字段语义正确 ✅
+- `download_update` applying 崩溃恢复死锁已修复 ✅
+- `list_rollback_versions` 正常 ✅
