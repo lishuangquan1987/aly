@@ -28,4 +28,10 @@
              Condition="Exists('content\UpdateFolder\client.json')" />
   </ItemGroup>
 
+  <!-- Auto-deploy targets: copies content to $(OutDir)..\UpdateFolder\ on build -->
+  <ItemGroup>
+    <None Include="Zap.Client.CSharpSDK.targets" Pack="true" PackagePath="build\Zap.Client.CSharpSDK.targets" />
+    <None Include="Zap.Client.CSharpSDK.targets" Pack="true" PackagePath="buildTransitive\Zap.Client.CSharpSDK.targets" />
+  </ItemGroup>
+
 </Project>
