@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"zap/client/zap-client-sdk/config"
-	"zap/client/zap-client-sdk/model"
-	"zap/client/zap-client-sdk/util"
+	"zap/client/zap-client/config"
+	"zap/client/zap-client/model"
+	"zap/client/zap-client/util"
 )
 
 // printOutput 按 isSuccess/errorMsg/data 格式输出 JSON 到 stdout

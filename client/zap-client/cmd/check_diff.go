@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"sync"
 
-	apiclient "zap/client/zap-client-sdk/client"
-	"zap/client/zap-client-sdk/config"
-	"zap/client/zap-client-sdk/model"
-	"zap/client/zap-client-sdk/util"
+	apiclient "zap/client/zap-client/client"
+	"zap/client/zap-client/config"
+	"zap/client/zap-client/model"
+	"zap/client/zap-client/util"
 )
 
 // CheckDiff lists files that differ from server (only server-side files)

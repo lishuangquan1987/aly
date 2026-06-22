@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
-	apiclient "zap/client/zap-client-sdk/client"
-	"zap/client/zap-client-sdk/config"
-	"zap/client/zap-client-sdk/model"
-	"zap/client/zap-client-sdk/util"
+	apiclient "zap/client/zap-client/client"
+	"zap/client/zap-client/config"
+	"zap/client/zap-client/model"
+	"zap/client/zap-client/util"
 )
 
 const largeFileThreshold = 100 * 1024 * 1024 // 100MB

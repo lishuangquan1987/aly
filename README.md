@@ -8,8 +8,8 @@ A minimal, self-contained auto-update solution for desktop applications. Ship ne
 zap/
 ├── server/         # API server (Go, Gin + Ent + SQLite)
 ├── client/
-│   ├── zap-client/      # Client updater executable (Go 1.10, Windows XP compatible)
-│   └── zap-client-sdk/  # Client SDK library (config, API client, file/proc utils)
+│   └── zap-client/      # Client updater (Go 1.10, Windows XP compatible)
+│   └── zap-client-sdk/  # (placeholder) Future Go/C# integration SDK
 ├── publish/
 │   ├── publish-cli/      # CLI publish engine (Go, cobra)
 │   └── publish-gui/  # Desktop GUI (Avalonia 11.3, .NET 8)
@@ -24,7 +24,6 @@ zap/
 | **zap-publish** | CLI tool to init configs, scan files, and publish versions | Developers / CI |
 | **zap-publish-gui** | Desktop GUI wrapping zap-publish via subprocess | Non-technical publishers |
 | **zap-client** | The updater executable — runs on end-user machines | End users (via your app) |
-| **zap-client-sdk** | Shared library for zap-client (config, HTTP, file utils) | Developers |
 
 ## Quick Start
 
@@ -164,7 +163,6 @@ Requires Go 1.10 (Windows XP compatibility, no Go modules). Source must be under
 ```bat
 :: Copy source to GOPATH
 xcopy /e /i /y client\zap-client %GOPATH%\src\zap\client\zap-client
-xcopy /e /i /y client\zap-client-sdk %GOPATH%\src\zap\client\zap-client-sdk
 
 :: Build
 set GOOS=windows

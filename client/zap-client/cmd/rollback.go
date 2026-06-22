@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"zap/client/zap-client-sdk/config"
-	"zap/client/zap-client-sdk/model"
-	"zap/client/zap-client-sdk/util"
+	"zap/client/zap-client/config"
+	"zap/client/zap-client/model"
+	"zap/client/zap-client/util"
 )
 
 // Rollback reverts to a previous version (same procedure as apply_update)

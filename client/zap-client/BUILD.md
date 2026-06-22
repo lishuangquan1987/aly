@@ -13,7 +13,6 @@
 
 ```batch
 rmdir /s /q %GOPATH%\src\zap\client\zap-client
-rmdir /s /q %GOPATH%\src\zap\client\zap-client-sdk
 ```
 
 ### 2. 将工作目录的源码复制到 GOPATH
@@ -65,11 +64,9 @@ REM   zap-client-sdk/ → %GOPATH%/src/zap/client/zap-client-sdk/
 
 echo 正在清理 GOPATH 旧源码...
 rmdir /s /q %GOPATH%\src\zap\client\zap-client
-rmdir /s /q %GOPATH%\src\zap\client\zap-client-sdk
 
 echo 正在复制源码到 GOPATH...
 xcopy /e /i /y client\zap-client %GOPATH%\src\zap\client\zap-client >nul
-xcopy /e /i /y client\zap-client-sdk %GOPATH%\src\zap\client\zap-client-sdk >nul
 
 echo 正在编译 zap-update.exe (GOARCH=386) ...
 set GOOS=windows

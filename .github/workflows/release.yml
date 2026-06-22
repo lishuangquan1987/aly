@@ -152,7 +152,6 @@ jobs:
         run: |
           mkdir "%GOPATH%\src\zap\client"
           xcopy /e /i /y client\zap-client "%GOPATH%\src\zap\client\zap-client"
-          xcopy /e /i /y client\zap-client-sdk "%GOPATH%\src\zap\client\zap-client-sdk"
 
       - name: Install deps & Build (32-bit, XP compatible)
         shell: cmd
