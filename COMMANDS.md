@@ -59,24 +59,28 @@ zap-update.exe check_update [--url <服务器地址>] [--project-name <项目名
 **实现逻辑**：
 
 1. 加载完整配置（`client.json` → `.updator/shared.json` + CLI 参数覆盖）
-2. 读取 `version.json`，检查 `version_status`：
-   - 若为 `downloaded` 或 `applying`：说明已有未完成的更新操作，直接返回 `has_update: true`
-3. 调用 `GET /api/project/get_project_by_name/{projectName}` 获取项目信息（含 `force_update` 标志，独立接口不再拉全量列表）
+2. 读取 `version.json`，根据 `version_status` 分三路处理：
+   - `applied` 或空：联系服务端比对版本，一致或断网 → 无更新；不一致 → `need_download_update=true`
+   - `downloaded`：联系服务端比对版本，一致或断网 → 继续 apply（`need_download_update=false`）；不一致 → 重新下载
+   - `applying`：同 `downloaded`，支持崩溃恢复
+3. 调用 `GET /api/project/get_project_by_name/{projectName}` 获取项目信息（含 `force_update`）
 4. 调用 `GET /api/project/get_project_change_logs/{projectName}` 获取变更日志
-5. 取最新一条日志的版本号，与本地 `version.json` 的版本号做数值比较
-6. 若服务端版本 > 本地版本，返回有更新；否则返回无更新
+5. 取最新一条日志的版本号，与本地 `version.json` 的版本号做比较
 
 **返回示例**：
 
 ```json
-// 有更新
-{"isSuccess":true,"data":{"has_update":true,"current_version":"1.0.0","new_version":"1.0.1","force_update":false}}
+// 有更新（需要下载）
+{"isSuccess":true,"data":{"has_update":true,"need_download_update":true,"current_version":"1.0.0","new_version":"1.0.1","force_update":false}}
+
+// 有更新（已下载，只需 apply）
+{"isSuccess":true,"data":{"has_update":true,"need_download_update":false,"current_version":"1.0.0","new_version":"1.0.1"}}
 
 // 无更新
-{"isSuccess":true,"data":{"has_update":false,"current_version":"1.0.0"}}
+{"isSuccess":true,"data":{"has_update":false,"need_download_update":false,"current_version":"1.0.0"}}
 
-// 已有未完成的更新（downloaded 状态）
-{"isSuccess":true,"data":{"has_update":true,"current_version":"1.0.0","new_version":"1.0.1"}}
+// 已有未完成的更新（downloaded/applying + 断网）
+{"isSuccess":true,"data":{"has_update":true,"need_download_update":false,"current_version":"1.0.0","new_version":"1.0.1"}}
 
 // 失败
 {"isSuccess":false,"errorMsg":"no server url configured","data":null}
@@ -191,7 +195,7 @@ zap-update.exe download_update [--url <服务器地址>] [--project-name <项目
 7. 每个文件下载后校验 MD5+SHA256，不匹配则重试最多 3 次
 8. 全部成功后更新 `version.json`：`version_status → "downloaded"`，记录新旧版本号，并从服务端变更日志同步 `after_apply_update_script` 字段
 
-**进度输出**（每行一个 JSON，最后一行 `data: null` 表示全部完成）：
+**进度输出**（每行一个 JSON，最后一行 `data: null` 表示全部完成。所有服务端文件都有进度行，`total` = 服务端文件总数，`index` 1..total 无重复）：
 
 ```
 {"isSuccess":true,"data":{"index":1,"total":5,"file":"app.exe","status":"START","file_size":5242880}}
@@ -1088,6 +1092,8 @@ zap-publish push --version <版本号> --message <变更说明> [--dry-run] [--f
 |------|------|------|------|
 | `--version` | string | **是** | 新版本号（如 `1.0.1`） |
 | `--message` | string[] | **是** | 变更说明（可多次指定） |
+| `--set-force-update` | bool | 否 | 推送后设置强制更新 |
+| `--after-apply-update-script` | string | 否 | 更新后执行的脚本路径 |
 | `--dry-run` | bool | 否 | 仅校验不实际推送 |
 | `--force` | bool | 否 | 跳过 MD5 复核强制上传 |
 
@@ -1113,90 +1119,7 @@ zap-publish push --version 1.0.1 --message "修复 bug" --dry-run
 
 ---
 
-### 2.18 push-all — 一键推送所有变更
-
-**用途**：跳过 `add` 步骤，直接扫描所有变更文件并推送到服务端。
-
-**使用场景**：快速发布，无需经过暂存区管理。
-
-**用法**：
-
-```bash
-zap-publish push-all --version <版本号> --message <变更说明> [--dry-run] [--force]
-```
-
-**参数**：
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `--version` | string | **是** | 新版本号 |
-| `--message` | string[] | **是** | 变更说明 |
-| `--dry-run` | bool | 否 | 仅校验不实际推送 |
-| `--force` | bool | 否 | 跳过 MD5 复核强制上传 |
-
-**实现逻辑**：
-
-1. 执行 `diff.RunStatus()` 获取所有变更文件
-2. 筛选出 `new` 和 `modified` 的文件
-3. 直接调用 `pushFiles()` 上传（不经过暂存区）
-
-**示例 1：一键发布所有变更**
-
-```bash
-zap-publish push-all --version 1.0.2 --message "发布新版本"
-```
-
-**示例 2：一键发布并跳过校验**
-
-```bash
-zap-publish push-all --version 1.0.2 --message "紧急修复" --force
-```
-
----
-
-### 2.19 publish — 完整发布流程
-
-**用途**：一个命令完成 `status → add --all → push` 的完整发布链条。
-
-**使用场景**：标准化发布流程，确保所有变更都被纳入本次发布。
-
-**用法**：
-
-```bash
-zap-publish publish --version <版本号> --message <变更说明> [--dry-run]
-```
-
-**参数**：
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `--version` | string | **是** | 新版本号 |
-| `--message` | string[] | **是** | 变更说明 |
-| `--dry-run` | bool | 否 | 仅校验不实际推送 |
-
-**实现逻辑**：
-
-1. 执行 `diff.RunStatus()` 扫描所有变更
-2. 筛选出 `new` + `modified` 文件
-3. 调用 `staging.Add()` 将这些文件加入暂存区
-4. 调用 `pushFiles()` 上传并创建版本
-5. 成功后退暂存区
-
-**示例 1：完整发布流程**
-
-```bash
-zap-publish publish --version 1.0.1 --message "正式版发布"
-```
-
-**示例 2：发布前用 dry-run 预览**
-
-```bash
-zap-publish publish --version 1.0.1 --message "测试发布" --dry-run
-```
-
----
-
-### 2.20 log — 查看版本变更日志
+### 2.18 log — 查看版本变更日志
 
 **用途**：查看项目的版本发布历史及每次发布的变更说明。
 
@@ -1234,52 +1157,7 @@ zap-publish log --limit 100 --json
 
 ---
 
-### 2.21 watch — 实时监控文件变更
-
-**用途**：轮询监控本地文件系统，实时检测文件新增、修改、删除操作。
-
-**使用场景**：开发过程中实时监控文件变化，配合 `--auto-add` 自动将变更加入暂存区。
-
-**用法**：
-
-```bash
-zap-publish watch [--interval <秒数>] [--auto-add]
-```
-
-**参数**：
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `--interval` | int | 2 | 轮询间隔（秒） |
-| `--auto-add` | bool | false | 自动将变更文件加入暂存区 |
-
-**实现逻辑**：
-
-1. 启动时扫描一次本地目录，记录文件快照（路径 + MD5）
-2. 每隔 `--interval` 秒重新扫描一次
-3. 对比前后两次快照，检测：
-   - **new**：新出现的文件
-   - **modified**：MD5 变化的文件
-   - **deleted**：消失的文件
-4. 输出变更信息到控制台
-5. 若启用 `--auto-add`，自动将 new 和 modified 文件加入暂存区
-6. `Ctrl+C` 停止监控
-
-**示例 1：每 5 秒监控文件变更**
-
-```bash
-zap-publish watch --interval 5
-```
-
-**示例 2：监控并自动添加到暂存区**
-
-```bash
-zap-publish watch --interval 2 --auto-add
-```
-
----
-
-### 2.22 server info — 查看服务端系统信息
+### 2.19 server info — 查看服务端系统信息
 
 **用途**：获取服务端服务器的操作系统、硬件、磁盘等信息。
 

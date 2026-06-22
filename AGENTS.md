@@ -58,11 +58,11 @@
 ## 四、禁止事项
 
 1. ❌ 不在 XAML code-behind 中写业务逻辑
-5. ❌ 不硬编码服务器地址
-8. ❌ 不引用未使用的命名空间
-9. ❌ 不在生产代码中写 `Console.WriteLine`（用 Serilog）
-10. ❌ 不为了简单控件创建自定义 UserControl
-11.❌写出不兼容的代码。client为go1.10编写，需要兼容xp,这个必须遵守
+2. ❌ 不硬编码服务器地址
+3. ❌ 不引用未使用的命名空间
+4. ❌ 不在生产代码中写 `Console.WriteLine`（用 Serilog）
+5. ❌ 不为了简单控件创建自定义 UserControl
+6. ❌ 写出不兼容的代码。client为go1.10编写，需要兼容xp,这个必须遵守
 
 ---
 
@@ -96,8 +96,8 @@
 
 ## 七、文档参考
 
-- **Avalonia 12**: https://docs.avaloniaui.net/docs/welcome
-- **Semi.Avalonia**: https://github.com/irihi/Semi.Avalonia
+- **Avalonia 11.3**: https://docs.avaloniaui.net/docs/welcome
+- **Semi.Avalonia 11.3**: https://github.com/irihi/Semi.Avalonia
 - **Ursa.Avalonia**: https://github.com/irihi/Ursa
 
-> **版本**: 2.0 | **适用范围**: publish/publish-gui/（.NET 8 + Avalonia 12 + CommunityToolkit.Mvvm + Semi.Avalonia + Ursa.Avalonia）
+> **版本**: 2.0 | **适用范围**: publish/publish-gui/（.NET 8 + Avalonia 11.3 + CommunityToolkit.Mvvm + Semi.Avalonia 11.3 + Ursa.Avalonia）

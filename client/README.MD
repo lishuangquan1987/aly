@@ -82,7 +82,7 @@ PackageFolder/
 
 ```json
 {
-  "version_previouse": "0.0.9",
+  "version_previous": "0.0.9",
   "version": "1.0.0",
   "version_status": "applied",
   "after_apply_update_script": "post_update.bat"
@@ -224,7 +224,7 @@ zap-update.exe check_update [--url <url>] [--project-name <name>]
 ```json
 {
   "isSuccess": true, "errorMsg": "",
-  "data": { "has_update": true, "current_version": "1.0.0", "new_version": "1.0.1", "force_update": false }
+  "data": { "has_update": true, "need_download_update": true, "current_version": "1.0.0", "new_version": "1.0.1", "force_update": false }
 }
 ```
 
@@ -232,13 +232,14 @@ zap-update.exe check_update [--url <url>] [--project-name <name>]
 ```json
 {
   "isSuccess": true, "errorMsg": "",
-  "data": { "has_update": false, "current_version": "1.0.0" }
+  "data": { "has_update": false, "need_download_update": false, "current_version": "1.0.0" }
 }
 ```
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `has_update` | bool | 是否有新版本 |
+| `need_download_update` | bool | 是否需要下载（`false` 时说明版本已下载，只需 `apply_update`） |
 | `current_version` | string | 本地当前版本号 |
 | `new_version` | string（可选） | 新版本号，仅 `has_update=true` 时出现 |
 | `force_update` | bool（可选） | 是否强制更新，仅 `has_update=true` 时出现。`true` 时调用方应自动下载更新并提示重启；`false` 时由用户确认是否更新 |
@@ -306,7 +307,7 @@ zap-update.exe download_update [--url <url>] [--project-name <name>] [--main-exe
    - 文件 ≤100MB 直接全量下载
 4. 下载完成后逐文件校验 MD5 + SHA-256，与服务器返回值不一致则重试（最大 3 次），仍未通过则中止并返回错误
 5. 更新 version.json（**仅在 status 非 `downloaded` 时执行，防止重复调用覆盖 `version_previouse`**）：
-   - `version_previouse` 设为当前 `version` 的值（记录本次更新前的版本号）
+   - `version_previous` 设为当前 `version` 的值（记录本次更新前的版本号）
    - `version` 设为新版本号（从接口中获取）
    - `version_status` 设为 `downloaded`
    - `after_apply_update_script` 从服务端变更日志同步

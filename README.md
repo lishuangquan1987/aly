@@ -9,8 +9,8 @@ zap/
 ├── server/         # API server (Go, Gin + Ent + SQLite)
 ├── client/         # Client updater (Go 1.10, Windows XP compatible)
 ├── publish/
-│   ├── zap-publish/      # CLI publish engine (Go, cobra)
-│   └── zap-publish-gui/  # Desktop GUI (Avalonia 12, .NET 8)
+│   ├── publish-cli/      # CLI publish engine (Go, cobra)
+│   └── publish-gui/  # Desktop GUI (Avalonia 11.3, .NET 8)
 └── README.md
 ```
 
@@ -31,7 +31,7 @@ zap/
 ./zap-server -p 2000
 ```
 
-First run auto-creates a SQLite database (`configs/zap.db`). The server stores project info and uploaded files under `data/{project_name}/`.
+First run auto-creates a SQLite database (`zap.db`). The server stores project info and uploaded files under `data/{project_name}/`.
 
 ### 2. Publish a New Version
 
@@ -43,8 +43,9 @@ zap-publish config init --server http://localhost:2000 --project myapp
 # Check what files changed
 zap-publish status
 
-# Publish a new version
-zap-publish publish --version V1.0.1 --message "Fixed login bug"
+# Stage all changes and push
+zap-publish add --all
+zap-publish push --version V1.0.1 --message "Fixed login bug"
 ```
 
 This scans the directory, uploads new/changed files to the server, and creates a version changelog entry.
@@ -56,7 +57,7 @@ On the end-user's machine, your application invokes `zap-update.exe` (located in
 ```bash
 # Step 1 — Check for updates
 zap-update.exe check_update
-# → {"isSuccess":true,"data":{"has_update":true,"new_version":"1.0.1","force_update":false}}
+# → {"isSuccess":true,"data":{"has_update":true,"need_download_update":true,"new_version":"1.0.1","force_update":false}}
 
 # Step 2 — Download (only downloads changed files, with SHA-256 verification)
 zap-update.exe download_update
@@ -125,7 +126,7 @@ Crash recovery: if `version_status` is `applying` on startup, the updater re-exe
 | Command | Description |
 |---------|-------------|
 | `check_update` | Compare local version vs. server latest |
-| `check_diff` | List files that differ (MD5 comparison) |
+| `check_diff` | List files that differ (MD5+SHA256 comparison) |
 | `download_update` | Download changed files, verify SHA-256 |
 | `apply_update` | Atomic replace + restart your app |
 | `list_rollback_versions` | List available previous versions |
@@ -141,7 +142,7 @@ Crash recovery: if `version_status` is `applying` on startup, the updater re-exe
 cd server && go build -ldflags="-s -w" -o zap-server.exe .
 
 # Publish CLI
-cd publish/zap-publish && go build -ldflags="-s -w" -o zap-publish.exe .
+cd publish/publish-cli && go build -ldflags="-s -w" -o zap-publish.exe .
 
 # Cross-compile (static, no CGO)
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o zap-server-linux-amd64 .
@@ -150,7 +151,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o zap-server-li
 ### Publish GUI
 
 ```bash
-cd publish/zap-publish-gui && dotnet build
+cd publish/publish-gui && dotnet build
 ```
 
 ### Client Updater
@@ -158,10 +159,11 @@ cd publish/zap-publish-gui && dotnet build
 Requires Go 1.10 (Windows XP compatibility, no Go modules):
 
 ```bat
+:: Client source must be under %GOPATH%/src/zap/client/
 set GOOS=windows
 set GOARCH=386
 set GO111MODULE=off
-go build -ldflags="-s -w" -o zap-update.exe ./client/
+go build -ldflags="-s -w" -o zap-update.exe zap/client
 ```
 
 ## License
