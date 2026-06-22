@@ -159,7 +159,6 @@ jobs:
           set GOOS=windows
           set GOARCH=386
           set GO111MODULE=off
-          go get gopkg.in/yaml.v2
           go build -ldflags="-s -w" -o zap-update.exe zap/client
 
       - name: Upload zap-update artifact

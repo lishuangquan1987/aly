@@ -154,7 +154,8 @@ public partial class MainWindowViewModel : ObservableObject
             var result = await ShowEditProjectDialogAsync(cfg);
             if (result != null)
             {
-                _cfg.UpdateProject(result);
+                if (!_cfg.UpdateProject(result))
+                    await MessageBox.ShowAsync("项目配置保存到磁盘失败", "警告", MessageBoxIcon.Warning);
                 var idx = Projects.IndexOf(project);
                 if (idx >= 0) Projects[idx] = result;
                 // 替换旧的 tab 引用（OnSelectedProjectChanged 会重建 tab）
@@ -163,6 +164,7 @@ public partial class MainWindowViewModel : ObservableObject
                 {
                     SelectedTab = null;
                     Tabs.Remove(oldTab);
+                    oldTab.Dispose();
                 }
                 SelectedProject = result;
             }
@@ -225,7 +227,8 @@ public partial class MainWindowViewModel : ObservableObject
         var cfg = await ShowAddProjectDialogAsync();
         if (cfg != null)
         {
-            _cfg.AddProject(cfg);
+            if (!_cfg.AddProject(cfg))
+                await MessageBox.ShowAsync("项目配置保存到磁盘失败", "警告", MessageBoxIcon.Warning);
             Projects.Add(cfg);
             var tab = CreateTab(cfg);
             Tabs.Add(tab);
@@ -242,7 +245,8 @@ public partial class MainWindowViewModel : ObservableObject
         var cfg = await ShowAddLocalProjectDialogAsync();
         if (cfg != null)
         {
-            _cfg.AddProject(cfg);
+            if (!_cfg.AddProject(cfg))
+                await MessageBox.ShowAsync("项目配置保存到磁盘失败", "警告", MessageBoxIcon.Warning);
             Projects.Add(cfg);
             var tab = CreateTab(cfg);
             Tabs.Add(tab);
@@ -258,7 +262,8 @@ public partial class MainWindowViewModel : ObservableObject
         if (SelectedProject == null) return;
         var name = SelectedProject.DisplayName;
         var path = SelectedProject.ProjectPath;
-        _cfg.RemoveProject(path);
+        if (!_cfg.RemoveProject(path))
+            await MessageBox.ShowAsync("项目配置保存到磁盘失败", "警告", MessageBoxIcon.Warning);
 
         // 清理对应 tab
         var tab = Tabs.FirstOrDefault(t => t.Project == SelectedProject);
@@ -280,6 +285,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (idx < 0) return;
 
         Tabs.RemoveAt(idx);
+        tab.Dispose();
         // 如果关闭的是当前选中的 tab，切换到相邻 tab（sidebar 选中项不变）
         if (SelectedTab == tab)
         {
@@ -297,13 +303,14 @@ public partial class MainWindowViewModel : ObservableObject
         var result = await ShowEditProjectDialogAsync(SelectedProject);
         if (result != null)
         {
-            _cfg.UpdateProject(result);
+            if (!_cfg.UpdateProject(result))
+                await MessageBox.ShowAsync("项目配置保存到磁盘失败", "警告", MessageBoxIcon.Warning);
             var idx = Projects.IndexOf(SelectedProject);
             if (idx >= 0) Projects[idx] = result;
 
             // 替换旧的 tab
             var oldTab = Tabs.FirstOrDefault(t => t.Project == oldProject);
-            if (oldTab != null) Tabs.Remove(oldTab);
+            if (oldTab != null) { Tabs.Remove(oldTab); oldTab.Dispose(); }
             SelectedProject = result; // 触发 OnSelectedProjectChanged 创建新 tab
             await MessageBox.ShowAsync("项目配置已更新", "成功", MessageBoxIcon.Success);
         }

@@ -35,6 +35,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
     public event Action<ProjectConfig?>? RequestClose;
 
     public IAsyncRelayCommand SaveUrlCommand { get; }
+    public IRelayCommand StartEditUrlCommand { get; }
     public IAsyncRelayCommand AddFolderCommand { get; }
     public IAsyncRelayCommand RemoveFolderCommand { get; }
     public IAsyncRelayCommand AddFileCommand { get; }
@@ -51,6 +52,13 @@ public partial class EditProjectDialogViewModel : ObservableObject
         AddFileCommand = new AsyncRelayCommand<string?>(AddFileAsync);
         RemoveFileCommand = new AsyncRelayCommand<string?>(RemoveFileAsync);
         SaveCommand = new AsyncRelayCommand(SaveAsync);
+        StartEditUrlCommand = new RelayCommand(StartEditUrl);
+    }
+
+    private void StartEditUrl()
+    {
+        EditUrl = ServerUrl;
+        IsEditingUrl = true;
     }
 
     public void LoadProject(ProjectConfig project)
@@ -116,6 +124,11 @@ public partial class EditProjectDialogViewModel : ObservableObject
                 await MessageBox.ShowAsync($"更新失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
             }
         }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "更新服务端地址失败: {Url}", EditUrl);
+            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
+        }
         finally { IsBusy = false; }
     }
 
@@ -138,6 +151,11 @@ public partial class EditProjectDialogViewModel : ObservableObject
                 await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
             }
         }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "添加忽略文件夹失败: {Item}", item);
+            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
+        }
         finally { IsBusy = false; }
     }
 
@@ -158,6 +176,11 @@ public partial class EditProjectDialogViewModel : ObservableObject
             {
                 await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
             }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "移除忽略文件夹失败: {Item}", item);
+            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
         }
         finally { IsBusy = false; }
     }
@@ -181,6 +204,11 @@ public partial class EditProjectDialogViewModel : ObservableObject
                 await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
             }
         }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "添加忽略文件失败: {Item}", item);
+            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
+        }
         finally { IsBusy = false; }
     }
 
@@ -201,6 +229,11 @@ public partial class EditProjectDialogViewModel : ObservableObject
             {
                 await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
             }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "移除忽略文件失败: {Item}", item);
+            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
         }
         finally { IsBusy = false; }
     }

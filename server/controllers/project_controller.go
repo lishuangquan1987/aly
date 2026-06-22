@@ -147,7 +147,12 @@ func DeleteProject(ctx *gin.Context) {
 		ProjectName string `uri:"projectName" json:"projectName"`
 	}
 	if err := ctx.BindUri(&projectNameDto); err != nil {
-		ctx.JSON(200, models.NGWithError(err))
+		ctx.JSON(400, models.NGWithError(err))
+		return
+	}
+
+	if err := validateProjectName(projectNameDto.ProjectName); err != nil {
+		ctx.JSON(400, models.NG(err.Error()))
 		return
 	}
 

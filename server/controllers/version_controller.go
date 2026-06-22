@@ -17,19 +17,19 @@ func PublishVersion(ctx *gin.Context) {
 		AfterApplyUpdateScript string   `json:"afterApplyUpdateScript"`
 	}
 	if err := ctx.ShouldBindJSON(&publishDto); err != nil {
-		ctx.JSON(200, models.NGWithError(err))
+		ctx.JSON(400, models.NGWithError(err))
 		return
 	}
 	if err := validateProjectName(publishDto.ProjectName); err != nil {
-		ctx.JSON(200, models.NG(err.Error()))
+		ctx.JSON(400, models.NG(err.Error()))
 		return
 	}
 	if publishDto.Version == "" {
-		ctx.JSON(200, models.NG("版本号不能为空"))
+		ctx.JSON(400, models.NG("版本号不能为空"))
 		return
 	}
 	if len(publishDto.Version) > 50 {
-		ctx.JSON(200, models.NG("版本号长度不能超过50个字符"))
+		ctx.JSON(400, models.NG("版本号长度不能超过50个字符"))
 		return
 	}
 
@@ -42,12 +42,12 @@ func GetProjectChangeLogs(ctx *gin.Context) {
 		ProjectName string `uri:"projectName" json:"projectName"`
 	}
 	if err := ctx.BindUri(&projectNameDto); err != nil {
-		ctx.JSON(200, models.NGWithError(err))
+		ctx.JSON(400, models.NGWithError(err))
 		return
 	}
 
 	if err := validateProjectName(projectNameDto.ProjectName); err != nil {
-		ctx.JSON(200, models.NG(err.Error()))
+		ctx.JSON(400, models.NG(err.Error()))
 		return
 	}
 

@@ -13,10 +13,17 @@ using Serilog;
 
 namespace ZapPublish.ViewModels;
 
-public partial class ProjectTabViewModel : ObservableObject
+public partial class ProjectTabViewModel : ObservableObject, IDisposable
 {
     private readonly CliService _cli;
     private CancellationTokenSource? _refreshCts;
+
+    public void Dispose()
+    {
+        _refreshCts?.Cancel();
+        _refreshCts?.Dispose();
+        _refreshCts = null;
+    }
 
     public ProjectConfig Project { get; }
 

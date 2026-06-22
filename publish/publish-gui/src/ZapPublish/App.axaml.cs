@@ -28,7 +28,9 @@ public partial class App : Application
         {
             // 日志目录创建失败时使用系统临时目录作为回退
             logDir = Path.Combine(Path.GetTempPath(), "ZapPublish", "logs");
-            try { Directory.CreateDirectory(logDir); } catch { }
+            try { Directory.CreateDirectory(logDir); } catch (Exception fallbackEx) {
+                System.Diagnostics.Debug.WriteLine($"回退日志目录也创建失败: {fallbackEx.Message}");
+            }
             System.Diagnostics.Debug.WriteLine($"创建日志目录失败，回退到 {logDir}: {ex.Message}");
         }
         Log.Logger = new LoggerConfiguration()

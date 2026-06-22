@@ -1,13 +1,13 @@
 package service
 
 import (
+	"fmt"
 	"zap/server/ent"
 	"zap/server/ent/project"
 	"zap/server/ent/projectchangelog"
 	"zap/server/internal/db"
 	"zap/server/models"
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -83,7 +83,19 @@ func UpdateProject(ctx context.Context, name string, title string, isForceUpdate
 			SetIgnoreFolders(ignoreFolders).
 			SetIgnoreFiles(ignoreFiles).
 			Save(ctx)
-		return err
+		if err != nil {
+			return err
+		}
+		// Mutation 返回的是 mutation 对象，无法直接检查 affected 行数。
+		// 这里再查一次确认条目存在（防御并发软删除后更新）。
+		exists, checkErr := tx.Project.Query().Where(project.NameEQ(name), project.IsDeletedEQ(false)).Exist(ctx)
+		if checkErr != nil {
+			return checkErr
+		}
+		if !exists {
+			return fmt.Errorf("项目不存在: %s", name)
+		}
+		return nil
 	})
 	if err != nil {
 		return models.NGWithError(err)

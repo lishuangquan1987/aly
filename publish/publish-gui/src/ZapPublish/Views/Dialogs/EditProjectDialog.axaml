@@ -116,7 +116,7 @@
                                         TextTrimming="CharacterEllipsis"
                                         VerticalAlignment="Center" />
                                     <Button
-                                        Click="EditUrlBtn_Click"
+                                        Command="{Binding StartEditUrlCommand}"
                                         Content="编辑"
                                         Grid.Column="1"
                                         Height="28"

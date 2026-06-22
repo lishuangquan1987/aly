@@ -2,7 +2,9 @@ using Newtonsoft.Json;
 using ZapPublish.Models.Local;
 using Serilog;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace ZapPublish.Services;
 
@@ -16,45 +18,45 @@ public class ConfigService
 
     private readonly object _lock = new();
 
-    public List<ProjectConfig> LoadProjects()
+    public IReadOnlyList<ProjectConfig> LoadProjects()
     {
         lock (_lock)
         {
-            return LoadProjectsUnlocked();
+            return LoadProjectsUnlocked().ToList();
         }
     }
 
-    public void SaveProjects(List<ProjectConfig> projects)
+    public bool SaveProjects(List<ProjectConfig> projects)
     {
         lock (_lock)
         {
-            SaveProjectsUnlocked(projects);
+            return SaveProjectsUnlocked(projects);
         }
     }
 
-    public void AddProject(ProjectConfig project)
+    public bool AddProject(ProjectConfig project)
     {
         Log.Information("添加项目到配置: DisplayName={Name}, Path={Path}", project.DisplayName, project.ProjectPath);
         lock (_lock)
         {
             var projects = LoadProjectsUnlocked();
             projects.Add(project);
-            SaveProjectsUnlocked(projects);
+            return SaveProjectsUnlocked(projects);
         }
     }
 
-    public void RemoveProject(string projectPath)
+    public bool RemoveProject(string projectPath)
     {
         Log.Information("从配置移除项目: Path={Path}", projectPath);
         lock (_lock)
         {
             var projects = LoadProjectsUnlocked();
             projects.RemoveAll(p => p.ProjectPath == projectPath);
-            SaveProjectsUnlocked(projects);
+            return SaveProjectsUnlocked(projects);
         }
     }
 
-    public void UpdateProject(ProjectConfig project)
+    public bool UpdateProject(ProjectConfig project)
     {
         Log.Information("更新项目配置: DisplayName={Name}, Path={Path}", project.DisplayName, project.ProjectPath);
         lock (_lock)
@@ -65,11 +67,12 @@ public class ConfigService
             if (index >= 0)
             {
                 projects[index] = project;
-                SaveProjectsUnlocked(projects);
+                return SaveProjectsUnlocked(projects);
             }
             else
             {
                 Log.Warning("更新项目配置失败: 未找到 Path={Path}", project.ProjectPath);
+                return false;
             }
         }
     }
@@ -97,7 +100,7 @@ public class ConfigService
         }
     }
 
-    private void SaveProjectsUnlocked(List<ProjectConfig> projects)
+    private bool SaveProjectsUnlocked(List<ProjectConfig> projects)
     {
         try
         {
@@ -105,10 +108,12 @@ public class ConfigService
             var json = JsonConvert.SerializeObject(projects, Formatting.Indented);
             File.WriteAllText(ConfigFile, json);
             Log.Information("保存配置成功: {Count} 个项目 -> {Path}", projects.Count, ConfigFile);
+            return true;
         }
         catch (Exception ex)
         {
             Log.Error(ex, "保存配置失败: {Path}", ConfigFile);
+            return false;
         }
     }
 }
