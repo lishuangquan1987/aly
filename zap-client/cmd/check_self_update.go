@@ -4,8 +4,8 @@ import (
 	"flag"
 	"os"
 
-	"zap/client/model"
-	"zap/client/util"
+	"zap/zap-client-sdk/model"
+	"zap/zap-client-sdk/util"
 )
 
 // CheckSelfUpdate checks if updator itself needs to be updated

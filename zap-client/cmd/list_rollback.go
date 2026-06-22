@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"zap/client/config"
-	"zap/client/model"
+	"zap/zap-client-sdk/config"
+	"zap/zap-client-sdk/model"
 )
 
 // ListRollbackVersions lists available rollback versions

@@ -62,7 +62,7 @@
 3. ❌ 不引用未使用的命名空间
 4. ❌ 不在生产代码中写 `Console.WriteLine`（用 Serilog）
 5. ❌ 不为了简单控件创建自定义 UserControl
-6. ❌ 写出不兼容的代码。client为go1.10编写，需要兼容xp,这个必须遵守
+6. ❌ 写出不兼容的代码。client为go1.10编写(GOPATH模式, GOARCH=386)，需要兼容xp，这个必须遵守。源码位于 zap-client/ 和 zap-client-sdk/
 
 ---
 
