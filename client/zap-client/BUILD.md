@@ -1,4 +1,4 @@
-# zap-update 编译说明
+# zap-client 编译说明
 
 ## 环境要求
 
@@ -57,7 +57,7 @@ del zap-client.exe
 
 ```batch
 @echo off
-REM 构建 zap-update（32位，兼容 XP）
+REM 构建 zap-client（32位，兼容 XP）
 REM 需要 Go 1.10，项目必须位于 GOPATH 下：
 REM   zap-client/     → %GOPATH%/src/zap/client/zap-client/
 REM   zap-client-sdk/ → %GOPATH%/src/zap/client/zap-client-sdk/
