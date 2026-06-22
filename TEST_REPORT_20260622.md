@@ -73,7 +73,7 @@
 
 ---
 
-## 四、Client 测试 ✅ (10/10)
+## 四、Client 测试 ✅ (13/13)
 
 **编译**: GO111MODULE=off GOARCH=386, GOPATH 模式 → 成功 (6.4 MB)  
 **运行**: 需管理员权限 (`Start-Process -Verb RunAs`)
@@ -90,6 +90,9 @@
 | 8 | `check_update` | force_update=true | ✅ | force_update=true ✅ |
 | 9 | `list_rollback_versions` | 当前 V3.0.0 | ✅ | 可回滚版本: [2.0.0] |
 | 10 | `download_update` | applying 崩溃恢复 (re-download) | ✅ | 6 文件重下成功，修复崩溃死锁 ✅ |
+| 11 | `download_update` | **大文件 10MB 进度汇报** | ✅ | 7 文件 START→DONE，含 index/total/file/size ✅ |
+| 12 | `download_update` | **断点续传** (截断 10MB→5MB) | ✅ | .part + Range 续传，最终 10MB 完整 ✅ |
+| 13 | `download_update` | 小文件 MD5/SHA256 校验 | ✅ | SKIP 逻辑正确，hash 匹配则跳过 |
 
 ---
 
