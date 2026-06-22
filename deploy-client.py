@@ -3,10 +3,10 @@ import subprocess, os, sys
 WSL_GO     = "/usr/local/go/bin/go"
 WSL_GOROOT = "/usr/local/go"
 WSL_GOPATH = "/home/test/go"
-WSL_SRC    = f"{WSL_GOPATH}/src/zap/client"
+WSL_SRC    = f"{WSL_GOPATH}/src/zap/client/zap-client"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SRC_LINUX  = "/mnt/e/Project2026/zap/client"
+SRC_LINUX  = "/mnt/e/Project2026/zap/client/zap-client"
 DST_WIN    = "E:/Yofc/Code/OTDR/OTDR3001/YOFC.OTDR3001/YOFC.OTDR3001/bin/Debug/netcoreapp3.1-windows/UpdateFolder"
 DST_LINUX  = "/mnt/e/Yofc/Code/OTDR/OTDR3001/YOFC.OTDR3001/YOFC.OTDR3001/bin/Debug/netcoreapp3.1-windows/UpdateFolder"
 
@@ -20,7 +20,7 @@ def wsl(cmd):
 print("=" * 50)
 print("  [1/5] Copy client to WSL ...")
 wsl(f"rm -rf {WSL_SRC}")
-wsl(f"mkdir -p {WSL_GOPATH}/src/zap")
+wsl(f"mkdir -p {WSL_GOPATH}/src/zap/client")
 r = wsl(f"cp -r {SRC_LINUX} {WSL_SRC}")
 if r.returncode != 0:
     sys.exit(1)
