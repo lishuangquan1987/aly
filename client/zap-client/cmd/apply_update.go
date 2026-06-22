@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"zap/zap-client-sdk/config"
-	"zap/zap-client-sdk/util"
+	"zap/client/zap-client-sdk/config"
+	"zap/client/zap-client-sdk/util"
 )
 
 // logDir 返回日志目录，ExeDir 失败时 fallback 到当前目录

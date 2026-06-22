@@ -1,12 +1,12 @@
 @echo off
 REM 构建 zap-update（32位，兼容 XP）
 REM 需要 Go 1.10，项目必须位于 GOPATH 下：
-REM   zap-client/     → %GOPATH%/src/zap/zap-client/
-REM   zap-client-sdk/ → %GOPATH%/src/zap/zap-client-sdk/
+REM   client/zap-client/     → %GOPATH%/src/zap/client/zap-client/
+REM   client/zap-client-sdk/ → %GOPATH%/src/zap/client/zap-client-sdk/
 REM
 REM 使用方法：
-REM   1. 将 zap-client/ 和 zap-client-sdk/ 复制到 %GOPATH%/src/zap/
-REM   2. cd %GOPATH%/src/zap/zap-client
+REM   1. 将 client/ 整个目录复制到 %GOPATH%/src/zap/client/
+REM   2. cd %GOPATH%/src/zap/client/zap-client
 REM   3. 运行 build.bat
 
 echo 正在构建 zap-update.exe (GOARCH=386, 兼容 XP) ...

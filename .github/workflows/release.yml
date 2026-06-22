@@ -150,9 +150,9 @@ jobs:
       - name: Setup GOPATH structure
         shell: cmd
         run: |
-          mkdir "%GOPATH%\src\zap"
-          xcopy /e /i /y zap-client "%GOPATH%\src\zap\zap-client"
-          xcopy /e /i /y zap-client-sdk "%GOPATH%\src\zap\zap-client-sdk"
+          mkdir "%GOPATH%\src\zap\client"
+          xcopy /e /i /y client\zap-client "%GOPATH%\src\zap\client\zap-client"
+          xcopy /e /i /y client\zap-client-sdk "%GOPATH%\src\zap\client\zap-client-sdk"
 
       - name: Install deps & Build (32-bit, XP compatible)
         shell: cmd
@@ -160,7 +160,7 @@ jobs:
           set GOOS=windows
           set GOARCH=386
           set GO111MODULE=off
-          go build -ldflags="-s -w" -o zap-update.exe zap/zap-client
+          go build -ldflags="-s -w" -o zap-update.exe zap/client/zap-client
 
       - name: Upload zap-update artifact
         uses: actions/upload-artifact@v4

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"zap/zap-client/cmd"
+	"zap/client/zap-client/cmd"
 )
 
 func main() {

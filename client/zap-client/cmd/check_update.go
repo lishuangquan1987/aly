@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	apiclient "zap/zap-client-sdk/client"
-	"zap/zap-client-sdk/config"
-	"zap/zap-client-sdk/model"
+	apiclient "zap/client/zap-client-sdk/client"
+	"zap/client/zap-client-sdk/config"
+	"zap/client/zap-client-sdk/model"
 )
 
 // CheckUpdate checks for new version

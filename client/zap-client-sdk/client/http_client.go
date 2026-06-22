@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"zap/zap-client-sdk/model"
+	"zap/client/zap-client-sdk/model"
 )
 
 var httpClient = &http.Client{

@@ -2,7 +2,7 @@
 
 本文档涵盖两个命令行工具的所有命令：
 
-1. **`zap-update.exe`**（位于 `zap-client/`）— 自动更新客户端，负责检查、下载、应用更新及回滚
+1. **`zap-update.exe`**（位于 `client/zap-client/`）— 自动更新客户端，负责检查、下载、应用更新及回滚
 2. **`zap-publish.exe`**（位于 `publish/publish-cli/`）— 发布命令行工具，负责项目管理、文件比对、暂存和推送发布
 
 ---
