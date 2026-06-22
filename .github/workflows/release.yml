@@ -192,7 +192,7 @@ jobs:
         shell: cmd
         run: |
           cd client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK
-          dotnet pack --configuration Release --no-build false -o nupkg
+          dotnet pack --configuration Release -o nupkg
 
       - name: Publish to NuGet
         shell: cmd
