@@ -24,6 +24,10 @@ func init() {
 	cmdConfigInit.Flags().StringVar(&ignoreFilesInit, "ignore-files", "", "忽略的文件（逗号分隔）")
 	cmdConfigInit.MarkFlagRequired("project")
 
+	cmdConfigSetArray.Flags().StringVar(&setArrayAdd, "add", "", "添加项")
+	cmdConfigSetArray.Flags().StringVar(&setArrayRemove, "remove", "", "移除项")
+	cmdConfigSetArray.Flags().BoolVar(&setArrayClear, "clear", false, "清空")
+
 	RootCmd.AddCommand(cmdConfig)
 	cmdConfig.AddCommand(cmdConfigInit)
 	cmdConfig.AddCommand(cmdConfigSet)
