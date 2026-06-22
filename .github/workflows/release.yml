@@ -191,13 +191,13 @@ jobs:
       - name: Build & Pack SDK
         shell: cmd
         run: |
-          cd client\zap-client-sdk\Zap.Client.CSharpSDK
+          cd client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK
           dotnet pack --configuration Release --no-build false -o nupkg
 
       - name: Publish to NuGet
         shell: cmd
         run: |
-          dotnet nuget push "client\zap-client-sdk\Zap.Client.CSharpSDK\nupkg\*.nupkg" ^
+          dotnet nuget push "client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK\nupkg\*.nupkg" ^
             --api-key ${{ secrets.NUGET_API_KEY }} ^
             --source https://api.nuget.org/v3/index.json ^
             --skip-duplicate
