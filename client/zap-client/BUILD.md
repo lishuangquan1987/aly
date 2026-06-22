@@ -30,7 +30,7 @@ xcopy /e /i /y client\zap-client-sdk %GOPATH%\src\zap\client\zap-client-sdk
 set GOOS=windows
 set GOARCH=386
 set GO111MODULE=off
-go build -ldflags="-s -w" -o zap-update.exe zap/client/zap-client
+go build -ldflags="-s -w" -o zap-client.exe zap/client/zap-client
 ```
 
 > **注意**：必须使用 import path `zap/zap-client`，不能使用绝对路径（如 `C:\xxx`），否则 Go 1.10 在 GOPATH 模式下会找不到包。
@@ -47,8 +47,8 @@ go build -ldflags="-s -w" -o zap-update.exe zap/client/zap-client
 ### 4. 将 exe 复制回工作目录
 
 ```batch
-copy /y zap-update.exe client\zap-client\zap-update.exe
-del zap-update.exe
+copy /y zap-client.exe client\zap-client\zap-client.exe
+del zap-client.exe
 ```
 
 ## 一键编译脚本
@@ -68,21 +68,21 @@ rmdir /s /q %GOPATH%\src\zap\client\zap-client
 echo 正在复制源码到 GOPATH...
 xcopy /e /i /y client\zap-client %GOPATH%\src\zap\client\zap-client >nul
 
-echo 正在编译 zap-update.exe (GOARCH=386) ...
+echo 正在编译 zap-client.exe (GOARCH=386) ...
 set GOOS=windows
 set GOARCH=386
 set GO111MODULE=off
-go build -ldflags="-s -w" -o zap-update.exe zap/client/zap-client
+go build -ldflags="-s -w" -o zap-client.exe zap/client/zap-client
 if %errorlevel% neq 0 (
     echo 编译失败！
     exit /b %errorlevel%
 )
 
 echo 正在复制 exe 到 zap-client\ 目录...
-copy /y zap-update.exe client\zap-client\zap-update.exe >nul
-del zap-update.exe
+copy /y zap-client.exe client\zap-client\zap-client.exe >nul
+del zap-client.exe
 
-echo 构建成功：client\zap-client\zap-update.exe
+echo 构建成功：client\zap-client\zap-client.exe
 ```
 
 ## 常见问题

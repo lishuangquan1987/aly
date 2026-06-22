@@ -117,8 +117,8 @@ jobs:
           name: zap-publish-${{ matrix.goos }}-${{ matrix.goarch }}
           path: publish/publish-cli/zap-publish-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
 
-  build-zap-update:
-    name: Build zap-update (Windows XP / 32-bit)
+  build-zap-client:
+    name: Build zap-client (Windows XP / 32-bit)
     runs-on: windows-latest
     env:
       GOPATH: C:\Users\runneradmin\go
@@ -159,17 +159,52 @@ jobs:
           set GOOS=windows
           set GOARCH=386
           set GO111MODULE=off
-          go build -ldflags="-s -w" -o zap-update.exe zap/client/zap-client
+          go build -ldflags="-s -w" -o zap-client.exe zap/client/zap-client
 
-      - name: Upload zap-update artifact
+      - name: Upload zap-client artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zap-update-win-xp
-          path: zap-update.exe
+          name: zap-client-win-xp
+          path: zap-client.exe
+
+  publish-sdk-nuget:
+    name: Publish Zap.Client.CSharpSDK to NuGet
+    needs: build-zap-client
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download zap-client artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zap-client-win-xp
+
+      - name: Copy zap-client.exe to SDK project
+        shell: cmd
+        run: |
+          mkdir client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK\content\UpdateFolder
+          copy zap-client.exe client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK\content\UpdateFolder\zap-client.exe
+          copy client\zap-client\client.json client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK\content\UpdateFolder\client.json
+
+      - name: Build & Pack SDK
+        shell: cmd
+        run: |
+          cd client\zap-client-sdk\Zap.Client.CSharpSDK
+          dotnet pack --configuration Release --no-build false -o nupkg
+
+      - name: Publish to NuGet
+        shell: cmd
+        run: |
+          dotnet nuget push "client\zap-client-sdk\Zap.Client.CSharpSDK\nupkg\*.nupkg" ^
+            --api-key ${{ secrets.NUGET_API_KEY }} ^
+            --source https://api.nuget.org/v3/index.json ^
+            --skip-duplicate
 
   upload-release-assets:
     name: Upload to Release
-    needs: [build-server, build-zap-publish, build-zap-update]
+    needs: [build-server, build-zap-publish, build-zap-client]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -209,5 +244,5 @@ jobs:
             zap-publish-linux-arm64/zap-publish-linux-arm64 \
             zap-publish-darwin-amd64/zap-publish-darwin-amd64 \
             zap-publish-darwin-arm64/zap-publish-darwin-arm64 \
-            zap-update-win-xp/zap-update.exe \
+            zap-client-win-xp/zap-client.exe \
             --clobber

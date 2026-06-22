@@ -23,7 +23,7 @@ type SharedConfig struct {
 	IgnoreFiles   []string `json:"ignore_files"`
 }
 
-// ExeDir 返回 zap-update.exe 所在目录 (UpdateFolder/)
+// ExeDir 返回 zap-client.exe 所在目录 (UpdateFolder/)
 func ExeDir() (string, error) {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -132,13 +132,13 @@ func (c *Config) AppVersionDir(version string) (string, error) {
 	return filepath.Join(pkgDir, mainExeFolderName+"_"+version), nil
 }
 
-// CheckUpdaterPath 返回 ApplicationFolder/zap-update.exe 的绝对路径
+// CheckUpdaterPath 返回 ApplicationFolder/zap-client.exe 的绝对路径
 func (c *Config) CheckUpdaterPath() (string, error) {
 	mainFolder, err := c.MainExeFolderPath()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(mainFolder, "zap-update.exe"), nil
+	return filepath.Join(mainFolder, "zap-client.exe"), nil
 }
 
 // ShouldSkipFolder 判断文件夹是否在忽略列表中（基于 SharedConfig.IgnoreFolders）

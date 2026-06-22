@@ -54,18 +54,18 @@ This scans the directory, uploads new/changed files to the server, and creates a
 
 ### 3. Client: Check & Apply Updates
 
-On the end-user's machine, your application invokes `zap-update.exe` (located in `UpdateFolder/`):
+On the end-user's machine, your application invokes `zap-client.exe` (located in `UpdateFolder/`):
 
 ```bash
 # Step 1 — Check for updates
-zap-update.exe check_update
+zap-client.exe check_update
 # → {"isSuccess":true,"data":{"has_update":true,"need_download_update":true,"new_version":"1.0.1","force_update":false}}
 
 # Step 2 — Download (only downloads changed files, with SHA-256 verification)
-zap-update.exe download_update
+zap-client.exe download_update
 
 # Step 3 — Apply (closes your app, atomically replaces files, restarts)
-zap-update.exe apply_update
+zap-client.exe apply_update
 ```
 
 If `force_update` is `true`, your app should auto-download and prompt a restart; otherwise, ask the user first.
@@ -79,7 +79,7 @@ PackageFolder/
 │   └── .updator/shared.json     # server_url, project_name, ignore rules
 ├── ApplicationFolder_V1.0.0/     # Previous version snapshot (for rollback)
 ├── UpdateFolder/
-│   ├── zap-update.exe            # The updater itself
+│   ├── zap-client.exe            # The updater itself
 │   ├── client.json               # main_exe_relative_path, must_close_process_name
 │   └── version.json              # Version state machine
 ```
@@ -88,7 +88,7 @@ PackageFolder/
 
 ### `.updator/` — Shared Config Directory
 
-Both `zap-publish` and `zap-update` read from `.updator/shared.json`:
+Both `zap-publish` and `zap-client` read from `.updator/shared.json`:
 
 ```json
 {
@@ -168,7 +168,7 @@ xcopy /e /i /y client\zap-client %GOPATH%\src\zap\client\zap-client
 set GOOS=windows
 set GOARCH=386
 set GO111MODULE=off
-go build -ldflags="-s -w" -o zap-update.exe zap/client/zap-client
+go build -ldflags="-s -w" -o zap-client.exe zap/client/zap-client
 ```
 
 ## License

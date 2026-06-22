@@ -28,11 +28,11 @@ print("  Done")
 print()
 
 # ── Step 2: Build (XP 32-bit) ──────────────────
-print("  [2/5] Building zap-update.exe (GOARCH=386) ...")
+print("  [2/5] Building zap-client.exe (GOARCH=386) ...")
 build = (
     f"cd {WSL_SRC} && "
     f"GOROOT={WSL_GOROOT} GOPATH={WSL_GOPATH} GOOS=windows GOARCH=386 "
-    f"{WSL_GO} build -ldflags=\"-s -w\" -o zap-update.exe ."
+    f"{WSL_GO} build -ldflags=\"-s -w\" -o zap-client.exe ."
 )
 r = wsl(build)
 if r.returncode != 0:
@@ -43,11 +43,11 @@ print()
 # ── Step 3: Copy output (OTDR3001) ─────────────
 print(f"  [3/5] Copy to {DST_WIN} ...")
 wsl(f"mkdir -p {DST_LINUX}")
-r = wsl(f"cp -f {WSL_SRC}/zap-update.exe {DST_LINUX}/")
+r = wsl(f"cp -f {WSL_SRC}/zap-client.exe {DST_LINUX}/")
 if r.returncode != 0:
     sys.exit(1)
 
-r = wsl(f"stat -c%s {DST_LINUX}/zap-update.exe")
+r = wsl(f"stat -c%s {DST_LINUX}/zap-client.exe")
 size = int(r.stdout.strip())
 print(f"  Done ({size / 1024 / 1024:.1f} MB)")
 print()
@@ -57,7 +57,7 @@ DST2_WIN   = "E:/Yofc/Code/OTDR/PK8000/YOFC.OTDRPK8000/YOFC.OTDRPK8000/bin/Updat
 DST2_LINUX = "/mnt/e/Yofc/Code/OTDR/PK8000/YOFC.OTDRPK8000/YOFC.OTDRPK8000/bin/UpdateFolder"
 print(f"  [4/5] Copy to {DST2_WIN} ...")
 wsl(f"mkdir -p {DST2_LINUX}")
-r = wsl(f"cp -f {WSL_SRC}/zap-update.exe {DST2_LINUX}/")
+r = wsl(f"cp -f {WSL_SRC}/zap-client.exe {DST2_LINUX}/")
 if r.returncode != 0:
     sys.exit(1)
 print("  Done")
@@ -70,6 +70,6 @@ print("  Done")
 print()
 
 print("=" * 50)
-print(f"  Deployed: {DST_WIN}/zap-update.exe")
-print(f"  Deployed: {DST2_WIN}/zap-update.exe")
+print(f"  Deployed: {DST_WIN}/zap-client.exe")
+print(f"  Deployed: {DST2_WIN}/zap-client.exe")
 print("=" * 50)

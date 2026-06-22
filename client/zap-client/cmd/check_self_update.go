@@ -26,13 +26,13 @@ func CheckSelfUpdate() {
 		return
 	}
 
-	// If zap-update.exe doesn't exist (first deploy), no update needed
+	// If zap-client.exe doesn't exist (first deploy), no update needed
 	if _, err := os.Stat(checkPath); os.IsNotExist(err) {
 		printOutput(true, "", &model.CheckSelfUpdateData{NeedUpdate: false})
 		return
 	}
 
-	// Compare SHA256 of self vs zap-update.exe
+	// Compare SHA256 of self vs zap-client.exe
 	selfPath, err := os.Executable()
 	if err != nil {
 		printOutput(false, err.Error(), nil)
