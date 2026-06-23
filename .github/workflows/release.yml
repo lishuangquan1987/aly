@@ -181,10 +181,13 @@ jobs:
         shell: cmd
         run: |
           if "${{ github.event_name }}"=="workflow_dispatch" (
-            echo ZAP_VERSION=${{ inputs.version }}>> %GITHUB_ENV%
+            set RAW=${{ inputs.version }}
           ) else (
-            echo ZAP_VERSION=${{ github.event.release.tag_name }}>> %GITHUB_ENV%
+            set RAW=${{ github.event.release.tag_name }}
           )
+          :: Strip leading 'v' for NuGet semver compatibility
+          set ZAP_VERSION=%RAW:v=%
+          echo ZAP_VERSION=%ZAP_VERSION%>> %GITHUB_ENV%
 
       - name: Download zap-client artifact
         uses: actions/download-artifact@v4
