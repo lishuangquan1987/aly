@@ -154,10 +154,22 @@ namespace ZapClient.CSharpSDK
                         var stdout = stdoutTask.Result;
                         var stderr = stderrTask.Result;
 
-                        // apply_update 等命令会关闭当前进程, 可能没 stdout
+                        if (!process.HasExited)
+                        {
+                            process.WaitForExit(5000);
+                        }
+
+                        if (process.ExitCode != 0 && string.IsNullOrWhiteSpace(stdout))
+                        {
+                            var err = stderr ?? "";
+                            if (string.IsNullOrWhiteSpace(err))
+                                err = "zap-client.exe exited with code " + process.ExitCode + " (may require admin)";
+                            return ZapResponse<T>.NG(err);
+                        }
+
                         if (string.IsNullOrWhiteSpace(stdout))
                         {
-                            return ZapResponse<T>.NG(stderr ?? "zap-client.exe returned no output");
+                            return ZapResponse<T>.NG(stderr ?? "zap-client.exe returned no output (may require admin)");
                         }
 
                         return JsonConvert.DeserializeObject<ZapResponse<T>>(stdout);

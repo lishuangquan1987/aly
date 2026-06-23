@@ -71,7 +71,13 @@ namespace ZapClient.CSharpSDK
                 }
 
                 var status = ZapApi.CheckUpdateAsync(UpdatorExePath).Result;
-                if (!status.IsSuccess) { Thread.Sleep(1000); continue; }
+                if (!status.IsSuccess)
+                {
+                    var errMsg = status.ErrorMsg ?? "check_update failed";
+                    OnStatusChanged(Status, errMsg);
+                    Thread.Sleep(5000);
+                    continue;
+                }
                 if (!status.Data.HasUpdate) { Thread.Sleep(1000); continue; }
 
                 if (status.Data.NeedDownloadUpdate)
