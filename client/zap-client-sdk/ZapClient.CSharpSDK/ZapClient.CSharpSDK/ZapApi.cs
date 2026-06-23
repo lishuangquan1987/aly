@@ -6,9 +6,9 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Zap.Client.CSharpSDK.Models;
+using ZapClient.CSharpSDK.Models;
 
-namespace Zap.Client.CSharpSDK
+namespace ZapClient.CSharpSDK
 {
     public class ZapApi
     {

@@ -1,6 +1,0 @@
-{
-  "main_exe_relative_path": "../Debug/MainApp.exe",
-  "must_close_process_name": [
-    "MainApp"
-  ]
-}

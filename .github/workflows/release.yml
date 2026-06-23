@@ -168,7 +168,7 @@ jobs:
           path: zap-client.exe
 
   publish-sdk-nuget:
-    name: Publish Zap.Client.CSharpSDK to NuGet
+    name: Publish ZapClient.CSharpSDK to NuGet
     needs: build-zap-client
     runs-on: windows-latest
 
@@ -197,25 +197,25 @@ jobs:
       - name: Copy zap-client.exe to SDK project
         shell: cmd
         run: |
-          mkdir client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK\content\UpdateFolder
-          copy zap-client.exe client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK\content\UpdateFolder\zap-client.exe
-          copy client\zap-client\client.json client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK\content\UpdateFolder\client.json
+          mkdir client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\content\UpdateFolder
+          copy zap-client.exe client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\content\UpdateFolder\zap-client.exe
+          copy client\zap-client\client.json client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\content\UpdateFolder\client.json
 
       - name: Build & Pack SDK
         shell: cmd
         run: |
-          cd client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK
+          cd client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK
           dotnet pack --configuration Release -o nupkg -p:Version=%ZAP_VERSION%
 
       - name: Verify nupkg
         shell: cmd
         run: |
-          dir client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK\nupkg\
+          dir client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\nupkg\
 
       - name: Publish to NuGet
         shell: cmd
         run: |
-          dotnet nuget push "client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK\nupkg\*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+          dotnet nuget push "client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\nupkg\*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
   upload-release-assets:
     name: Upload to Release

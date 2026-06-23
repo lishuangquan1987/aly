@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!-- ZapClient.CSharpSDK: copy zap-client.exe and client.json to ../UpdateFolder/ -->
+  <PropertyGroup>
+    <ZapUpdateFolder Condition="'$(ZapUpdateFolder)' == ''">$(OutDir)..\UpdateFolder\</ZapUpdateFolder>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ZapDeployFiles Include="$(MSBuildThisFileDirectory)..\content\UpdateFolder\*" />
+  </ItemGroup>
+
+  <Target Name="ZapDeployToUpdateFolder" AfterTargets="Build">
+    <MakeDir Directories="$(ZapUpdateFolder)" />
+    <Copy SourceFiles="@(ZapDeployFiles)"
+          DestinationFolder="$(ZapUpdateFolder)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
