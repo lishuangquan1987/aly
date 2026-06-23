@@ -156,7 +156,7 @@ namespace ZapClient.CSharpSDK
 
                         if (!process.HasExited)
                         {
-                            process.WaitForExit(5000);
+                            process.WaitForExit(30000);
                         }
 
                         if (process.ExitCode != 0 && string.IsNullOrWhiteSpace(stdout))

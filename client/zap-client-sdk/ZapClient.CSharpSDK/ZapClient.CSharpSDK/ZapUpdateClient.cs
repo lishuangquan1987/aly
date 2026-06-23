@@ -61,20 +61,11 @@ namespace ZapClient.CSharpSDK
         {
             while (!token.IsCancellationRequested)
             {
-                try
-                {
-                    token.ThrowIfCancellationRequested();
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
 
                 var status = ZapApi.CheckUpdateAsync(UpdatorExePath).Result;
                 if (!status.IsSuccess)
                 {
-                    var errMsg = status.ErrorMsg ?? "check_update failed";
-                    OnStatusChanged(Status, errMsg);
+                    OnError(status.ErrorMsg ?? "check_update failed");
                     Thread.Sleep(5000);
                     continue;
                 }
@@ -124,6 +115,12 @@ namespace ZapClient.CSharpSDK
             if (handler != null) handler(s, msg);
         }
 
+        private void OnError(string msg)
+        {
+            var handler = ErrorOccurred;
+            if (handler != null) handler(msg);
+        }
+
         /// <summary>Raised when download confirmation is needed (non-force updates)</summary>
         public event Action<string> RequestDownloadUpdate;
 
@@ -132,5 +129,8 @@ namespace ZapClient.CSharpSDK
 
         /// <summary>Raised for every status change with a human-readable message</summary>
         public event Action<ZapClientStatus, string> StatusChanged;
+
+        /// <summary>Raised when an error occurs (process failure, network, etc)</summary>
+        public event Action<string> ErrorOccurred;
     }
 }
