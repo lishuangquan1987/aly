@@ -1,22 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
-  <!-- ZapClient.CSharpSDK: copy zap-client.exe and client.json to ../UpdateFolder/ -->
+  <!-- ZapClient.CSharpSDK: deploy runtime files to ../UpdateFolder/ -->
   <PropertyGroup>
     <ZapUpdateFolder Condition="'$(ZapUpdateFolder)' == ''">$(OutDir)..\UpdateFolder\</ZapUpdateFolder>
   </PropertyGroup>
 
-  <!-- Look in both locations: build/ (PackageReference) and content/ (packages.config) -->
+  <!-- Source: build/UpdateFolder/ (PackageReference) or content/UpdateFolder/ (packages.config) -->
   <ItemGroup>
-    <ZapDeployFiles Include="$(MSBuildThisFileDirectory)UpdateFolder\*" />
-    <ZapDeployFiles Include="$(MSBuildThisFileDirectory)..\content\UpdateFolder\*" Condition="Exists('$(MSBuildThisFileDirectory)..\content\UpdateFolder\')" />
+    <ZapDeploySource Include="$(MSBuildThisFileDirectory)UpdateFolder\zap-client.exe" />
+    <ZapDeploySource Include="$(MSBuildThisFileDirectory)UpdateFolder\client.json" />
+    <ZapDeploySource Include="$(MSBuildThisFileDirectory)..\content\UpdateFolder\zap-client.exe"
+                      Condition="Exists('$(MSBuildThisFileDirectory)..\content\UpdateFolder\zap-client.exe')" />
+    <ZapDeploySource Include="$(MSBuildThisFileDirectory)..\content\UpdateFolder\client.json"
+                      Condition="Exists('$(MSBuildThisFileDirectory)..\content\UpdateFolder\client.json')" />
   </ItemGroup>
 
   <Target Name="ZapDeployToUpdateFolder" AfterTargets="Build">
     <MakeDir Directories="$(ZapUpdateFolder)" />
-    <Copy SourceFiles="@(ZapDeployFiles)"
-          DestinationFolder="$(ZapUpdateFolder)"
-          SkipUnchangedFiles="true" />
+
+    <!-- zap-client.exe: always overwrite to stay current -->
+    <Copy SourceFiles="@(ZapDeploySource)" Condition="'%(Filename)%(Extension)'=='zap-client.exe'"
+          DestinationFolder="$(ZapUpdateFolder)" SkipUnchangedFiles="true" />
+
+    <!-- client.json: only copy if target does not exist (protect user config) -->
+    <Copy SourceFiles="@(ZapDeploySource)" Condition="'%(Filename)%(Extension)'=='client.json'"
+          DestinationFolder="$(ZapUpdateFolder)" />
+  </Target>
+
+  <!-- Guard: skip client.json copy if it already exists -->
+  <Target Name="ZapSkipJsonIfExists" BeforeTargets="ZapDeployToUpdateFolder"
+          Condition="Exists('$(ZapUpdateFolder)client.json')">
+    <ItemGroup>
+      <ZapDeploySource Remove="%(ZapDeploySource.Identity)"
+                       Condition="'%(Filename)%(Extension)'=='client.json'" />
+    </ItemGroup>
   </Target>
 
 </Project>
