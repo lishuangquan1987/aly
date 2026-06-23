@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ZapDeployFiles Include="$(MSBuildThisFileDirectory)..\content\UpdateFolder\*" />
+    <ZapDeployFiles Include="$(MSBuildThisFileDirectory)UpdateFolder\*" />
   </ItemGroup>
 
   <Target Name="ZapDeployToUpdateFolder" AfterTargets="Build">

@@ -18,17 +18,17 @@
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
-  <!-- zap-client.exe + client.json: embed into NuGet at content/UpdateFolder/ -->
+  <!-- zap-client.exe + client.json: embed beside .targets in build/UpdateFolder/ -->
   <ItemGroup>
-    <Content Include="content\UpdateFolder\zap-client.exe" Pack="true"
-             PackagePath="content\UpdateFolder\zap-client.exe"
-             Condition="Exists('content\UpdateFolder\zap-client.exe')" />
-    <Content Include="content\UpdateFolder\client.json" Pack="true"
-             PackagePath="content\UpdateFolder\client.json"
-             Condition="Exists('content\UpdateFolder\client.json')" />
+    <None Include="build\UpdateFolder\zap-client.exe" Pack="true"
+          PackagePath="build\UpdateFolder\zap-client.exe"
+          Condition="Exists('build\UpdateFolder\zap-client.exe')" />
+    <None Include="build\UpdateFolder\client.json" Pack="true"
+          PackagePath="build\UpdateFolder\client.json"
+          Condition="Exists('build\UpdateFolder\client.json')" />
   </ItemGroup>
 
-  <!-- Auto-deploy targets: copies content to $(OutDir)..\UpdateFolder\ on build -->
+  <!-- Auto-deploy targets -->
   <ItemGroup>
     <None Include="ZapClient.CSharpSDK.targets" Pack="true" PackagePath="build\ZapClient.CSharpSDK.targets" />
     <None Include="ZapClient.CSharpSDK.targets" Pack="true" PackagePath="buildTransitive\ZapClient.CSharpSDK.targets" />

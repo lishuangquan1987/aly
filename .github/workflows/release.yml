@@ -197,9 +197,9 @@ jobs:
       - name: Copy zap-client.exe to SDK project
         shell: cmd
         run: |
-          mkdir client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\content\UpdateFolder
-          copy zap-client.exe client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\content\UpdateFolder\zap-client.exe
-          copy client\zap-client\client.json client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\content\UpdateFolder\client.json
+          mkdir client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\build\UpdateFolder
+          copy zap-client.exe client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\build\UpdateFolder\zap-client.exe
+          copy client\zap-client\client.json client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\build\UpdateFolder\client.json
 
       - name: Build & Pack SDK
         shell: cmd
