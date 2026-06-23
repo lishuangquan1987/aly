@@ -18,13 +18,19 @@
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
-  <!-- zap-client.exe + client.json: embed beside .targets in build/UpdateFolder/ -->
+  <!-- zap-client.exe + client.json: pack for both PackageReference (build/) and packages.config (content/) -->
   <ItemGroup>
     <None Include="build\UpdateFolder\zap-client.exe" Pack="true"
           PackagePath="build\UpdateFolder\zap-client.exe"
           Condition="Exists('build\UpdateFolder\zap-client.exe')" />
     <None Include="build\UpdateFolder\client.json" Pack="true"
           PackagePath="build\UpdateFolder\client.json"
+          Condition="Exists('build\UpdateFolder\client.json')" />
+    <None Include="build\UpdateFolder\zap-client.exe" Pack="true"
+          PackagePath="content\UpdateFolder\zap-client.exe"
+          Condition="Exists('build\UpdateFolder\zap-client.exe')" />
+    <None Include="build\UpdateFolder\client.json" Pack="true"
+          PackagePath="content\UpdateFolder\client.json"
           Condition="Exists('build\UpdateFolder\client.json')" />
   </ItemGroup>
 

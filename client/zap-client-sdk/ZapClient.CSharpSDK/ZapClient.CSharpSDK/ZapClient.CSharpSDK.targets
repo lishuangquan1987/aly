@@ -6,8 +6,10 @@
     <ZapUpdateFolder Condition="'$(ZapUpdateFolder)' == ''">$(OutDir)..\UpdateFolder\</ZapUpdateFolder>
   </PropertyGroup>
 
+  <!-- Look in both locations: build/ (PackageReference) and content/ (packages.config) -->
   <ItemGroup>
     <ZapDeployFiles Include="$(MSBuildThisFileDirectory)UpdateFolder\*" />
+    <ZapDeployFiles Include="$(MSBuildThisFileDirectory)..\content\UpdateFolder\*" Condition="Exists('$(MSBuildThisFileDirectory)..\content\UpdateFolder\')" />
   </ItemGroup>
 
   <Target Name="ZapDeployToUpdateFolder" AfterTargets="Build">
