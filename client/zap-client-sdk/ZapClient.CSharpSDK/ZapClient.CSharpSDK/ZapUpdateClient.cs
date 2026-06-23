@@ -89,7 +89,7 @@ namespace ZapClient.CSharpSDK
 
                     var downloadResult = ZapApi.DownloadUpdateAsync(UpdatorExePath, (fileName, progress) =>
                     {
-                        OnStatusChanged(Status, "Downloading... " + ((int)(progress * 100)) + "%");
+                        OnStatusChanged(Status, string.Format("Downloading {0}... {1:F0}%", fileName, progress * 100));
                     }).Result;
                     if (!downloadResult.IsSuccess) { Thread.Sleep(1000); continue; }
                 }
