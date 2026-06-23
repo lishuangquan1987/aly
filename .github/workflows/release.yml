@@ -176,6 +176,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve version
+        id: version
+        shell: cmd
+        run: |
+          if "${{ github.event_name }}"=="workflow_dispatch" (
+            echo ZAP_VERSION=${{ inputs.version }}>> %GITHUB_ENV%
+          ) else (
+            echo ZAP_VERSION=${{ github.event.release.tag_name }}>> %GITHUB_ENV%
+          )
+
       - name: Download zap-client artifact
         uses: actions/download-artifact@v4
         with:
@@ -192,15 +202,17 @@ jobs:
         shell: cmd
         run: |
           cd client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK
-          dotnet pack --configuration Release -o nupkg
+          dotnet pack --configuration Release -o nupkg -p:Version=%ZAP_VERSION%
+
+      - name: Verify nupkg
+        shell: cmd
+        run: |
+          dir client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK\nupkg\
 
       - name: Publish to NuGet
         shell: cmd
         run: |
-          dotnet nuget push "client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK\nupkg\*.nupkg" ^
-            --api-key ${{ secrets.NUGET_API_KEY }} ^
-            --source https://api.nuget.org/v3/index.json ^
-            --skip-duplicate
+          dotnet nuget push "client\zap-client-sdk\Zap.Client.CSharpSDK\Zap.Client.CSharpSDK\nupkg\*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
   upload-release-assets:
     name: Upload to Release
