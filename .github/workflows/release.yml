@@ -179,11 +179,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET 9 SDK (for OIDC trusted publishing)
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
       - name: Resolve version
         id: version
         shell: cmd
@@ -220,10 +215,16 @@ jobs:
         run: |
           dir client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\nupkg\
 
-      - name: Publish to NuGet (Trusted Publishing)
+      - name: NuGet login (OIDC → temp API key)
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Publish to NuGet
         shell: cmd
         run: |
-          dotnet nuget push "client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\nupkg\*.nupkg" --trusted-publisher --source https://api.nuget.org/v3/index.json
+          dotnet nuget push "client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\nupkg\*.nupkg" --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
   upload-release-assets:
     name: Upload to Release
