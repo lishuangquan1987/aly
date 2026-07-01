@@ -1,4 +1,4 @@
-module zap/server
+module aly/server
 
 go 1.25.0
 

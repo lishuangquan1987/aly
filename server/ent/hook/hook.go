@@ -5,7 +5,7 @@ package hook
 import (
 	"context"
 	"fmt"
-	"zap/server/ent"
+	"aly/server/ent"
 )
 
 // The ProjectFunc type is an adapter to allow the use of ordinary

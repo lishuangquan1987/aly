@@ -4,8 +4,8 @@ package ent
 
 import (
 	"context"
-	"zap/server/ent/predicate"
-	"zap/server/ent/projectchangelog"
+	"aly/server/ent/predicate"
+	"aly/server/ent/projectchangelog"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"

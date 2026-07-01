@@ -1,7 +1,7 @@
 package routers
 
 import (
-	"zap/server/controllers"
+	"aly/server/controllers"
 
 	"github.com/gin-gonic/gin"
 )

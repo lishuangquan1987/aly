@@ -1,4 +1,4 @@
-module zap/publish-cli
+module aly/publish-cli
 
 go 1.25.0
 

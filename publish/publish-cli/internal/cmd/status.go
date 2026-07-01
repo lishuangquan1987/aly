@@ -1,8 +1,8 @@
 ﻿package cmd
 
 import (
-	"zap/publish-cli/internal/diff"
-	"zap/publish-cli/pkg/models"
+	"aly/publish-cli/internal/diff"
+	"aly/publish-cli/pkg/models"
 
 	"github.com/spf13/cobra"
 )
@@ -57,7 +57,7 @@ func runStatus(cmd *cobra.Command, args []string) {
 
 	if len(sd.Staged) > 0 {
 		printHumanLn("Changes staged for commit:")
-		printHumanLn("  (use \"zap-publish reset <file>...\" to unstage)")
+		printHumanLn("  (use \"aly-publish reset <file>...\" to unstage)")
 		printHumanLn("")
 		for _, f := range sd.Staged {
 			printHumanLn("        %-12s %s", f.Status+":", f.RelativePath)
@@ -66,7 +66,7 @@ func runStatus(cmd *cobra.Command, args []string) {
 	}
 	if len(sd.Unstaged) > 0 {
 		printHumanLn("Changes not staged for commit:")
-		printHumanLn("  (use \"zap-publish add <file>...\" to stage)")
+		printHumanLn("  (use \"aly-publish add <file>...\" to stage)")
 		printHumanLn("")
 		for _, f := range sd.Unstaged {
 			printHumanLn("        %-12s %s", f.Status+":", f.RelativePath)

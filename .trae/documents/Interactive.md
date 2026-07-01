@@ -6,7 +6,7 @@
 
 ## 已确认信息
 
-- **后台调用方式**: 通过 Process.Start 调用 zap-publish.exe，解析 --json 输出
+- **后台调用方式**: 通过 Process.Start 调用 aly-publish.exe，解析 --json 输出
 - **技术栈**: .NET 8 + Avalonia 12 + CommunityToolkit.Mvvm + Semi.Avalonia + Ursa.Avalonia
 - **项目目录**: publish_tool_avalonia/（当前为空目录）
 
@@ -53,11 +53,11 @@ publish-cli发布流程：status->add->publish(填写版本号和commit message)
 
 回答：GitKraken 类型。publish-gui不用查看文件差异与比对文件差异，因为文件都是二进制，但是要显示文件在本地和服务端有多大
 
-### Q4: zap-publish.exe 定位方式
-GUI 如何找到 zap-publish.exe？
+### Q4: aly-publish.exe 定位方式
+GUI 如何找到 aly-publish.exe？
 
-- **方案A**: 在设置中配置 zap-publish.exe 路径
-- **方案B**: 默认查找同目录下的 zap-publish.exe，支持手动配置
+- **方案A**: 在设置中配置 aly-publish.exe 路径
+- **方案B**: 默认查找同目录下的 aly-publish.exe，支持手动配置
 - **方案C**: 从环境变量 PATH 中查找
 
 回答：先从方案B中找，找不到再从方案C中找
@@ -71,7 +71,7 @@ publish-cli 使用 .publish-cli/config.json 存储配置（server.url、project.
 
 回答：1.需要项目设置来编辑这些配置。2.当修改配置保存时，调用publish-cli config命令保存。3.需要，分为两种向导，一种是已经init号的项目，一种是没有init好的项目
 
-zap-publish.exe init之后，会在项目目录下生成一个.publish目录，里面有一个config.json，存放项目的配置。publish-gui调用publish-cli的时候，publish-cli会读取这些配置，优先使用命令行参数
+aly-publish.exe init之后，会在项目目录下生成一个.publish目录，里面有一个config.json，存放项目的配置。publish-gui调用publish-cli的时候，publish-cli会读取这些配置，优先使用命令行参数
 
 ### Q6: 与现有 publish_tool_avalonia 计划的关系
 .trae/documents/avalonia-publish-tool-plan.md 中有一份详细的计划（直接调用 server API，不经过 publish-cli）。本次新建的 GUI 工具是：

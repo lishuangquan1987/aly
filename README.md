@@ -1,15 +1,15 @@
-# Zap — Lightweight Client Auto-Update System
+# Aly — Lightweight Client Auto-Update System
 
 A minimal, self-contained auto-update solution for desktop applications. Ship new versions with a single command, and let your users update seamlessly with crash-safe atomic replacement.
 
 ## Project Structure
 
 ```
-zap/
+aly/
 ├── server/         # API server (Go, Gin + Ent + SQLite)
 ├── client/
-│   └── zap-client/      # Client updater (Go 1.10, Windows XP compatible)
-│   └── zap-client-sdk/  # (placeholder) Future Go/C# integration SDK
+│   └── aly-client/      # Client updater (Go 1.10, Windows XP compatible)
+│   └── aly-client-sdk/  # (placeholder) Future Go/C# integration SDK
 ├── publish/
 │   ├── publish-cli/      # CLI publish engine (Go, cobra)
 │   └── publish-gui/  # Desktop GUI (Avalonia 11.3, .NET 8)
@@ -20,52 +20,52 @@ zap/
 
 | Module | Role | For whom |
 |--------|------|----------|
-| **zap-server** | Stores project metadata & files, serves REST API | Deploy on your infrastructure |
-| **zap-publish** | CLI tool to init configs, scan files, and publish versions | Developers / CI |
-| **zap-publish-gui** | Desktop GUI wrapping zap-publish via subprocess | Non-technical publishers |
-| **zap-client** | The updater executable — runs on end-user machines | End users (via your app) |
+| **aly-server** | Stores project metadata & files, serves REST API | Deploy on your infrastructure |
+| **aly-publish** | CLI tool to init configs, scan files, and publish versions | Developers / CI |
+| **aly-publish-gui** | Desktop GUI wrapping aly-publish via subprocess | Non-technical publishers |
+| **aly-client** | The updater executable — runs on end-user machines | End users (via your app) |
 
 ## Quick Start
 
 ### 1. Start the Server
 
 ```bash
-./zap-server -p 2000
+./aly-server -p 2000
 ```
 
-First run auto-creates a SQLite database (`zap.db`). The server stores project info and uploaded files under `data/{project_name}/`.
+First run auto-creates a SQLite database (`aly.db`). The server stores project info and uploaded files under `data/{project_name}/`.
 
 ### 2. Publish a New Version
 
 ```bash
 # Initialize project config (creates .updator/ directory)
 cd ./dist
-zap-publish config init --server http://localhost:2000 --project myapp
+aly-publish config init --server http://localhost:2000 --project myapp
 
 # Check what files changed
-zap-publish status
+aly-publish status
 
 # Stage all changes and push
-zap-publish add --all
-zap-publish push --version V1.0.1 --message "Fixed login bug"
+aly-publish add --all
+aly-publish push --version V1.0.1 --message "Fixed login bug"
 ```
 
 This scans the directory, uploads new/changed files to the server, and creates a version changelog entry.
 
 ### 3. Client: Check & Apply Updates
 
-On the end-user's machine, your application invokes `zap-client.exe` (located in `UpdateFolder/`):
+On the end-user's machine, your application invokes `aly-client.exe` (located in `UpdateFolder/`):
 
 ```bash
 # Step 1 — Check for updates
-zap-client.exe check_update
+aly-client.exe check_update
 # → {"isSuccess":true,"data":{"has_update":true,"need_download_update":true,"new_version":"1.0.1","force_update":false}}
 
 # Step 2 — Download (only downloads changed files, with SHA-256 verification)
-zap-client.exe download_update
+aly-client.exe download_update
 
 # Step 3 — Apply (closes your app, atomically replaces files, restarts)
-zap-client.exe apply_update
+aly-client.exe apply_update
 ```
 
 If `force_update` is `true`, your app should auto-download and prompt a restart; otherwise, ask the user first.
@@ -79,7 +79,7 @@ PackageFolder/
 │   └── .updator/shared.json     # server_url, project_name, ignore rules
 ├── ApplicationFolder_V1.0.0/     # Previous version snapshot (for rollback)
 ├── UpdateFolder/
-│   ├── zap-client.exe            # The updater itself
+│   ├── aly-client.exe            # The updater itself
 │   ├── client.json               # main_exe_relative_path, must_close_process_name
 │   └── version.json              # Version state machine
 ```
@@ -88,7 +88,7 @@ PackageFolder/
 
 ### `.updator/` — Shared Config Directory
 
-Both `zap-publish` and `zap-client` read from `.updator/shared.json`:
+Both `aly-publish` and `aly-client` read from `.updator/shared.json`:
 
 ```json
 {
@@ -141,13 +141,13 @@ Crash recovery: if `version_status` is `applying` on startup, the updater re-exe
 
 ```bash
 # Server
-cd server && go build -ldflags="-s -w" -o zap-server.exe .
+cd server && go build -ldflags="-s -w" -o aly-server.exe .
 
 # Publish CLI
-cd publish/publish-cli && go build -ldflags="-s -w" -o zap-publish.exe .
+cd publish/publish-cli && go build -ldflags="-s -w" -o aly-publish.exe .
 
 # Cross-compile (static, no CGO)
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o zap-server-linux-amd64 .
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o aly-server-linux-amd64 .
 ```
 
 ### Publish GUI
@@ -162,13 +162,13 @@ Requires Go 1.10 (Windows XP compatibility, no Go modules). Source must be under
 
 ```bat
 :: Copy source to GOPATH
-xcopy /e /i /y client\zap-client %GOPATH%\src\zap\client\zap-client
+xcopy /e /i /y client\aly-client %GOPATH%\src\aly\client\aly-client
 
 :: Build
 set GOOS=windows
 set GOARCH=386
 set GO111MODULE=off
-go build -ldflags="-s -w" -o zap-client.exe zap/client/zap-client
+go build -ldflags="-s -w" -o aly-client.exe aly/client/aly-client
 ```
 
 ## License

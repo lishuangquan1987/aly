@@ -1,11 +1,11 @@
 package controllers
 
 import (
-	"zap/server/ent"
-	"zap/server/ent/project"
-	"zap/server/internal/db"
-	"zap/server/internal/service"
-	"zap/server/models"
+	"aly/server/ent"
+	"aly/server/ent/project"
+	"aly/server/internal/db"
+	"aly/server/internal/service"
+	"aly/server/models"
 	"log"
 	"os"
 	"path/filepath"

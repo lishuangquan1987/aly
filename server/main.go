@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"zap/server/internal/db"
-	"zap/server/routers"
+	"aly/server/internal/db"
+	"aly/server/routers"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,7 +24,7 @@ func main() {
 	var port int
 	var dbPath string
 	flag.IntVar(&port, "p", 2000, "监听的端口")
-	flag.StringVar(&dbPath, "db", "", "数据库文件路径（默认程序根目录 zap.db）")
+	flag.StringVar(&dbPath, "db", "", "数据库文件路径（默认程序根目录 aly.db）")
 	flag.Parse()
 
 	//初始化数据库

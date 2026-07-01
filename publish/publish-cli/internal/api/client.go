@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"zap/publish-cli/pkg/models"
+	"aly/publish-cli/pkg/models"
 )
 
 // Client HTTP API 客户端

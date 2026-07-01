@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"zap/server/ent/project"
+	"aly/server/ent/project"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"

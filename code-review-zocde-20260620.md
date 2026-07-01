@@ -1,4 +1,4 @@
-# Zap 项目代码审查报告
+# Aly 项目代码审查报告
 
 > **审查日期**：2026-06-20
 > **审查范围**：`server/`、`publish/publish-cli/`、`publish/publish-gui/`、`client/` 全部手写代码（约 1 万行）
@@ -9,14 +9,14 @@
 
 ## 一、项目概览
 
-Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
+Aly 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 | 模块 | 目录 | 技术栈 | 规模（手写） | 职责 |
 |------|------|--------|--------|------|
-| zap-server | `server/` | Go 1.25 + Gin + Ent + SQLite | ~1141 行 | REST API，存储项目元数据与文件 |
-| zap-publish (CLI) | `publish/publish-cli/` | Go 1.25 + cobra | ~2274 行 | 命令行发布引擎（init/status/add/push） |
-| zap-publish-gui | `publish/publish-gui/` | .NET 8 + Avalonia 11.3 + MVVM | ~3705 行 | 桌面 GUI，通过子进程调用 CLI |
-| zap-update (client) | `client/` | **Go 1.10（兼容 XP）** | ~3043 行 | 终端更新器（检查/下载/原子替换/回滚） |
+| aly-server | `server/` | Go 1.25 + Gin + Ent + SQLite | ~1141 行 | REST API，存储项目元数据与文件 |
+| aly-publish (CLI) | `publish/publish-cli/` | Go 1.25 + cobra | ~2274 行 | 命令行发布引擎（init/status/add/push） |
+| aly-publish-gui | `publish/publish-gui/` | .NET 8 + Avalonia 11.3 + MVVM | ~3705 行 | 桌面 GUI，通过子进程调用 CLI |
+| aly-update (client) | `client/` | **Go 1.10（兼容 XP）** | ~3043 行 | 终端更新器（检查/下载/原子替换/回滚） |
 
 四模块通过 `.updator/shared.json` 配置目录和统一 JSON 契约 `{isSuccess, errorMsg, data}` 解耦。GUI 完全委托给 CLI，零业务逻辑重复。
 
@@ -27,7 +27,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 **架构是优秀的**：职责分明、分层清晰、契约统一。下面这些做得好的地方应当继续保持：
 
 - ✅ 统一 JSON 输出契约 `{isSuccess, errorMsg, data}` 贯穿三端
-- ✅ publish-gui 的 MVVM 分层严格（`ZapPublish.{Layer}` 命名空间规范），DI 容器注册规范
+- ✅ publish-gui 的 MVVM 分层严格（`AlyPublish.{Layer}` 命名空间规范），DI 容器注册规范
 - ✅ client 严格兼容 Go 1.10：使用旧式 `// +build`、`ioutil`、GOPATH 模式，未发现 `errors.Is/As`、`%w`、`any`、`context` 等 1.13+ 语法
 - ✅ client 的"原子替换 + 版本状态机（applied/downloaded/applying/applied）+ 崩溃自恢复"设计稳健（`apply_update.go`）
 - ✅ `ProcessService` 并发读 stdout/stderr 防死锁、超时 Kill 后二次等待
@@ -47,7 +47,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
   ```yaml
   set GO111MODULE=off
   go get gopkg.in/yaml.v2      # 第 162 行
-  go build -ldflags="-s -w" -o zap-update.exe zap/client
+  go build -ldflags="-s -w" -o aly-update.exe aly/client
   ```
 - **问题**：
   - `client/README.MD:170` 明确写"YAML 解析 | 已移除（统一使用 JSON）"，全 client 源码已无 `yaml` import。
@@ -58,7 +58,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 ### P0-2. `ConfigService.SaveProjects` 静默吞异常，导致内存与磁盘不一致
 
-- **位置**：`publish/publish-gui/src/ZapPublish/Services/ConfigService.cs:40-53`
+- **位置**：`publish/publish-gui/src/AlyPublish/Services/ConfigService.cs:40-53`
 - **现状**：`SaveProjects` 在 catch 块里只 `Log.Error`，不抛出、不返回错误码：
   ```csharp
   public void SaveProjects(List<ProjectConfig> projects)
@@ -74,7 +74,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 ### P0-3. `AddProjectDialogViewModel.OnProjectPathChanged` 是无 try-catch 的 `async partial void`
 
-- **位置**：`publish/publish-gui/src/ZapPublish/ViewModels/AddProjectDialogViewModel.cs:69-91`
+- **位置**：`publish/publish-gui/src/AlyPublish/ViewModels/AddProjectDialogViewModel.cs:69-91`
 - **现状**：
   ```csharp
   async partial void OnProjectPathChanged(string value)
@@ -95,7 +95,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 ### P0-4. `EditProjectDialogViewModel` 五个方法只有 try/finally 无 catch
 
-- **位置**：`publish/publish-gui/src/ZapPublish/ViewModels/EditProjectDialogViewModel.cs:93-198`
+- **位置**：`publish/publish-gui/src/AlyPublish/ViewModels/EditProjectDialogViewModel.cs:93-198`
 - **涉及方法**：`SaveUrlAsync`(93)、`AddFolderAsync`(114)、`RemoveFolderAsync`(136)、`AddFileAsync`(157)、`RemoveFileAsync`(179)
 - **现状**：5 个方法都是 `try { ... } finally { IsBusy = false; }`，**完全没有 catch**。
 - **问题**：一旦 `ConfigSetArrayAddAsync` 等抛非预期异常（网络层、序列化），异常冒泡到 `AsyncRelayCommand`，CommunityToolkit 默认在 `IAsyncRelayCommand.ExecuteAsync` 里吞掉并记录到 `NullLogger`——**用户看不到任何反馈，`IsBusy` 虽被 finally 还原但 UI 状态可能不一致**。与同文件 `SyncIgnoreToServerAsync`(201-220，有 catch) 风格不一致。
@@ -103,7 +103,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 ### P0-5. `DialogService` 订阅 `RequestClose` 事件永不取消订阅
 
-- **位置**：`publish/publish-gui/src/ZapPublish/Services/DialogService.cs:57, 85, 107, 127`
+- **位置**：`publish/publish-gui/src/AlyPublish/Services/DialogService.cs:57, 85, 107, 127`
 - **现状**：4 个对话框方法都订阅了 VM 的 `RequestClose` 事件：
   ```csharp
   vm.RequestClose += result => dialog.Close(result);
@@ -116,7 +116,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 ### P0-6. `ProjectTabViewModel` 未实现 IDisposable，`_refreshCts` 不释放
 
-- **位置**：`publish/publish-gui/src/ZapPublish/ViewModels/ProjectTabViewModel.cs:19, 92-101`
+- **位置**：`publish/publish-gui/src/AlyPublish/ViewModels/ProjectTabViewModel.cs:19, 92-101`
 - **现状**：字段 `_refreshCts` 在 `RefreshAsync` 中每次重建（旧的 Dispose），但 `ProjectTabViewModel` **未实现 `IDisposable`**。
 - **问题**：`MainWindowViewModel.CloseTab`(`:180`) 和 `EditProjectAsync`(`:210`) 直接 `Tabs.Remove(tab)` 后丢弃实例。若 Tab 关闭时正好有未完成的刷新，那个 CTS 不会被释放（CTS 内部持有计时器资源）。虽然 `.NET 8` 的 CTS finalizer 会兜底回收，但属资源管理瑕疵。
 - **建议**：让 `ProjectTabViewModel` 实现 `IDisposable`，`CloseTab` 时 `_refreshCts?.Cancel(); _refreshCts?.Dispose();`。
@@ -138,7 +138,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 ### P1-2. `EditProjectDialog.axaml.cs` 在 code-behind 写业务逻辑
 
-- **位置**：`publish/publish-gui/src/ZapPublish/Views/Dialogs/EditProjectDialog.axaml.cs:13-24`
+- **位置**：`publish/publish-gui/src/AlyPublish/Views/Dialogs/EditProjectDialog.axaml.cs:13-24`
 - **现状**：
   ```csharp
   private void EditUrlBtn_Click(object? sender, RoutedEventArgs e)
@@ -155,8 +155,8 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 ### P1-3. `CliService` 字符串拼接参数 + `AppConstants.*ArgPrefix` 常量完全不被引用
 
 - **位置**：
-  - `publish/publish-gui/src/ZapPublish/Services/CliService.cs:108, 116-124, 126-145`（全部字符串插值）
-  - `publish/publish-gui/src/ZapPublish/Constants/AppConstants.cs:37-46`
+  - `publish/publish-gui/src/AlyPublish/Services/CliService.cs:108, 116-124, 126-145`（全部字符串插值）
+  - `publish/publish-gui/src/AlyPublish/Constants/AppConstants.cs:37-46`
 - **现状**：
   - `CliService` 全部用 `$"push --version \"{version}\" --message \"{message}\""` 这种字符串拼接，仅对 `"` 做 `Replace("\"", "\\\"")`，未处理其他 shell 元字符。
   - `AppConstants` 定义了 `JsonOutputArg`、`PathArgPrefix`、`ServerArgPrefix`、`VersionArgPrefix`、`MessageArgPrefix` 等，**`CliService` 一个都没引用**，全是裸字符串 `"--server"`、`"--version"`。
@@ -164,11 +164,11 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 - **建议**：
   - 抽取统一的参数构建器（含转义规则），所有命令复用。
   - `CliService` 引用 `AppConstants` 已定义的前缀常量。
-  - `AppConstants.CliExecutableName`（`:37` 写死 `"zap-publish.exe"` 不跨平台）与 `CliService.cs:30`（`OperatingSystem.IsWindows() ? "zap-publish.exe" : "zap-publish"` 跨平台）冲突，应统一为后者逻辑。
+  - `AppConstants.CliExecutableName`（`:37` 写死 `"aly-publish.exe"` 不跨平台）与 `CliService.cs:30`（`OperatingSystem.IsWindows() ? "aly-publish.exe" : "aly-publish"` 跨平台）冲突，应统一为后者逻辑。
 
 ### P1-4. `AddLocalProjectDialogViewModel` 未通过 DI 注册，手动 `new`
 
-- **位置**：`publish/publish-gui/src/ZapPublish/Services/DialogService.cs:81`
+- **位置**：`publish/publish-gui/src/AlyPublish/Services/DialogService.cs:81`
 - **现状**：`var vm = new AddLocalProjectDialogViewModel();`
 - **问题**：其它三个 Dialog VM 都通过 `_sp.GetRequiredService<T>()` 获取（`:49, 101, 123`），`App.axaml.cs:44-47` 也确实**没有注册** `AddLocalProjectDialogViewModel`。风格不一致，且该 VM 未来若注入依赖会漏注册。
 - **建议**：在 `App.axaml.cs` 注册（Transient），`DialogService` 统一用 `GetRequiredService`。
@@ -187,7 +187,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
   ```python
   HOST = "10.96.115.14"
   USER = "quartecs"
-  REMOTE_DIR = "/home/quartecs/lishuangquan/zap"   # 含真实姓名
+  REMOTE_DIR = "/home/quartecs/lishuangquan/aly"   # 含真实姓名
   PORT = 7000
   ```
 - **问题**：
@@ -198,7 +198,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 ### P1-7. `ProjectTabViewModel.RefreshAsync` 的"取消"是假机制
 
-- **位置**：`publish/publish-gui/src/ZapPublish/ViewModels/ProjectTabViewModel.cs:92-101`
+- **位置**：`publish/publish-gui/src/AlyPublish/ViewModels/ProjectTabViewModel.cs:92-101`
 - **现状**：
   ```csharp
   _refreshCts?.Cancel();
@@ -217,7 +217,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 - **位置**：
   - `publish/publish-cli/publish-cli.exe`（约 9.6 MB）被 git 跟踪
-  - `.gitignore:21` 写的是 `publish/publish-cli/zap-publish.exe`，**实际产物叫 `publish-cli.exe`，规则没匹配上**
+  - `.gitignore:21` 写的是 `publish/publish-cli/aly-publish.exe`，**实际产物叫 `publish-cli.exe`，规则没匹配上**
 - **影响**：仓库膨胀，每次构建改动 exe 都产生大 diff。
 - **建议**：
   1. `.gitignore` 改为 `publish/publish-cli/*.exe`（或精确加 `publish-cli.exe`）。
@@ -226,7 +226,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 ### P2-2. IDE 配置目录与 AI 工具状态目录被跟踪
 
 - **被跟踪的文件**（来自 `git ls-files` 与 status）：
-  - `.idea/`（`ClientUpdator.iml`、`dataSources.xml`、`go.imports.xml`、`modules.xml`、`vcs.xml` 等）—— `dataSources.xml` 可能含本地数据库连接信息
+  - `.idea/`（`AlyUpdator.iml`、`dataSources.xml`、`go.imports.xml`、`modules.xml`、`vcs.xml` 等）—— `dataSources.xml` 可能含本地数据库连接信息
   - `.vscode/launch.json`
   - `.codegraph/daemon.pid`（PID 文件，每台机器不同，入库冲突无意义）
   - `.trae/documents/*.md`、`.trae/rules/*`
@@ -259,7 +259,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 ### P2-5. `ProjectTabViewModel` 六个业务方法模板高度重复
 
-- **位置**：`publish/publish-gui/src/ZapPublish/ViewModels/ProjectTabViewModel.cs`
+- **位置**：`publish/publish-gui/src/AlyPublish/ViewModels/ProjectTabViewModel.cs`
 - **涉及方法**：`AddAllAsync`(153)、`ResetAllAsync`(182)、`AddSelectedAsync`(211)、`ResetSelectedAsync`(242)、`PublishAsync`(289)、`EditProjectCmdAsync`(335)
 - **问题**：每个方法都是同一模板：
   ```
@@ -274,13 +274,13 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 ### P2-6. `EditProjectDialogViewModel` 四个 Add/Remove Folder/File 方法重复
 
-- **位置**：`publish/publish-gui/src/ZapPublish/ViewModels/EditProjectDialogViewModel.cs:114-198`
+- **位置**：`publish/publish-gui/src/AlyPublish/ViewModels/EditProjectDialogViewModel.cs:114-198`
 - **问题**：`AddFolderAsync`/`RemoveFolderAsync`/`AddFileAsync`/`RemoveFileAsync` 结构完全一致，只差 `IgnoreFolders`/`IgnoreFiles` 和 `ignore.folders`/`ignore.files` 两个 key。
 - **建议**：抽取 `private async Task ModifyIgnoreAsync(ObservableCollection<string> target, string configKey, string item, bool isAdd)`。
 
 ### P2-7. `AppConstants` 整类基本是"定义了不用"的死代码
 
-- **位置**：`publish/publish-gui/src/ZapPublish/Constants/AppConstants.cs:29-46`
+- **位置**：`publish/publish-gui/src/AlyPublish/Constants/AppConstants.cs:29-46`
 - **现状**：
   - `DefaultServerUrl`(`:38`)：全代码库**无任何引用**。`AddProjectDialog.axaml:30` 的 Watermark `"http://localhost:2000"` 是重复硬编码字符串。
   - `CliExecutableName`(`:37`)：不被引用，且只含 Windows 名（见 P1-3）。
@@ -289,7 +289,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 ### P2-8. `CliService.CliPath` 每次访问都重做文件系统 IO
 
-- **位置**：`publish/publish-gui/src/ZapPublish/Services/CliService.cs:16`
+- **位置**：`publish/publish-gui/src/AlyPublish/Services/CliService.cs:16`
   ```csharp
   public string CliPath => FindCliDefault();
   ```
@@ -298,13 +298,13 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 ### P2-9. `CliService.FindCli()` / `PublishAsync` 是死代码
 
-- **位置**：`publish/publish-gui/src/ZapPublish/Services/CliService.cs:51`（`FindCli` 全代码库无调用方）
+- **位置**：`publish/publish-gui/src/AlyPublish/Services/CliService.cs:51`（`FindCli` 全代码库无调用方）
 - **说明**：报告早期提到 `PublishAsync`(`:126`) 无调用方——经核对当前 HEAD，**`PushAsync`(`:116`) 被 `ProjectTabViewModel.PublishAsync:301` 使用，`PublishAsync` 已不存在**，此项仅保留 `FindCli` 死代码。
 - **建议**：删除 `FindCli()`。
 
 ### P2-10. `FetchDataAsync` 逐条 Add 触发大量 CollectionChanged
 
-- **位置**：`publish/publish-gui/src/ZapPublish/ViewModels/ProjectTabViewModel.cs:120-131`
+- **位置**：`publish/publish-gui/src/AlyPublish/ViewModels/ProjectTabViewModel.cs:120-131`
   ```csharp
   UnstagedFiles.Clear(); StagedFiles.Clear();
   foreach (var f in d.Unstaged ?? []) UnstagedFiles.Add(...);
@@ -317,8 +317,8 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 ### P2-11. `FileItem.StatusDisplay` 与 `FileStatus.GetDisplayText` 重复
 
 - **位置**：
-  - `publish/publish-gui/src/ZapPublish/Models/Local/FileItem.cs:28-34`（`StatusDisplay` 把 `"new"→"新增"` 等写一遍）
-  - `publish/publish-gui/src/ZapPublish/Constants/AppConstants.cs:16-23`（`FileStatus.GetDisplayText` 又写一遍完全相同的映射）
+  - `publish/publish-gui/src/AlyPublish/Models/Local/FileItem.cs:28-34`（`StatusDisplay` 把 `"new"→"新增"` 等写一遍）
+  - `publish/publish-gui/src/AlyPublish/Constants/AppConstants.cs:16-23`（`FileStatus.GetDisplayText` 又写一遍完全相同的映射）
 - **问题**：状态文案映射存在两份实现，魔法字符串 `"new"/"modified"/"deleted"` 散落在 `ProjectTabViewModel.cs:123`、`StatusToColorConverter.cs:20-22`、`AppConstants.cs:8-11` 等多处。
 - **建议**：`FileItem.StatusDisplay` 改为 `=> FileStatus.GetDisplayText(Status)`，统一一处实现；所有魔法字符串改用 `FileStatus.New/Modified/Deleted` 常量。
 
@@ -380,7 +380,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 ### P3-8. `App.axaml.cs` 的 `ServiceProvider` 未 Dispose
 
-- **位置**：`publish/publish-gui/src/ZapPublish/App.axaml.cs:48, 53-57`
+- **位置**：`publish/publish-gui/src/AlyPublish/App.axaml.cs:48, 53-57`
 - **现状**：`Services = svc.BuildServiceProvider();` 返回的 `ServiceProvider` 未在 `ShutdownRequested` 里 Dispose（`:53-57` 只 flush 了日志）。
 - **建议**：`ShutdownRequested` 中 `Services?.Dispose();`。
 
@@ -390,8 +390,8 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 | 文档位置 | 偏差内容 |
 |---------|---------|
-| `AGENTS.md` §七 | 称"Avalonia 12"，但 `ZapPublish.csproj` 实际引用 **Avalonia 11.3.7**、`Semi.Avalonia 11.3.7` |
-| `README.md` | 提到 `publish/zap-publish/` 和 `publish/zap-publish-gui/`，实际目录已改名为 `publish/publish-cli/` 和 `publish/publish-gui/` |
+| `AGENTS.md` §七 | 称"Avalonia 12"，但 `AlyPublish.csproj` 实际引用 **Avalonia 11.3.7**、`Semi.Avalonia 11.3.7` |
+| `README.md` | 提到 `publish/aly-publish/` 和 `publish/aly-publish-gui/`，实际目录已改名为 `publish/publish-cli/` 和 `publish/publish-gui/` |
 | 端口约定 | `README.md:41` 用 `:2000`，`deploy-server.py:8,42,60,66` 用 `:7000`，**项目内端口不一致** |
 | `AGENTS.md` §四 | 编号断号（见 P3-1） |
 | 根目录 | 存在 `代码审查-不合理之处.md`（初稿）和 `代码审查-不合理之处-已审查.md`（结论）两份大文档，建议合并或仅保留"已审查"版，避免后续读者分不清权威版本 |
@@ -439,7 +439,7 @@ Zap 是一个轻量级桌面应用自动更新系统，采用四模块架构：
 
 ## 九、结语
 
-Zap 项目整体工程质量较高，架构清晰、分层规范、契约统一，client 的 Go 1.10 + XP 兼容性处理到位，原子替换+回滚状态机设计稳健。本次审查发现的问题中：
+Aly 项目整体工程质量较高，架构清晰、分层规范、契约统一，client 的 Go 1.10 + XP 兼容性处理到位，原子替换+回滚状态机设计稳健。本次审查发现的问题中：
 
 - **P0（6 项）**集中在构建脆弱、资源/异常处理缺陷，建议立即修复。
 - **P1（7 项）**涉及分层架构与代码组织，是中期重构重点。

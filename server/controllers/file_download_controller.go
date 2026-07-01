@@ -1,10 +1,10 @@
 package controllers
 
 import (
-	"zap/server/ent"
-	"zap/server/internal/service"
-	"zap/server/internal/utils"
-	"zap/server/models"
+	"aly/server/ent"
+	"aly/server/internal/service"
+	"aly/server/internal/utils"
+	"aly/server/models"
 	"log"
 	"net/http"
 	"os"

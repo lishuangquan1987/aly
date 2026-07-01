@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"time"
 
-	"zap/publish-cli/internal/staging"
-	"zap/publish-cli/pkg/models"
+	"aly/publish-cli/internal/staging"
+	"aly/publish-cli/pkg/models"
 
 	"github.com/spf13/cobra"
 )

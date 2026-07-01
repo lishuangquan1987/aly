@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!-- AlyClient.CSharpSDK: deploy runtime files to ../UpdateFolder/ -->
+  <PropertyGroup>
+    <AlyUpdateFolder Condition="'$(AlyUpdateFolder)' == ''">$(OutDir)..\UpdateFolder\</AlyUpdateFolder>
+  </PropertyGroup>
+
+  <!-- Source: build/UpdateFolder/ (PackageReference) or content/UpdateFolder/ (packages.config) -->
+  <ItemGroup>
+    <AlyDeploySource Include="$(MSBuildThisFileDirectory)UpdateFolder\aly-client.exe" />
+    <AlyDeploySource Include="$(MSBuildThisFileDirectory)UpdateFolder\client.json" />
+    <AlyDeploySource Include="$(MSBuildThisFileDirectory)..\content\UpdateFolder\aly-client.exe"
+                      Condition="Exists('$(MSBuildThisFileDirectory)..\content\UpdateFolder\aly-client.exe')" />
+    <AlyDeploySource Include="$(MSBuildThisFileDirectory)..\content\UpdateFolder\client.json"
+                      Condition="Exists('$(MSBuildThisFileDirectory)..\content\UpdateFolder\client.json')" />
+  </ItemGroup>
+
+  <Target Name="AlyDeployToUpdateFolder" AfterTargets="Build">
+    <MakeDir Directories="$(AlyUpdateFolder)" />
+
+    <!-- aly-client.exe: always overwrite to stay current -->
+    <Copy SourceFiles="@(AlyDeploySource)" Condition="'%(Filename)%(Extension)'=='aly-client.exe'"
+          DestinationFolder="$(AlyUpdateFolder)" SkipUnchangedFiles="true" />
+
+    <!-- client.json: only copy if target does not exist (protect user config) -->
+    <Copy SourceFiles="@(AlyDeploySource)" Condition="'%(Filename)%(Extension)'=='client.json'"
+          DestinationFolder="$(AlyUpdateFolder)" />
+  </Target>
+
+  <!-- Guard: skip client.json copy if it already exists -->
+  <Target Name="AlySkipJsonIfExists" BeforeTargets="AlyDeployToUpdateFolder"
+          Condition="Exists('$(AlyUpdateFolder)client.json')">
+    <ItemGroup>
+      <AlyDeploySource Remove="%(AlyDeploySource.Identity)"
+                       Condition="'%(Filename)%(Extension)'=='client.json'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

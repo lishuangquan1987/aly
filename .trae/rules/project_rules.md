@@ -1,4 +1,4 @@
-# ClientUpdator 项目规则
+# AlyUpdator 项目规则
 
 > 所有新增/修改代码必须遵循以下规则。
 
@@ -371,7 +371,7 @@ public override void Initialize()
 ## 九、交互规则
 
 - 写代码之前，如果有不懂不清楚的地方，主动向我提问
-- 将问题写在 `e:\Project2026\ClientUpdator\.trae\documents\Interactive.md` 中
+- 将问题写在 `e:\Project2026\AlyUpdator\.trae\documents\Interactive.md` 中
 - 我会在 Interactive.md 中作答，确认后再继续执行
 - 不要猜测或假设，宁可多问也不做错
 
@@ -380,7 +380,7 @@ public override void Initialize()
 - 每次修改完成后，全面检查一遍是否有 bug
 - 确认是否完全完成任务，没有遗漏
 - 检查是否有跑偏的嫌疑，确保与目标一致
-- 执行任务过程中如果有不确定的地方，记录到 `e:\Project2026\ClientUpdator\.trae\documents\Interactive.md` 中，等待回答后再继续
+- 执行任务过程中如果有不确定的地方，记录到 `e:\Project2026\AlyUpdator\.trae\documents\Interactive.md` 中，等待回答后再继续
 
 ## 十一、UI 组件设计原则
 

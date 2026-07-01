@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
-	"zap/server/ent/project"
-	"zap/server/ent/projectchangelog"
+	"aly/server/ent/project"
+	"aly/server/ent/projectchangelog"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"

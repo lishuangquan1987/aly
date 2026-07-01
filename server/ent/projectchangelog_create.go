@@ -7,8 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
-	"zap/server/ent/project"
-	"zap/server/ent/projectchangelog"
+	"aly/server/ent/project"
+	"aly/server/ent/projectchangelog"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"

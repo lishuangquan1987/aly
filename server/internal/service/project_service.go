@@ -2,11 +2,11 @@ package service
 
 import (
 	"fmt"
-	"zap/server/ent"
-	"zap/server/ent/project"
-	"zap/server/ent/projectchangelog"
-	"zap/server/internal/db"
-	"zap/server/models"
+	"aly/server/ent"
+	"aly/server/ent/project"
+	"aly/server/ent/projectchangelog"
+	"aly/server/internal/db"
+	"aly/server/models"
 	"context"
 	"os"
 	"path/filepath"

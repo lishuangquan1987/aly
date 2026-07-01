@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"zap/publish-cli/internal/config"
+	"aly/publish-cli/internal/config"
 
 	"github.com/spf13/cobra"
 )
@@ -111,7 +111,7 @@ func runConfigInit(cmd *cobra.Command, args []string) {
 
 func runConfigSet(cmd *cobra.Command, args []string) {
 	if len(args) < 2 {
-		outputResult(false, "Usage: zap-publish config set <key> <value>", nil)
+		outputResult(false, "Usage: aly-publish config set <key> <value>", nil)
 		return
 	}
 	key := args[0]
@@ -142,7 +142,7 @@ func runConfigSet(cmd *cobra.Command, args []string) {
 
 func runConfigSetArray(cmd *cobra.Command, args []string) {
 	if len(args) < 1 {
-		outputResult(false, "Usage: zap-publish config set-array <key> --add <item> | --remove <item> | --clear", nil)
+		outputResult(false, "Usage: aly-publish config set-array <key> --add <item> | --remove <item> | --clear", nil)
 		return
 	}
 	key := args[0]
@@ -172,7 +172,7 @@ func runConfigSetArray(cmd *cobra.Command, args []string) {
 
 func runConfigGet(cmd *cobra.Command, args []string) {
 	if len(args) < 1 {
-		outputResult(false, "Usage: zap-publish config get <key>", nil)
+		outputResult(false, "Usage: aly-publish config get <key>", nil)
 		return
 	}
 	key := args[0]

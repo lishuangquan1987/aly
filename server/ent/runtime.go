@@ -4,9 +4,9 @@ package ent
 
 import (
 	"time"
-	"zap/server/ent/project"
-	"zap/server/ent/projectchangelog"
-	"zap/server/ent/schema"
+	"aly/server/ent/project"
+	"aly/server/ent/projectchangelog"
+	"aly/server/ent/schema"
 )
 
 // The init function reads all schema descriptors with runtime code

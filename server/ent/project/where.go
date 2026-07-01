@@ -4,7 +4,7 @@ package project
 
 import (
 	"time"
-	"zap/server/ent/predicate"
+	"aly/server/ent/predicate"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"

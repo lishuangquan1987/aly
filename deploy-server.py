@@ -3,8 +3,8 @@ import os, sys, getpass, subprocess
 
 HOST = "10.96.115.14"
 USER = "quartecs"
-REMOTE_DIR = "/home/quartecs/lishuangquan/zap"
-BINARY = "zap-server-linux-amd64"
+REMOTE_DIR = "/home/quartecs/lishuangquan/aly"
+BINARY = "aly-server-linux-amd64"
 PORT = 7000
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))

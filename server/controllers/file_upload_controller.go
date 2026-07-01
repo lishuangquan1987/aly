@@ -1,8 +1,8 @@
 package controllers
 
 import (
-	"zap/server/internal/service"
-	"zap/server/models"
+	"aly/server/internal/service"
+	"aly/server/models"
 	"fmt"
 	"path/filepath"
 	"strings"

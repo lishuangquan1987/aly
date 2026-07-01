@@ -9,10 +9,10 @@ import (
 	"log"
 	"reflect"
 
-	"zap/server/ent/migrate"
+	"aly/server/ent/migrate"
 
-	"zap/server/ent/project"
-	"zap/server/ent/projectchangelog"
+	"aly/server/ent/project"
+	"aly/server/ent/projectchangelog"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"

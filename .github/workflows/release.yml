@@ -12,7 +12,7 @@ on:
 
 jobs:
   build-server:
-    name: Build zap-server (${{ matrix.goos }}/${{ matrix.goarch }})
+    name: Build aly-server (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: windows-latest
     strategy:
       matrix:
@@ -45,7 +45,7 @@ jobs:
       - name: Verify Go version
         run: go version
 
-      - name: Build zap-server
+      - name: Build aly-server
         shell: cmd
         env:
           GOOS: ${{ matrix.goos }}
@@ -55,17 +55,17 @@ jobs:
           cd server
           set EXT=
           if /I "%GOOS%"=="windows" set EXT=.exe
-          set OUT=zap-server-%GOOS%-%GOARCH%%EXT%
+          set OUT=aly-server-%GOOS%-%GOARCH%%EXT%
           go build -ldflags="-s -w" -o %OUT% .
 
-      - name: Upload zap-server artifact
+      - name: Upload aly-server artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zap-server-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: server/zap-server-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+          name: aly-server-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: server/aly-server-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
 
-  build-zap-publish:
-    name: Build zap-publish (${{ matrix.goos }}/${{ matrix.goarch }})
+  build-aly-publish:
+    name: Build aly-publish (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: windows-latest
     strategy:
       matrix:
@@ -98,7 +98,7 @@ jobs:
       - name: Verify Go version
         run: go version
 
-      - name: Build zap-publish
+      - name: Build aly-publish
         shell: cmd
         env:
           GOOS: ${{ matrix.goos }}
@@ -108,17 +108,17 @@ jobs:
           cd publish\publish-cli
           set EXT=
           if /I "%GOOS%"=="windows" set EXT=.exe
-          set OUT=zap-publish-%GOOS%-%GOARCH%%EXT%
+          set OUT=aly-publish-%GOOS%-%GOARCH%%EXT%
           go build -ldflags="-s -w" -o %OUT% .
 
-      - name: Upload zap-publish artifact
+      - name: Upload aly-publish artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zap-publish-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: publish/publish-cli/zap-publish-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+          name: aly-publish-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: publish/publish-cli/aly-publish-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
 
-  build-zap-client:
-    name: Build zap-client (Windows XP / 32-bit)
+  build-aly-client:
+    name: Build aly-client (Windows XP / 32-bit)
     runs-on: windows-latest
     env:
       GOPATH: C:\Users\runneradmin\go
@@ -150,8 +150,8 @@ jobs:
       - name: Setup GOPATH structure
         shell: cmd
         run: |
-          mkdir "%GOPATH%\src\zap\client"
-          xcopy /e /i /y client\zap-client "%GOPATH%\src\zap\client\zap-client"
+          mkdir "%GOPATH%\src\aly\client"
+          xcopy /e /i /y client\aly-client "%GOPATH%\src\aly\client\aly-client"
 
       - name: Install deps & Build (32-bit, XP compatible)
         shell: cmd
@@ -159,17 +159,17 @@ jobs:
           set GOOS=windows
           set GOARCH=386
           set GO111MODULE=off
-          go build -ldflags="-s -w" -o zap-client.exe zap/client/zap-client
+          go build -ldflags="-s -w" -o aly-client.exe aly/client/aly-client
 
-      - name: Upload zap-client artifact
+      - name: Upload aly-client artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zap-client-win-xp
-          path: zap-client.exe
+          name: aly-client-win-xp
+          path: aly-client.exe
 
   publish-sdk-nuget:
-    name: Publish ZapClient.CSharpSDK to NuGet
-    needs: build-zap-client
+    name: Publish AlyClient.CSharpSDK to NuGet
+    needs: build-aly-client
     runs-on: windows-latest
 
     steps:
@@ -186,40 +186,40 @@ jobs:
             set RAW=${{ github.event.release.tag_name }}
           )
           :: Strip leading 'v' for NuGet semver compatibility
-          set ZAP_VERSION=%RAW:v=%
-          echo ZAP_VERSION=%ZAP_VERSION%>> %GITHUB_ENV%
+          set ALY_VERSION=%RAW:v=%
+          echo ALY_VERSION=%ALY_VERSION%>> %GITHUB_ENV%
 
-      - name: Download zap-client artifact
+      - name: Download aly-client artifact
         uses: actions/download-artifact@v4
         with:
-          name: zap-client-win-xp
+          name: aly-client-win-xp
 
-      - name: Copy zap-client.exe to SDK project
+      - name: Copy aly-client.exe to SDK project
         shell: cmd
         run: |
-          mkdir client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\build\UpdateFolder
-          copy zap-client.exe client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\build\UpdateFolder\zap-client.exe
-          copy client\zap-client\client.json client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\build\UpdateFolder\client.json
+          mkdir client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\build\UpdateFolder
+          copy aly-client.exe client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\build\UpdateFolder\aly-client.exe
+          copy client\aly-client\client.json client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\build\UpdateFolder\client.json
 
       - name: Build & Pack SDK
         shell: cmd
         run: |
-          cd client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK
-          dotnet pack --configuration Release -o nupkg -p:Version=%ZAP_VERSION%
+          cd client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK
+          dotnet pack --configuration Release -o nupkg -p:Version=%ALY_VERSION%
 
       - name: Verify nupkg
         shell: cmd
         run: |
-          dir client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\nupkg\
+          dir client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\nupkg\
 
       - name: Publish to NuGet
         shell: cmd
         run: |
-          dotnet nuget push "client\zap-client-sdk\ZapClient.CSharpSDK\ZapClient.CSharpSDK\nupkg\*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+          dotnet nuget push "client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\nupkg\*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
   upload-release-assets:
     name: Upload to Release
-    needs: [build-server, build-zap-publish, build-zap-client]
+    needs: [build-server, build-aly-publish, build-aly-client]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -249,15 +249,15 @@ jobs:
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           gh release upload "$TAG" \
-            zap-server-windows-amd64/zap-server-windows-amd64.exe \
-            zap-server-linux-amd64/zap-server-linux-amd64 \
-            zap-server-linux-arm64/zap-server-linux-arm64 \
-            zap-server-darwin-amd64/zap-server-darwin-amd64 \
-            zap-server-darwin-arm64/zap-server-darwin-arm64 \
-            zap-publish-windows-amd64/zap-publish-windows-amd64.exe \
-            zap-publish-linux-amd64/zap-publish-linux-amd64 \
-            zap-publish-linux-arm64/zap-publish-linux-arm64 \
-            zap-publish-darwin-amd64/zap-publish-darwin-amd64 \
-            zap-publish-darwin-arm64/zap-publish-darwin-arm64 \
-            zap-client-win-xp/zap-client.exe \
+            aly-server-windows-amd64/aly-server-windows-amd64.exe \
+            aly-server-linux-amd64/aly-server-linux-amd64 \
+            aly-server-linux-arm64/aly-server-linux-arm64 \
+            aly-server-darwin-amd64/aly-server-darwin-amd64 \
+            aly-server-darwin-arm64/aly-server-darwin-arm64 \
+            aly-publish-windows-amd64/aly-publish-windows-amd64.exe \
+            aly-publish-linux-amd64/aly-publish-linux-amd64 \
+            aly-publish-linux-arm64/aly-publish-linux-arm64 \
+            aly-publish-darwin-amd64/aly-publish-darwin-amd64 \
+            aly-publish-darwin-arm64/aly-publish-darwin-arm64 \
+            aly-client-win-xp/aly-client.exe \
             --clobber

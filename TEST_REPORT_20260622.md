@@ -1,8 +1,8 @@
-# Zap 项目全面测试报告
+# Aly 项目全面测试报告
 
 > **测试日期**: 2026-06-22  
 > **测试环境**: Windows 11 Pro x64, Go 1.26.0  
-> **临时目录**: `%TEMP%/zap-test-client/` (已清理)  
+> **临时目录**: `%TEMP%/aly-test-client/` (已清理)  
 > **注意**: Client 二进制(GOARCH=386, GOPATH 模式)需管理员权限运行
 
 ---
@@ -11,16 +11,16 @@
 
 | 组件 | 二进制 | 大小 | 结果 |
 |------|--------|------|------|
-| server | `zap-server.exe` | 45.8 MB | ✅ 编译通过 |
-| publish-cli | `zap-publish.exe` | 10.1 MB | ✅ 编译通过 |
-| client (386) | `zap-update.exe` | 6.4 MB | ✅ 编译通过 (Go 1.10 GOPATH 模式) |
-| client (amd64) | `zap-update-amd64.exe` | - | ⚠️ 编译通过但无法运行 (见 §四) |
+| server | `aly-server.exe` | 45.8 MB | ✅ 编译通过 |
+| publish-cli | `aly-publish.exe` | 10.1 MB | ✅ 编译通过 |
+| client (386) | `aly-update.exe` | 6.4 MB | ✅ 编译通过 (Go 1.10 GOPATH 模式) |
+| client (amd64) | `aly-update-amd64.exe` | - | ⚠️ 编译通过但无法运行 (见 §四) |
 
 ---
 
 ## 二、Server API 测试
 
-**启动**: `zap-server.exe -p 2000` → 成功，端口 2000 响应正常
+**启动**: `aly-server.exe -p 2000` → 成功，端口 2000 响应正常
 
 | # | 测试项 | API | 结果 |
 |---|--------|-----|------|

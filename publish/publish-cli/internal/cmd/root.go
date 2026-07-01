@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"zap/publish-cli/internal/api"
-	"zap/publish-cli/internal/config"
-	"zap/publish-cli/internal/staging"
-	"zap/publish-cli/pkg/models"
+	"aly/publish-cli/internal/api"
+	"aly/publish-cli/internal/config"
+	"aly/publish-cli/internal/staging"
+	"aly/publish-cli/pkg/models"
 
 	"github.com/spf13/cobra"
 )
@@ -148,14 +148,14 @@ func mergeStagedIntoStatusData(sd *models.StatusData, projectPath string) {
 
 // RootCmd 根命令
 var RootCmd = &cobra.Command{
-	Use:   "zap-publish",
+	Use:   "aly-publish",
 	Short: "命令行发布工具——将本地构建产物推送到服务端",
-	Long: `zap-publish 向发布的命令行工具，用于管理项目、比文件差异、暂存变更文件、推送新版本到服务端。
+	Long: `aly-publish 向发布的命令行工具，用于管理项目、比文件差异、暂存变更文件、推送新版本到服务端。
 工作流：
-  zap-publish config init    # 初始化项目
-  zap-publish status          # 查看与服务端差异
-  zap-publish add --all       # 暂存所有变更
-  zap-publish push --version V1.0.1 --message "更新说明"  # 推送并发布`,
+  aly-publish config init    # 初始化项目
+  aly-publish status          # 查看与服务端差异
+  aly-publish add --all       # 暂存所有变更
+  aly-publish push --version V1.0.1 --message "更新说明"  # 推送并发布`,
 }
 
 func init() {

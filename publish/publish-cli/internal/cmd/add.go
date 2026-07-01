@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"zap/publish-cli/internal/diff"
-	"zap/publish-cli/internal/staging"
+	"aly/publish-cli/internal/diff"
+	"aly/publish-cli/internal/staging"
 
 	"github.com/spf13/cobra"
 )
@@ -83,9 +83,9 @@ func runAdd(cmd *cobra.Command, args []string) {
 	} else {
 		if len(args) == 0 {
 			if jsonOutput {
-				printOutput(false, "Usage: zap-publish add [--all | <file>...]", nil)
+				printOutput(false, "Usage: aly-publish add [--all | <file>...]", nil)
 			} else {
-				fmt.Fprintln(os.Stderr, "Usage: zap-publish add [--all | <file>...]")
+				fmt.Fprintln(os.Stderr, "Usage: aly-publish add [--all | <file>...]")
 			}
 			return
 		}
@@ -125,9 +125,9 @@ func runReset(cmd *cobra.Command, args []string) {
 	}
 	if len(args) == 0 {
 		if jsonOutput {
-			printOutput(false, "Usage: zap-publish reset [--all | <file>...]", nil)
+			printOutput(false, "Usage: aly-publish reset [--all | <file>...]", nil)
 		} else {
-			fmt.Fprintln(os.Stderr, "Usage: zap-publish reset [--all | <file>...]")
+			fmt.Fprintln(os.Stderr, "Usage: aly-publish reset [--all | <file>...]")
 		}
 		return
 	}

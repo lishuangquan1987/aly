@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"zap/publish-cli/pkg/models"
+	"aly/publish-cli/pkg/models"
 )
 
 // fileEntry 遍历阶段收集的文件信息（不含哈希）

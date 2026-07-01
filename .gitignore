@@ -8,24 +8,37 @@ publish_tool_avalonia/.idea/
 publish_tool_avalonia/.vs/
 
 # server build artifacts
-server/zap-server.exe
-server/zap-server-*
+server/aly-server.exe
+server/aly-server-*
 
 # client build artifacts
-client/zap-update.exe
+client/aly-update.exe
 client/test/temp_test/
 client/test/*.exe
 test_data/
 
 # publish-cli build artifacts
-publish/publish-cli/zap-publish.exe
+publish/publish-cli/aly-publish.exe
 
 # test artifacts
 test_e2e/
 .publish-cli/
 .updator/
 server/data/
-server/zap-server.exe~
+server/aly-server.exe~
 *~
-server/configs/zap.db
+server/configs/aly.db
 server/release-server.exe
+.gopath/
+.reasonix/
+publish/publish-cli/publish-cli.exe
+publish/publish-gui/.idea/.idea.AlyPublish/.idea/.name
+publish/publish-gui/.idea/
+publish/publish-gui/src/AlyPublish/build_test/
+server/configs/clientupdator.db
+server/server.exe
+server/aly.db
+package-lock.json
+client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/bin/
+client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/bin/
+client/aly-client/.idea/

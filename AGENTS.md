@@ -1,4 +1,4 @@
-# Zap 项目规则
+# Aly 项目规则
 
 > 所有新增/修改代码必须遵循以下规则。
 
@@ -23,7 +23,7 @@
 
 | 元素 | 规则 | 示例 |
 | ---- | ---- | ---- |
-| 命名空间 | `ZapPublish.{Layer}` | `ZapPublish.Services` |
+| 命名空间 | `AlyPublish.{Layer}` | `AlyPublish.Services` |
 | 类 | PascalCase | `MainWindowViewModel` |
 | 接口 | `I` 前缀 + PascalCase | `IProjectApi` |
 | 属性 | PascalCase | `ServerUrl` |
@@ -35,12 +35,12 @@
 
 ## 二、模型设计规则（publish-gui）
 
-### 2.1 DTO（`ZapPublish.Models.Cli`）
+### 2.1 DTO（`AlyPublish.Models.Cli`）
 
 - 用于 API 序列化/反序列化，使用 Newtonsoft.Json `[JsonProperty]`
 - 属性 `{ get; set; }`，集合默认 `new()`，字符串默认 `string.Empty`
 
-### 2.2 本地模型（`ZapPublish.Models.Local`）
+### 2.2 本地模型（`AlyPublish.Models.Local`）
 
 - 用于 UI 绑定，继承 `ObservableObject`，使用 `[ObservableProperty]`
 - 枚举类型定义在同文件中
@@ -62,7 +62,7 @@
 3. ❌ 不引用未使用的命名空间
 4. ❌ 不在生产代码中写 `Console.WriteLine`（用 Serilog）
 5. ❌ 不为了简单控件创建自定义 UserControl
-6. ❌ 写出不兼容的代码。client为go1.10编写(GOPATH模式, GOARCH=386)，需要兼容xp，这个必须遵守。源码位于 client/zap-client/
+6. ❌ 写出不兼容的代码。client为go1.10编写(GOPATH模式, GOARCH=386)，需要兼容xp，这个必须遵守。源码位于 client/aly-client/
 
 ---
 

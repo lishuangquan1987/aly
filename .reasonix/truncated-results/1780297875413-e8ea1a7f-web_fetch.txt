@@ -1,10 +1,10 @@
-https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/tags/v0.0.3
+https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/tags/v0.0.3
 
 {
-  "url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/332301998",
-  "assets_url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/332301998/assets",
-  "upload_url": "https://uploads.github.com/repos/lishuangquan1987/ClientUpdator/releases/332301998/assets{?name,label}",
-  "html_url": "https://github.com/lishuangquan1987/ClientUpdator/releases/tag/v0.0.3",
+  "url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/332301998",
+  "assets_url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/332301998/assets",
+  "upload_url": "https://uploads.github.com/repos/lishuangquan1987/AlyUpdator/releases/332301998/assets{?name,label}",
+  "html_url": "https://github.com/lishuangquan1987/AlyUpdator/releases/tag/v0.0.3",
   "id": 332301998,
   "author": {
     "login": "lishuangquan1987",
@@ -39,7 +39,7 @@ https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/tags/v0.0.3
   "published_at": "2026-06-01T05:46:25Z",
   "assets": [
     {
-      "url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/assets/435032609",
+      "url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/assets/435032609",
       "id": 435032609,
       "node_id": "RA_kwDOQ1KoP84Z7hIh",
       "name": "client-updator.exe",
@@ -72,10 +72,10 @@ https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/tags/v0.0.3
       "download_count": 0,
       "created_at": "2026-06-01T07:07:40Z",
       "updated_at": "2026-06-01T07:07:41Z",
-      "browser_download_url": "https://github.com/lishuangquan1987/ClientUpdator/releases/download/v0.0.3/client-updator.exe"
+      "browser_download_url": "https://github.com/lishuangquan1987/AlyUpdator/releases/download/v0.0.3/client-updator.exe"
     },
     {
-      "url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/assets/435032599",
+      "url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/assets/435032599",
       "id": 435032599,
       "node_id": "RA_kwDOQ1KoP84Z7hIX",
       "name": "publish-cli-darwin-amd64",
@@ -108,10 +108,10 @@ https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/tags/v0.0.3
       "download_count": 0,
       "created_at": "2026-06-01T07:07:39Z",
       "updated_at": "2026-06-01T07:07:40Z",
-      "browser_download_url": "https://github.com/lishuangquan1987/ClientUpdator/releases/download/v0.0.3/publish-cli-darwin-amd64"
+      "browser_download_url": "https://github.com/lishuangquan1987/AlyUpdator/releases/download/v0.0.3/publish-cli-darwin-amd64"
     },
     {
-      "url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/assets/435032602",
+      "url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/assets/435032602",
       "id": 435032602,
       "node_id": "RA_kwDOQ1KoP84Z7hIa",
       "name": "publish-cli-darwin-arm64",
@@ -144,10 +144,10 @@ https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/tags/v0.0.3
       "download_count": 0,
       "created_at": "2026-06-01T07:07:40Z",
       "updated_at": "2026-06-01T07:07:40Z",
-      "browser_download_url": "https://github.com/lishuangquan1987/ClientUpdator/releases/download/v0.0.3/publish-cli-darwin-arm64"
+      "browser_download_url": "https://github.com/lishuangquan1987/AlyUpdator/releases/download/v0.0.3/publish-cli-darwin-arm64"
     },
     {
-      "url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/assets/435032593",
+      "url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/assets/435032593",
       "id": 435032593,
       "node_id": "RA_kwDOQ1KoP84Z7hIR",
       "name": "publish-cli-linux-amd64",
@@ -180,10 +180,10 @@ https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/tags/v0.0.3
       "download_count": 0,
       "created_at": "2026-06-01T07:07:39Z",
       "updated_at": "2026-06-01T07:07:40Z",
-      "browser_download_url": "https://github.com/lishuangquan1987/ClientUpdator/releases/download/v0.0.3/publish-cli-linux-amd64"
+      "browser_download_url": "https://github.com/lishuangquan1987/AlyUpdator/releases/download/v0.0.3/publish-cli-linux-amd64"
     },
     {
-      "url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/assets/435032598",
+      "url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/assets/435032598",
       "id": 435032598,
       "node_id": "RA_kwDOQ1KoP84Z7hIW",
       "name": "publish-cli-linux-arm64",
@@ -216,10 +216,10 @@ https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/tags/v0.0.3
       "download_count": 0,
       "created_at": "2026-06-01T07:07:39Z",
       "updated_at": "2026-06-01T07:07:40Z",
-      "browser_download_url": "https://github.com/lishuangquan1987/ClientUpdator/releases/download/v0.0.3/publish-cli-linux-arm64"
+      "browser_download_url": "https://github.com/lishuangquan1987/AlyUpdator/releases/download/v0.0.3/publish-cli-linux-arm64"
     },
     {
-      "url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/assets/435032590",
+      "url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/assets/435032590",
       "id": 435032590,
       "node_id": "RA_kwDOQ1KoP84Z7hIO",
       "name": "publish-cli-windows-amd64.exe",
@@ -252,10 +252,10 @@ https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/tags/v0.0.3
       "download_count": 0,
       "created_at": "2026-06-01T07:07:39Z",
       "updated_at": "2026-06-01T07:07:39Z",
-      "browser_download_url": "https://github.com/lishuangquan1987/ClientUpdator/releases/download/v0.0.3/publish-cli-windows-amd64.exe"
+      "browser_download_url": "https://github.com/lishuangquan1987/AlyUpdator/releases/download/v0.0.3/publish-cli-windows-amd64.exe"
     },
     {
-      "url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/assets/435032578",
+      "url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/assets/435032578",
       "id": 435032578,
       "node_id": "RA_kwDOQ1KoP84Z7hIC",
       "name": "server-darwin-amd64",
@@ -288,10 +288,10 @@ https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/tags/v0.0.3
       "download_count": 0,
       "created_at": "2026-06-01T07:07:37Z",
       "updated_at": "2026-06-01T07:07:38Z",
-      "browser_download_url": "https://github.com/lishuangquan1987/ClientUpdator/releases/download/v0.0.3/server-darwin-amd64"
+      "browser_download_url": "https://github.com/lishuangquan1987/AlyUpdator/releases/download/v0.0.3/server-darwin-amd64"
     },
     {
-      "url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/assets/435032575",
+      "url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/assets/435032575",
       "id": 435032575,
       "node_id": "RA_kwDOQ1KoP84Z7hH_",
       "name": "server-darwin-arm64",
@@ -324,10 +324,10 @@ https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/tags/v0.0.3
       "download_count": 0,
       "created_at": "2026-06-01T07:07:37Z",
       "updated_at": "2026-06-01T07:07:39Z",
-      "browser_download_url": "https://github.com/lishuangquan1987/ClientUpdator/releases/download/v0.0.3/server-darwin-arm64"
+      "browser_download_url": "https://github.com/lishuangquan1987/AlyUpdator/releases/download/v0.0.3/server-darwin-arm64"
     },
     {
-      "url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/assets/435032576",
+      "url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/assets/435032576",
       "id": 435032576,
       "node_id": "RA_kwDOQ1KoP84Z7hIA",
       "name": "server-linux-amd64",
@@ -360,10 +360,10 @@ https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/tags/v0.0.3
       "download_count": 0,
       "created_at": "2026-06-01T07:07:37Z",
       "updated_at": "2026-06-01T07:07:39Z",
-      "browser_download_url": "https://github.com/lishuangquan1987/ClientUpdator/releases/download/v0.0.3/server-linux-amd64"
+      "browser_download_url": "https://github.com/lishuangquan1987/AlyUpdator/releases/download/v0.0.3/server-linux-amd64"
     },
     {
-      "url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/assets/435032577",
+      "url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/assets/435032577",
       "id": 435032577,
       "node_id": "RA_kwDOQ1KoP84Z7hIB",
       "name": "server-linux-arm64",
@@ -396,10 +396,10 @@ https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/tags/v0.0.3
       "download_count": 0,
       "created_at": "2026-06-01T07:07:37Z",
       "updated_at": "2026-06-01T07:07:38Z",
-      "browser_download_url": "https://github.com/lishuangquan1987/ClientUpdator/releases/download/v0.0.3/server-linux-arm64"
+      "browser_download_url": "https://github.com/lishuangquan1987/AlyUpdator/releases/download/v0.0.3/server-linux-arm64"
     },
     {
-      "url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/assets/435032574",
+      "url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/releases/assets/435032574",
       "id": 435032574,
       "node_id": "RA_kwDOQ1KoP84Z7hH-",
       "name": "server-windows-amd64.exe",
@@ -432,10 +432,10 @@ https://api.github.com/repos/lishuangquan1987/ClientUpdator/releases/tags/v0.0.3
       "download_count": 0,
       "created_at": "2026-06-01T07:07:37Z",
       "updated_at": "2026-06-01T07:07:39Z",
-      "browser_download_url": "https://github.com/lishuangquan1987/ClientUpdator/releases/download/v0.0.3/server-windows-amd64.exe"
+      "browser_download_url": "https://github.com/lishuangquan1987/AlyUpdator/releases/download/v0.0.3/server-windows-amd64.exe"
     }
   ],
-  "tarball_url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/tarball/v0.0.3",
-  "zipball_url": "https://api.github.com/repos/lishuangquan1987/ClientUpdator/zipball/v0.0.3",
+  "tarball_url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/tarball/v0.0.3",
+  "zipball_url": "https://api.github.com/repos/lishuangquan1987/AlyUpdator/zipball/v0.0.3",
   "body": ""
 }

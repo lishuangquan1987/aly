@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"zap/publish-cli/internal/diff"
-	"zap/publish-cli/pkg/models"
+	"aly/publish-cli/internal/diff"
+	"aly/publish-cli/pkg/models"
 )
 
 // StagedFile represents a staged file entry.
