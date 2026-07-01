@@ -171,6 +171,9 @@ jobs:
     name: Publish AlyClient.CSharpSDK to NuGet
     needs: build-aly-client
     runs-on: windows-latest
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout
@@ -212,10 +215,10 @@ jobs:
         run: |
           dir client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\nupkg\
 
-      - name: Publish to NuGet
+      - name: Publish to NuGet (Trusted Publishing)
         shell: cmd
         run: |
-          dotnet nuget push "client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\nupkg\*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+          dotnet nuget push "client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\nupkg\*.nupkg" --trusted-publisher --source https://api.nuget.org/v3/index.json
 
   upload-release-assets:
     name: Upload to Release
