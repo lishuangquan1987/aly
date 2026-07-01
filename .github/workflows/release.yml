@@ -179,6 +179,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup .NET 9 SDK (for OIDC trusted publishing)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
       - name: Resolve version
         id: version
         shell: cmd
