@@ -14,12 +14,13 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
-	host      = "10.96.115.14"
-	user      = "quartecs"
-	remoteDir = "/home/quartecs/lishuangquan/aly"
+	host      = "10.200.4.69"
+	user      = "root"
+	remoteDir = "/root/lishuangquan/aly/"
 	binary    = "aly-server-linux-amd64"
 	port      = "7000"
 )
@@ -59,6 +60,43 @@ func runCmdInDir(dir, name string, args ...string) error {
 }
 
 // ── SSH with password ────────────────────────
+
+func sshBackground(password string, args ...string) error {
+	// sshWithPassword but fire-and-forget: Start() without Wait()
+	// Prefer sshpass if available
+	if _, err := exec.LookPath("sshpass"); err == nil {
+		allArgs := append([]string{"-p", password, "ssh", "-f"}, args...)
+		allArgs = append(allArgs, "-o", "StrictHostKeyChecking=no")
+		cmd := exec.Command("sshpass", allArgs...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Start() // fire and forget
+	}
+
+	// Fallback: SSH_ASKPASS with temporary script
+	askpassFile, cleanup, err := createAskPass(password)
+	if err != nil {
+		return fmt.Errorf("SSH_ASKPASS setup failed: %w", err)
+	}
+	// delay cleanup: SSH needs the askpass script to exist during authentication
+	go func() {
+		time.Sleep(5 * time.Second)
+		cleanup()
+	}()
+
+	env := append(os.Environ(),
+		"SSH_ASKPASS="+askpassFile,
+		"SSH_ASKPASS_REQUIRE=force",
+		"DISPLAY=dummy",
+	)
+
+	allArgs := append([]string{"ssh", "-f", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=no"}, args...)
+	cmd := exec.Command(allArgs[0], allArgs[1:]...)
+	cmd.Env = env
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Start() // fire and forget
+}
 
 func sshWithPassword(password string, args ...string) error {
 	// Prefer sshpass if available
@@ -197,7 +235,7 @@ func main() {
 	if err := sshWithPassword(password, user+"@"+host, stopCmd); err != nil {
 		fmt.Printf("[WARN] Stop command had issues: %v\n", err)
 	}
-	fmt.Println("       done\n")
+	fmt.Println("       done")
 
 	// ── Step 3: Upload ───────────────────────
 	fmt.Println("[3/5] Uploading ...")
@@ -206,7 +244,7 @@ func main() {
 		fmt.Printf("[ERROR] Upload failed: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("       Upload OK\n")
+	fmt.Println("       Upload OK")
 
 	// ── Step 4: chmod ────────────────────────
 	fmt.Println("[4/5] chmod +x ...")
@@ -215,19 +253,19 @@ func main() {
 		fmt.Printf("[ERROR] chmod failed: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("       done\n")
+	fmt.Println("       done")
 
 	// ── Step 5: Start (detached) ─────────────
 	fmt.Println("[5/5] Starting server (detached) ...")
 	startCmd := fmt.Sprintf(
-		"cd %s && setsid ./%s -p %s </dev/null >>nohup.out 2>&1 &",
+		"cd %s && nohup ./%s -p %s </dev/null >/dev/null 2>&1",
 		remoteDir, binary, port,
 	)
-	if err := sshWithPassword(password, user+"@"+host, startCmd); err != nil {
+	if err := sshBackground(password, user+"@"+host, startCmd); err != nil {
 		fmt.Printf("[ERROR] Start failed: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("       done\n")
+	fmt.Println("       done")
 
 	// ── Verify ───────────────────────────────
 	verifyCmd := fmt.Sprintf("lsof -i :%s 2>/dev/null | head -2", port)

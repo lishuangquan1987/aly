@@ -1,40 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
-  <!-- AlyClient.CSharpSDK: deploy runtime files to ../UpdateFolder/ -->
+  <!--
+    AlyClient.CSharpSDK: deploy runtime files to ../UpdateFolder/
+
+    aly-client.exe is downloaded from GitHub Releases on first build.
+    client.json is auto-generated with a default template.
+  -->
+
   <PropertyGroup>
     <AlyUpdateFolder Condition="'$(AlyUpdateFolder)' == ''">$(OutDir)..\UpdateFolder\</AlyUpdateFolder>
+    <AlyClientVersion Condition="'$(AlyClientVersion)' == ''">ALY_CLIENT_VERSION_PLACEHOLDER</AlyClientVersion>
+    <AlyClientDownloadUrl Condition="'$(AlyClientDownloadUrl)' == ''">https://github.com/lishuangquan1987/aly/releases/download/v$(AlyClientVersion)/aly-client.exe</AlyClientDownloadUrl>
   </PropertyGroup>
 
-  <!-- Source: build/UpdateFolder/ (PackageReference) or content/UpdateFolder/ (packages.config) -->
-  <ItemGroup>
-    <AlyDeploySource Include="$(MSBuildThisFileDirectory)UpdateFolder\aly-client.exe" />
-    <AlyDeploySource Include="$(MSBuildThisFileDirectory)UpdateFolder\client.json" />
-    <AlyDeploySource Include="$(MSBuildThisFileDirectory)..\content\UpdateFolder\aly-client.exe"
-                      Condition="Exists('$(MSBuildThisFileDirectory)..\content\UpdateFolder\aly-client.exe')" />
-    <AlyDeploySource Include="$(MSBuildThisFileDirectory)..\content\UpdateFolder\client.json"
-                      Condition="Exists('$(MSBuildThisFileDirectory)..\content\UpdateFolder\client.json')" />
-  </ItemGroup>
+  <Target Name="AlyDeployToUpdateFolder" BeforeTargets="Build">
 
-  <Target Name="AlyDeployToUpdateFolder" AfterTargets="Build">
     <MakeDir Directories="$(AlyUpdateFolder)" />
 
-    <!-- aly-client.exe: always overwrite to stay current -->
-    <Copy SourceFiles="@(AlyDeploySource)" Condition="'%(Filename)%(Extension)'=='aly-client.exe'"
-          DestinationFolder="$(AlyUpdateFolder)" SkipUnchangedFiles="true" />
+    <!-- Download aly-client.exe from GitHub Releases if not present -->
+    <Exec Condition="!Exists('$(AlyUpdateFolder)aly-client.exe')"
+          Command="powershell -NoProfile -Command &quot;
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
+try {
+  Invoke-WebRequest -Uri '$(AlyClientDownloadUrl)' -OutFile '$(AlyUpdateFolder)aly-client.exe' -ErrorAction Stop;
+  Write-Host 'Downloaded aly-client.exe v$(AlyClientVersion) successfully';
+} catch {
+  Write-Error &quot;Failed to download aly-client.exe: $($_.Exception.Message)&quot;;
+  exit 1;
+}&quot;" />
 
-    <!-- client.json: only copy if target does not exist (protect user config) -->
-    <Copy SourceFiles="@(AlyDeploySource)" Condition="'%(Filename)%(Extension)'=='client.json'"
-          DestinationFolder="$(AlyUpdateFolder)" />
-  </Target>
+    <!-- Generate default client.json if missing -->
+    <WriteLinesToFile Condition="!Exists('$(AlyUpdateFolder)client.json')"
+                      File="$(AlyUpdateFolder)client.json"
+                      Lines="{&quot;main_exe_relative_path&quot;: &quot;../ApplicationFolder/YourApp.exe&quot;,&quot;must_close_process_name&quot;: [&quot;YourApp&quot;]}"
+                      Overwrite="true" />
 
-  <!-- Guard: skip client.json copy if it already exists -->
-  <Target Name="AlySkipJsonIfExists" BeforeTargets="AlyDeployToUpdateFolder"
-          Condition="Exists('$(AlyUpdateFolder)client.json')">
-    <ItemGroup>
-      <AlyDeploySource Remove="%(AlyDeploySource.Identity)"
-                       Condition="'%(Filename)%(Extension)'=='client.json'" />
-    </ItemGroup>
   </Target>
 
 </Project>

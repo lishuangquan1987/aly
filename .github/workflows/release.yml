@@ -169,7 +169,6 @@ jobs:
 
   publish-sdk-nuget:
     name: Publish AlyClient.CSharpSDK to NuGet
-    needs: build-aly-client
     runs-on: windows-latest
     permissions:
       id-token: write
@@ -192,17 +191,18 @@ jobs:
           set ALY_VERSION=%RAW:v=%
           echo ALY_VERSION=%ALY_VERSION%>> %GITHUB_ENV%
 
-      - name: Download aly-client artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: aly-client-win-xp
-
-      - name: Copy aly-client.exe to SDK project
-        shell: cmd
+      - name: Inject version into .targets file
+        shell: bash
         run: |
-          mkdir client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\build\UpdateFolder
-          copy aly-client.exe client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\build\UpdateFolder\aly-client.exe
-          copy client\aly-client\client.json client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\build\UpdateFolder\client.json
+          TARGETS="client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/AlyClient.CSharpSDK.targets"
+          python -c "
+with open('$TARGETS', 'r', encoding='utf-8') as f:
+    content = f.read()
+content = content.replace('ALY_CLIENT_VERSION_PLACEHOLDER', '$ALY_VERSION')
+with open('$TARGETS', 'w', encoding='utf-8') as f:
+    f.write(content)
+print(f'Injected version $ALY_VERSION into .targets')
+"
 
       - name: Build & Pack SDK
         shell: cmd

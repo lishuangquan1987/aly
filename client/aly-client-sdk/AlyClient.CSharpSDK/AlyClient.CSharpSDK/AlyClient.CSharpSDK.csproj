@@ -18,23 +18,7 @@
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
-  <!-- aly-client.exe + client.json: pack for both PackageReference (build/) and packages.config (content/) -->
-  <ItemGroup>
-    <None Include="build\UpdateFolder\aly-client.exe" Pack="true"
-          PackagePath="build\UpdateFolder\aly-client.exe"
-          Condition="Exists('build\UpdateFolder\aly-client.exe')" />
-    <None Include="build\UpdateFolder\client.json" Pack="true"
-          PackagePath="build\UpdateFolder\client.json"
-          Condition="Exists('build\UpdateFolder\client.json')" />
-    <None Include="build\UpdateFolder\aly-client.exe" Pack="true"
-          PackagePath="content\UpdateFolder\aly-client.exe"
-          Condition="Exists('build\UpdateFolder\aly-client.exe')" />
-    <None Include="build\UpdateFolder\client.json" Pack="true"
-          PackagePath="content\UpdateFolder\client.json"
-          Condition="Exists('build\UpdateFolder\client.json')" />
-  </ItemGroup>
-
-  <!-- Auto-deploy targets -->
+  <!-- Deploy targets: download aly-client.exe + generate client.json at build time -->
   <ItemGroup>
     <None Include="AlyClient.CSharpSDK.targets" Pack="true" PackagePath="build\AlyClient.CSharpSDK.targets" />
     <None Include="AlyClient.CSharpSDK.targets" Pack="true" PackagePath="buildTransitive\AlyClient.CSharpSDK.targets" />
