@@ -17,10 +17,18 @@ import (
 	"time"
 )
 
+// const (
+// 	host      = "10.200.4.69"
+// 	user      = "root"
+// 	remoteDir = "/root/lishuangquan/aly/"
+// 	binary    = "aly-server-linux-amd64"
+// 	port      = "7000"
+// )
+
 const (
-	host      = "10.200.4.69"
-	user      = "root"
-	remoteDir = "/root/lishuangquan/aly/"
+	host      = "10.96.115.14"
+	user      = "quartecs"
+	remoteDir = "/home/quartecs/lishuangquan/zap"
 	binary    = "aly-server-linux-amd64"
 	port      = "7000"
 )

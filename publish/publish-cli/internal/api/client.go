@@ -293,7 +293,7 @@ func (c *Client) completeChunks(projectName, relativeFileName string, totalChunk
 
 // uploadChunkWithRetry 上传单个分片（带重试）
 func (c *Client) uploadChunkWithRetry(data []byte, projectName, relativeFileName string, chunkIndex, totalChunks int) error {
-	maxRetries := 3
+	maxRetries := 5
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {

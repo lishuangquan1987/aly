@@ -1,7 +1,10 @@
 ﻿package cmd
 
 import (
+	"fmt"
+
 	"aly/publish-cli/internal/diff"
+	"aly/publish-cli/internal/staging"
 	"aly/publish-cli/pkg/models"
 
 	"github.com/spf13/cobra"
@@ -47,6 +50,27 @@ func runStatus(cmd *cobra.Command, args []string) {
 		outputResult(false, err.Error(), nil)
 		return
 	}
+
+	// 自动同步暂存区：移除已在服务端存在的文件（MD5 一致）
+	serverMD5s := make(map[string]string)
+	for _, f := range sd.Unstaged {
+		if f.ServerMd5 != "" {
+			serverMD5s[f.RelativePath] = f.ServerMd5
+		}
+	}
+	for _, f := range sd.Unchanged {
+		serverMD5s[f.RelativePath] = f.ServerMd5
+	}
+	if removed, err := staging.Sync(cfg.Path, serverMD5s); err != nil {
+		outputResult(false, fmt.Sprintf("同步暂存区失败: %v", err), nil)
+		return
+	} else if len(removed) > 0 && !jsonOutput {
+		printHumanLn("已同步暂存区：移除了 %d 个已上传成功的文件", len(removed))
+		for _, f := range removed {
+			printHumanLn("        %s", f)
+		}
+	}
+
 	// 合并暂存区文件：从 unstaged 移除已暂存的，放入 staged
 	mergeStagedIntoStatusData(sd, cfg.Path)
 

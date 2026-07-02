@@ -156,6 +156,36 @@ func Verify(projectPath string) (conflicts []string, err error) {
 	return
 }
 
+// Sync 移除暂存区中已在服务端存在的文件（MD5 一致即视为已上传成功）。
+// serverMD5s 为服务端文件相对路径 → MD5 的映射（可从 diff 结果获取）。
+// 返回被移除的路径列表。
+func Sync(projectPath string, serverMD5s map[string]string) (removed []string, err error) {
+	current, err := Load(projectPath)
+	if err != nil {
+		return nil, err
+	}
+	if current == nil {
+		return nil, nil
+	}
+
+	var remaining []StagedFile
+	for _, f := range current {
+		serverMd5, ok := serverMD5s[f.RelativePath]
+		if ok && strings.EqualFold(f.LocalMd5, serverMd5) {
+			removed = append(removed, f.RelativePath)
+		} else {
+			remaining = append(remaining, f)
+		}
+	}
+
+	if len(removed) > 0 {
+		if err := Save(projectPath, remaining); err != nil {
+			return removed, err
+		}
+	}
+	return removed, nil
+}
+
 func stagingPath(projectPath string) string {
 	return filepath.Join(projectPath, ".updator", "staging", "staged-files.json")
 }
