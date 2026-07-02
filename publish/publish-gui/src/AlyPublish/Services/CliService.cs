@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using AlyPublish.Models.Cli;
 using Serilog;
 
@@ -115,12 +116,76 @@ public class CliService
 
     public Task<CliOutput<object>?> PushAsync(string projectPath, string version, string message, string afterApplyUpdateScript = "", bool setForceUpdate = false)
     {
+        var args = BuildPushArgs(version, message, afterApplyUpdateScript, setForceUpdate);
+        return RunAsync<object>(args, projectPath, 300000);
+    }
+
+    /// <summary>
+    /// 推送并实时回调上传进度（每行 stdout 解析为 UploadProgress 后调用 onProgress）。
+    /// </summary>
+    public async Task<CliOutput<object>?> PushWithProgressAsync(
+        string projectPath, string version, string message,
+        Action<UploadProgress> onProgress,
+        string afterApplyUpdateScript = "", bool setForceUpdate = false)
+    {
+        if (!Found)
+        {
+            Log.Error("aly-publish 未找到，无法执行推送");
+            return Fail<object>("未找到 aly-publish");
+        }
+
+        var args = BuildPushArgs(version, message, afterApplyUpdateScript, setForceUpdate);
+        var fullArgs = $"{args} --json";
+        var workDir = string.IsNullOrWhiteSpace(projectPath) ? null : projectPath;
+
+        CliOutput<object>? finalResult = null;
+
+        var procResult = await _ps.RunWithProgressAsync(CliPath, fullArgs, line =>
+        {
+            try
+            {
+                // 用 JObject 检查 data 是否包含 "status" 字段来区分进度行和最终结果
+                var jObj = JObject.Parse(line);
+                var hasStatus = jObj["data"]?["status"] != null;
+
+                if (hasStatus)
+                {
+                    var output = JsonConvert.DeserializeObject<CliOutput<UploadProgress>>(line);
+                    if (output?.Data != null)
+                    {
+                        onProgress(output.Data);
+                    }
+                }
+                else
+                {
+                    // 无 status 字段：progressDone 哨兵 (data: null) 或最终结果 (data: {"version","files"})
+                    finalResult = JsonConvert.DeserializeObject<CliOutput<object>>(line);
+                }
+            }
+            catch (JsonException ex)
+            {
+                Log.Warning(ex, "进度行 JSON 解析失败: {Line}", line);
+            }
+        }, workDir, 300000);
+
+        if (!procResult.Success)
+        {
+            var errMsg = string.IsNullOrEmpty(procResult.StandardError) ? "推送失败" : procResult.StandardError;
+            Log.Warning("CLI push 失败: {Error}", errMsg);
+            return finalResult ?? Fail<object>(errMsg);
+        }
+
+        return finalResult;
+    }
+
+    private static string BuildPushArgs(string version, string message, string afterApplyUpdateScript, bool setForceUpdate)
+    {
         var args = $"push --version \"{version}\" --message \"{message}\"";
         if (setForceUpdate)
             args += " --set-force-update";
         if (!string.IsNullOrWhiteSpace(afterApplyUpdateScript))
             args += $" --after-apply-update-script \"{afterApplyUpdateScript.Replace("\"", "\\\"")}\"";
-        return RunAsync<object>(args, projectPath, 300000);
+        return args;
     }
 
     public Task<CliOutput<List<ChangeLog>>?> GetLogAsync(string projectPath, int limit = 20)

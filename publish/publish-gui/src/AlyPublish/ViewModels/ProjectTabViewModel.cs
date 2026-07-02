@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Ursa.Controls;
@@ -40,6 +41,13 @@ public partial class ProjectTabViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isUploading;
     [ObservableProperty] private string _afterApplyUpdateScript = string.Empty;
     [ObservableProperty] private bool _setForceUpdate;
+
+    [ObservableProperty] private ObservableCollection<UploadProgress> _uploadProgressItems = new();
+    [ObservableProperty] private int _uploadDoneCount;
+    [ObservableProperty] private int _uploadTotalCount;
+    [ObservableProperty] private double _uploadProgressPercent;
+    [ObservableProperty] private string _uploadProgressText = string.Empty;
+    [ObservableProperty] private bool _isUploadProgressIndeterminate = true;
 
     [ObservableProperty] private FileItem? _selectedUnStagedFile;
     [ObservableProperty] private FileItem? _selectedStagedFile;
@@ -317,10 +325,25 @@ public partial class ProjectTabViewModel : ObservableObject, IDisposable
 
         IsBusy = true;
         IsUploading = true;
+        UploadProgressItems.Clear();
+        UploadDoneCount = 0;
+        UploadTotalCount = StagedFiles.Count;
+        UploadProgressPercent = 0;
+        IsUploadProgressIndeterminate = true;
+        UploadProgressText = $"准备上传 ({StagedFiles.Count} 个文件)...";
         StatusMessage = "发布中...";
+
         try
         {
-            var r = await _cli.PushAsync(Project.ProjectPath, NewVersion, CommitMessage, AfterApplyUpdateScript, SetForceUpdate);
+            var r = await _cli.PushWithProgressAsync(
+                Project.ProjectPath, NewVersion, CommitMessage,
+                onProgress: progress =>
+                {
+                    Dispatcher.UIThread.Post(() => OnUploadProgress(progress));
+                },
+                afterApplyUpdateScript: AfterApplyUpdateScript,
+                setForceUpdate: SetForceUpdate);
+
             if (r?.IsSuccess == true)
             {
                 var stagedCount = StagedFiles.Count;
@@ -349,6 +372,43 @@ public partial class ProjectTabViewModel : ObservableObject, IDisposable
         {
             IsUploading = false;
             IsBusy = false;
+        }
+    }
+
+    private void OnUploadProgress(UploadProgress progress)
+    {
+        switch (progress.Status)
+        {
+            case "START":
+                IsUploadProgressIndeterminate = false;
+                UploadProgressItems.Add(progress);
+                UploadProgressPercent = UploadTotalCount > 0
+                    ? (double)UploadDoneCount / UploadTotalCount * 100
+                    : 0;
+                UploadProgressText = $"正在上传 {progress.File} ({UploadDoneCount}/{UploadTotalCount})...";
+                break;
+
+            case "DONE":
+            case "FAIL":
+                // 查找并替换对应索引的项
+                for (int i = 0; i < UploadProgressItems.Count; i++)
+                {
+                    if (UploadProgressItems[i].Index == progress.Index)
+                    {
+                        UploadProgressItems[i] = progress;
+                        break;
+                    }
+                }
+                if (progress.Status == "DONE")
+                {
+                    UploadDoneCount++;
+                }
+                UploadProgressPercent = UploadTotalCount > 0
+                    ? (double)UploadDoneCount / UploadTotalCount * 100
+                    : 0;
+                var doneText = progress.Status == "DONE" ? "完成" : "失败";
+                UploadProgressText = $"已{doneText} {progress.File} ({UploadDoneCount}/{UploadTotalCount})";
+                break;
         }
     }
 

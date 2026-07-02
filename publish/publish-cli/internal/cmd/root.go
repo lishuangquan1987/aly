@@ -124,6 +124,75 @@ func outputResult(success bool, errMsg string, data interface{}) {
 	}
 }
 
+// printProgress 输出上传进度到 stdout（仅 --json 模式），每行一个 JSON。
+// data 中包含 index/total/file/status/file_size/error 字段。
+func printProgress(index, total int, file, status string, fileSize int64, errMsg string) {
+	if !jsonOutput {
+		return
+	}
+	out := models.Output{
+		IsSuccess: true,
+		ErrMsg:    "",
+		Data: models.UploadProgress{
+			Index:    index,
+			Total:    total,
+			File:     file,
+			Status:   status,
+			FileSize: fileSize,
+			Error:    errMsg,
+		},
+	}
+	bytes, err := json.Marshal(out)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "JSON marshal error: %v\n", err)
+		return
+	}
+	fmt.Println(string(bytes))
+}
+
+// printProgressFail 输出失败的进度行（isSuccess: false）。
+func printProgressFail(index, total int, file string, fileSize int64, errMsg string) {
+	if !jsonOutput {
+		return
+	}
+	out := models.Output{
+		IsSuccess: false,
+		ErrMsg:    fmt.Sprintf("%s: %s", file, errMsg),
+		Data: models.UploadProgress{
+			Index:    index,
+			Total:    total,
+			File:     file,
+			Status:   "FAIL",
+			FileSize: fileSize,
+			Error:    errMsg,
+		},
+	}
+	bytes, err := json.Marshal(out)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "JSON marshal error: %v\n", err)
+		return
+	}
+	fmt.Println(string(bytes))
+}
+
+// printProgressDone 输出最终完成行（isSuccess: true, data: null），表示进度流结束。
+func printProgressDone() {
+	if !jsonOutput {
+		return
+	}
+	out := models.Output{
+		IsSuccess: true,
+		ErrMsg:    "",
+		Data:      nil,
+	}
+	bytes, err := json.Marshal(out)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "JSON marshal error: %v\n", err)
+		return
+	}
+	fmt.Println(string(bytes))
+}
+
 // mergeStagedIntoStatusData 从暂存区加载 staged 文件，并从 unstaged 中移除已暂存的条目
 func mergeStagedIntoStatusData(sd *models.StatusData, projectPath string) {
 	stagedItems, err := staging.Load(projectPath)

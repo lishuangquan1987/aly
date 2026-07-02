@@ -127,3 +127,13 @@ type FileDiff struct {
 	ServerMd5    string
 	ServerSize   int64
 }
+
+// UploadProgress 是 push 命令的过程进度输出（每行一个 JSON，仅 --json 模式）
+type UploadProgress struct {
+	Index    int    `json:"index"`
+	Total    int    `json:"total"`
+	File     string `json:"file"`
+	Status   string `json:"status"` // START / DONE / FAIL
+	FileSize int64  `json:"file_size"`
+	Error    string `json:"error,omitempty"`
+}
