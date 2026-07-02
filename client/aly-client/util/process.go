@@ -147,7 +147,7 @@ func WaitForProcessExit(pid uint32, timeout time.Duration) bool {
 	return ret == WAIT_OBJECT_0
 }
 
-// KillProcessesAndWait 终止指定名称列表的所有进程并等待它们退出
+// KillProcessesAndWait 等待指定名称列表的进程退出，超时后强杀
 func KillProcessesAndWait(names []string, timeout time.Duration) error {
 	var allPIDs []uint32
 
@@ -164,14 +164,7 @@ func KillProcessesAndWait(names []string, timeout time.Duration) error {
 		return nil
 	}
 
-	// 终止所有进程
-	for _, pid := range allPIDs {
-		if err := KillProcess(pid); err != nil {
-			fmt.Fprintf(os.Stderr, "KillProcess %d failed: %v\n", pid, err)
-		}
-	}
-
-	// 等待所有进程退出
+	// 先等待进程自行退出（给优雅关闭的时间）
 	dead := make(map[uint32]bool)
 	deadline := time.Now().Add(timeout)
 
@@ -196,8 +189,15 @@ func KillProcessesAndWait(names []string, timeout time.Duration) error {
 	for _, pid := range allPIDs {
 		if !dead[pid] {
 			if err := KillProcess(pid); err != nil {
-				fmt.Fprintf(os.Stderr, "KillProcess (force) %d failed: %v\n", pid, err)
+				fmt.Fprintf(os.Stderr, "KillProcess %d failed: %v\n", pid, err)
 			}
+		}
+	}
+
+	// 再次等待残留进程退出（给 TerminateProcess 生效时间）
+	for _, pid := range allPIDs {
+		if !dead[pid] {
+			WaitForProcessExit(pid, 2*time.Second)
 		}
 	}
 

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"aly/publish-cli/pkg/models"
@@ -188,86 +189,193 @@ func (c *Client) GetAllFiles(projectName string) ([]models.FileInfo, error) {
 	return files, nil
 }
 
-// UploadFile 上传单个文件（multipart，流式传输避免大文件 OOM）
+// ─── 分片上传常量 ──────────────────────────────────────────────────────
+
+const chunkSize = 50 * 1024 // 50 KiB（跨子网防火墙通常允许 <64KB 的 POST body）
+
+// ─── 分片上传逻辑 ──────────────────────────────────────────────────────
+
+// isTransientUploadError 判断是否为可重试的临时网络错误
+func isTransientUploadError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "closed pipe") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "forcibly closed") ||
+		strings.Contains(msg, "timeout")
+}
+
+// UploadFile 上传单个文件：小文件直接上传，大文件分片上传
 func (c *Client) UploadFile(localPath, projectName, relativeFileName string) error {
-	file, err := os.Open(localPath)
+	fi, err := os.Stat(localPath)
 	if err != nil {
-		return fmt.Errorf("open file: %w", err)
+		return fmt.Errorf("stat file: %w", err)
+	}
+	if fi.Size() <= chunkSize {
+		return c.uploadFileDirect(localPath, projectName, relativeFileName)
+	}
+	return c.uploadFileChunked(localPath, projectName, relativeFileName, fi.Size())
+}
+
+// uploadFileDirect 直接上传小文件（内存缓冲，无 io.Pipe）
+func (c *Client) uploadFileDirect(localPath, projectName, relativeFileName string) error {
+	data, err := os.ReadFile(localPath)
+	if err != nil {
+		return fmt.Errorf("read file: %w", err)
 	}
 
-	pr, pw := io.Pipe()
-	writer := multipart.NewWriter(pw)
-	writeErrCh := make(chan error, 1)
+	body := multipartFormBuffer(data, filepath.Base(localPath), map[string]string{
+		"projectName":      projectName,
+		"relativeFileName": relativeFileName,
+	})
 
-	// 在 goroutine 中写入 multipart 数据，通过 Pipe 流式传输
-	// file.Close 在 goroutine 内完成，避免主 goroutine 提前关闭文件
-	go func() {
-		defer file.Close()
-		var writeErr error
-		defer func() {
-			// panic recovery：确保 goroutine panic 不会导致 Pipe 静默成功
-			if r := recover(); r != nil {
-				writeErr = fmt.Errorf("panic in multipart writer: %v", r)
-			}
-			// 确保 writer 关闭以结束 multipart 边界
-			if closeErr := writer.Close(); closeErr != nil && writeErr == nil {
-				writeErr = closeErr
-			}
-			pw.CloseWithError(writeErr)
-			writeErrCh <- writeErr
-		}()
-
-		// file 字段
-		part, err := writer.CreateFormFile("file", filepath.Base(localPath))
-		if err != nil {
-			writeErr = fmt.Errorf("create form file: %w", err)
-			return
-		}
-		if _, err := io.Copy(part, file); err != nil {
-			writeErr = fmt.Errorf("copy file to part: %w", err)
-			return
-		}
-
-		// projectName 字段
-		if err := writer.WriteField("projectName", projectName); err != nil {
-			writeErr = fmt.Errorf("write projectName field: %w", err)
-			return
-		}
-		// relativeFileName 字段
-		if err := writer.WriteField("relativeFileName", relativeFileName); err != nil {
-			writeErr = fmt.Errorf("write relativeFileName field: %w", err)
-			return
-		}
-	}()
-
-	resp, err := c.hc.Post(c.ServerURL+"/api/file/upload_file", writer.FormDataContentType(), pr)
-	writeErr := <-writeErrCh
-	if writeErr != nil {
-		return fmt.Errorf("multipart write: %w", writeErr)
-	}
+	resp, err := c.hc.Post(c.ServerURL+"/api/file/upload_file", body.contentType, &body.buf)
 	if err != nil {
 		return fmt.Errorf("upload file: %w", err)
 	}
 	defer resp.Body.Close()
 
+	return checkResponse(resp)
+}
+
+// uploadFileChunked 分片上传大文件
+func (c *Client) uploadFileChunked(localPath, projectName, relativeFileName string, fileSize int64) error {
+	totalChunks := int((fileSize + chunkSize - 1) / chunkSize)
+
+	file, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("open file: %w", err)
+	}
+	defer file.Close()
+
+	// 顺序上传分片（每个分片有独立重试）
+	for i := 0; i < totalChunks; i++ {
+		offset := int64(i) * chunkSize
+		remaining := fileSize - offset
+		chunkLen := chunkSize
+		if remaining < int64(chunkSize) {
+			chunkLen = int(remaining)
+		}
+		if chunkLen <= 0 {
+			break
+		}
+
+		buf := make([]byte, chunkLen)
+		if _, err := file.ReadAt(buf, offset); err != nil {
+			return fmt.Errorf("read chunk %d: %w", i, err)
+		}
+
+		if err := c.uploadChunkWithRetry(buf, projectName, relativeFileName, i, totalChunks); err != nil {
+			return fmt.Errorf("upload chunk %d/%d: %w", i, totalChunks, err)
+		}
+	}
+
+	// 通知服务端合并分片
+	return c.completeChunks(projectName, relativeFileName, totalChunks)
+}
+
+// completeChunks 通知服务端合并所有分片
+func (c *Client) completeChunks(projectName, relativeFileName string, totalChunks int) error {
+	body := multipartFormBuffer(nil, "", map[string]string{
+		"projectName":      projectName,
+		"relativeFileName": relativeFileName,
+		"totalChunks":      fmt.Sprintf("%d", totalChunks),
+	})
+
+	resp, err := c.hc.Post(c.ServerURL+"/api/file/upload_chunk_complete", body.contentType, &body.buf)
+	if err != nil {
+		return fmt.Errorf("chunk complete: %w", err)
+	}
+	defer resp.Body.Close()
+
+	return checkResponse(resp)
+}
+
+// uploadChunkWithRetry 上传单个分片（带重试）
+func (c *Client) uploadChunkWithRetry(data []byte, projectName, relativeFileName string, chunkIndex, totalChunks int) error {
+	maxRetries := 3
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(200*(1<<attempt)) * time.Millisecond
+			time.Sleep(backoff)
+		}
+		err := c.uploadChunkOnce(data, projectName, relativeFileName, chunkIndex, totalChunks)
+		if err == nil {
+			return nil
+		}
+		if !isTransientUploadError(err) {
+			return err
+		}
+		lastErr = err
+	}
+	return fmt.Errorf("chunk %d/%d failed after %d retries: %w", chunkIndex, totalChunks, maxRetries, lastErr)
+}
+
+// uploadChunkOnce 单次上传分片（内存缓冲，无 io.Pipe）
+func (c *Client) uploadChunkOnce(data []byte, projectName, relativeFileName string, chunkIndex, totalChunks int) error {
+	body := multipartFormBuffer(data, filepath.Base(relativeFileName), map[string]string{
+		"projectName":      projectName,
+		"relativeFileName": relativeFileName,
+		"chunkIndex":       fmt.Sprintf("%d", chunkIndex),
+		"totalChunks":      fmt.Sprintf("%d", totalChunks),
+	})
+
+	resp, err := c.hc.Post(c.ServerURL+"/api/file/upload_chunk", body.contentType, &body.buf)
+	if err != nil {
+		return fmt.Errorf("upload chunk: %w", err)
+	}
+	defer resp.Body.Close()
+
+	return checkResponse(resp)
+}
+
+// ─── multipart 辅助 ─────────────────────────────────────────────────────
+
+type multipartForm struct {
+	contentType string
+	buf         bytes.Buffer
+}
+
+// multipartFormBuffer 构造 multipart/form-data 请求体（完全在内存中，无 io.Pipe）
+// fileData 为 nil 时跳过 file 字段（用于 complete 请求）
+func multipartFormBuffer(fileData []byte, fileName string, extraFields map[string]string) multipartForm {
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+
+	if fileData != nil {
+		part, _ := writer.CreateFormFile("file", fileName)
+		part.Write(fileData)
+	}
+
+	for key, value := range extraFields {
+		writer.WriteField(key, value)
+	}
+
+	writer.Close()
+	return multipartForm{contentType: writer.FormDataContentType(), buf: buf}
+}
+
+// checkResponse 检查通用响应
+func checkResponse(resp *http.Response) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
-			return fmt.Errorf("upload file returned HTTP %d (failed to read body: %v)", resp.StatusCode, readErr)
+			return fmt.Errorf("HTTP %d (failed to read body: %v)", resp.StatusCode, readErr)
 		}
-		return fmt.Errorf("upload file returned HTTP %d: %s", resp.StatusCode, string(respBody))
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	respBody, readErr := io.ReadAll(resp.Body)
 	if readErr != nil {
-		return fmt.Errorf("upload file read response: %w", readErr)
+		return fmt.Errorf("read response: %w", readErr)
 	}
 	var cr models.CommonResponse
 	if err := json.Unmarshal(respBody, &cr); err != nil {
-		return fmt.Errorf("upload file parse response: %w", err)
+		return fmt.Errorf("parse response: %w", err)
 	}
 	if !cr.IsSuccess {
-		return fmt.Errorf("upload file: %s", cr.ErrorMsg)
+		return fmt.Errorf("%s", cr.ErrorMsg)
 	}
 	return nil
 }

@@ -29,6 +29,8 @@ func InitRouter(r *gin.Engine) {
 		fileGroup := group.Group("file")
 		{
 			fileGroup.POST("upload_file", controllers.UploadFile)
+			fileGroup.POST("upload_chunk", controllers.UploadChunk)
+			fileGroup.POST("upload_chunk_complete", controllers.UploadChunkComplete)
 			fileGroup.GET("get_all_files/:projectName", controllers.GetAllFilesByProjectName)
 			fileGroup.GET("download_file", controllers.DownloadFile)
 		}

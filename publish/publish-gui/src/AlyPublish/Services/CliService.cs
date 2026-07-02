@@ -120,7 +120,7 @@ public class CliService
             args += " --set-force-update";
         if (!string.IsNullOrWhiteSpace(afterApplyUpdateScript))
             args += $" --after-apply-update-script \"{afterApplyUpdateScript.Replace("\"", "\\\"")}\"";
-        return RunAsync<object>(args, projectPath, 120000);
+        return RunAsync<object>(args, projectPath, 300000);
     }
 
     public Task<CliOutput<List<ChangeLog>>?> GetLogAsync(string projectPath, int limit = 20)
