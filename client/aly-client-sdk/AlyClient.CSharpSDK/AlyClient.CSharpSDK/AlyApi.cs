@@ -197,7 +197,8 @@ namespace AlyClient.CSharpSDK
                 {
                     FileName = alyExePath,
                     Arguments = arguments,
-                    UseShellExecute = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
                     WorkingDirectory = Path.GetDirectoryName(alyExePath),
                 };
 
