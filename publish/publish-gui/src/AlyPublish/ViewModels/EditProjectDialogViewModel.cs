@@ -53,6 +53,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
     public IAsyncRelayCommand AddUnCopyFileCommand { get; }
     public IAsyncRelayCommand RemoveUnCopyFileCommand { get; }
     public IAsyncRelayCommand BrowseExeCommand { get; }
+    public IRelayCommand CancelCommand { get; }
     public IAsyncRelayCommand SaveCommand { get; }
 
     public EditProjectDialogViewModel(CliService cli)
@@ -69,6 +70,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
         AddUnCopyFileCommand = new AsyncRelayCommand<string?>(AddUnCopyFileAsync);
         RemoveUnCopyFileCommand = new AsyncRelayCommand<string?>(RemoveUnCopyFileAsync);
         BrowseExeCommand = new AsyncRelayCommand(BrowseExeAsync);
+        CancelCommand = new RelayCommand(() => RequestClose?.Invoke(null));
         SaveCommand = new AsyncRelayCommand(SaveAsync);
         StartEditUrlCommand = new RelayCommand(StartEditUrl);
     }

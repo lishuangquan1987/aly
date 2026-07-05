@@ -17,9 +17,6 @@
     xmlns:u="https://irihi.tech/ursa"
     xmlns:vm="using:AlyPublish.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Design.DataContext>
-        <vm:MainWindowViewModel />
-    </Design.DataContext>
 
     <Window.Resources>
         <conv:BytesToSizeConverter x:Key="BytesToSize" />
@@ -623,19 +620,19 @@
                                                         HorizontalAlignment="Center"
                                                         Text="{Binding UploadProgressText}" />
                                                 </StackPanel>
-                                                <!-- 文件级进度列表 -->
+                                                <!--  文件级进度列表  -->
                                                 <ScrollViewer MaxHeight="150">
                                                     <ItemsControl ItemsSource="{Binding UploadProgressItems}">
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
                                                                 <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,1">
-                                                                    <!-- 状态图标 -->
+                                                                    <!--  状态图标  -->
                                                                     <TextBlock
                                                                         FontSize="12"
                                                                         Grid.Column="0"
                                                                         Text="⏳"
                                                                         Width="18" />
-                                                                    <!-- 文件名 -->
+                                                                    <!--  文件名  -->
                                                                     <TextBlock
                                                                         FontSize="11"
                                                                         Foreground="{DynamicResource SemiColorText1}"
@@ -644,7 +641,7 @@
                                                                         Text="{Binding File}"
                                                                         TextTrimming="CharacterEllipsis"
                                                                         VerticalAlignment="Center" />
-                                                                    <!-- 状态文字 -->
+                                                                    <!--  状态文字  -->
                                                                     <TextBlock
                                                                         FontSize="11"
                                                                         Foreground="{DynamicResource SemiColorText2}"

@@ -363,7 +363,7 @@
                 Text="{Binding StatusMessage}"
                 VerticalAlignment="Center" />
             <Button
-                Click="CancelBtn_Click"
+                Command="{Binding CancelCommand}"
                 Content="取消"
                 Grid.Column="1"
                 Height="32"
