@@ -21,6 +21,8 @@ type SharedConfig struct {
 	ProjectName   string   `json:"project_name"`
 	IgnoreFolders []string `json:"ignore_folders"`
 	IgnoreFiles   []string `json:"ignore_files"`
+	UnCopyFolders []string `json:"un_copy_folders"`
+	UnCopyFiles   []string `json:"un_copy_files"`
 }
 
 // ExeDir 返回 aly-client.exe 所在目录 (UpdateFolder/)

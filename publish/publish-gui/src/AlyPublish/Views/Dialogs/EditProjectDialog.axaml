@@ -1,7 +1,7 @@
 <Window
     Background="{DynamicResource SemiColorBg0}"
     CanResize="False"
-    Height="500"
+    Height="720"
     Title="编辑项目"
     Width="520"
     WindowStartupLocation="CenterOwner"
@@ -72,6 +72,26 @@
                                 Margin="0,0,0,4"
                                 Text="显示名称" />
                             <TextBox FontSize="13" Text="{Binding DisplayName}" />
+                        </StackPanel>
+
+                        <!--  MainExePath  -->
+                        <StackPanel>
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{DynamicResource SemiColorText2}"
+                                Margin="0,0,0,4"
+                                Text='主程序路径（用于"启动程序"按钮）' />
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBox FontSize="13" Text="{Binding MainExePath}" />
+                                <Button
+                                    Command="{Binding BrowseExeCommand}"
+                                    Content="..."
+                                    Grid.Column="1"
+                                    Height="28"
+                                    Margin="6,0,0,0"
+                                    Padding="8,0"
+                                    ToolTip.Tip="选择主程序 .exe" />
+                            </Grid>
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -231,6 +251,94 @@
                                 <Button
                                     Command="{Binding #Root.((vm:EditProjectDialogViewModel)DataContext).AddFileCommand}"
                                     CommandParameter="{Binding #Root.((vm:EditProjectDialogViewModel)DataContext).NewFileItem}"
+                                    Content="添加"
+                                    Grid.Column="1"
+                                    Height="28"
+                                    Margin="6,0,0,0"
+                                    Padding="8,0" />
+                            </Grid>
+                        </StackPanel>
+
+                        <!--  UnCopy Folders  -->
+                        <StackPanel>
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{DynamicResource SemiColorText2}"
+                                Margin="0,0,0,4"
+                                Text="不复制文件夹（apply-update 时跳过）" />
+                            <ItemsControl ItemsSource="{Binding UnCopyFolders}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                                            <TextBlock
+                                                FontSize="12"
+                                                Text="{Binding}"
+                                                VerticalAlignment="Center" />
+                                            <Button
+                                                Command="{Binding #Root.((vm:EditProjectDialogViewModel)DataContext).RemoveUnCopyFolderCommand}"
+                                                CommandParameter="{Binding}"
+                                                Content="✕"
+                                                FontSize="10"
+                                                Grid.Column="1"
+                                                Height="24"
+                                                Padding="0"
+                                                Width="24" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+                                <TextBox
+                                    FontSize="12"
+                                    Text="{Binding NewUnCopyFolderItem}"
+                                    Watermark="添加不复制文件夹..." />
+                                <Button
+                                    Command="{Binding #Root.((vm:EditProjectDialogViewModel)DataContext).AddUnCopyFolderCommand}"
+                                    CommandParameter="{Binding #Root.((vm:EditProjectDialogViewModel)DataContext).NewUnCopyFolderItem}"
+                                    Content="添加"
+                                    Grid.Column="1"
+                                    Height="28"
+                                    Margin="6,0,0,0"
+                                    Padding="8,0" />
+                            </Grid>
+                        </StackPanel>
+
+                        <!--  UnCopy Files  -->
+                        <StackPanel>
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{DynamicResource SemiColorText2}"
+                                Margin="0,0,0,4"
+                                Text="不复制文件（apply-update 时跳过）" />
+                            <ItemsControl ItemsSource="{Binding UnCopyFiles}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                                            <TextBlock
+                                                FontSize="12"
+                                                Text="{Binding}"
+                                                VerticalAlignment="Center" />
+                                            <Button
+                                                Command="{Binding #Root.((vm:EditProjectDialogViewModel)DataContext).RemoveUnCopyFileCommand}"
+                                                CommandParameter="{Binding}"
+                                                Content="✕"
+                                                FontSize="10"
+                                                Grid.Column="1"
+                                                Height="24"
+                                                Padding="0"
+                                                Width="24" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+                                <TextBox
+                                    FontSize="12"
+                                    Text="{Binding NewUnCopyFileItem}"
+                                    Watermark="添加不复制文件规则..." />
+                                <Button
+                                    Command="{Binding #Root.((vm:EditProjectDialogViewModel)DataContext).AddUnCopyFileCommand}"
+                                    CommandParameter="{Binding #Root.((vm:EditProjectDialogViewModel)DataContext).NewUnCopyFileItem}"
                                     Content="添加"
                                     Grid.Column="1"
                                     Height="28"

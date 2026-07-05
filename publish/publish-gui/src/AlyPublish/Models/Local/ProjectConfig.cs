@@ -18,4 +18,9 @@ public partial class ProjectConfig : ObservableObject
     [ObservableProperty]
     [property: JsonProperty("ProjectPath")]
     private string _projectPath = string.Empty;
+
+    /// <summary>主程序相对路径（相对于 ProjectPath），用于"启动程序"按钮</summary>
+    [ObservableProperty]
+    [property: JsonProperty("MainExePath")]
+    private string _mainExePath = string.Empty;
 }

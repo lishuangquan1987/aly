@@ -1,5 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -63,6 +65,9 @@ public partial class ProjectTabViewModel : ObservableObject, IDisposable
     /// <summary>由 MainWindowViewModel 注入，用于打开编辑项目对话框</summary>
     public Func<ProjectConfig, Task<ProjectConfig?>>? EditProjectAsync { get; set; }
 
+    public IRelayCommand LaunchProgramCommand { get; }
+    public IRelayCommand OpenExplorerCommand { get; }
+
     public ProjectTabViewModel(ProjectConfig project, CliService cli)
     {
         Project = project;
@@ -77,6 +82,9 @@ public partial class ProjectTabViewModel : ObservableObject, IDisposable
         PublishCommand = new AsyncRelayCommand(PublishAsync,
             () => !IsBusy && StagedFiles.Count > 0 && !string.IsNullOrWhiteSpace(NewVersion) && !string.IsNullOrWhiteSpace(CommitMessage));
         EditProjectCommand = new AsyncRelayCommand(EditProjectCmdAsync, () => !IsBusy);
+
+        LaunchProgramCommand = new RelayCommand(LaunchProgram);
+        OpenExplorerCommand = new RelayCommand(OpenExplorer);
 
         UnstagedFiles.CollectionChanged += (_, _) =>
         {
@@ -435,5 +443,97 @@ public partial class ProjectTabViewModel : ObservableObject, IDisposable
             Log.Error(ex, "编辑项目异常");
         }
         finally { IsBusy = false; }
+    }
+
+    // ── Launch / Explorer ────────────────────────────────
+
+    private void LaunchProgram()
+    {
+        try
+        {
+            var exePath = GetMainExeFullPath();
+            if (string.IsNullOrWhiteSpace(exePath))
+            {
+                Dispatcher.UIThread.Post(() =>
+                    MessageBox.ShowAsync("请先在项目设置中配置主程序路径", "提示", MessageBoxIcon.Warning));
+                return;
+            }
+            if (!File.Exists(exePath))
+            {
+                Dispatcher.UIThread.Post(() =>
+                    MessageBox.ShowAsync($"主程序不存在: {exePath}", "错误", MessageBoxIcon.Error));
+                return;
+            }
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = exePath,
+                WorkingDirectory = Path.GetDirectoryName(exePath) ?? Project.ProjectPath,
+                UseShellExecute = true
+            });
+            StatusMessage = $"已启动: {exePath}";
+            Log.Information("启动程序: {Path}", exePath);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "启动程序失败: {Path}", Project.MainExePath);
+            Dispatcher.UIThread.Post(() =>
+                MessageBox.ShowAsync($"启动失败: {ex.Message}", "错误", MessageBoxIcon.Error));
+        }
+    }
+
+    private void OpenExplorer()
+    {
+        try
+        {
+            var dir = Project.ProjectPath;
+            if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir))
+            {
+                Dispatcher.UIThread.Post(() =>
+                    MessageBox.ShowAsync($"项目目录不存在: {dir}", "错误", MessageBoxIcon.Error));
+                return;
+            }
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = dir,
+                UseShellExecute = true
+            });
+            StatusMessage = $"已打开: {dir}";
+            Log.Information("打开文件管理器: {Path}", dir);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "打开文件管理器失败: {Path}", Project.ProjectPath);
+            Dispatcher.UIThread.Post(() =>
+                MessageBox.ShowAsync($"打开失败: {ex.Message}", "错误", MessageBoxIcon.Error));
+        }
+    }
+
+    private string? GetMainExeFullPath()
+    {
+        var mainExePath = Project.MainExePath;
+        if (string.IsNullOrWhiteSpace(mainExePath))
+            return null;
+        // 如果是绝对路径，确保在项目目录内
+        if (Path.IsPathRooted(mainExePath))
+        {
+            var projectPath = Project.ProjectPath;
+            if (string.IsNullOrWhiteSpace(projectPath))
+                return null;
+            var normalizedProject = Path.GetFullPath(projectPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var normalizedExe = Path.GetFullPath(mainExePath);
+            if (!normalizedExe.StartsWith(normalizedProject + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return null;
+            return mainExePath;
+        }
+        // 否则相对于项目路径
+        var projPath = Project.ProjectPath;
+        if (string.IsNullOrWhiteSpace(projPath))
+            return null;
+        var fullPath = Path.GetFullPath(Path.Combine(projPath, mainExePath));
+        // 确保解析后的路径仍在项目目录内（防止 ../../ 路径穿越）
+        var normProject = Path.GetFullPath(projPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (!fullPath.StartsWith(normProject + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            return null;
+        return fullPath;
     }
 }

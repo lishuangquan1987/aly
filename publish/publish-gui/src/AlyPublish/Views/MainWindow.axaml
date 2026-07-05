@@ -264,7 +264,7 @@
                                         BorderBrush="{DynamicResource SemiColorBorder}"
                                         BorderThickness="0,0,0,1"
                                         Padding="14,0">
-                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Height="36">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto" Height="36">
                                             <StackPanel
                                                 Orientation="Horizontal"
                                                 Spacing="6"
@@ -285,8 +285,40 @@
                                             </StackPanel>
                                             <Button
                                                 Classes="Tertiary"
-                                                Command="{Binding EditProjectCommand}"
+                                                Command="{Binding LaunchProgramCommand}"
                                                 Grid.Column="2"
+                                                Height="28"
+                                                Margin="0,0,4,0"
+                                                Padding="8,0"
+                                                ToolTip.Tip="启动设置的主程序">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <materialIcons:MaterialIcon
+                                                        Height="14"
+                                                        Kind="Play"
+                                                        Width="14" />
+                                                    <TextBlock FontSize="12" Text="启动程序" />
+                                                </StackPanel>
+                                            </Button>
+                                            <Button
+                                                Classes="Tertiary"
+                                                Command="{Binding OpenExplorerCommand}"
+                                                Grid.Column="3"
+                                                Height="28"
+                                                Margin="0,0,4,0"
+                                                Padding="8,0"
+                                                ToolTip.Tip="打开项目目录">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <materialIcons:MaterialIcon
+                                                        Height="14"
+                                                        Kind="FolderOpen"
+                                                        Width="14" />
+                                                    <TextBlock FontSize="12" Text="打开文件夹" />
+                                                </StackPanel>
+                                            </Button>
+                                            <Button
+                                                Classes="Tertiary"
+                                                Command="{Binding EditProjectCommand}"
+                                                Grid.Column="4"
                                                 Height="28"
                                                 Margin="0,0,4,0"
                                                 Padding="10,0">
@@ -303,7 +335,7 @@
                                             </Button>
                                             <Button
                                                 Command="{Binding RefreshCommand}"
-                                                Grid.Column="3"
+                                                Grid.Column="5"
                                                 Height="28"
                                                 Margin="0,0,4,0"
                                                 Padding="10,0">
@@ -317,7 +349,7 @@
                                             </Button>
                                             <Button
                                                 Command="{Binding AddSelectedCommand}"
-                                                Grid.Column="4"
+                                                Grid.Column="6"
                                                 Height="28"
                                                 Margin="0,0,4,0"
                                                 Padding="10,0">
@@ -332,7 +364,7 @@
                                             <Button
                                                 Classes="Primary"
                                                 Command="{Binding AddAllCommand}"
-                                                Grid.Column="5"
+                                                Grid.Column="7"
                                                 Height="28"
                                                 Margin="0,0,4,0"
                                                 Padding="10,0">

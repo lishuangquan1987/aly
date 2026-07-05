@@ -15,13 +15,17 @@ var (
 	setArrayRemove string
 	setArrayClear  bool
 
-	ignoreFoldersInit string
-	ignoreFilesInit   string
+	ignoreFoldersInit  string
+	ignoreFilesInit    string
+	unCopyFoldersInit  string
+	unCopyFilesInit    string
 )
 
 func init() {
 	cmdConfigInit.Flags().StringVar(&ignoreFoldersInit, "ignore-folders", "", "忽略的文件夹（逗号分隔）")
 	cmdConfigInit.Flags().StringVar(&ignoreFilesInit, "ignore-files", "", "忽略的文件（逗号分隔）")
+	cmdConfigInit.Flags().StringVar(&unCopyFoldersInit, "un-copy-folders", "", "不复制文件夹（逗号分隔）")
+	cmdConfigInit.Flags().StringVar(&unCopyFilesInit, "un-copy-files", "", "不复制文件（逗号分隔）")
 	cmdConfigInit.MarkFlagRequired("project")
 
 	cmdConfigSetArray.Flags().StringVar(&setArrayAdd, "add", "", "添加项")
@@ -90,6 +94,13 @@ func runConfigInit(cmd *cobra.Command, args []string) {
 	}
 	if ignoreFilesInit != "" {
 		cfg.Shared.IgnoreFiles = parseCSV(ignoreFilesInit)
+	}
+	// 应用 --un-copy-folders 和 --un-copy-files（逗号分隔）
+	if unCopyFoldersInit != "" {
+		cfg.Shared.UnCopyFolders = parseCSV(unCopyFoldersInit)
+	}
+	if unCopyFilesInit != "" {
+		cfg.Shared.UnCopyFiles = parseCSV(unCopyFilesInit)
 	}
 	if err := config.SaveShared(cfg.Path, cfg.Shared); err != nil {
 		outputResult(false, err.Error(), nil)
@@ -204,8 +215,10 @@ func runConfigList(cmd *cobra.Command, args []string) {
 	}
 	printHumanLn("server.url      = %s", cfg.Shared.ServerURL)
 	printHumanLn("project.name    = %s", cfg.Shared.ProjectName)
-	printHumanLn("ignore.folders  = %v", cfg.Shared.IgnoreFolders)
-	printHumanLn("ignore.files    = %v", cfg.Shared.IgnoreFiles)
+	printHumanLn("ignore.folders   = %v", cfg.Shared.IgnoreFolders)
+	printHumanLn("ignore.files     = %v", cfg.Shared.IgnoreFiles)
+	printHumanLn("un_copy.folders  = %v", cfg.Shared.UnCopyFolders)
+	printHumanLn("un_copy.files    = %v", cfg.Shared.UnCopyFiles)
 
 }
 
@@ -243,6 +256,10 @@ func applyArrayOp(cfg *RuntimeConfig, key, add, remove string, clear bool) error
 		target = &cfg.Shared.IgnoreFolders
 	case "ignore.files":
 		target = &cfg.Shared.IgnoreFiles
+	case "un_copy.folders":
+		target = &cfg.Shared.UnCopyFolders
+	case "un_copy.files":
+		target = &cfg.Shared.UnCopyFiles
 	default:
 		return fmt.Errorf("unknown config key '%s'", key)
 	}

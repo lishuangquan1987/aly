@@ -102,12 +102,23 @@ func ApplyUpdate() {
 		return
 	}
 
-	// Copy current mainFolder content to versionDir (excluding ignore folders/files from shared.json)
+	// 从 versionDir 读取 shared.json，获取 un_copy_folders / un_copy_files
+	// 这些字段指定不应从当前 ApplicationFolder 复制到新版本目录的文件/文件夹
+	var unCopyFolders []string
+	var unCopyFiles []string
+	if versionShared, verErr := config.LoadSharedConfig(versionDir); verErr == nil {
+		unCopyFolders = versionShared.UnCopyFolders
+		unCopyFiles = versionShared.UnCopyFiles
+	}
+
+	// Copy current mainFolder content to versionDir.
+	// 只排除 un_copy_folders / un_copy_files（仅用于 apply-update 时的复制控制）。
+	// ignore_folders / ignore_files 用于服务端文件列表过滤和 publish-cli 文件采集，不在此处使用。
 	shouldSkipFile := func(relPath string) bool {
-		return config.ShouldSkipFile(relPath, fc.Shared.IgnoreFiles)
+		return config.ShouldSkipFile(relPath, unCopyFiles)
 	}
 	shouldSkipFolder := func(relPath string) bool {
-		return config.ShouldSkipFolder(relPath, fc.Shared.IgnoreFolders)
+		return config.ShouldSkipFolder(relPath, unCopyFolders)
 	}
 	if err := util.CopyDirWithExclude(fc.MainFolder, versionDir, shouldSkipFile, shouldSkipFolder); err != nil {
 		versionInfo.VersionStatus = config.VersionStatusDownloaded

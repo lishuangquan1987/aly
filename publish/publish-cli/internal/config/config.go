@@ -9,10 +9,12 @@ import (
 
 // SharedConfig publish-cli + client 共用配置（.updator/shared.json）
 type SharedConfig struct {
-	ServerURL     string   `json:"server_url"`
-	ProjectName   string   `json:"project_name"`
-	IgnoreFolders []string `json:"ignore_folders"`
-	IgnoreFiles   []string `json:"ignore_files"`
+	ServerURL      string   `json:"server_url"`
+	ProjectName    string   `json:"project_name"`
+	IgnoreFolders  []string `json:"ignore_folders"`
+	IgnoreFiles    []string `json:"ignore_files"`
+	UnCopyFolders  []string `json:"un_copy_folders"`
+	UnCopyFiles    []string `json:"un_copy_files"`
 }
 
 // PublishConfig publish-cli 专有配置（.updator/publish.json，本地不上传）
@@ -25,6 +27,8 @@ func DefaultShared() SharedConfig {
 	return SharedConfig{
 		IgnoreFolders: []string{},
 		IgnoreFiles:   []string{},
+		UnCopyFolders: []string{},
+		UnCopyFiles:   []string{},
 	}
 }
 

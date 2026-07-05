@@ -1,8 +1,11 @@
 using System;
 using System.Collections.ObjectModel;
+
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -24,13 +27,18 @@ public partial class EditProjectDialogViewModel : ObservableObject
     [ObservableProperty] private string _projectName = string.Empty;
     [ObservableProperty] private ObservableCollection<string> _ignoreFolders = new();
     [ObservableProperty] private ObservableCollection<string> _ignoreFiles = new();
+    [ObservableProperty] private ObservableCollection<string> _unCopyFolders = new();
+    [ObservableProperty] private ObservableCollection<string> _unCopyFiles = new();
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _statusMessage = string.Empty;
+    [ObservableProperty] private string _mainExePath = string.Empty;
 
     [ObservableProperty] private bool _isEditingUrl;
     [ObservableProperty] private string _editUrl = string.Empty;
     [ObservableProperty] private string _newFolderItem = string.Empty;
     [ObservableProperty] private string _newFileItem = string.Empty;
+    [ObservableProperty] private string _newUnCopyFolderItem = string.Empty;
+    [ObservableProperty] private string _newUnCopyFileItem = string.Empty;
 
     public event Action<ProjectConfig?>? RequestClose;
 
@@ -40,6 +48,11 @@ public partial class EditProjectDialogViewModel : ObservableObject
     public IAsyncRelayCommand RemoveFolderCommand { get; }
     public IAsyncRelayCommand AddFileCommand { get; }
     public IAsyncRelayCommand RemoveFileCommand { get; }
+    public IAsyncRelayCommand AddUnCopyFolderCommand { get; }
+    public IAsyncRelayCommand RemoveUnCopyFolderCommand { get; }
+    public IAsyncRelayCommand AddUnCopyFileCommand { get; }
+    public IAsyncRelayCommand RemoveUnCopyFileCommand { get; }
+    public IAsyncRelayCommand BrowseExeCommand { get; }
     public IAsyncRelayCommand SaveCommand { get; }
 
     public EditProjectDialogViewModel(CliService cli)
@@ -51,6 +64,11 @@ public partial class EditProjectDialogViewModel : ObservableObject
         RemoveFolderCommand = new AsyncRelayCommand<string?>(RemoveFolderAsync);
         AddFileCommand = new AsyncRelayCommand<string?>(AddFileAsync);
         RemoveFileCommand = new AsyncRelayCommand<string?>(RemoveFileAsync);
+        AddUnCopyFolderCommand = new AsyncRelayCommand<string?>(AddUnCopyFolderAsync);
+        RemoveUnCopyFolderCommand = new AsyncRelayCommand<string?>(RemoveUnCopyFolderAsync);
+        AddUnCopyFileCommand = new AsyncRelayCommand<string?>(AddUnCopyFileAsync);
+        RemoveUnCopyFileCommand = new AsyncRelayCommand<string?>(RemoveUnCopyFileAsync);
+        BrowseExeCommand = new AsyncRelayCommand(BrowseExeAsync);
         SaveCommand = new AsyncRelayCommand(SaveAsync);
         StartEditUrlCommand = new RelayCommand(StartEditUrl);
     }
@@ -66,6 +84,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
         if (project == null) throw new ArgumentNullException(nameof(project));
         _projectPath = project.ProjectPath;
         DisplayName = project.DisplayName;
+        MainExePath = project.MainExePath ?? string.Empty;
         _ = LoadCliConfigAsync().ContinueWith(t =>
         {
             if (t.IsFaulted) Log.Error(t.Exception, "LoadCliConfig failed");
@@ -95,6 +114,8 @@ public partial class EditProjectDialogViewModel : ObservableObject
                     ProjectName = cfg.ProjectName ?? "";
                     IgnoreFolders = new ObservableCollection<string>(cfg.IgnoreFolders ?? []);
                     IgnoreFiles = new ObservableCollection<string>(cfg.IgnoreFiles ?? []);
+                    UnCopyFolders = new ObservableCollection<string>(cfg.UnCopyFolders ?? []);
+                    UnCopyFiles = new ObservableCollection<string>(cfg.UnCopyFiles ?? []);
                 });
             }
         }
@@ -238,6 +259,162 @@ public partial class EditProjectDialogViewModel : ObservableObject
         finally { IsBusy = false; }
     }
 
+    // ── UnCopy Folders ────────────────────────────────────
+
+    private async Task AddUnCopyFolderAsync(string? item)
+    {
+        if (string.IsNullOrWhiteSpace(item)) return;
+        IsBusy = true;
+        try
+        {
+            var r = await _cli.ConfigSetArrayAddAsync(_projectPath, "un_copy.folders", item.Trim());
+            if (r?.IsSuccess == true)
+            {
+                UnCopyFolders.Add(item.Trim());
+                NewUnCopyFolderItem = string.Empty;
+                StatusMessage = "已添加（不复制文件夹）";
+            }
+            else
+            {
+                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "添加不复制文件夹失败: {Item}", item);
+            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
+        }
+        finally { IsBusy = false; }
+    }
+
+    private async Task RemoveUnCopyFolderAsync(string? item)
+    {
+        if (string.IsNullOrWhiteSpace(item)) return;
+        IsBusy = true;
+        try
+        {
+            var r = await _cli.ConfigSetArrayRemoveAsync(_projectPath, "un_copy.folders", item);
+            if (r?.IsSuccess == true)
+            {
+                UnCopyFolders.Remove(item);
+                StatusMessage = "已移除（不复制文件夹）";
+            }
+            else
+            {
+                await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "移除不复制文件夹失败: {Item}", item);
+            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
+        }
+        finally { IsBusy = false; }
+    }
+
+    // ── UnCopy Files ──────────────────────────────────────
+
+    private async Task AddUnCopyFileAsync(string? item)
+    {
+        if (string.IsNullOrWhiteSpace(item)) return;
+        IsBusy = true;
+        try
+        {
+            var r = await _cli.ConfigSetArrayAddAsync(_projectPath, "un_copy.files", item.Trim());
+            if (r?.IsSuccess == true)
+            {
+                UnCopyFiles.Add(item.Trim());
+                NewUnCopyFileItem = string.Empty;
+                StatusMessage = "已添加（不复制文件）";
+            }
+            else
+            {
+                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "添加不复制文件失败: {Item}", item);
+            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
+        }
+        finally { IsBusy = false; }
+    }
+
+    private async Task RemoveUnCopyFileAsync(string? item)
+    {
+        if (string.IsNullOrWhiteSpace(item)) return;
+        IsBusy = true;
+        try
+        {
+            var r = await _cli.ConfigSetArrayRemoveAsync(_projectPath, "un_copy.files", item);
+            if (r?.IsSuccess == true)
+            {
+                UnCopyFiles.Remove(item);
+                StatusMessage = "已移除（不复制文件）";
+            }
+            else
+            {
+                await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "移除不复制文件失败: {Item}", item);
+            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
+        }
+        finally { IsBusy = false; }
+    }
+
+    // ── Browse MainExe ────────────────────────────────────
+
+    private async Task BrowseExeAsync()
+    {
+        try
+        {
+            var topLevel = TopLevel.GetTopLevel(Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                ? desktop.MainWindow : null);
+            if (topLevel == null) return;
+
+            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "选择主程序 (.exe)",
+                AllowMultiple = false,
+                FileTypeFilter = [new FilePickerFileType("可执行文件") { Patterns = ["*.exe"] }]
+            });
+
+            if (files.Count > 0)
+            {
+                var selectedPath = files[0].Path.LocalPath;
+                // 转换为相对路径（相对于 ProjectPath）
+                if (!string.IsNullOrWhiteSpace(_projectPath))
+                {
+                    var projectDir = Path.GetFullPath(_projectPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    var selectedFull = Path.GetFullPath(selectedPath);
+                    if (selectedFull.StartsWith(projectDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                        selectedFull.StartsWith(projectDir + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    {
+                        MainExePath = selectedFull.Substring(projectDir.Length + 1);
+                    }
+                    else
+                    {
+                        // 不在项目目录内，使用绝对路径
+                        MainExePath = selectedFull;
+                        await MessageBox.ShowAsync("所选文件不在项目目录内，将使用绝对路径", "提示", MessageBoxIcon.Warning);
+                    }
+                }
+                else
+                {
+                    MainExePath = selectedPath;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "选择主程序失败");
+            await MessageBox.ShowAsync($"选择失败: {ex.Message}", "错误", MessageBoxIcon.Error);
+        }
+    }
+
     /// <summary>将当前的 ignore 设置同步到服务端（保留服务端原有 title，不覆盖）</summary>
     private async Task SyncIgnoreToServerAsync()
     {
@@ -280,7 +457,8 @@ public partial class EditProjectDialogViewModel : ObservableObject
         var result = new ProjectConfig
         {
             DisplayName = DisplayName.Trim(),
-            ProjectPath = _projectPath
+            ProjectPath = _projectPath,
+            MainExePath = MainExePath?.Trim() ?? string.Empty
         };
         RequestClose?.Invoke(result);
         return Task.CompletedTask;

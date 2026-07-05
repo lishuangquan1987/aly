@@ -18,4 +18,10 @@ public class SharedConfig
 
     [JsonProperty("ignore_files")]
     public List<string> IgnoreFiles { get; set; } = new();
+
+    [JsonProperty("un_copy_folders")]
+    public List<string> UnCopyFolders { get; set; } = new();
+
+    [JsonProperty("un_copy_files")]
+    public List<string> UnCopyFiles { get; set; } = new();
 }
