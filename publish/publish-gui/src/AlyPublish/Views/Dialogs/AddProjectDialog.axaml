@@ -175,6 +175,45 @@
                              Watermark="*.log, *.tmp, .DS_Store" FontSize="13"/>
                 </StackPanel>
 
+                <!-- 主程序路径 -->
+                <StackPanel>
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Grid.Column="0" Kind="OpenInApp"
+                                                    Width="14" Height="14"
+                                                    VerticalAlignment="Center"
+                                                    Margin="0,0,6,0"
+                                                    Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Grid.Column="1" Text="主程序路径"
+                                   FontWeight="Medium" FontSize="13"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource SemiColorText0}"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBox Text="{Binding MainExePath}"
+                                 Watermark="选择主程序 exe 文件" FontSize="13"/>
+                        <Button Grid.Column="1" Command="{Binding BrowseMainExeCommand}"
+                                Content="..."
+                                Margin="8,0,0,0" Height="32" Padding="12,0"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- 关闭进程名 -->
+                <StackPanel>
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                        <materialIcons:MaterialIcon Grid.Column="0" Kind="CloseCircleOutline"
+                                                    Width="14" Height="14"
+                                                    VerticalAlignment="Center"
+                                                    Margin="0,0,6,0"
+                                                    Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Grid.Column="1" Text="更新时关闭的进程名"
+                                   FontWeight="Medium" FontSize="13"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource SemiColorText0}"/>
+                    </Grid>
+                    <TextBox Text="{Binding CloseProcessName}"
+                             Watermark="自动从主程序名推断，可修改" FontSize="13"/>
+                </StackPanel>
+
             </StackPanel>
         </ScrollViewer>
 

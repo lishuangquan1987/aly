@@ -116,4 +116,115 @@ public class ConfigService
             return false;
         }
     }
+
+    // ── UpdateFolder ─────────────────────────────────────
+
+    /// <summary>
+    /// 在 projectPath 的父目录下创建 UpdateFolder，复制 aly-client.exe 并写入 client.json。
+    /// </summary>
+    public void CreateUpdateFolder(string projectPath, string mainExePath, string closeProcessName)
+    {
+        if (string.IsNullOrWhiteSpace(projectPath))
+        {
+            Log.Warning("CreateUpdateFolder: projectPath 为空");
+            return;
+        }
+
+        var parentDir = Path.GetDirectoryName(Path.GetFullPath(projectPath));
+        if (parentDir == null)
+        {
+            Log.Warning("CreateUpdateFolder: 无法获取 projectPath 的父目录: {Path}", projectPath);
+            return;
+        }
+
+        var updateFolder = Path.Combine(parentDir, "UpdateFolder");
+        Directory.CreateDirectory(updateFolder);
+        Log.Information("创建 UpdateFolder: {Path}", updateFolder);
+
+        // 复制 aly-client.exe
+        var clientExeName = OperatingSystem.IsWindows() ? "aly-client.exe" : "aly-client";
+        var clientExeSource = FindAlyClientExe(clientExeName);
+        if (clientExeSource != null)
+        {
+            var destPath = Path.Combine(updateFolder, clientExeName);
+            try
+            {
+                File.Copy(clientExeSource, destPath, overwrite: true);
+                Log.Information("复制 aly-client.exe: {Source} -> {Dest}", clientExeSource, destPath);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "复制 aly-client.exe 失败: {Source} -> {Dest}", clientExeSource, destPath);
+            }
+        }
+        else
+        {
+            Log.Warning("未找到 aly-client.exe，跳过复制。用户可手动放置到 {Path}", updateFolder);
+        }
+
+        // 写入 client.json
+        var relativePath = GetRelativePath(updateFolder, Path.GetFullPath(mainExePath));
+        Log.Information("计算 main_exe_relative_path: UpdateFolder={Folder}, MainExe={Exe}, Relative={Rel}",
+            updateFolder, mainExePath, relativePath);
+
+        var config = new UpdateClientConfig
+        {
+            MainExeRelativePath = relativePath,
+            MustCloseProcessName = new List<string> { closeProcessName }
+        };
+
+        var clientJsonPath = Path.Combine(updateFolder, "client.json");
+        try
+        {
+            var json = JsonConvert.SerializeObject(config, Formatting.Indented);
+            File.WriteAllText(clientJsonPath, json);
+            Log.Information("写入 client.json: {Path}", clientJsonPath);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "写入 client.json 失败: {Path}", clientJsonPath);
+        }
+    }
+
+    /// <summary>查找 aly-client.exe 源文件</summary>
+    private static string? FindAlyClientExe(string exeName)
+    {
+        var exeDir = AppDomain.CurrentDomain.BaseDirectory;
+        Log.Debug("查找 aly-client.exe: BaseDirectory={Dir}", exeDir);
+
+        // 1. 同目录
+        var same = Path.Combine(exeDir, exeName);
+        if (File.Exists(same))
+        {
+            Log.Debug("找到 aly-client.exe (同目录): {Path}", same);
+            return same;
+        }
+
+        // 2. 开发路径：从 bin/Debug/net8.0/ 往上 7 层到项目根，再进入 client/aly-client/
+        var dev = Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "..", "..", "..", "..",
+            "client", "aly-client", exeName));
+        if (File.Exists(dev))
+        {
+            Log.Debug("找到 aly-client.exe (开发路径): {Path}", dev);
+            return dev;
+        }
+
+        Log.Warning("未找到 aly-client.exe");
+        return null;
+    }
+
+    /// <summary>计算从 fromDir 到 targetPath 的相对路径</summary>
+    private static string GetRelativePath(string fromDir, string targetPath)
+    {
+        // 确保目录以分隔符结尾
+        if (!fromDir.EndsWith(Path.DirectorySeparatorChar.ToString()))
+            fromDir += Path.DirectorySeparatorChar;
+
+        var fromUri = new Uri(fromDir);
+        var toUri = new Uri(targetPath);
+        var relativeUri = fromUri.MakeRelativeUri(toUri);
+        var relativePath = Uri.UnescapeDataString(relativeUri.ToString())
+            .Replace('/', Path.DirectorySeparatorChar);
+        return relativePath;
+    }
 }

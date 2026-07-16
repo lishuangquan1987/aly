@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -82,6 +83,20 @@ public partial class MainWindowViewModel : ObservableObject
 
         var vm = _sp.GetRequiredService<AddProjectDialogViewModel>();
         vm.BrowseFolderAsync = browseFolderAsync;
+        vm.BrowseMainExeFileAsync = new Func<Task<string?>>(async () =>
+        {
+            var result = await dialog.StorageProvider.OpenFilePickerAsync(
+                new FilePickerOpenOptions
+                {
+                    Title = "选择主程序",
+                    AllowMultiple = false,
+                    FileTypeFilter = new List<FilePickerFileType>
+                    {
+                        new("可执行文件") { Patterns = new[] { "*.exe" } }
+                    }
+                });
+            return result.Count > 0 ? result[0].Path.LocalPath : null;
+        });
         vm.ShowCreateProjectDialogAsync = async (serverUrl, ignoreFolders, ignoreFiles) =>
             await ShowCreateProjectDialogAsync(dialog, serverUrl, ignoreFolders, ignoreFiles);
 

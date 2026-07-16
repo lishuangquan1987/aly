@@ -16,7 +16,9 @@ namespace AlyPublish.ViewModels;
 public partial class AddProjectDialogViewModel : ObservableObject
 {
     private readonly CliService _cli;
+    private readonly ConfigService _configService;
     internal Func<Task<string?>>? BrowseFolderAsync { get; set; }
+    internal Func<Task<string?>>? BrowseMainExeFileAsync { get; set; }
 
     private bool _isInit;
     [ObservableProperty] private string _serverUrl = string.Empty;
@@ -33,21 +35,28 @@ public partial class AddProjectDialogViewModel : ObservableObject
     [ObservableProperty] private string _ignoreFolders = string.Empty;
     [ObservableProperty] private string _ignoreFiles = string.Empty;
 
+    // ── 主程序选择 ─────────────────────────────────────
+    [ObservableProperty] private string _mainExePath = string.Empty;
+    [ObservableProperty] private string _closeProcessName = string.Empty;
+
     /// <summary>View 订阅此事件以关闭对话框并返回结果</summary>
     public event Action<ProjectConfig?>? RequestClose;
 
     public IAsyncRelayCommand FetchProjectsCommand { get; }
     public IAsyncRelayCommand BrowseCommand { get; }
+    public IAsyncRelayCommand BrowseMainExeCommand { get; }
     public IAsyncRelayCommand ConfirmCommand { get; }
     public IRelayCommand CancelCommand { get; }
     public IAsyncRelayCommand CreateOnServerCommand { get; }
 
-    public AddProjectDialogViewModel(CliService cli)
+    public AddProjectDialogViewModel(CliService cli, ConfigService configService)
     {
         _cli = cli;
+        _configService = configService;
 
         FetchProjectsCommand = new AsyncRelayCommand(FetchProjectsAsync, () => !IsFetching);
         BrowseCommand = new AsyncRelayCommand(BrowseAsync);
+        BrowseMainExeCommand = new AsyncRelayCommand(BrowseMainExeAsync);
         ConfirmCommand = new AsyncRelayCommand(ConfirmAsync);
         CancelCommand = new RelayCommand(() => RequestClose?.Invoke(null));
         CreateOnServerCommand = new AsyncRelayCommand(CreateOnServerAsync);
@@ -87,6 +96,47 @@ public partial class AddProjectDialogViewModel : ObservableObject
             _isInit = false;
             InitStatusMessage = "";
             ShowInitStatus = false;
+
+            // 自动扫描路径下第一个 exe 文件作为主程序
+            TryAutoDetectMainExe(value);
+        }
+    }
+
+    /// <summary>自动扫描项目目录下第一个 .exe 文件</summary>
+    private void TryAutoDetectMainExe(string projectPath)
+    {
+        try
+        {
+            var firstExe = Directory.EnumerateFiles(projectPath, "*.exe", SearchOption.TopDirectoryOnly)
+                .FirstOrDefault();
+            if (firstExe != null)
+            {
+                MainExePath = firstExe;
+                CloseProcessName = Path.GetFileNameWithoutExtension(firstExe);
+                Log.Information("自动检测主程序: {Path}, 进程名: {Name}", firstExe, CloseProcessName);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "扫描主程序 exe 失败: {Path}", projectPath);
+        }
+    }
+
+    /// <summary>浏览选择主程序 exe 文件</summary>
+    private async Task BrowseMainExeAsync()
+    {
+        var browseMainExeFileAsync = BrowseMainExeFileAsync;
+        if (browseMainExeFileAsync == null)
+        {
+            Log.Warning("BrowseMainExeFileAsync delegate is not set; browse action unavailable");
+            return;
+        }
+        var path = await browseMainExeFileAsync();
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            MainExePath = path;
+            CloseProcessName = Path.GetFileNameWithoutExtension(path);
+            Log.Information("用户选择主程序: {Path}, 进程名: {Name}", path, CloseProcessName);
         }
     }
 
@@ -241,11 +291,22 @@ public partial class AddProjectDialogViewModel : ObservableObject
         var cfg = new ProjectConfig
         {
             DisplayName = displayName!,
-            ProjectPath = projectPath
+            ProjectPath = projectPath,
+            MainExePath = MainExePath
         };
 
         Log.Information("项目初始化完成: DisplayName={Name}, Path={Path}, Server={Server}, Project={Proj}",
             cfg.DisplayName, cfg.ProjectPath, serverUrl, SelectedServerProject.Name);
+
+        // 创建 UpdateFolder/client.json 并复制 aly-client.exe
+        if (!string.IsNullOrWhiteSpace(MainExePath) && File.Exists(MainExePath))
+        {
+            _configService.CreateUpdateFolder(projectPath, MainExePath, CloseProcessName);
+        }
+        else
+        {
+            Log.Warning("未选择主程序，跳过 UpdateFolder 创建");
+        }
 
         RequestClose?.Invoke(cfg);
     }
