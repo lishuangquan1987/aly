@@ -81,55 +81,75 @@ namespace AlyClient.CSharpSDK
 
         private void MainLoop(CancellationToken token)
         {
-            while (!token.IsCancellationRequested)
+            try
             {
-                var status = AlyApi.CheckUpdateAsync(UpdatorExePath).Result;
-                if (!status.IsSuccess)
+                while (!token.IsCancellationRequested)
                 {
-                    OnError(status.ErrorMsg ?? "check_update failed");
-                    Thread.Sleep(5000);
-                    continue;
-                }
-
-                ClearError();
-                if (!status.Data.HasUpdate) { Thread.Sleep(1000); continue; }
-
-                if (status.Data.NeedDownloadUpdate)
-                {
-                    Status = AlyClientStatus.DiscoveredUpdate;
-                    OnStatusChanged(Status, "Found new version: " + status.Data.NewVersion);
-
-                    if (!status.Data.ForceUpdate)
+                    try
                     {
-                        RequestDownloadUpdate?.Invoke(status.Data.NewVersion);
+                        var status = AlyApi.CheckUpdateAsync(UpdatorExePath).Result;
+                        if (!status.IsSuccess)
+                        {
+                            OnError(status.ErrorMsg ?? "check_update failed");
+                            Thread.Sleep(5000);
+                            continue;
+                        }
+
+                        ClearError();
+                        if (!status.Data.HasUpdate) { Thread.Sleep(1000); continue; }
+
+                        if (status.Data.NeedDownloadUpdate)
+                        {
+                            Status = AlyClientStatus.DiscoveredUpdate;
+                            OnStatusChanged(Status, "Found new version: " + status.Data.NewVersion);
+
+                            if (!status.Data.ForceUpdate)
+                            {
+                                RequestDownloadUpdate?.Invoke(status.Data.NewVersion);
+                            }
+
+                            Status = AlyClientStatus.DownloadingUpdate;
+                            OnStatusChanged(Status, "Downloading...");
+
+                            var downloadResult = AlyApi.DownloadUpdateAsync(UpdatorExePath, (fileName, progress) =>
+                            {
+                                OnStatusChanged(Status, string.Format("Downloading {0}... {1:F0}%", fileName, progress * 100));
+                            }).Result;
+                            if (!downloadResult.IsSuccess) { Thread.Sleep(1000); continue; }
+                        }
+
+                        Status = AlyClientStatus.DownloadedUpdate;
+                        OnStatusChanged(Status, "Ready to apply Update");
+
+                        if (!status.Data.ForceUpdate)
+                        {
+                            RequestApplyUpdate?.Invoke(status.Data.NewVersion);
+                        }
+
+                        Status = AlyClientStatus.ApplyUpdate;
+                        OnStatusChanged(Status, "Applying update...");
+
+                        AlyApi.ApplyUpdateAsync(UpdatorExePath);
+                        // 不 break：apply_update 成功后宿主程序会被重启；
+                        // 如果失败或用户取消则继续轮询后续更新。
+                        Thread.Sleep(5000);
                     }
-
-                    Status = AlyClientStatus.DownloadingUpdate;
-                    OnStatusChanged(Status, "Downloading...");
-
-                    var downloadResult = AlyApi.DownloadUpdateAsync(UpdatorExePath, (fileName, progress) =>
+                    catch (Exception ex)
                     {
-                        OnStatusChanged(Status, string.Format("Downloading {0}... {1:F0}%", fileName, progress * 100));
-                    }).Result;
-                    if (!downloadResult.IsSuccess) { Thread.Sleep(1000); continue; }
+                        OnError("update exception: " + ex.Message);
+                        Thread.Sleep(5000);
+                    }
                 }
-
-                Status = AlyClientStatus.DownloadedUpdate;
-                OnStatusChanged(Status, "Ready to apply Update");
-
-                if (!status.Data.ForceUpdate)
-                {
-                    RequestApplyUpdate?.Invoke(status.Data.NewVersion);
-                }
-
-                Status = AlyClientStatus.ApplyUpdate;
-                OnStatusChanged(Status, "Applying update...");
-
-                AlyApi.ApplyUpdateAsync(UpdatorExePath);
-                break;
             }
-
-            IsRunning = false;
+            catch (Exception ex)
+            {
+                // 顶层兜底，确保 IsRunning 正确
+                try { OnError("MainLoop fatal: " + ex.Message); } catch { }
+            }
+            finally
+            {
+                IsRunning = false;
+            }
         }
 
         private void OnStatusChanged(AlyClientStatus s, string msg)
