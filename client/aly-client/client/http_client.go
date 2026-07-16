@@ -17,7 +17,10 @@ import (
 
 var httpClient = &http.Client{
 	Timeout: 300 * time.Second,
+	// DisableKeepAlives 避开 WinXP 下连接池复用失效；MaxIdleConns / IdleConnTimeout
+	// 在此处无效（需 keep-alive 时才生效），保留作为后续启用 keep-alive 时的参考
 	Transport: &http.Transport{
+		DisableKeepAlives:   true,
 		MaxIdleConns:        10,
 		IdleConnTimeout:     90 * time.Second,
 		DisableCompression:  false,

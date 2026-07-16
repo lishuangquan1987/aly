@@ -36,22 +36,20 @@ func runLog(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// 按 ID 倒序排列，统一构建输出列表
+	// 服务器已按 ID DESC 返回（最新在前），直接截取前 logLimit 条
 	count := logLimit
 	if count > len(logs) {
 		count = len(logs)
 	}
-	reversed := make([]models.ProjectChangeLog, 0, count)
-	for i := len(logs) - 1; i >= 0 && len(reversed) < logLimit; i-- {
-		reversed = append(reversed, logs[i])
-	}
+	result := make([]models.ProjectChangeLog, count)
+	copy(result, logs[:count])
 
 	if jsonOutput {
-		printOutput(true, "", reversed)
+		printOutput(true, "", result)
 		return
 	}
 
-	for _, l := range reversed {
+	for _, l := range result {
 		printHumanLn("%s (%s)", l.Version, l.Time)
 		for _, msg := range l.Logs {
 			printHumanLn("  • %s", msg)
