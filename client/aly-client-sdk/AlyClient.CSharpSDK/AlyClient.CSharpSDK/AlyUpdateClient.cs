@@ -51,18 +51,20 @@ namespace AlyClient.CSharpSDK
             _cts = new CancellationTokenSource();
             IsRunning = true;
 
-            var selfCheckUpdateResult = AlyApi.CheckSelfUpdateAsync(UpdatorExePath).Result;
-            if (selfCheckUpdateResult.IsSuccess && selfCheckUpdateResult.Data.NeedUpdate)
+            Task.Factory.StartNew(() =>
             {
-                try
+                var selfCheckUpdateResult = AlyApi.CheckSelfUpdateAsync(UpdatorExePath).Result;
+                if (selfCheckUpdateResult.IsSuccess && selfCheckUpdateResult.Data.NeedUpdate)
                 {
-                    File.Copy(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "aly-client.exe"),
-                        UpdatorExePath, true);
+                    try
+                    {
+                        File.Copy(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "aly-client.exe"),
+                            UpdatorExePath, true);
+                    }
+                    catch (Exception) { }
                 }
-                catch (Exception) { }
-            }
-
-            Task.Factory.StartNew(() => MainLoop(_cts.Token));
+                MainLoop(_cts.Token);
+            });
         }
 
         /// <summary>Stop the background polling loop. Idempotent.</summary>
