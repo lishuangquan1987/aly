@@ -26,4 +26,14 @@ public class UploadProgress
 
     [JsonProperty("error")]
     public string Error { get; set; } = string.Empty;
+
+    /// <summary>界面显示用的状态文字：START/DONE/FAIL 映射为中文，FAIL 时附带具体失败原因。</summary>
+    [JsonIgnore]
+    public string StatusText => Status switch
+    {
+        "START" => "上传中",
+        "DONE" => "完成",
+        "FAIL" => string.IsNullOrWhiteSpace(Error) ? "失败" : $"失败: {Error}",
+        _ => Status
+    };
 }

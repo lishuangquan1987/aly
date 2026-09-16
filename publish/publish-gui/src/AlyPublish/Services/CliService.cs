@@ -198,6 +198,9 @@ public class CliService
         var workDir = string.IsNullOrWhiteSpace(projectPath) ? null : projectPath;
 
         CliOutput<object>? finalResult = null;
+        // isSuccess=false 的失败结果单独保存：它后面会紧跟 progressDone 哨兵行，
+        // 若直接覆盖 finalResult，失败原因会被吞掉，界面将误判为发布成功。
+        CliOutput<object>? failResult = null;
 
         var procResult = await _ps.RunWithProgressAsync(CliPath, args, line =>
         {
@@ -209,17 +212,32 @@ public class CliService
 
                 if (hasStatus)
                 {
+                    // 进度行：START / DONE / FAIL（FAIL 行的 data.error 含具体失败原因）
                     var output = JsonConvert.DeserializeObject<CliOutput<UploadProgress>>(line);
                     if (output?.Data != null)
                     {
                         onProgress(output.Data);
                     }
+                    return;
                 }
-                else
+
+                // 非进度行：isSuccess=false 的失败结果、成功结果 (data: {"version","files"})、
+                // 或 progressDone 哨兵 (isSuccess:true, data:null)
+                var result = JsonConvert.DeserializeObject<CliOutput<object>>(line);
+                if (result == null)
+                    return;
+
+                if (!result.IsSuccess)
                 {
-                    // 无 status 字段：progressDone 哨兵 (data: null) 或最终结果 (data: {"version","files"})
-                    finalResult = JsonConvert.DeserializeObject<CliOutput<object>>(line);
+                    // 失败结果：解析并保留 errorMsg 作为明确的失败原因
+                    failResult = result;
                 }
+                else if (result.Data != null)
+                {
+                    // 成功结果：data 非空（version/files）
+                    finalResult = result;
+                }
+                // isSuccess:true 且 data:null 的哨兵行：不覆盖已有结果
             }
             catch (JsonException ex)
             {
@@ -229,12 +247,25 @@ public class CliService
 
         if (!procResult.Success)
         {
-            var errMsg = string.IsNullOrEmpty(procResult.StandardError) ? "推送失败" : procResult.StandardError;
-            Log.Warning("CLI push 失败: {Error}", errMsg);
-            return finalResult ?? Fail<object>(errMsg);
+            // 进程级失败（启动失败/超时/非零退出）：优先用 CLI 已输出的失败原因
+            if (failResult != null && !string.IsNullOrWhiteSpace(failResult.ErrorMsg))
+                return failResult;
+
+            var stderrMsg = string.IsNullOrWhiteSpace(procResult.StandardError) ? null : procResult.StandardError;
+            Log.Warning("CLI push 失败: {Error}", stderrMsg ?? "(无 stderr)");
+            return stderrMsg != null
+                ? Fail<object>($"推送失败: {stderrMsg}")
+                : Fail<object>("推送失败：CLI 进程执行失败或超时，请查看日志");
         }
 
-        return finalResult;
+        // 有失败结果（isSuccess=false 的 errorMsg）优先返回
+        if (failResult != null)
+            return failResult;
+        if (finalResult != null)
+            return finalResult;
+
+        Log.Warning("CLI push 无有效结果输出");
+        return Fail<object>("推送失败：CLI 未返回有效结果，请查看日志");
     }
 
     private static List<string> BuildPushArgsList(string version, string message, string afterApplyUpdateScript, bool setForceUpdate)

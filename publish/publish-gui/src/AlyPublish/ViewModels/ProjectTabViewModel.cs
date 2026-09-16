@@ -350,8 +350,9 @@ public partial class ProjectTabViewModel : ObservableObject, IDisposable
             }
             else
             {
-                StatusMessage = $"发布失败: {r?.ErrorMsg ?? "未知错误"}";
-                await MessageBox.ShowAsync($"发布失败: {r?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
+                var errMsg = string.IsNullOrWhiteSpace(r?.ErrorMsg) ? "未知错误（详情见日志）" : r.ErrorMsg;
+                StatusMessage = $"发布失败: {errMsg}";
+                await MessageBox.ShowAsync($"发布失败: {errMsg}", "错误", MessageBoxIcon.Error);
             }
         }
         catch (Exception ex)
@@ -398,8 +399,15 @@ public partial class ProjectTabViewModel : ObservableObject, IDisposable
                 UploadProgressPercent = UploadTotalCount > 0
                     ? (double)UploadDoneCount / UploadTotalCount * 100
                     : 0;
-                var doneText = progress.Status == "DONE" ? "完成" : "失败";
-                UploadProgressText = $"已{doneText} {progress.File} ({UploadDoneCount}/{UploadTotalCount})";
+                if (progress.Status == "FAIL" && !string.IsNullOrWhiteSpace(progress.Error))
+                {
+                    UploadProgressText = $"已失败 {progress.File}: {progress.Error}";
+                }
+                else
+                {
+                    var doneText = progress.Status == "DONE" ? "完成" : "失败";
+                    UploadProgressText = $"已{doneText} {progress.File} ({UploadDoneCount}/{UploadTotalCount})";
+                }
                 break;
         }
     }

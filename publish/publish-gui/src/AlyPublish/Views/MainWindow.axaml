@@ -646,7 +646,8 @@
                                                                         FontSize="11"
                                                                         Foreground="{DynamicResource SemiColorText2}"
                                                                         Grid.Column="2"
-                                                                        Text="{Binding Status}"
+                                                                        Text="{Binding StatusText}"
+                                                                        TextTrimming="CharacterEllipsis"
                                                                         VerticalAlignment="Center" />
                                                                 </Grid>
                                                             </DataTemplate>
