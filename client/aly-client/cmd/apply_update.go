@@ -27,6 +27,8 @@ func ApplyUpdate() {
 	closeTimeoutFlag := fs.Int("close-timeout", 30, "timeout seconds for process close")
 	fs.Parse(os.Args[2:])
 
+	closeTimeout := time.Duration(*closeTimeoutFlag) * time.Second
+
 	fc, err := loadFullConfig("", "", *mainExePathFlag)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
@@ -83,7 +85,7 @@ func ApplyUpdate() {
 			}
 			if _, statErr := os.Stat(versionDir); statErr == nil {
 				// Rename AppVersionDir to MainExeFolderPath
-				if err := os.Rename(versionDir, fc.MainFolder); err != nil {
+				if err := renameDirWithKill(versionDir, fc.MainFolder, closeTimeout); err != nil {
 					printOutput(false, fmt.Sprintf("crash recovery failed: %v", err), nil)
 					return
 				}
@@ -124,7 +126,6 @@ func ApplyUpdate() {
 	// 原子替换 + 重试：替换失败多因进程占用文件夹，每次重试前都会重新关闭占用进程。
 	const maxAttempts = 3
 	const retryInterval = 2 * time.Second
-	closeTimeout := time.Duration(*closeTimeoutFlag) * time.Second
 
 	var applyErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
@@ -222,7 +223,7 @@ func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDi
 	}
 
 	// Rename mainFolder -> prevVersionDir (backup)
-	if err := os.Rename(fc.MainFolder, prevVersionDir); err != nil {
+	if err := renameDirWithKill(fc.MainFolder, prevVersionDir, closeTimeout); err != nil {
 		// Restore old backup if it existed
 		if _, statErr := os.Stat(oldBackupTemp); statErr == nil {
 			if rerr := os.Rename(oldBackupTemp, prevVersionDir); rerr != nil {
@@ -234,7 +235,7 @@ func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDi
 	}
 
 	// Rename versionDir -> mainFolder
-	if err := os.Rename(versionDir, fc.MainFolder); err != nil {
+	if err := renameDirWithKill(versionDir, fc.MainFolder, closeTimeout); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
 		if rerr := os.Rename(prevVersionDir, fc.MainFolder); rerr != nil {
 			exeDir := logDir()

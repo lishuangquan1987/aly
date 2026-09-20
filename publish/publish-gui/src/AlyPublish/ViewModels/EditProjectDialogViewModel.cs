@@ -21,6 +21,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
 {
     private readonly CliService _cli;
     private string _projectPath = string.Empty;
+    private string _originalProjectName = string.Empty;
 
     [ObservableProperty] private string _displayName = string.Empty;
     [ObservableProperty] private string _serverUrl = string.Empty;
@@ -52,6 +53,10 @@ public partial class EditProjectDialogViewModel : ObservableObject
     public IAsyncRelayCommand RemoveUnCopyFolderCommand { get; }
     public IAsyncRelayCommand AddUnCopyFileCommand { get; }
     public IAsyncRelayCommand RemoveUnCopyFileCommand { get; }
+    public IAsyncRelayCommand BrowseIgnoreFolderCommand { get; }
+    public IAsyncRelayCommand BrowseIgnoreFileCommand { get; }
+    public IAsyncRelayCommand BrowseUnCopyFolderCommand { get; }
+    public IAsyncRelayCommand BrowseUnCopyFileCommand { get; }
     public IAsyncRelayCommand BrowseExeCommand { get; }
     public IRelayCommand CancelCommand { get; }
     public IAsyncRelayCommand SaveCommand { get; }
@@ -69,6 +74,10 @@ public partial class EditProjectDialogViewModel : ObservableObject
         RemoveUnCopyFolderCommand = new AsyncRelayCommand<string?>(RemoveUnCopyFolderAsync);
         AddUnCopyFileCommand = new AsyncRelayCommand<string?>(AddUnCopyFileAsync);
         RemoveUnCopyFileCommand = new AsyncRelayCommand<string?>(RemoveUnCopyFileAsync);
+        BrowseIgnoreFolderCommand = new AsyncRelayCommand(() => BrowseAndAddAsync("ignore.folders"));
+        BrowseIgnoreFileCommand = new AsyncRelayCommand(() => BrowseAndAddAsync("ignore.files"));
+        BrowseUnCopyFolderCommand = new AsyncRelayCommand(() => BrowseAndAddAsync("un_copy.folders"));
+        BrowseUnCopyFileCommand = new AsyncRelayCommand(() => BrowseAndAddAsync("un_copy.files"));
         BrowseExeCommand = new AsyncRelayCommand(BrowseExeAsync);
         CancelCommand = new RelayCommand(() => RequestClose?.Invoke(null));
         SaveCommand = new AsyncRelayCommand(SaveAsync);
@@ -114,6 +123,7 @@ public partial class EditProjectDialogViewModel : ObservableObject
                 {
                     ServerUrl = cfg.ServerUrl ?? "";
                     ProjectName = cfg.ProjectName ?? "";
+                    _originalProjectName = ProjectName;
                     IgnoreFolders = new ObservableCollection<string>(cfg.IgnoreFolders ?? []);
                     IgnoreFiles = new ObservableCollection<string>(cfg.IgnoreFiles ?? []);
                     UnCopyFolders = new ObservableCollection<string>(cfg.UnCopyFolders ?? []);
@@ -369,12 +379,36 @@ public partial class EditProjectDialogViewModel : ObservableObject
 
     // ── Browse MainExe ────────────────────────────────────
 
+    /// <summary>获取当前窗口的 TopLevel，供 StorageProvider 使用</summary>
+    private static TopLevel? GetTopLevel()
+    {
+        return TopLevel.GetTopLevel(Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+            ? desktop.MainWindow : null);
+    }
+
+    /// <summary>将绝对路径转换为相对于项目目录的路径（使用 / 分隔符），
+    /// 不在项目目录内时返回原始绝对路径。</summary>
+    private string ToProjectRelativePath(string fullPath)
+    {
+        if (string.IsNullOrWhiteSpace(_projectPath) || string.IsNullOrWhiteSpace(fullPath))
+            return fullPath;
+        var projectDir = Path.GetFullPath(_projectPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var full = Path.GetFullPath(fullPath);
+        if (full.StartsWith(projectDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+            full.StartsWith(projectDir + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        {
+            return full.Substring(projectDir.Length + 1)
+                .Replace(Path.DirectorySeparatorChar, '/')
+                .Replace(Path.AltDirectorySeparatorChar, '/');
+        }
+        return fullPath;
+    }
+
     private async Task BrowseExeAsync()
     {
         try
         {
-            var topLevel = TopLevel.GetTopLevel(Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-                ? desktop.MainWindow : null);
+            var topLevel = GetTopLevel();
             if (topLevel == null) return;
 
             var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -390,18 +424,16 @@ public partial class EditProjectDialogViewModel : ObservableObject
                 // 转换为相对路径（相对于 ProjectPath）
                 if (!string.IsNullOrWhiteSpace(_projectPath))
                 {
-                    var projectDir = Path.GetFullPath(_projectPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                    var selectedFull = Path.GetFullPath(selectedPath);
-                    if (selectedFull.StartsWith(projectDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
-                        selectedFull.StartsWith(projectDir + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    var rel = ToProjectRelativePath(selectedPath);
+                    if (rel == selectedPath)
                     {
-                        MainExePath = selectedFull.Substring(projectDir.Length + 1);
+                        // 不在项目目录内，使用绝对路径
+                        MainExePath = selectedPath;
+                        await MessageBox.ShowAsync("所选文件不在项目目录内，将使用绝对路径", "提示", MessageBoxIcon.Warning);
                     }
                     else
                     {
-                        // 不在项目目录内，使用绝对路径
-                        MainExePath = selectedFull;
-                        await MessageBox.ShowAsync("所选文件不在项目目录内，将使用绝对路径", "提示", MessageBoxIcon.Warning);
+                        MainExePath = rel;
                     }
                 }
                 else
@@ -413,6 +445,72 @@ public partial class EditProjectDialogViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Error(ex, "选择主程序失败");
+            await MessageBox.ShowAsync($"选择失败: {ex.Message}", "错误", MessageBoxIcon.Error);
+        }
+    }
+
+    // ── Browse ignore / un_copy 项（打开资源管理器选择）────────────────
+
+    /// <summary>根据配置键打开资源管理器选择文件夹/文件并直接添加。
+    /// 文件夹键：ignore.folders / un_copy.folders；文件键：ignore.files / un_copy.files。</summary>
+    private async Task BrowseAndAddAsync(string configKey)
+    {
+        try
+        {
+            var topLevel = GetTopLevel();
+            if (topLevel == null) return;
+
+            var isFolder = configKey is "ignore.folders" or "un_copy.folders";
+            var title = isFolder ? "选择文件夹（忽略/不复制）" : "选择文件（忽略/不复制）";
+
+            if (isFolder)
+            {
+                var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+                {
+                    Title = title,
+                    AllowMultiple = true
+                });
+                if (folders.Count == 0) return;
+                foreach (var folder in folders)
+                {
+                    var item = ToProjectRelativePath(folder.Path.LocalPath);
+                    switch (configKey)
+                    {
+                        case "ignore.folders":
+                            await AddFolderAsync(item);
+                            break;
+                        case "un_copy.folders":
+                            await AddUnCopyFolderAsync(item);
+                            break;
+                    }
+                }
+            }
+            else
+            {
+                var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+                {
+                    Title = title,
+                    AllowMultiple = true
+                });
+                if (files.Count == 0) return;
+                foreach (var file in files)
+                {
+                    var item = ToProjectRelativePath(file.Path.LocalPath);
+                    switch (configKey)
+                    {
+                        case "ignore.files":
+                            await AddFileAsync(item);
+                            break;
+                        case "un_copy.files":
+                            await AddUnCopyFileAsync(item);
+                            break;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "选择 {Key} 项失败", configKey);
             await MessageBox.ShowAsync($"选择失败: {ex.Message}", "错误", MessageBoxIcon.Error);
         }
     }
@@ -454,8 +552,31 @@ public partial class EditProjectDialogViewModel : ObservableObject
         }
     }
 
-    private Task SaveAsync()
+    private async Task SaveAsync()
     {
+        // 项目名称（shared.json 的 project_name）发生变化时，先持久化再关闭
+        var newName = ProjectName?.Trim() ?? string.Empty;
+        if (!string.IsNullOrEmpty(newName) && !string.Equals(newName, _originalProjectName, StringComparison.Ordinal))
+        {
+            IsBusy = true;
+            try
+            {
+                var r = await _cli.ConfigSetAsync(_projectPath, "project.name", newName);
+                if (r?.IsSuccess != true)
+                {
+                    await MessageBox.ShowAsync($"项目名称保存失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
+                    return; // 保存失败不关闭对话框
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "保存项目名称失败: {Name}", newName);
+                await MessageBox.ShowAsync($"项目名称保存异常: {ex.Message}", "错误", MessageBoxIcon.Error);
+                return;
+            }
+            finally { IsBusy = false; }
+        }
+
         var result = new ProjectConfig
         {
             DisplayName = DisplayName.Trim(),
@@ -463,6 +584,5 @@ public partial class EditProjectDialogViewModel : ObservableObject
             MainExePath = MainExePath?.Trim() ?? string.Empty
         };
         RequestClose?.Invoke(result);
-        return Task.CompletedTask;
     }
 }

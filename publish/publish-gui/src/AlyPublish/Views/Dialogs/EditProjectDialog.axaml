@@ -157,18 +157,19 @@
                             </Grid>
                         </StackPanel>
 
-                        <!--  Project Name (read-only)  -->
+                        <!--  Project Name (editable)  -->
                         <StackPanel>
                             <TextBlock
                                 FontSize="12"
                                 Foreground="{DynamicResource SemiColorText2}"
                                 Margin="0,0,0,4"
                                 Text="项目名称（服务端）" />
+                            <TextBox FontSize="13" Text="{Binding ProjectName}" />
                             <TextBlock
-                                FontSize="13"
-                                FontWeight="Medium"
-                                Foreground="{DynamicResource SemiColorText0}"
-                                Text="{Binding ProjectName}" />
+                                FontSize="11"
+                                Foreground="{DynamicResource SemiColorText3}"
+                                Margin="0,4,0,0"
+                                Text="修改后客户端将按新名称连接服务端项目，请确保服务端存在同名项目" />
                         </StackPanel>
 
                         <!--  Ignore Folders  -->
@@ -199,7 +200,7 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+                            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,6,0,0">
                                 <TextBox
                                     FontSize="12"
                                     Text="{Binding NewFolderItem}"
@@ -212,6 +213,14 @@
                                     Height="28"
                                     Margin="6,0,0,0"
                                     Padding="8,0" />
+                                <Button
+                                    Command="{Binding BrowseIgnoreFolderCommand}"
+                                    Content="..."
+                                    Grid.Column="2"
+                                    Height="28"
+                                    Margin="6,0,0,0"
+                                    Padding="8,0"
+                                    ToolTip.Tip="打开资源管理器选择文件夹" />
                             </Grid>
                         </StackPanel>
 
@@ -243,7 +252,7 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+                            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,6,0,0">
                                 <TextBox
                                     FontSize="12"
                                     Text="{Binding NewFileItem}"
@@ -256,6 +265,14 @@
                                     Height="28"
                                     Margin="6,0,0,0"
                                     Padding="8,0" />
+                                <Button
+                                    Command="{Binding BrowseIgnoreFileCommand}"
+                                    Content="..."
+                                    Grid.Column="2"
+                                    Height="28"
+                                    Margin="6,0,0,0"
+                                    Padding="8,0"
+                                    ToolTip.Tip="打开资源管理器选择文件" />
                             </Grid>
                         </StackPanel>
 
@@ -287,7 +304,7 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+                            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,6,0,0">
                                 <TextBox
                                     FontSize="12"
                                     Text="{Binding NewUnCopyFolderItem}"
@@ -300,6 +317,14 @@
                                     Height="28"
                                     Margin="6,0,0,0"
                                     Padding="8,0" />
+                                <Button
+                                    Command="{Binding BrowseUnCopyFolderCommand}"
+                                    Content="..."
+                                    Grid.Column="2"
+                                    Height="28"
+                                    Margin="6,0,0,0"
+                                    Padding="8,0"
+                                    ToolTip.Tip="打开资源管理器选择文件夹" />
                             </Grid>
                         </StackPanel>
 
@@ -331,7 +356,7 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+                            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,6,0,0">
                                 <TextBox
                                     FontSize="12"
                                     Text="{Binding NewUnCopyFileItem}"
@@ -344,6 +369,14 @@
                                     Height="28"
                                     Margin="6,0,0,0"
                                     Padding="8,0" />
+                                <Button
+                                    Command="{Binding BrowseUnCopyFileCommand}"
+                                    Content="..."
+                                    Grid.Column="2"
+                                    Height="28"
+                                    Margin="6,0,0,0"
+                                    Padding="8,0"
+                                    ToolTip.Tip="打开资源管理器选择文件" />
                             </Grid>
                         </StackPanel>
                     </StackPanel>

@@ -189,8 +189,8 @@ func closeProcessesGracefully(names []string, timeout time.Duration) {
 }
 
 // closeProcessesHoldingFolder 探测并结束占用指定文件夹的进程（排除更新器自身），
-// 先发 WM_CLOSE 优雅关闭，超时后强杀。覆盖 must_close_process_name 之外的占用者
-// （例如用户手动打开的 explorer 文件夹窗口）。
+// 先发 WM_CLOSE 优雅关闭，随后直接强杀（不长时间等待优雅退出）。
+// 覆盖 must_close_process_name 之外的占用者（例如用户手动打开的 explorer 文件夹窗口）。
 func closeProcessesHoldingFolder(folder string, timeout time.Duration) {
 	selfPid := uint32(os.Getpid())
 	pids, err := util.FindProcessesHoldingPath(folder)
@@ -208,13 +208,70 @@ func closeProcessesHoldingFolder(folder string, timeout time.Duration) {
 	if len(toKill) == 0 {
 		return
 	}
+	// 先尝试优雅关闭（explorer 等会自行释放句柄），随后直接强杀
 	for _, pid := range toKill {
 		util.SendCloseMessageToProcess(pid)
 	}
-	if err := util.KillPIDsAndWait(toKill, timeout); err != nil {
-		util.AppendToLog(logDir(), "update.log",
-			fmt.Sprintf("closeProcessesHoldingFolder: kill processes holding %s failed: %v", folder, err))
+	wait := timeout
+	if wait > forceKillWait {
+		wait = forceKillWait
 	}
+	util.ForceKillPIDs(toKill, wait)
+}
+
+// forceKillWait 强制结束进程后等待退出的上限，避免更新长时间卡在等待上
+const forceKillWait = 5 * time.Second
+
+// renameDirWithKill 重命名目录；若因进程占用失败，探测占用 from/to 的进程并
+// 直接结束（用户要求：更新时有进程占用待重命名的文件夹，直接结束进程），
+// 然后重试，直到成功或达到最大尝试次数。
+func renameDirWithKill(from, to string, timeout time.Duration) error {
+	const maxAttempts = 5
+	const retrySleep = 300 * time.Millisecond
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		err := os.Rename(from, to)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("rename %s -> %s attempt %d/%d failed: %v", from, to, attempt, maxAttempts, err))
+
+		// 直接结束占用待重命名文件夹的进程（排除更新器自身）
+		pids := findHoldersOf(from, to)
+		if len(pids) > 0 {
+			wait := timeout
+			if wait > forceKillWait {
+				wait = forceKillWait
+			}
+			util.ForceKillPIDs(pids, wait)
+		}
+		time.Sleep(retrySleep)
+	}
+	return lastErr
+}
+
+// findHoldersOf 收集占用指定路径集合的进程 PID，去重并排除更新器自身。
+func findHoldersOf(paths ...string) []uint32 {
+	selfPid := uint32(os.Getpid())
+	seen := make(map[uint32]bool)
+	var pids []uint32
+	for _, p := range paths {
+		found, err := util.FindProcessesHoldingPath(p)
+		if err != nil {
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("find holders of %s failed: %v", p, err))
+			continue
+		}
+		for _, pid := range found {
+			if pid != selfPid && !seen[pid] {
+				seen[pid] = true
+				pids = append(pids, pid)
+			}
+		}
+	}
+	return pids
 }
 
 // launchMainExe 启动主程序

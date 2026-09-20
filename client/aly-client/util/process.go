@@ -209,6 +209,34 @@ func KillPIDsAndWait(pids []uint32, timeout time.Duration) error {
 	return nil
 }
 
+// ForceKillPIDs 直接强制结束指定 PID 列表的进程（不等待优雅关闭），
+// 用于更新替换目录前清理占用进程。TerminateProcess 是异步的，结束后会
+// 等待进程退出（最长 waitTimeout），确保重命名前句柄已被释放。
+func ForceKillPIDs(pids []uint32, waitTimeout time.Duration) {
+	if len(pids) == 0 {
+		return
+	}
+	for _, pid := range pids {
+		if pid == 0 {
+			continue
+		}
+		if err := KillProcess(pid); err != nil {
+			fmt.Fprintf(os.Stderr, "ForceKillPIDs: kill %d failed: %v\n", pid, err)
+		}
+	}
+	deadline := time.Now().Add(waitTimeout)
+	for _, pid := range pids {
+		if pid == 0 {
+			continue
+		}
+		remaining := deadline.Sub(time.Now())
+		if remaining <= 0 {
+			break
+		}
+		WaitForProcessExit(pid, remaining)
+	}
+}
+
 // SendCloseMessageToProcess 向指定 PID 的所有可见顶层窗口发送 WM_CLOSE 消息
 func SendCloseMessageToProcess(pid uint32) {
 	pidPtr := pid
