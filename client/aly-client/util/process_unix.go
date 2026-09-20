@@ -33,6 +33,10 @@ func KillPIDsAndWait(pids []uint32, timeout time.Duration) error {
 	return nil
 }
 
+// ForceKillPIDs 直接强制结束指定 PID 列表的进程（Unix 兼容实现，当前为空操作）
+func ForceKillPIDs(pids []uint32, waitTimeout time.Duration) {
+}
+
 // SendCloseMessageToProcess 向指定 PID 的所有可见顶层窗口发送 WM_CLOSE 消息（Unix 无窗口系统兼容）
 func SendCloseMessageToProcess(pid uint32) {
 	// Unix 系统无窗口消息机制，跳过
