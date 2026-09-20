@@ -25,8 +25,19 @@ type SharedConfig struct {
 	UnCopyFiles   []string `json:"un_copy_files"`
 }
 
+// exeDirOverride 非空时覆盖 ExeDir 返回值（测试专用）
+var exeDirOverride string
+
+// SetExeDir 设置 ExeDir 覆盖值；传入空串恢复默认（仅测试使用）
+func SetExeDir(dir string) {
+	exeDirOverride = dir
+}
+
 // ExeDir 返回 aly-client.exe 所在目录 (UpdateFolder/)
 func ExeDir() (string, error) {
+	if exeDirOverride != "" {
+		return exeDirOverride, nil
+	}
 	exePath, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("get executable path failed: %v", err)

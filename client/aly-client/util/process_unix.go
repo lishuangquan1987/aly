@@ -37,6 +37,12 @@ func KillPIDsAndWait(pids []uint32, timeout time.Duration) error {
 func ForceKillPIDs(pids []uint32, waitTimeout time.Duration) {
 }
 
+// IsProcessAlive 判断指定 PID 的进程是否存活（Unix 兼容实现，恒返回 false，
+// 使残留锁始终被清理；实际部署为 Windows）
+func IsProcessAlive(pid uint32) bool {
+	return false
+}
+
 // SendCloseMessageToProcess 向指定 PID 的所有可见顶层窗口发送 WM_CLOSE 消息（Unix 无窗口系统兼容）
 func SendCloseMessageToProcess(pid uint32) {
 	// Unix 系统无窗口消息机制，跳过

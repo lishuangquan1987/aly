@@ -22,6 +22,14 @@ func Rollback() {
 
 	closeTimeout := time.Duration(*closeTimeoutFlag) * time.Second
 
+	// 全局更新锁：同一时刻只允许一个更新操作（下载/应用/回滚）
+	releaseLock, lockErr := AcquireUpdateLock("rollback")
+	if lockErr != nil {
+		printOutput(false, lockErr.Error(), nil)
+		return
+	}
+	defer releaseLock()
+
 	if *versionFlag == "" {
 		printOutput(false, "--version is required", nil)
 		return
@@ -136,6 +144,8 @@ func Rollback() {
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
 			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after backup rename fail: write version failed: %v", wErr))
 		}
+		// 回滚失败：启动当前版本主程序（保持应用可用），并附带错误信息
+		launchMainExeFn(fc.ExeCfg)
 		printOutput(false, fmt.Sprintf("backup rename failed: %v", err), nil)
 		return
 	}
@@ -153,6 +163,8 @@ func Rollback() {
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
 			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after apply rename fail: write version failed: %v", wErr))
 		}
+		// 回滚失败：启动当前版本主程序（保持应用可用），并附带错误信息
+		launchMainExeFn(fc.ExeCfg)
 		printOutput(false, fmt.Sprintf("apply rename failed: %v", err), nil)
 		return
 	}

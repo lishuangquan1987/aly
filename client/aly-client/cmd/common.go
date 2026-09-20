@@ -372,6 +372,25 @@ func launchMainExe(cfg *config.Config) {
 	}
 }
 
+// launchMainExeFn 启动主程序入口（测试可替换为桩，记录调用）
+var launchMainExeFn = launchMainExe
+
+// applyFailureFallback 更新失败兜底（用户要求：重命名失败时启动旧 exe 并附带错误信息）。
+// 将 version.json 状态回退 downloaded、启动旧版本主程序（保证应用可用）、记录错误日志，
+// 返回给调用方输出的错误信息字符串。
+func applyFailureFallback(fc *FullConfig, versionInfo *config.VersionInfo, failErr error) string {
+	if versionInfo != nil {
+		versionInfo.VersionStatus = config.VersionStatusDownloaded
+		if wErr := config.WriteVersion(versionInfo); wErr != nil {
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback after apply fail: write version failed: %v", wErr))
+		}
+	}
+	// 启动旧版本主程序：更新失败也保证应用可继续运行
+	launchMainExeFn(fc.ExeCfg)
+	util.AppendToLog(logDir(), "update.log", fmt.Sprintf("apply failed, launched old exe: %v", failErr))
+	return failErr.Error()
+}
+
 // filepathFromSlash converts forward-slash paths to OS-specific separators.
 // Replaces Go 1.17+ filepath.FromSlash for Go 1.10 compatibility.
 func filepathFromSlash(path string) string {

@@ -29,6 +29,14 @@ func ApplyUpdate() {
 
 	closeTimeout := time.Duration(*closeTimeoutFlag) * time.Second
 
+	// 全局更新锁：同一时刻只允许一个更新操作（下载/应用/回滚）
+	releaseLock, lockErr := AcquireUpdateLock("apply_update")
+	if lockErr != nil {
+		printOutput(false, lockErr.Error(), nil)
+		return
+	}
+	defer releaseLock()
+
 	fc, err := loadFullConfig("", "", *mainExePathFlag)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
@@ -144,11 +152,8 @@ func ApplyUpdate() {
 		}
 	}
 	if applyErr != nil {
-		versionInfo.VersionStatus = config.VersionStatusDownloaded
-		if wErr := config.WriteVersion(versionInfo); wErr != nil {
-			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback after apply fail: write version failed: %v", wErr))
-		}
-		printOutput(false, applyErr.Error(), nil)
+		// 失败兜底：状态回退 + 启动旧版本主程序 + 附带错误信息
+		printOutput(false, applyFailureFallback(fc, versionInfo, applyErr), nil)
 		return
 	}
 

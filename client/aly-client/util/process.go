@@ -31,8 +31,9 @@ const (
 	TH32CS_SNAPPROCESS  = 0x00000002
 	INVALID_HANDLE_VALUE = ^uintptr(0)
 
-	PROCESS_TERMINATE = 0x0001
-	SYNCHRONIZE       = 0x00100000
+	PROCESS_TERMINATE          = 0x0001
+	SYNCHRONIZE                = 0x00100000
+	PROCESS_QUERY_INFORMATION  = 0x0400
 
 	WAIT_OBJECT_0 = 0
 	WAIT_TIMEOUT  = 0x00000102
@@ -99,8 +100,7 @@ func FindProcessesByName(name string) ([]uint32, error) {
 }
 
 // KillProcess 终止指定 PID 的进程
-func KillProcess(pid uint32) error {
-	handle, _, _ := procOpenProcess.Call(
+func KillProcess(pid uint32) error {	handle, _, _ := procOpenProcess.Call(
 		uintptr(PROCESS_TERMINATE),
 		0,
 		uintptr(pid),
@@ -145,6 +145,30 @@ func WaitForProcessExit(pid uint32, timeout time.Duration) bool {
 
 	ret, _, _ := procWaitForSingleObject.Call(handle, timeoutMs)
 	return ret == WAIT_OBJECT_0
+}
+
+// IsProcessAlive 判断指定 PID 的进程是否存活。
+// 用 OpenProcess(PROCESS_QUERY_INFORMATION) 探测：
+//   - ERROR_INVALID_PARAMETER (87)：进程不存在 → false
+//   - ERROR_ACCESS_DENIED (5)：进程存在但权限不足 → true（保守）
+//   - 其他失败：保守返回 true
+func IsProcessAlive(pid uint32) bool {
+	if pid == 0 {
+		return false
+	}
+	handle, _, callErr := procOpenProcess.Call(
+		uintptr(PROCESS_QUERY_INFORMATION),
+		0,
+		uintptr(pid),
+	)
+	if handle == 0 {
+		if errno, ok := callErr.(syscall.Errno); ok && errno == 87 {
+			return false
+		}
+		return true // 权限不足或其他：保守认为存活
+	}
+	procCloseHandle.Call(handle)
+	return true
 }
 
 // KillProcessesAndWait 等待指定名称列表的进程退出，超时后强杀
