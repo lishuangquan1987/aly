@@ -222,40 +222,58 @@ func closeProcessesHoldingFolder(folder string, timeout time.Duration) {
 // forceKillWait 强制结束进程后等待退出的上限，避免更新长时间卡在等待上
 const forceKillWait = 5 * time.Second
 
-// renameDirWithKill 重命名目录（用户要求：更新时有进程占用待重命名的文件夹，直接结束进程）。
-// 处理两类失败：
-//  1. 目标目录已存在（例如上一次更新留下的旧版本备份）：MoveFileEx 无法覆盖非空目录，
-//     即使无任何进程占用也会报 Access denied。此时先把目标挪到 to+".old" 再重命名。
-//  2. 进程占用：探测占用 from/to 的进程并直接强杀后重试。
+// renameDirWithKill 重命名文件夹，约定三条规则：
+//  1. 源文件夹必须存在，否则直接失败；
+//  2. 目标文件夹必须不存在：若目标已存在（例如上一次更新留下的旧版本备份），
+//     先把它重命名为另一个不冲突的文件夹（to.old / to.old.1 / to.old.2 …）再执行正式重命名。
+//     Windows 的 MoveFileEx 无法覆盖非空目录，即使无任何进程占用也会报 Access denied；
+//  3. 重命名失败若因进程占用，探测占用 from/to 的进程并直接结束（排除更新器自身）后重试。
 func renameDirWithKill(from, to string, timeout time.Duration) error {
-	// 目标已存在：先挪到 to+".old"（同样带杀进程重试），挪不开则直接失败
-	if _, statErr := os.Stat(to); statErr == nil {
-		aside := to + ".old"
-		if rmErr := os.RemoveAll(aside); rmErr != nil {
-			util.AppendToLog(logDir(), "update.log",
-				fmt.Sprintf("remove aside %s failed: %v", aside, rmErr))
+	const maxAttempts = 5
+	const retrySleep = 300 * time.Millisecond
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		// 1) 源必须存在（不存在时重试无意义）
+		if _, statErr := os.Stat(from); statErr != nil {
+			return fmt.Errorf("rename %s -> %s: source not found: %v", from, to, statErr)
 		}
-		if asideErr := renameWithKillRetry(to, aside, timeout); asideErr != nil {
-			return fmt.Errorf("move aside %s -> %s: %v", to, aside, asideErr)
+		// 2) 目标若存在：先挪到另一个不冲突的文件夹
+		if _, statErr := os.Stat(to); statErr == nil {
+			aside := nextAsideName(to)
+			if asideErr := renameWithKillRetry(to, aside, timeout); asideErr != nil {
+				lastErr = fmt.Errorf("move aside %s -> %s: %v", to, aside, asideErr)
+			}
 		}
+		// 3) 正式重命名
+		err := os.Rename(from, to)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("rename %s -> %s attempt %d/%d failed: %v", from, to, attempt, maxAttempts, err))
+
+		// 4) 直接结束占用待重命名文件夹的进程（排除更新器自身）
+		pids := findHoldersOf(from, to)
+		if len(pids) > 0 {
+			wait := timeout
+			if wait > forceKillWait {
+				wait = forceKillWait
+			}
+			util.ForceKillPIDs(pids, wait)
+		}
+		time.Sleep(retrySleep)
 	}
-	return renameWithKillRetry(from, to, timeout)
+	return lastErr
 }
 
-// renameWithKillRetry 尝试重命名；失败时探测占用 from/to 的进程并直接结束（排除更新器自身），
-// 然后重试，直到成功或达到最大尝试次数。目标残留（例如 .old 清理失败）会先尝试删除。
+// renameWithKillRetry 执行重命名；失败时探测占用 from/to 的进程并直接强杀后重试。
+// 调用方需保证目标 to 不存在（由 renameDirWithKill 负责挪开）。
 func renameWithKillRetry(from, to string, timeout time.Duration) error {
 	const maxAttempts = 5
 	const retrySleep = 300 * time.Millisecond
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		// 目标仍存在（上次失败残留）：先尝试删除，删除不了则等待杀进程后由下一轮重试
-		if _, statErr := os.Stat(to); statErr == nil {
-			if rmErr := os.RemoveAll(to); rmErr != nil {
-				util.AppendToLog(logDir(), "update.log",
-					fmt.Sprintf("remove target %s before rename failed: %v", to, rmErr))
-			}
-		}
 		err := os.Rename(from, to)
 		if err == nil {
 			return nil
@@ -276,6 +294,18 @@ func renameWithKillRetry(from, to string, timeout time.Duration) error {
 		time.Sleep(retrySleep)
 	}
 	return lastErr
+}
+
+// nextAsideName 生成一个不冲突的"挪开目标"名称：to.old、to.old.1、to.old.2 …
+// 依次检查，返回第一个不存在的名称，避免与上次残留的 .old 冲突。
+func nextAsideName(to string) string {
+	aside := to + ".old"
+	for i := 1; ; i++ {
+		if _, err := os.Stat(aside); os.IsNotExist(err) {
+			return aside
+		}
+		aside = fmt.Sprintf("%s.old.%d", to, i)
+	}
 }
 
 // findHoldersOf 收集占用指定路径集合的进程 PID，去重并排除更新器自身。
