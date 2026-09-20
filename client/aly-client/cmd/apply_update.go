@@ -215,10 +215,10 @@ func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDi
 		util.AppendToLog(exeDir, "update.log", fmt.Sprintf("remove old backup temp: %v", err))
 	}
 	if _, statErr := os.Stat(prevVersionDir); statErr == nil {
-		if err := os.Rename(prevVersionDir, oldBackupTemp); err != nil {
-			exeDir := logDir()
-			util.AppendToLog(exeDir, "update.log", fmt.Sprintf("backup rename to temp: %v", err))
-			// Continue anyway — the main rename will fail and trigger rollback
+		// 旧备份目录存在：必须先挪开，否则主目录重命名会因目标非空目录报 Access denied。
+		// 挪不动（被占用）则直接失败，不再静默继续。
+		if err := renameDirWithKill(prevVersionDir, oldBackupTemp, closeTimeout); err != nil {
+			return fmt.Errorf("backup aside failed: %v", err)
 		}
 	}
 

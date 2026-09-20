@@ -20,6 +20,8 @@ func Rollback() {
 	closeTimeoutFlag := fs.Int("close-timeout", 30, "timeout seconds")
 	fs.Parse(os.Args[2:])
 
+	closeTimeout := time.Duration(*closeTimeoutFlag) * time.Second
+
 	if *versionFlag == "" {
 		printOutput(false, "--version is required", nil)
 		return
@@ -58,7 +60,7 @@ func Rollback() {
 		} else {
 			// Main folder doesn't exist, check if target version dir exists
 			if _, statErr := os.Stat(versionDir); statErr == nil {
-				if err := os.Rename(versionDir, fc.MainFolder); err != nil {
+				if err := renameDirWithKill(versionDir, fc.MainFolder, closeTimeout); err != nil {
 					printOutput(false, fmt.Sprintf("crash recovery failed: %v", err), nil)
 					return
 				}
@@ -89,7 +91,7 @@ func Rollback() {
 
 	// Close processes gracefully
 	if len(fc.ExeCfg.MustCloseProcessName) > 0 {
-		closeProcessesGracefully(fc.ExeCfg.MustCloseProcessName, time.Duration(*closeTimeoutFlag)*time.Second)
+		closeProcessesGracefully(fc.ExeCfg.MustCloseProcessName, closeTimeout)
 	}
 
 	// Rollback target version dir already has complete files from when it was active.
@@ -112,13 +114,19 @@ func Rollback() {
 		util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: remove old backup temp failed: %v", err))
 	}
 	if _, statErr := os.Stat(prevVersionDir); statErr == nil {
-		if err := os.Rename(prevVersionDir, oldBackupTemp); err != nil {
-			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: rename prevVersionDir to oldBackupTemp failed: %v", err))
+		// 旧备份目录存在：必须先挪开，否则主目录重命名会因目标非空目录报 Access denied
+		if err := renameDirWithKill(prevVersionDir, oldBackupTemp, closeTimeout); err != nil {
+			versionInfo.VersionStatus = config.VersionStatusApplied
+			if wErr := config.WriteVersion(versionInfo); wErr != nil {
+				util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after backup aside fail: write version failed: %v", wErr))
+			}
+			printOutput(false, fmt.Sprintf("backup aside failed: %v", err), nil)
+			return
 		}
 	}
 
 	// Rename mainFolder -> prevVersionDir (backup current)
-	if err := os.Rename(fc.MainFolder, prevVersionDir); err != nil {
+	if err := renameDirWithKill(fc.MainFolder, prevVersionDir, closeTimeout); err != nil {
 		if _, statErr := os.Stat(oldBackupTemp); statErr == nil {
 			if rErr := os.Rename(oldBackupTemp, prevVersionDir); rErr != nil {
 				util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: restore oldBackupTemp to prevVersionDir failed: %v", rErr))
@@ -133,7 +141,7 @@ func Rollback() {
 	}
 
 	// Rename versionDir -> mainFolder (activate rollback target)
-	if err := os.Rename(versionDir, fc.MainFolder); err != nil {
+	if err := renameDirWithKill(versionDir, fc.MainFolder, closeTimeout); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
 		if rErr := os.Rename(prevVersionDir, fc.MainFolder); rErr != nil {
 			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: restore prevVersionDir to mainFolder failed: %v", rErr))
