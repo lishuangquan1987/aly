@@ -290,10 +290,38 @@ func renameWithKillRetry(from, to string, timeout time.Duration) error {
 				wait = forceKillWait
 			}
 			util.ForceKillPIDs(pids, wait)
+		} else {
+			// Restart Manager 探测不到占用者时，通常是资源管理器窗口
+			// 打开了该文件夹（Explorer 持目录句柄，RM 检测不到），
+			// 关闭/结束 Explorer（系统会自动重启它）。
+			closeExplorerWindows(timeout)
 		}
 		time.Sleep(retrySleep)
 	}
 	return lastErr
+}
+
+// closeExplorerWindows 关闭资源管理器（先 WM_CLOSE 优雅关闭，随后强杀，Explorer 会自动重启）。
+// 用于解除 Explorer 文件夹窗口对目录句柄的占用。
+func closeExplorerWindows(timeout time.Duration) {
+	pids, err := util.FindProcessesByName("explorer")
+	if err != nil {
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("closeExplorerWindows: find explorer failed: %v", err))
+		return
+	}
+	if len(pids) == 0 {
+		return
+	}
+	for _, pid := range pids {
+		util.SendCloseMessageToProcess(pid)
+	}
+	wait := timeout
+	if wait > forceKillWait {
+		wait = forceKillWait
+	}
+	util.ForceKillPIDs(pids, wait)
+	util.AppendToLog(logDir(), "update.log", "closed explorer windows to release folder handle")
 }
 
 // nextAsideName 生成一个不冲突的"挪开目标"名称：to.old、to.old.1、to.old.2 …
