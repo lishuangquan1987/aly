@@ -22,6 +22,14 @@ func DownloadUpdate() {
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
 	fs.Parse(os.Args[2:])
 
+	// 全局更新锁：同一时刻只允许一个更新操作（下载/应用/回滚）
+	releaseLock, lockErr := AcquireUpdateLock("download_update")
+	if lockErr != nil {
+		printOutput(false, lockErr.Error(), nil)
+		return
+	}
+	defer releaseLock()
+
 	fc, err := loadFullConfig(*urlFlag, *projectNameFlag, *mainExePathFlag)
 	if err != nil {
 		printOutput(false, err.Error(), nil)
@@ -99,43 +107,43 @@ func DownloadUpdate() {
 		return
 	}
 
-	// 遍历服务端所有文件，输出完整的进度汇报到 stdout。
-	// 逻辑：单循环遍历所有 server 文件，统一计数器 progIdx（1-based），
-	// 确保 SKIP / START / DONE 序号连续不重复。
-	// - 本地 MD5 已匹配 → SKIP（文件未变化，无需下载）
-	// - 本地不存在或不匹配 → 检查目标目录，已有正确文件 → SKIP
+	// 只打印真正需要下载的差异文件：本地已匹配、或目标目录已有正确文件的
+	// 都不输出（不打印 SKIP），total 取差异文件数，避免界面按行统计进度出错。
+	// 逻辑：
+	// - 本地当前版本 MD5 已匹配 → 无需下载（不打印）
+	// - 目标版本目录已有正确文件（断点续传/已下载过）→ 无需下载（不打印）
 	// - 否则 → START → 下载（3 次重试 + MD5/SHA256 校验）→ DONE
-	total := len(serverFiles)
 	type fileToDownload struct {
 		idx        int
 		serverFile model.FileInfo
 	}
 	var downloadList []fileToDownload
-	progIdx := 0
 	for i := range serverFiles {
-		progIdx++
 		relPath := normalizePath(serverFiles[i].FileRelativePath)
+
+		// 本地当前版本已匹配：非差异文件，无需下载
 		localMD5, localExists := localMD5Map[relPath]
 		if localExists && localMD5 == serverFiles[i].MD5 {
-			printProgress(progIdx, total, relPath, "SKIP", serverFiles[i].FileSize, "")
 			continue
 		}
-		downloadList = append(downloadList, fileToDownload{progIdx, serverFiles[i]})
-	}
 
-	for _, dl := range downloadList {
-		relPath := normalizePath(dl.serverFile.FileRelativePath)
+		// 目标目录已有正确文件（MD5+SHA256）：无需重新下载
 		localPath := filepath.Join(targetDir, filepathFromSlash(relPath))
-
-		// 目标目录已有正确文件（MD5+SHA256），跳过下载
-		if info, statErr := os.Stat(localPath); statErr == nil && info.Size() == dl.serverFile.FileSize {
-			localMD5, md5Err := util.FileMD5(localPath)
-			localSHA256, shaErr := util.FileSHA256(localPath)
-			if md5Err == nil && shaErr == nil && localMD5 == dl.serverFile.MD5 && localSHA256 == dl.serverFile.SHA256 {
-				printProgress(dl.idx, total, relPath, "SKIP", dl.serverFile.FileSize, "")
+		if info, statErr := os.Stat(localPath); statErr == nil && info.Size() == serverFiles[i].FileSize {
+			targetMD5, md5Err := util.FileMD5(localPath)
+			targetSHA256, shaErr := util.FileSHA256(localPath)
+			if md5Err == nil && shaErr == nil && targetMD5 == serverFiles[i].MD5 && targetSHA256 == serverFiles[i].SHA256 {
 				continue
 			}
 		}
+
+		downloadList = append(downloadList, fileToDownload{idx: len(downloadList) + 1, serverFile: serverFiles[i]})
+	}
+
+	total := len(downloadList)
+	for _, dl := range downloadList {
+		relPath := normalizePath(dl.serverFile.FileRelativePath)
+		localPath := filepath.Join(targetDir, filepathFromSlash(relPath))
 
 		printProgress(dl.idx, total, relPath, "START", dl.serverFile.FileSize, "")
 

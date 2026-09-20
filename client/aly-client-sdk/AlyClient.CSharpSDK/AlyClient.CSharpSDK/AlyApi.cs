@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -50,7 +50,6 @@ namespace AlyClient.CSharpSDK
                         process.Start();
                         process.Exited += (s, e) => cts.Cancel();
 
-                        int doneCount = 0;
                         while (!cts.IsCancellationRequested)
                         {
                             var stdoutTask = process.StandardOutput.ReadLine();
@@ -66,11 +65,11 @@ namespace AlyClient.CSharpSDK
                                 {
                                     return AlyResponse.OK();
                                 }
-                                // Count DONE + SKIP as completed files for accurate progress
-                                if (result.Data.Status == "DONE" || result.Data.Status == "SKIP")
+                                // 只统计 DONE（客户端已不再输出 SKIP），百分比 = 已完成序号/总数，
+                                // 避免把未下载的文件算进进度导致界面统计失误
+                                if (result.Data.Status == "DONE" && result.Data.Total > 0)
                                 {
-                                    doneCount++;
-                                    progress?.Invoke(result.Data.File, doneCount / (double)result.Data.Total);
+                                    progress?.Invoke(result.Data.File, result.Data.Index / (double)result.Data.Total);
                                 }
                             }
                         }
