@@ -189,49 +189,7 @@ func closeProcessesGracefully(names []string, timeout time.Duration) {
 	}
 }
 
-// buildKillWhitelist 可强杀进程白名单：explorer + 主程序 exe 名 + must_close_process_name。
-// 白名单之外的占用者只做优雅关闭尝试，不强杀，改为返回错误提示用户手动关闭（#13）。
-func buildKillWhitelist(fc *FullConfig) []string {
-	names := []string{"explorer"}
-	if fc.ExeCfg.MainExeRelativePath != "" {
-		base := filepath.Base(fc.ExeCfg.MainExeRelativePath)
-		names = append(names, strings.TrimSuffix(base, filepath.Ext(base)))
-	}
-	names = append(names, fc.ExeCfg.MustCloseProcessName...)
-	return names
-}
-
-// whitelistPIDs 返回白名单进程名对应的 PID 集合（按进程名查找，查找失败仅记日志）
-func whitelistPIDs(names []string) map[uint32]bool {
-	wl := make(map[uint32]bool)
-	for _, name := range names {
-		pids, err := util.FindProcessesByName(name)
-		if err != nil {
-			util.AppendToLog(logDir(), "update.log",
-				fmt.Sprintf("whitelistPIDs: find %s failed: %v", name, err))
-			continue
-		}
-		for _, pid := range pids {
-			wl[pid] = true
-		}
-	}
-	return wl
-}
-
-// partitionHolders 将持有者 PID 按白名单分区：killable（可强杀）与 blocked（非白名单）。
-// 提取为纯函数便于单测（#13）。
-func partitionHolders(holders []uint32, wl map[uint32]bool) (killable []uint32, blocked []uint32) {
-	for _, pid := range holders {
-		if wl[pid] {
-			killable = append(killable, pid)
-		} else {
-			blocked = append(blocked, pid)
-		}
-	}
-	return killable, blocked
-}
-
-// formatPidNames 将阻塞进程 PID 格式化为去重、排序的进程名列表（未知名回退 PID）
+// formatPidNames 将进程 PID 格式化为去重、排序的进程名列表（未知名回退 PID），用于日志
 func formatPidNames(pids []uint32, names map[uint32]string) []string {
 	seen := make(map[string]bool)
 	var list []string
@@ -251,42 +209,33 @@ func formatPidNames(pids []uint32, names map[uint32]string) []string {
 
 // closeProcessesHoldingFolder 探测并结束占用指定文件夹的进程（排除更新器自身），
 // 先发 WM_CLOSE 优雅关闭，随后直接强杀（不长时间等待优雅退出）。
-// 仅对白名单内进程（must_close_process_name / 主程序 / explorer）强杀；
-// 非白名单占用者（记事本/IDE/杀毒等无关进程）不强杀，返回错误提示用户手动关闭（#13）。
-func closeProcessesHoldingFolder(folder string, whitelist []string, timeout time.Duration) error {
+// 用户决定：谁占用杀谁——RM 探测的句柄持有者与 CWD 持有者（cmd.exe 等站在目录里的进程）
+// 一律强杀，不弹窗询问。强杀名单写入 update.log 便于排查。
+func closeProcessesHoldingFolder(folder string, timeout time.Duration) {
 	selfPid := uint32(os.Getpid())
-	pids, err := util.FindProcessesHoldingPath(folder)
-	if err != nil {
-		util.AppendToLog(logDir(), "update.log",
-			fmt.Sprintf("closeProcessesHoldingFolder: find processes holding %s failed: %v", folder, err))
-		return nil
-	}
-	var holders []uint32
+	pids := findHoldersOf(folder)
+	var toKill []uint32
 	for _, pid := range pids {
 		if pid != selfPid {
-			holders = append(holders, pid)
+			toKill = append(toKill, pid)
 		}
 	}
-	if len(holders) == 0 {
-		return nil
+	if len(toKill) == 0 {
+		return
 	}
-
-	killable, blocked := partitionHolders(holders, whitelistPIDs(whitelist))
-	// 先尝试优雅关闭（explorer 等会自行释放句柄），随后直接强杀白名单进程
-	for _, pid := range killable {
+	// 先尝试优雅关闭（explorer 等会自行释放句柄），随后直接强杀
+	for _, pid := range toKill {
 		util.SendCloseMessageToProcess(pid)
 	}
 	wait := timeout
 	if wait > forceKillWait {
 		wait = forceKillWait
 	}
-	util.ForceKillPIDs(killable, wait)
-
-	if len(blocked) > 0 {
-		names := util.FindProcessNamesByPIDs(blocked)
-		return fmt.Errorf("以下进程占用更新目录，请关闭后重试: %v", formatPidNames(blocked, names))
-	}
-	return nil
+	util.ForceKillPIDs(toKill, wait)
+	// 日志记录杀了谁，便于排查误杀
+	names := util.FindProcessNamesByPIDs(toKill)
+	util.AppendToLog(logDir(), "update.log",
+		fmt.Sprintf("killed folder holders: %v", formatPidNames(toKill, names)))
 }
 
 // forceKillWait 强制结束进程后等待退出的上限，避免更新长时间卡在等待上
@@ -297,9 +246,9 @@ const forceKillWait = 5 * time.Second
 //  2. 目标文件夹必须不存在：若目标已存在（例如上一次更新留下的旧版本备份），
 //     先把它重命名为另一个不冲突的文件夹（to.old / to.old.1 / to.old.2 …）再执行正式重命名。
 //     Windows 的 MoveFileEx 无法覆盖非空目录，即使无任何进程占用也会报 Access denied；
-//  3. 重命名失败若因进程占用，探测占用 from/to 的进程：白名单内直接结束（排除更新器自身），
-//     非白名单占用者返回错误提示用户手动关闭（#13）。
-func renameDirWithKill(from, to string, whitelist []string, timeout time.Duration) error {
+//  3. 重命名失败若因进程占用，探测占用 from/to 的进程并直接结束（排除更新器自身）后重试。
+//     用户决定：谁占用杀谁，不弹窗询问。
+func renameDirWithKill(from, to string, timeout time.Duration) error {
 	const maxAttempts = 5
 	const retrySleep = 300 * time.Millisecond
 	var lastErr error
@@ -311,8 +260,8 @@ func renameDirWithKill(from, to string, whitelist []string, timeout time.Duratio
 		// 2) 目标若存在：先挪到另一个不冲突的文件夹
 		if _, statErr := os.Stat(to); statErr == nil {
 			aside := nextAsideName(to)
-			if asideErr := renameWithKillRetry(to, aside, whitelist, timeout); asideErr != nil {
-				// 旁移失败（如非白名单占用）：重试无意义，直接返回
+			if asideErr := renameWithKillRetry(to, aside, timeout); asideErr != nil {
+				// 旁移失败（被占用且杀不掉）：直接返回，重试无意义
 				return fmt.Errorf("move aside %s -> %s: %v", to, aside, asideErr)
 			}
 		}
@@ -325,19 +274,14 @@ func renameDirWithKill(from, to string, whitelist []string, timeout time.Duratio
 		util.AppendToLog(logDir(), "update.log",
 			fmt.Sprintf("rename %s -> %s attempt %d/%d failed: %v", from, to, attempt, maxAttempts, err))
 
-		// 4) 只强杀白名单进程；非白名单占用者返回错误（重试无意义）
-		killable, blocked := findHoldersOf(whitelist, from, to)
-		if len(blocked) > 0 {
-			names := util.FindProcessNamesByPIDs(blocked)
-			return fmt.Errorf("rename %s -> %s: 以下进程占用，请关闭后重试: %v",
-				from, to, formatPidNames(blocked, names))
-		}
-		if len(killable) > 0 {
+		// 4) 直接结束占用待重命名文件夹的进程（排除更新器自身）
+		pids := findHoldersOf(from, to)
+		if len(pids) > 0 {
 			wait := timeout
 			if wait > forceKillWait {
 				wait = forceKillWait
 			}
-			util.ForceKillPIDs(killable, wait)
+			util.ForceKillPIDs(pids, wait)
 		}
 		time.Sleep(retrySleep)
 	}
@@ -346,7 +290,7 @@ func renameDirWithKill(from, to string, whitelist []string, timeout time.Duratio
 
 // renameWithKillRetry 执行重命名；失败时探测占用 from/to 的进程并直接强杀后重试。
 // 调用方需保证目标 to 不存在（由 renameDirWithKill 负责挪开）。
-func renameWithKillRetry(from, to string, whitelist []string, timeout time.Duration) error {
+func renameWithKillRetry(from, to string, timeout time.Duration) error {
 	const maxAttempts = 5
 	const retrySleep = 300 * time.Millisecond
 	var lastErr error
@@ -359,24 +303,21 @@ func renameWithKillRetry(from, to string, whitelist []string, timeout time.Durat
 		util.AppendToLog(logDir(), "update.log",
 			fmt.Sprintf("rename %s -> %s attempt %d/%d failed: %v", from, to, attempt, maxAttempts, err))
 
-		// 只强杀白名单进程；非白名单占用者返回错误（重试无意义）
-		killable, blocked := findHoldersOf(whitelist, from, to)
-		if len(blocked) > 0 {
-			names := util.FindProcessNamesByPIDs(blocked)
-			return fmt.Errorf("rename %s -> %s: 以下进程占用，请关闭后重试: %v",
-				from, to, formatPidNames(blocked, names))
-		}
-		if len(killable) > 0 {
+		// 直接结束占用待重命名文件夹的进程（排除更新器自身）
+		pids := findHoldersOf(from, to)
+		if len(pids) > 0 {
 			wait := timeout
 			if wait > forceKillWait {
 				wait = forceKillWait
 			}
-			util.ForceKillPIDs(killable, wait)
+			util.ForceKillPIDs(pids, wait)
 		} else {
-			// Restart Manager 探测不到占用者时，通常是资源管理器窗口
-			// 打开了该文件夹（Explorer 持目录句柄，RM 检测不到），
-			// 关闭/结束 Explorer（系统会自动重启它）。用户已确认：explorer
-			// 占用导致重命名失败时杀掉它是预期补救手段（#13）。
+			// RM 与 CWD 探测都找不到占用者时，通常是资源管理器窗口
+			// 打开了该文件夹（Explorer 持目录句柄，RM 检测不到），或 64 位原生
+			// cmd.exe 等 CWD 持有者（32 位客户端无法读取其 PEB，见 util/process.go）。
+			// 关闭/结束 Explorer（系统会自动重启它）。
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("rename %s -> %s: no holders found by RM/CWD scan, closing explorer as fallback", from, to))
 			closeExplorerWindows(timeout)
 		}
 		time.Sleep(retrySleep)
@@ -419,18 +360,25 @@ func nextAsideName(to string) string {
 	}
 }
 
-// findHoldersOf 收集占用指定路径集合的进程 PID（去重并排除更新器自身），
-// 按白名单分区为"可强杀"与"需提示用户"两类（#13）。
-func findHoldersOf(whitelist []string, paths ...string) (killable []uint32, blocked []uint32) {
+// findHoldersOf 收集占用指定路径集合的进程 PID（去重并排除更新器自身）。
+// 来源：Restart Manager 句柄持有者 + CWD 持有者（cmd.exe 等站在目录里的进程）。
+// 用户决定：谁占用杀谁，返回的全部 PID 都会被强杀。
+// CWD 探测较昂贵（枚举全进程表 + 逐进程 PEB 读取，慢速 XP 上可达秒级），
+// 仅在 RM 未发现任何持有者时执行：CWD-only 占用者会在重试轮中（RM 为空）被扫到。
+func findHoldersOf(paths ...string) []uint32 {
 	selfPid := uint32(os.Getpid())
 	seen := make(map[uint32]bool)
 	var holders []uint32
+	rmFoundAny := false
 	for _, p := range paths {
 		found, err := util.FindProcessesHoldingPath(p)
 		if err != nil {
 			util.AppendToLog(logDir(), "update.log",
 				fmt.Sprintf("find holders of %s failed: %v", p, err))
 			continue
+		}
+		if len(found) > 0 {
+			rmFoundAny = true
 		}
 		for _, pid := range found {
 			if pid != selfPid && !seen[pid] {
@@ -439,7 +387,19 @@ func findHoldersOf(whitelist []string, paths ...string) (killable []uint32, bloc
 			}
 		}
 	}
-	return partitionHolders(holders, whitelistPIDs(whitelist))
+	if !rmFoundAny {
+		// CWD 持有者（如 32 位 cmd.exe 站在目录里，RM 不一定报得出）
+		for _, p := range paths {
+			cwdHolders := util.FindProcessesWithCWDUnder(p)
+			for _, pid := range cwdHolders {
+				if pid != selfPid && !seen[pid] {
+					seen[pid] = true
+					holders = append(holders, pid)
+				}
+			}
+		}
+	}
+	return holders
 }
 
 // buildMainExeCmd 构造主程序启动命令（提取为可测试函数，断言工作目录）

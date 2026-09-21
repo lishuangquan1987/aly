@@ -38,7 +38,7 @@ func TestRenameDirWithKillOverExistingTarget(t *testing.T) {
 	// 目标目录已存在且非空（旧版本备份）
 	mustMkdirFile(t, to, "old.exe", "old app")
 
-	if err := renameDirWithKill(from, to, nil, 5*time.Second); err != nil {
+	if err := renameDirWithKill(from, to, 5*time.Second); err != nil {
 		t.Fatalf("目标存在时应自动挪开后成功，实际失败: %v", err)
 	}
 
@@ -68,7 +68,7 @@ func TestRenameDirWithKillNoTarget(t *testing.T) {
 	to := filepath.Join(root, "win-x64_2.0")
 	mustMkdirFile(t, from, "app.exe", "new app")
 
-	if err := renameDirWithKill(from, to, nil, 5*time.Second); err != nil {
+	if err := renameDirWithKill(from, to, 5*time.Second); err != nil {
 		t.Fatalf("renameDirWithKill 失败: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(to, "app.exe")); err != nil {
@@ -96,7 +96,7 @@ func TestRenameDirWithKillAsideCollision(t *testing.T) {
 	// 上次残留的 to.old 也存在
 	mustMkdirFile(t, to+".old", "residue.exe", "residue")
 
-	if err := renameDirWithKill(from, to, nil, 5*time.Second); err != nil {
+	if err := renameDirWithKill(from, to, 5*time.Second); err != nil {
 		t.Fatalf("目标与 .old 均存在时应挪到 .old.1 后成功，实际失败: %v", err)
 	}
 
@@ -125,7 +125,7 @@ func TestRenameDirWithKillSourceMissing(t *testing.T) {
 	from := filepath.Join(root, "not-exist")
 	to := filepath.Join(root, "win-x64_1.0")
 
-	if err := renameDirWithKill(from, to, nil, 5*time.Second); err == nil {
+	if err := renameDirWithKill(from, to, 5*time.Second); err == nil {
 		t.Fatal("源文件夹不存在时应返回错误")
 	}
 }

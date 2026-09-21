@@ -40,8 +40,6 @@ func Rollback() {
 		printOutput(false, err.Error(), nil)
 		return
 	}
-	// 可强杀进程白名单（must_close_process_name / 主程序 / explorer），#13
-	whitelist := buildKillWhitelist(fc)
 
 	versionDir, err := fc.ExeCfg.AppVersionDir(*versionFlag)
 	if err != nil {
@@ -98,7 +96,7 @@ func Rollback() {
 		} else {
 			// Main folder doesn't exist, check if target version dir exists
 			if _, statErr := os.Stat(versionDir); statErr == nil {
-				if err := renameDirWithKill(versionDir, fc.MainFolder, whitelist, closeTimeout); err != nil {
+				if err := renameDirWithKill(versionDir, fc.MainFolder, closeTimeout); err != nil {
 					printOutput(false, fmt.Sprintf("crash recovery failed: %v", err), nil)
 					return
 				}
@@ -157,7 +155,7 @@ func Rollback() {
 	}
 	if _, statErr := os.Stat(prevVersionDir); statErr == nil {
 		// 旧备份目录存在：必须先挪开，否则主目录重命名会因目标非空目录报 Access denied
-		if err := renameDirWithKill(prevVersionDir, oldBackupTemp, whitelist, closeTimeout); err != nil {
+		if err := renameDirWithKill(prevVersionDir, oldBackupTemp, closeTimeout); err != nil {
 			versionInfo.VersionStatus = config.VersionStatusApplied
 			versionInfo.RollbackPrevious = ""
 			if wErr := config.WriteVersion(versionInfo); wErr != nil {
@@ -169,7 +167,7 @@ func Rollback() {
 	}
 
 	// Rename mainFolder -> prevVersionDir (backup current)
-	if err := renameDirWithKill(fc.MainFolder, prevVersionDir, whitelist, closeTimeout); err != nil {
+	if err := renameDirWithKill(fc.MainFolder, prevVersionDir, closeTimeout); err != nil {
 		if _, statErr := os.Stat(oldBackupTemp); statErr == nil {
 			if rErr := os.Rename(oldBackupTemp, prevVersionDir); rErr != nil {
 				util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: restore oldBackupTemp to prevVersionDir failed: %v", rErr))
@@ -187,7 +185,7 @@ func Rollback() {
 	}
 
 	// Rename versionDir -> mainFolder (activate rollback target)
-	if err := renameDirWithKill(versionDir, fc.MainFolder, whitelist, closeTimeout); err != nil {
+	if err := renameDirWithKill(versionDir, fc.MainFolder, closeTimeout); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
 		if rErr := os.Rename(prevVersionDir, fc.MainFolder); rErr != nil {
 			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: restore prevVersionDir to mainFolder failed: %v", rErr))

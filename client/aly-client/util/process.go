@@ -5,6 +5,9 @@ package util
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -13,6 +16,7 @@ import (
 var (
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
 	user32   = syscall.NewLazyDLL("user32.dll")
+	ntdll    = syscall.NewLazyDLL("ntdll.dll")
 
 	procCreateToolhelp32Snapshot = kernel32.NewProc("CreateToolhelp32Snapshot")
 	procProcess32FirstW          = kernel32.NewProc("Process32FirstW")
@@ -25,6 +29,10 @@ var (
 	procGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
 	procSendMessageW             = user32.NewProc("SendMessageW")
 	procIsWindowVisible          = user32.NewProc("IsWindowVisible")
+
+	procNtQueryInformationProcess = ntdll.NewProc("NtQueryInformationProcess")
+	procNtReadVirtualMemory       = ntdll.NewProc("NtReadVirtualMemory")
+	procIsWow64Process            = kernel32.NewProc("IsWow64Process")
 )
 
 const (
@@ -32,6 +40,7 @@ const (
 	INVALID_HANDLE_VALUE = ^uintptr(0)
 
 	PROCESS_TERMINATE          = 0x0001
+	PROCESS_VM_READ            = 0x0010
 	SYNCHRONIZE                = 0x00100000
 	PROCESS_QUERY_INFORMATION  = 0x0400
 
@@ -42,6 +51,72 @@ const (
 
 	MAX_PATH = 260
 )
+
+// processBasicInformation 对应 NT 的 PROCESS_BASIC_INFORMATION（32/64 位通用，uintptr 对齐）
+type processBasicInformation struct {
+	Reserved1       uintptr
+	PebBaseAddress  uintptr
+	Reserved2       [2]uintptr
+	UniqueProcessId uintptr
+	Reserved3       uintptr
+}
+
+// 客户端固定 GOARCH=386（32 位）。32 位客户端只能读取"32 位目标进程"的 PEB：
+//   - 32 位系统（XP）：所有进程均为 32 位，直接用 32 位偏移；
+//   - 64 位系统：WOW64（32 位）进程用 32 位偏移；64 位原生进程无法由 32 位客户端读取 PEB，跳过。
+// PEB / RTL_USER_PROCESS_PARAMETERS 的 32 位偏移（实测验证）：
+//   - PEB.ProcessParameters              = PEB + 0x10
+//   - ProcessParameters.CurrentDirectory = + 0x24（CURDIR 的 DosPath：UNICODE_STRING
+//     { Length(2); MaximumLength(2); Buffer(4) }，即结构体基址在 0x24，Buffer 字段在 +4）
+const (
+	pebProcessParametersOffset32 = 0x10
+	procParamsCurDirOffset       = 0x24
+)
+
+// processWow64Information 对应 NtQueryInformationProcess 的 ProcessWow64Information(26) 类
+const processWow64Information = 26
+
+// osIs64Bit 判断当前运行环境是否为 64 位 Windows（结果缓存，仅计算一次）。
+// 客户端固定 32 位：若自身处于 WOW64（32 位跑在 64 位系统上）则为 64 位系统，否则为 32 位系统。
+// IsWow64Process 自 XP SP2 起提供：XP RTM/SP1 上导出缺失时（proc.Addr()==0），
+// 直接视为 32 位系统（避免 LazyProc.Call 对缺失导出 panic）。
+var (
+	osBitsOnce  sync.Once
+	osIs64BitV  bool
+)
+
+func osIs64Bit() bool {
+	osBitsOnce.Do(func() {
+		if procIsWow64Process.Addr() == 0 {
+			osIs64BitV = false // XP RTM/SP1 无此导出，视为 32 位系统
+			return
+		}
+		var isWow uint32
+		ret, _, _ := procIsWow64Process.Call(
+			uintptr(INVALID_HANDLE_VALUE), // GetCurrentProcess() 伪句柄
+			uintptr(unsafe.Pointer(&isWow)),
+		)
+		osIs64BitV = ret != 0 && isWow != 0
+	})
+	return osIs64BitV
+}
+
+// processIs32Bit 判断目标进程是否为 32 位。
+// 32 位系统上恒为 true；64 位系统上通过 ProcessWow64Information 判断（非 0 = WOW64 32 位进程）。
+func processIs32Bit(handle uintptr) bool {
+	if !osIs64Bit() {
+		return true
+	}
+	var wow64 uintptr
+	procNtQueryInformationProcess.Call(
+		handle,
+		uintptr(processWow64Information),
+		uintptr(unsafe.Pointer(&wow64)),
+		uintptr(unsafe.Sizeof(wow64)),
+		0,
+	)
+	return wow64 != 0
+}
 
 type PROCESSENTRY32W struct {
 	Size            uint32
@@ -137,6 +212,145 @@ func FindProcessNamesByPIDs(pids []uint32) map[uint32]string {
 		)
 	}
 	return result
+}
+
+// FindProcessesWithCWDUnder 返回工作目录位于 dir（或其子目录）内的进程 PID 列表。
+// 用于识别 cmd.exe 等"站在目录里"的 CWD 占用者——这类锁 Restart Manager 不一定报得出，
+// 但同样会让目录无法重命名/删除。
+// 实现：读取目标进程 PEB 的 RTL_USER_PROCESS_PARAMETERS.CurrentDirectory（32 位偏移，
+// 客户端固定 GOARCH=386），纯 syscall、XP 兼容；读取失败或无权限的进程直接跳过。
+func FindProcessesWithCWDUnder(dir string) []uint32 {
+	var result []uint32
+	dirNorm := normPath(dir)
+
+	snapshot, _, _ := procCreateToolhelp32Snapshot.Call(
+		uintptr(TH32CS_SNAPPROCESS),
+		0,
+	)
+	if snapshot == INVALID_HANDLE_VALUE {
+		return result
+	}
+	defer procCloseHandle.Call(snapshot)
+
+	var entry PROCESSENTRY32W
+	entry.Size = uint32(unsafe.Sizeof(entry))
+	ret, _, _ := procProcess32FirstW.Call(
+		snapshot,
+		uintptr(unsafe.Pointer(&entry)),
+	)
+	for ret != 0 {
+		if cwd := processCWDPath(entry.ProcessID); cwd != "" && pathIsUnder(cwd, dirNorm) {
+			result = append(result, entry.ProcessID)
+		}
+		ret, _, _ = procProcess32NextW.Call(
+			snapshot,
+			uintptr(unsafe.Pointer(&entry)),
+		)
+	}
+	return result
+}
+
+// processCWDPath 读取指定进程的当前工作目录（归一化为盘符小写路径），失败返回 ""。
+// 32 位客户端无法读取 64 位原生进程的 PEB（指针宽度不匹配），故直接跳过——
+// 注意：这只是"读不到"，32 位进程仍可用 TerminateProcess 结束 64 位进程；
+// 64 位 cmd.exe 这类 CWD 持有者对 RM 与本探测均不可见，由重试兜底与
+// closeExplorerWindows 分支处理（见 common.go 中相关日志提示）。
+func processCWDPath(pid uint32) string {
+	handle, _, _ := procOpenProcess.Call(
+		uintptr(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ),
+		0,
+		uintptr(pid),
+	)
+	if handle == 0 {
+		return ""
+	}
+	defer procCloseHandle.Call(handle)
+
+	if !processIs32Bit(handle) {
+		return "" // 64 位原生进程：32 位客户端无法读取其 PEB
+	}
+
+	var pbi processBasicInformation
+	ret, _, _ := procNtQueryInformationProcess.Call(
+		handle,
+		uintptr(0), // ProcessBasicInformation
+		uintptr(unsafe.Pointer(&pbi)),
+		uintptr(unsafe.Sizeof(pbi)),
+		0,
+	)
+	if ret != 0 || pbi.PebBaseAddress == 0 {
+		return ""
+	}
+
+	var processParams uintptr
+	ret, _, _ = procNtReadVirtualMemory.Call(
+		handle,
+		pbi.PebBaseAddress+pebProcessParametersOffset32,
+		uintptr(unsafe.Pointer(&processParams)),
+		uintptr(unsafe.Sizeof(processParams)),
+		0,
+	)
+	if ret != 0 || processParams == 0 {
+		return ""
+	}
+
+	// CurrentDirectory.DosPath：UNICODE_STRING{ Length(2); MaximumLength(2); Buffer(4) }
+	var us struct {
+		Length        uint16
+		MaximumLength uint16
+		Buffer        uintptr
+	}
+	ret, _, _ = procNtReadVirtualMemory.Call(
+		handle,
+		processParams+procParamsCurDirOffset,
+		uintptr(unsafe.Pointer(&us)),
+		uintptr(unsafe.Sizeof(us)),
+		0,
+	)
+	if ret != 0 || us.Buffer == 0 || us.Length == 0 || us.Length > 4096 {
+		return ""
+	}
+
+	buf := make([]uint16, (us.Length+1)/2)
+	var readBytes uint32
+	ret, _, _ = procNtReadVirtualMemory.Call(
+		handle,
+		us.Buffer,
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(us.Length),
+		uintptr(unsafe.Pointer(&readBytes)),
+	)
+	if ret != 0 {
+		return ""
+	}
+	path := syscall.UTF16ToString(buf)
+	// NT 路径形如 \??\C:\... 或 \\?\C:\... 或 \??\UNC\server\share\...：
+	// 去掉前缀并归一化为盘符 / UNC 形式
+	path = strings.TrimPrefix(path, `\??\`)
+	path = strings.TrimPrefix(path, `\\?\`)
+	if strings.HasPrefix(path, `UNC\`) {
+		// \??\UNC\server\share\app → \\server\share\app
+		path = `\` + path
+	}
+	return normPath(path)
+}
+
+// normPath 归一化路径用于比较：Clean + 小写 + 解析 8.3 短名（EvalSymlinks），失败回退 Clean。
+func normPath(p string) string {
+	if resolved, err := filepath.EvalSymlinks(p); err == nil {
+		return strings.ToLower(filepath.Clean(resolved))
+	}
+	return strings.ToLower(filepath.Clean(p))
+}
+
+// pathIsUnder 判断 path 是否等于 baseDir 或其子目录（两者均已归一化）。
+// baseDir 为驱动器根（如 c:\）时也能正确匹配其下所有路径。
+func pathIsUnder(path, baseDir string) bool {
+	if path == baseDir {
+		return true
+	}
+	base := strings.TrimRight(baseDir, string(filepath.Separator))
+	return strings.HasPrefix(path, base+string(filepath.Separator))
 }
 
 // KillProcess 终止指定 PID 的进程
