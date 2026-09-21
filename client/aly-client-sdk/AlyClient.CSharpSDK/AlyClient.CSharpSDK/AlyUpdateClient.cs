@@ -56,12 +56,7 @@ namespace AlyClient.CSharpSDK
                 var selfCheckUpdateResult = AlyApi.CheckSelfUpdateAsync(UpdatorExePath).Result;
                 if (selfCheckUpdateResult.IsSuccess && selfCheckUpdateResult.Data.NeedUpdate)
                 {
-                    try
-                    {
-                        File.Copy(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "aly-client.exe"),
-                            UpdatorExePath, true);
-                    }
-                    catch (Exception) { }
+                    UpdateSelf();
                 }
                 MainLoop(_cts.Token);
             });
@@ -71,6 +66,90 @@ namespace AlyClient.CSharpSDK
         public void Cancel()
         {
             try { _cts?.Cancel(); } catch (ObjectDisposedException) { }
+        }
+
+        /// <summary>
+        /// 自更新更新器：临时文件 + SHA256 校验 + 原子替换（File.Replace / File.Move），
+        /// 目标被占用时重试 3 次（间隔 1s）。失败不静默（#8）：
+        /// 更新器损坏会破坏后续所有更新，必须留痕并保留旧更新器（不清空目标）。
+        /// </summary>
+        private void UpdateSelf()
+        {
+            string src = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "aly-client.exe");
+            string tmp = UpdatorExePath + ".new";
+            Exception lastErr = null;
+            for (int i = 0; i < 3; i++)
+            {
+                try
+                {
+                    File.Copy(src, tmp, true);
+                    // 校验副本与源一致（防止复制截断）。源的完整性由主更新链路保证：
+                    // 随版本下发的 aly-client.exe 在 download_update 时已按服务端
+                    // MD5+SHA256 校验通过（server/get_all_files 提供可信哈希）。
+                    if (ComputeSha256(tmp) != ComputeSha256(src))
+                    {
+                        throw new IOException("self-update checksum mismatch");
+                    }
+                    if (File.Exists(UpdatorExePath))
+                    {
+                        // 目标存在：原子替换（要求目标未被占用）
+                        File.Replace(tmp, UpdatorExePath, null);
+                    }
+                    else
+                    {
+                        // 首次部署：目标不存在，直接改名
+                        File.Move(tmp, UpdatorExePath);
+                    }
+                    LogError("self-update OK: " + UpdatorExePath);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    lastErr = ex;
+                    try { File.Delete(tmp); } catch { }
+                    // 非 Windows 平台（netstandard2.0/Mono 等）File.Replace 抛
+                    // PlatformNotSupportedException：回退为 删除目标 + 改名。
+                    var pns = ex as PlatformNotSupportedException;
+                    if (pns != null)
+                    {
+                        try
+                        {
+                            if (File.Exists(UpdatorExePath)) File.Delete(UpdatorExePath);
+                            File.Move(tmp, UpdatorExePath);
+                            LogError("self-update OK (move fallback): " + UpdatorExePath);
+                            return;
+                        }
+                        catch (Exception ex2)
+                        {
+                            lastErr = ex2;
+                        }
+                    }
+                    // 目标被占用（如上一更新进程尚未完全退出）：等待后重试
+                    Thread.Sleep(1000);
+                }
+            }
+            string msg = "self-update failed: " + (lastErr != null ? lastErr.Message : "unknown");
+            LogError(msg);
+        }
+
+        private static string ComputeSha256(string path)
+        {
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(fs);
+                return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+            }
+        }
+
+        private static void LogError(string msg)
+        {
+            try
+            {
+                string log = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "aly-client-sdk.log");
+                File.AppendAllText(log, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + msg + Environment.NewLine);
+            }
+            catch { }
         }
 
         /// <summary>Cancel and release resources.</summary>
@@ -118,7 +197,23 @@ namespace AlyClient.CSharpSDK
                                 // StatusChanged 携带文件名与百分比（0-100）
                                 OnStatusChanged(Status, string.Format("Downloading {0}... {1}%", fileName, (int)Math.Round(progress * 100)));
                             }).Result;
-                            if (!downloadResult.IsSuccess) { Thread.Sleep(1000); continue; }
+                            if (!downloadResult.IsSuccess)
+                            {
+                                // #6 防御：client 已是最新版本时 download_update 返回
+                                // "already at latest version"（文案与
+                                // client/aly-client/cmd/download_update.go 保持一致），
+                                // 应视为无需更新而非错误，避免强制更新场景下死循环报错。
+                                if (downloadResult.ErrorMsg != null &&
+                                    downloadResult.ErrorMsg.Contains("already at latest version"))
+                                {
+                                    ClearError();
+                                    // 状态复位，避免宿主 UI 停留在 "Downloading..."（#6 审查发现）
+                                    Status = AlyClientStatus.None;
+                                    OnStatusChanged(Status, "No update needed");
+                                }
+                                Thread.Sleep(1000);
+                                continue;
+                            }
                         }
 
                         Status = AlyClientStatus.DownloadedUpdate;
