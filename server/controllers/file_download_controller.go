@@ -51,15 +51,25 @@ func GetAllFilesByProjectName(ctx *gin.Context) {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
-			return nil
-		}
 		// 获取相对路径（正斜杠统一）
 		relPath, err := filepath.Rel(workDir, absPath)
 		if err != nil {
 			return err
 		}
 		relPath = strings.ReplaceAll(relPath, "\\", "/")
+
+		// 跳过上传中间态文件（分片暂存 xxx.chunks/、合并临时 xxx.merging、.part/.tmp），
+		// 避免上传进行中时被当作正式文件下发给客户端（#7）。
+		if isUploadTempPath(relPath) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if info.IsDir() {
+			return nil
+		}
 
 		// 应用忽略文件夹规则
 		for _, ignoreFolder := range p.IgnoreFolders {
@@ -132,11 +142,30 @@ func matchIgnoreFile(relPath, pattern string) bool {
 	return false
 }
 
+// isUploadTempPath 判断路径是否含服务端上传中间态元素。
+// 服务端实际创建的中间态只有两种固定形态（file_upload_controller.go）：
+//   - {文件}.chunks/   分片暂存目录
+//   - {文件}.merging   分片合并临时文件
+// 不做 .tmp/.part 等宽泛后缀匹配，避免误伤项目内合法的同名文件/目录（#7 审查发现）。
+func isUploadTempPath(relPath string) bool {
+	for _, seg := range strings.Split(relPath, "/") {
+		if strings.HasSuffix(seg, ".chunks") || strings.HasSuffix(seg, ".merging") {
+			return true
+		}
+	}
+	return false
+}
+
 func DownloadFile(ctx *gin.Context) {
 	pathStr := ctx.Query("path")
 
 	// 路径穿越防护：规范化路径并限制在 data 目录内
 	cleanPath := filepath.Clean(pathStr)
+	// 拒绝下载上传中间态文件（#7 纵深防御）
+	if isUploadTempPath(filepath.ToSlash(cleanPath)) {
+		ctx.AbortWithStatus(http.StatusNotFound)
+		return
+	}
 	exePath, err := os.Executable()
 	if err != nil {
 		ctx.AbortWithStatus(http.StatusNotFound)

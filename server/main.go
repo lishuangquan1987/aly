@@ -35,6 +35,9 @@ func main() {
 	defer db.Client.Close()
 
 	r := gin.Default()
+	// 上传大小限制（#14）：multipart 内存阈值调小，超出部分落盘临时文件，
+	// 配合 controllers.UploadFile/UploadChunk 的 MaxBytesReader + Content-Length 前置校验。
+	r.MaxMultipartMemory = 8 << 20
 	routers.InitRouter(r)
 
 	srv := &http.Server{

@@ -3,8 +3,10 @@ package controllers
 import (
 	"aly/server/internal/service"
 	"aly/server/models"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -20,12 +22,27 @@ import (
 const maxUploadFileSize int64 = 1 << 30
 
 func UploadFile(ctx *gin.Context) {
+	// 上传大小前置限制（#14）：
+	// 1) Content-Length 早退，不解析 body；
+	// 2) MaxBytesReader 在 multipart 解析阶段即截断超限 body，避免大文件先落盘再拒绝。
+	if ctx.Request.ContentLength > maxUploadFileSize {
+		ctx.JSON(200, models.NG(fmt.Sprintf("文件过大: %d 字节，上限 %d 字节", ctx.Request.ContentLength, maxUploadFileSize)))
+		return
+	}
+	// 预留 1MB 覆盖 multipart 边界/表单字段开销
+	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, maxUploadFileSize+1<<20)
+
 	f, err := ctx.FormFile("file")
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			ctx.JSON(200, models.NG(fmt.Sprintf("文件过大: 上限 %d 字节", maxUploadFileSize)))
+			return
+		}
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
-	// 上传大小限制：multipart 解析时即校验，避免大文件先落盘再拒绝
+	// 兜底：multipart 解析后仍校验大小
 	if f.Size > maxUploadFileSize {
 		ctx.JSON(200, models.NG(fmt.Sprintf("文件过大: %d 字节，上限 %d 字节", f.Size, maxUploadFileSize)))
 		return
@@ -87,8 +104,20 @@ func UploadFile(ctx *gin.Context) {
 	ctx.JSON(200, models.OK())
 }
 
+// chunkMaxSize 单分片大小上限（64MB）：publish-cli 实际按 1MB 分包，64MB 是宽松上限，
+// 防止单请求写入近 1GB 临时文件（#14 审查发现）。
+const chunkMaxSize int64 = 64 << 20
+
 // UploadChunk 接收分片上传：将单个分片保存到临时目录
 func UploadChunk(ctx *gin.Context) {
+	// 上传大小前置限制（#14）：必须在 ShouldBind 解析 multipart body 之前安装，
+	// 否则 body 已被完整解析落盘，限制形同虚设。
+	if ctx.Request.ContentLength > chunkMaxSize {
+		ctx.JSON(200, models.NG(fmt.Sprintf("分片过大: %d 字节，上限 %d 字节", ctx.Request.ContentLength, chunkMaxSize)))
+		return
+	}
+	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, chunkMaxSize+1<<20)
+
 	var chunkInfo struct {
 		ProjectName      string `form:"projectName"`
 		RelativeFileName string `form:"relativeFileName"`
@@ -96,6 +125,11 @@ func UploadChunk(ctx *gin.Context) {
 		TotalChunks      int    `form:"totalChunks"`
 	}
 	if err := ctx.ShouldBind(&chunkInfo); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			ctx.JSON(200, models.NG(fmt.Sprintf("分片过大: 上限 %d 字节", chunkMaxSize)))
+			return
+		}
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
@@ -117,9 +151,9 @@ func UploadChunk(ctx *gin.Context) {
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
-	// 分片大小同样受限
-	if f.Size > maxUploadFileSize {
-		ctx.JSON(200, models.NG(fmt.Sprintf("分片过大: %d 字节，上限 %d 字节", f.Size, maxUploadFileSize)))
+	// 分片大小校验（解析后兜底）
+	if f.Size > chunkMaxSize {
+		ctx.JSON(200, models.NG(fmt.Sprintf("分片过大: %d 字节，上限 %d 字节", f.Size, chunkMaxSize)))
 		return
 	}
 
