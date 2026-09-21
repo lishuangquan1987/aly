@@ -274,8 +274,15 @@ func renameDirWithKill(from, to string, timeout time.Duration) error {
 		util.AppendToLog(logDir(), "update.log",
 			fmt.Sprintf("rename %s -> %s attempt %d/%d failed: %v", from, to, attempt, maxAttempts, err))
 
-		// 4) 直接结束占用待重命名文件夹的进程（排除更新器自身）
-		pids := findHoldersOf(from, to)
+		// 4) 直接结束占用待重命名文件夹的进程（排除更新器自身）。
+		//    前两轮浅扫（RM + 32 位 CWD），仍失败后第 3 轮起启用深扫
+		//    （全系统句柄枚举，覆盖 64 位进程/RM 探测不到的持有者）。
+		var pids []uint32
+		if attempt >= 3 {
+			pids = findDeepHolders(from, to)
+		} else {
+			pids = findHoldersOf(from, to)
+		}
 		if len(pids) > 0 {
 			wait := timeout
 			if wait > forceKillWait {
@@ -303,8 +310,14 @@ func renameWithKillRetry(from, to string, timeout time.Duration) error {
 		util.AppendToLog(logDir(), "update.log",
 			fmt.Sprintf("rename %s -> %s attempt %d/%d failed: %v", from, to, attempt, maxAttempts, err))
 
-		// 直接结束占用待重命名文件夹的进程（排除更新器自身）
-		pids := findHoldersOf(from, to)
+		// 直接结束占用待重命名文件夹的进程（排除更新器自身）；
+		// 前两轮浅扫，第 3 轮起深扫（全系统句柄枚举）。
+		var pids []uint32
+		if attempt >= 3 {
+			pids = findDeepHolders(from, to)
+		} else {
+			pids = findHoldersOf(from, to)
+		}
 		if len(pids) > 0 {
 			wait := timeout
 			if wait > forceKillWait {
@@ -315,19 +328,37 @@ func renameWithKillRetry(from, to string, timeout time.Duration) error {
 			// RM 与 CWD 探测都找不到占用者时，通常是资源管理器窗口
 			// 打开了该文件夹（Explorer 持目录句柄，RM 检测不到），或 64 位原生
 			// cmd.exe 等 CWD 持有者（32 位客户端无法读取其 PEB，见 util/process.go）。
-			// 关闭/结束 Explorer（系统会自动重启它）。
+			// 先精准关闭浏览 from/to 的 Explorer 窗口，未命中再杀全部 explorer 兜底。
 			util.AppendToLog(logDir(), "update.log",
-				fmt.Sprintf("rename %s -> %s: no holders found by RM/CWD scan, closing explorer as fallback", from, to))
-			closeExplorerWindows(timeout)
+				fmt.Sprintf("rename %s -> %s: no holders found by RM/CWD scan, closing explorer windows", from, to))
+			closeExplorerWindows(timeout, from, to)
 		}
 		time.Sleep(retrySleep)
 	}
 	return lastErr
 }
 
-// closeExplorerWindows 关闭资源管理器（先 WM_CLOSE 优雅关闭，随后强杀，Explorer 会自动重启）。
-// 用于解除 Explorer 文件夹窗口对目录句柄的占用。
-func closeExplorerWindows(timeout time.Duration) {
+// closeExplorerWindows 解除 Explorer 对目录的占用：
+//  1) 精准方案：只关闭"当前文件夹 == 目标"的 Explorer 窗口（Shell.Application COM via
+//     cscript，业界推荐做法），避免误关用户其他资源管理器窗口、不重启 shell；
+//  2) 兜底：精准关闭未命中任何窗口（或 cscript 不可用）时，按"谁占用杀谁"结束全部
+//     explorer（系统会自动重启它）。
+func closeExplorerWindows(timeout time.Duration, folders ...string) {
+	for _, folder := range folders {
+		closed, err := util.CloseExplorerWindowsBrowsing(folder)
+		if err != nil {
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("close explorer windows (targeted) failed for %s: %v", folder, err))
+			continue
+		}
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("closed %d explorer window(s) browsing %s", closed, folder))
+		if closed > 0 {
+			return // 已精准关闭目标窗口，无需杀全部 explorer
+		}
+	}
+
+	// 兜底：杀全部 explorer（系统自动重启）
 	pids, err := util.FindProcessesByName("explorer")
 	if err != nil {
 		util.AppendToLog(logDir(), "update.log",
@@ -396,6 +427,25 @@ func findHoldersOf(paths ...string) []uint32 {
 					seen[pid] = true
 					holders = append(holders, pid)
 				}
+			}
+		}
+	}
+	return holders
+}
+
+// findDeepHolders 深扫：在浅扫（RM + 32 位 CWD）基础上追加全系统句柄枚举，
+// 覆盖 64 位原生进程的 CWD/句柄、RM 探测不到的持有者。耗时（秒级），仅重试后期调用。
+func findDeepHolders(paths ...string) []uint32 {
+	holders := findHoldersOf(paths...)
+	seen := make(map[uint32]bool)
+	for _, p := range holders {
+		seen[p] = true
+	}
+	for _, p := range paths {
+		for _, pid := range util.FindProcessesWithHandlesUnder(p) {
+			if pid != uint32(os.Getpid()) && !seen[pid] {
+				seen[pid] = true
+				holders = append(holders, pid)
 			}
 		}
 	}
