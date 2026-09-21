@@ -95,6 +95,8 @@ func CheckDiff() {
 	}
 
 	// Compute SHA256 in parallel for files that differ by MD5
+	// 并发约束：每个 goroutine 只按下标写 diffFiles[idx]（不同内存地址，非 data race）；
+	// 禁止在此循环内对 diffFiles 执行 append/扩容，否则将构成 data race（四-3）。
 	var shaWg sync.WaitGroup
 	for i := range diffFiles {
 		if diffFiles[i].LocalMD5 == "" {

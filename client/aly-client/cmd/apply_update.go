@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"aly/client/aly-client/config"
@@ -73,13 +74,14 @@ func ApplyUpdate() {
 			if _, statErr2 := os.Stat(versionDir); os.IsNotExist(statErr2) {
 				// 新版本已应用完成：补齐状态、执行后置脚本、启动主程序。
 				versionInfo.VersionStatus = config.VersionStatusApplied
+				versionInfo.RollbackPrevious = ""
 				if wErr := config.WriteVersion(versionInfo); wErr != nil {
 					util.AppendToLog(logDir(), "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
 				}
 				if versionInfo.AfterApplyUpdateScript != "" {
-					runScript(filepath.Join(fc.MainFolder, versionInfo.AfterApplyUpdateScript))
+					runScript(filepath.Join(fc.MainFolder, versionInfo.AfterApplyUpdateScript), fc.MainFolder)
 				}
-				launchMainExe(fc.ExeCfg)
+				launchMainExe(fc.ExeCfg, fc.MainFolder)
 				printOutput(true, "", nil)
 				return
 			}
@@ -93,20 +95,22 @@ func ApplyUpdate() {
 			}
 			if _, statErr := os.Stat(versionDir); statErr == nil {
 				// Rename AppVersionDir to MainExeFolderPath
-				if err := renameDirWithKill(versionDir, fc.MainFolder, closeTimeout); err != nil {
+				whitelist := buildKillWhitelist(fc)
+				if err := renameDirWithKill(versionDir, fc.MainFolder, whitelist, closeTimeout); err != nil {
 					printOutput(false, fmt.Sprintf("crash recovery failed: %v", err), nil)
 					return
 				}
 				// Update status to applied
 				versionInfo.VersionStatus = config.VersionStatusApplied
+				versionInfo.RollbackPrevious = ""
 				if wErr := config.WriteVersion(versionInfo); wErr != nil {
 					util.AppendToLog(logDir(), "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
 				}
 				// Run post-update script and launch main exe
 				if versionInfo.AfterApplyUpdateScript != "" {
-					runScript(filepath.Join(fc.MainFolder, versionInfo.AfterApplyUpdateScript))
+					runScript(filepath.Join(fc.MainFolder, versionInfo.AfterApplyUpdateScript), fc.MainFolder)
 				}
-				launchMainExe(fc.ExeCfg)
+				launchMainExe(fc.ExeCfg, fc.MainFolder)
 				printOutput(true, "", nil)
 				return
 			}
@@ -143,6 +147,10 @@ func ApplyUpdate() {
 		}
 		util.AppendToLog(logDir(), "update.log",
 			fmt.Sprintf("apply attempt %d/%d failed: %v", attempt, maxAttempts, applyErr))
+		// 非白名单进程占用（请关闭后重试）：重试无意义，直接失败兜底
+		if strings.Contains(applyErr.Error(), "请关闭后重试") {
+			break
+		}
 		if attempt < maxAttempts {
 			// 回滚失败可能已导致 ApplicationFolder 丢失，此时重试只会从不存在源复制、无法恢复
 			if _, statErr := os.Stat(fc.MainFolder); os.IsNotExist(statErr) {
@@ -159,6 +167,7 @@ func ApplyUpdate() {
 
 	// Update version.json
 	versionInfo.VersionStatus = config.VersionStatusApplied
+	versionInfo.RollbackPrevious = ""
 	if err := config.WriteVersion(versionInfo); err != nil {
 		printOutput(false, fmt.Sprintf("write version: %v", err), nil)
 		return
@@ -166,11 +175,11 @@ func ApplyUpdate() {
 
 	// Run post-update script if configured
 	if versionInfo.AfterApplyUpdateScript != "" {
-		runScript(filepath.Join(fc.MainFolder, versionInfo.AfterApplyUpdateScript))
+		runScript(filepath.Join(fc.MainFolder, versionInfo.AfterApplyUpdateScript), fc.MainFolder)
 	}
 
 	// Launch main exe
-	launchMainExe(fc.ExeCfg)
+	launchMainExe(fc.ExeCfg, fc.MainFolder)
 
 	// Output success
 	printOutput(true, "", nil)
@@ -179,12 +188,17 @@ func ApplyUpdate() {
 // applyReplacement 执行一次原子替换：关闭占用进程 → 复制 → 备份改名 → 替换改名。
 // 任何一步失败都会尝试回滚恢复 mainFolder，并返回错误（由调用方决定是否重试）。
 func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDir string, closeTimeout time.Duration) error {
+	whitelist := buildKillWhitelist(fc)
 	// 关闭 must_close_process_name 指定的进程
 	if len(fc.ExeCfg.MustCloseProcessName) > 0 {
 		closeProcessesGracefully(fc.ExeCfg.MustCloseProcessName, closeTimeout)
 	}
-	// 自动探测并结束占用 ApplicationFolder 的进程（排除更新器自身）
-	closeProcessesHoldingFolder(fc.MainFolder, closeTimeout)
+	// 自动探测并结束占用 ApplicationFolder 的进程（排除更新器自身）。
+	// 仅强杀白名单进程（must_close_process_name / 主程序 / explorer）；
+	// 非白名单占用者返回错误，由调用方提示用户手动关闭（#13）。
+	if err := closeProcessesHoldingFolder(fc.MainFolder, whitelist, closeTimeout); err != nil {
+		return err
+	}
 
 	// 从 versionDir 读取 shared.json，获取 un_copy_folders / un_copy_files
 	// 这些字段指定不应从当前 ApplicationFolder 复制到新版本目录的文件/文件夹
@@ -222,13 +236,13 @@ func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDi
 	if _, statErr := os.Stat(prevVersionDir); statErr == nil {
 		// 旧备份目录存在：必须先挪开，否则主目录重命名会因目标非空目录报 Access denied。
 		// 挪不动（被占用）则直接失败，不再静默继续。
-		if err := renameDirWithKill(prevVersionDir, oldBackupTemp, closeTimeout); err != nil {
+		if err := renameDirWithKill(prevVersionDir, oldBackupTemp, whitelist, closeTimeout); err != nil {
 			return fmt.Errorf("backup aside failed: %v", err)
 		}
 	}
 
 	// Rename mainFolder -> prevVersionDir (backup)
-	if err := renameDirWithKill(fc.MainFolder, prevVersionDir, closeTimeout); err != nil {
+	if err := renameDirWithKill(fc.MainFolder, prevVersionDir, whitelist, closeTimeout); err != nil {
 		// Restore old backup if it existed
 		if _, statErr := os.Stat(oldBackupTemp); statErr == nil {
 			if rerr := os.Rename(oldBackupTemp, prevVersionDir); rerr != nil {
@@ -240,7 +254,7 @@ func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDi
 	}
 
 	// Rename versionDir -> mainFolder
-	if err := renameDirWithKill(versionDir, fc.MainFolder, closeTimeout); err != nil {
+	if err := renameDirWithKill(versionDir, fc.MainFolder, whitelist, closeTimeout); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
 		if rerr := os.Rename(prevVersionDir, fc.MainFolder); rerr != nil {
 			exeDir := logDir()

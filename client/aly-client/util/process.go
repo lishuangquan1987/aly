@@ -99,6 +99,46 @@ func FindProcessesByName(name string) ([]uint32, error) {
 	return pids, nil
 }
 
+// FindProcessNamesByPIDs 返回给定 PID 集合的进程名映射（小写、去 .exe 后缀）。
+// 用于更新前识别非白名单占用进程并向用户提示（#13）；找不到的 PID 不包含在结果中。
+func FindProcessNamesByPIDs(pids []uint32) map[uint32]string {
+	result := make(map[uint32]string)
+	if len(pids) == 0 {
+		return result
+	}
+	want := make(map[uint32]bool, len(pids))
+	for _, p := range pids {
+		want[p] = true
+	}
+
+	snapshot, _, _ := procCreateToolhelp32Snapshot.Call(
+		uintptr(TH32CS_SNAPPROCESS),
+		0,
+	)
+	if snapshot == INVALID_HANDLE_VALUE {
+		return result
+	}
+	defer procCloseHandle.Call(snapshot)
+
+	var entry PROCESSENTRY32W
+	entry.Size = uint32(unsafe.Sizeof(entry))
+	ret, _, _ := procProcess32FirstW.Call(
+		snapshot,
+		uintptr(unsafe.Pointer(&entry)),
+	)
+	for ret != 0 {
+		if want[entry.ProcessID] {
+			exeName := syscall.UTF16ToString(entry.ExeFile[:])
+			result[entry.ProcessID] = toLowerWithoutExt(exeName)
+		}
+		ret, _, _ = procProcess32NextW.Call(
+			snapshot,
+			uintptr(unsafe.Pointer(&entry)),
+		)
+	}
+	return result
+}
+
 // KillProcess 终止指定 PID 的进程
 func KillProcess(pid uint32) error {	handle, _, _ := procOpenProcess.Call(
 		uintptr(PROCESS_TERMINATE),

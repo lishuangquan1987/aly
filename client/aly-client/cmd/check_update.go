@@ -78,7 +78,7 @@ func checkUpdateApplied(fc *FullConfig, localVersion string) {
 	latestLog := findLatestLog(logs)
 	serverVersion := stripVPrefix(latestLog.Version)
 
-	if serverVersion == localVersion {
+	if !needUpdate(serverVersion, localVersion) {
 		printOutput(true, "", &model.CheckUpdateData{
 			HasUpdate:      false,
 			CurrentVersion: localVersion,
@@ -123,8 +123,8 @@ func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVe
 	latestLog := findLatestLog(logs)
 	serverVersion := stripVPrefix(latestLog.Version)
 
-	if serverVersion == localVersion {
-		// 服务器版本一致：继续 apply 已下载版本
+	if !needUpdate(serverVersion, localVersion) {
+		// 服务器版本不高于本地待应用版本：继续 apply 已下载版本
 		currentVer := versionInfo.VersionPrevious
 		if currentVer == "" {
 			currentVer = versionInfo.Version
@@ -152,6 +152,14 @@ func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVe
 			ForceUpdate:        &forceUpdate,
 		})
 	}
+}
+
+// needUpdate 统一版本判断口径：仅当服务器版本严格高于本地版本时才需要更新。
+// 与 download_update 的 compareVersion(newVersion, currentVersion) > 0 语义保持一致，
+// 避免服务端版本低于本地（回滚发布/连错环境）时 check 报有更新而 download 报已是最新，
+// 导致开启强制更新的客户端永久卡死。
+func needUpdate(serverVersion, localVersion string) bool {
+	return compareVersion(serverVersion, localVersion) > 0
 }
 
 // findLatestLog 返回 ID 最大的变更日志

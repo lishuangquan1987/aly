@@ -50,8 +50,17 @@ func ListRollbackVersions() {
 	prefix := folderName + "_"
 	versionInfo, _ := config.ReadVersion()
 	currentVersion := ""
+	pendingVersion := ""
 	if versionInfo != nil {
 		currentVersion = versionInfo.Version
+		if versionInfo.VersionStatus == config.VersionStatusDownloaded {
+			// downloaded 状态：主程序仍是 VersionPrevious 的内容，Version 是待应用版本
+			if versionInfo.VersionPrevious != "" {
+				currentVersion = versionInfo.VersionPrevious
+			}
+			// 待应用版本目录是下载产物，不可作为回滚目标，列表需排除
+			pendingVersion = versionInfo.Version
+		}
 	}
 
 	var versions []string
@@ -61,6 +70,9 @@ func ListRollbackVersions() {
 		}
 		version := strings.TrimPrefix(name, prefix)
 		if !isLikelyVersion(version) {
+			continue
+		}
+		if version == pendingVersion {
 			continue
 		}
 		subDirPath := filepath.Join(pkgDir, name)

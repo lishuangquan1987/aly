@@ -165,8 +165,46 @@ func ShouldSkipFolder(relPath string, ignoreFolders []string) bool {
 		if strings.EqualFold(pattern, relPath) {
 			return true
 		}
+		// 支持 ** 表达任意深度嵌套（filepath.Match 的 * 不跨路径分隔符）
+		if matchPathPattern(pattern, relPath) {
+			return true
+		}
 	}
 	return false
+}
+
+// matchPathPattern 按 "/" 分段递归匹配路径 pattern：
+//   - "**" 匹配零个或多个路径段（支持 a/**/b、**/logs 等任意深度嵌套）；
+//   - 其余段用 filepath.Match 逐段匹配（* 不跨分隔符，与整串匹配语义一致）。
+// 无 "**" 的 pattern 行为与 filepath.Match(pattern, relPath) 等价。
+func matchPathPattern(pattern, relPath string) bool {
+	pp := strings.Split(pattern, "/")
+	rp := strings.Split(strings.TrimPrefix(relPath, "./"), "/")
+	return matchSegs(pp, rp)
+}
+
+func matchSegs(pp, rp []string) bool {
+	if len(pp) == 0 {
+		return len(rp) == 0
+	}
+	if pp[0] == "**" {
+		// ** 匹配零段：跳过当前 ** 继续匹配
+		if matchSegs(pp[1:], rp) {
+			return true
+		}
+		// ** 匹配一段：消耗一个路径段后继续
+		if len(rp) > 0 && matchSegs(pp, rp[1:]) {
+			return true
+		}
+		return false
+	}
+	if len(rp) == 0 {
+		return false
+	}
+	if m, _ := filepath.Match(pp[0], rp[0]); !m {
+		return false
+	}
+	return matchSegs(pp[1:], rp[1:])
 }
 
 // ShouldSkipFile 判断文件是否在忽略列表中（基于 SharedConfig.IgnoreFiles）

@@ -126,13 +126,9 @@ func LocalFileMD5Map(root string) (map[string]string, error) {
 		relPath = filepath.ToSlash(relPath)
 
 		if info.IsDir() {
-			if relPath == "update" || hasPrefix(relPath, "update/") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		if hasPrefix(relPath, "update/") {
+			// 注：UpdateFolder 位于 PackageFolder 下（MainFolder 的兄弟目录），
+			// 不在本 Walk(root=MainFolder) 范围内，无需在此排除；
+			// .updator/ 需参与扫描（shared.json 随版本下发），不可排除（#12）。
 			return nil
 		}
 
@@ -191,14 +187,6 @@ func LocalFileMD5Map(root string) (map[string]string, error) {
 	}
 
 	return result, md5Err
-}
-
-// hasPrefix checks if a string has the specified prefix.
-func hasPrefix(s, prefix string) bool {
-	if len(s) < len(prefix) {
-		return false
-	}
-	return s[:len(prefix)] == prefix
 }
 
 // EnsureDir ensures a directory exists.

@@ -127,3 +127,36 @@ func TestCopyDirWithExcludeNothingSkipped(t *testing.T) {
 	assertExists(t, filepath.Join(dst, "logs", "c.log"))
 	assertExists(t, filepath.Join(dst, "keep", "d.txt"))
 }
+
+// TestLocalFileMD5MapIncludesUpdateFolder 验证 #12 修复：
+// 移除硬编码的 "update" 目录排除后，名为 update/ 的子目录不再被 LocalFileMD5Map 跳过。
+func TestLocalFileMD5MapIncludesUpdateFolder(t *testing.T) {
+	root, err := ioutil.TempDir("", "local-md5-map")
+	if err != nil {
+		t.Fatalf("创建临时目录失败: %v", err)
+	}
+	defer os.RemoveAll(root)
+
+	write := func(rel string) {
+		full := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatalf("创建目录 %s 失败: %v", filepath.Dir(full), err)
+		}
+		if err := ioutil.WriteFile(full, []byte(rel), 0644); err != nil {
+			t.Fatalf("写入文件 %s 失败: %v", full, err)
+		}
+	}
+	write("app.exe")
+	write("update/tool.exe")
+
+	m, err := LocalFileMD5Map(root)
+	if err != nil {
+		t.Fatalf("LocalFileMD5Map 失败: %v", err)
+	}
+	if _, ok := m["update/tool.exe"]; !ok {
+		t.Errorf("update/ 子目录不应再被排除，map 应包含 update/tool.exe")
+	}
+	if _, ok := m["app.exe"]; !ok {
+		t.Errorf("map 应包含 app.exe")
+	}
+}

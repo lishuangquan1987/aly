@@ -201,6 +201,7 @@ func DownloadUpdate() {
 	versionInfo.VersionPrevious = versionInfo.Version
 	versionInfo.Version = newVersion
 	versionInfo.VersionStatus = config.VersionStatusDownloaded
+	versionInfo.RollbackPrevious = ""
 	versionInfo.AfterApplyUpdateScript = latestLog.AfterApplyUpdateScript
 	if err := config.WriteVersion(versionInfo); err != nil {
 		printProgressFail(0, 0, "version.json", 0, fmt.Sprintf("write version: %v", err))

@@ -38,7 +38,7 @@ func TestApplyFailureFallback(t *testing.T) {
 	// launchMainExeFn 桩：记录调用
 	var launched []string
 	orig := launchMainExeFn
-	launchMainExeFn = func(cfg *config.Config) {
+	launchMainExeFn = func(cfg *config.Config, mainFolder string) {
 		launched = append(launched, cfg.MainExeRelativePath)
 	}
 	defer func() { launchMainExeFn = orig }()

@@ -20,6 +20,10 @@ type VersionInfo struct {
 	Version                string `json:"version"`
 	VersionStatus          string `json:"version_status"`
 	AfterApplyUpdateScript string `json:"after_apply_update_script,omitempty"`
+	// RollbackPrevious 记录回滚开始时 MainFolder 的真实内容版本（pre-rollback active version）。
+	// 仅 rollback 在 status=applying 期间写入，用于崩溃恢复时正确还原备份目录对应的版本，
+	// 避免 downloaded 状态下回滚导致的"目录名与实际内容错配"（#5）。
+	RollbackPrevious string `json:"rollback_previous,omitempty"`
 }
 
 func versionPath() (string, error) {
