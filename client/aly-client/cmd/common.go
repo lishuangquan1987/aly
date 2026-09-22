@@ -55,7 +55,17 @@ func loadFullConfig(url, projectName, mainExePath string) (*FullConfig, error) {
 
 	shared, err := config.LoadSharedConfig(mainFolder)
 	if err != nil {
-		return nil, fmt.Errorf("load shared.json: %v", err)
+		// 崩溃恢复场景：apply 中途崩溃时 MainFolder 可能已被改名走（或删除），
+		// 此时 .updator/shared.json 随旧主目录一起移动。仅当 MainFolder 确实缺失时
+		// 才回退到版本目录读取；其它错误（如文件损坏）保持原样上报，避免掩盖问题。
+		if _, statErr := os.Stat(mainFolder); !os.IsNotExist(statErr) {
+			return nil, fmt.Errorf("load shared.json: %v", err)
+		}
+		fallback, fErr := loadSharedFromVersionDirs(cfg)
+		if fErr != nil {
+			return nil, fmt.Errorf("load shared.json: %v (fallback failed: %v)", err, fErr)
+		}
+		shared = fallback
 	}
 
 	// CLI 参数覆盖
@@ -76,6 +86,80 @@ func loadFullConfig(url, projectName, mainExePath string) (*FullConfig, error) {
 // normalizePath 将反斜杠转为正斜杠
 func normalizePath(p string) string {
 	return strings.Replace(p, "\\", "/", -1)
+}
+
+// loadSharedFromVersionDirs 在 MainFolder 缺失（崩溃恢复）时，从 PackageFolder 下的
+// 版本目录读取 shared.json：优先 version.json 记录的版本目录（崩溃恢复正在应用的那个），
+// 其余按版本号从大到小依次尝试，返回第一个可读的配置。
+// 崩溃现场：apply 已把 MainFolder 改名成备份（或删除），下载的版本目录仍在，
+// 其 .updator/shared.json 是 download 时复制的，配置完整可用。
+func loadSharedFromVersionDirs(cfg *config.Config) (*config.SharedConfig, error) {
+	folderName, err := cfg.MainExeFolderName()
+	if err != nil {
+		return nil, err
+	}
+	pkgDir, err := config.PackageDir()
+	if err != nil {
+		return nil, err
+	}
+	dir, err := os.Open(pkgDir)
+	if err != nil {
+		return nil, err
+	}
+	defer dir.Close()
+	names, err := dir.Readdirnames(0)
+	if err != nil {
+		return nil, err
+	}
+
+	// 收集所有合法版本目录（目录名 = {folderName}_{version}）
+	prefix := folderName + "_"
+	var versions []string
+	for _, name := range names {
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		v := strings.TrimPrefix(name, prefix)
+		if !isLikelyVersion(v) {
+			continue
+		}
+		subDir := filepath.Join(pkgDir, name)
+		if info, statErr := os.Stat(subDir); statErr != nil || !info.IsDir() {
+			continue
+		}
+		versions = append(versions, v)
+	}
+	if len(versions) == 0 {
+		return nil, fmt.Errorf("no version dir found under %s", pkgDir)
+	}
+	// 按版本号从大到小排序（字符串排序不是版本序，必须用 compareVersion）
+	sort.Slice(versions, func(i, j int) bool {
+		return compareVersion(versions[i], versions[j]) > 0
+	})
+	// 优先 version.json 记录的版本（崩溃恢复正在应用的那个）
+	if vi, vErr := config.ReadVersion(); vErr == nil && vi.Version != "" {
+		want := stripVPrefix(vi.Version)
+		for i, v := range versions {
+			if v == want && i > 0 {
+				reordered := make([]string, 0, len(versions))
+				reordered = append(reordered, versions[i])
+				reordered = append(reordered, versions[:i]...)
+				reordered = append(reordered, versions[i+1:]...)
+				versions = reordered
+				break
+			}
+		}
+	}
+	// 依次尝试，返回第一个可读的 shared.json
+	var lastErr error
+	for _, v := range versions {
+		sc, sErr := config.LoadSharedConfig(filepath.Join(pkgDir, prefix+v))
+		if sErr == nil {
+			return sc, nil
+		}
+		lastErr = sErr
+	}
+	return nil, fmt.Errorf("no readable shared.json in version dirs: %v", lastErr)
 }
 
 // printProgress 输出下载进度到 stdout，每行统一用 {isSuccess, errorMsg, data} 包裹的 JSON。
@@ -400,12 +484,14 @@ func probeHoldersState(from, to string, attempt int, st *renameProbeState) []uin
 		}
 	}
 
-	// 浅扫（RM 句柄持有者 + CWD 持有者）：每次重试都重新探测
+	// 浅扫（RM 句柄持有者 + 32 位 CWD 持有者）：每次重试都重新探测
 	if len(paths) > 0 {
 		add(findHoldersOf(paths...))
 	}
 
-	// 深扫：第 3 轮起，仅未深扫过的路径（全系统句柄枚举，覆盖 64 位进程/RM 盲区）
+	// 深扫：第 3 轮起（全系统句柄枚举，10-60s 级成本，见 #23）。64 位原生进程的
+	// CWD/句柄 32 位客户端浅扫探不到，只能靠深扫；深扫按路径缓存，同一路径在本次
+	// apply 内最多做一次，避免 3 次 rename 重复全量扫描。
 	if attempt >= 3 {
 		deepUnprobed := deepScanCandidates(paths, st)
 		if len(deepUnprobed) > 0 {
@@ -431,10 +517,10 @@ func deepScanCandidates(paths []string, st *renameProbeState) []string {
 }
 
 // closeExplorerWindows 解除 Explorer 对目录的占用（#24 修复）：
-//  1) 精准方案：关闭"浏览目标目录或其任意子目录"的 Explorer 文件窗口
+//  1. 精准方案：关闭"浏览目标目录或其任意子目录"的 Explorer 文件窗口
 //     （Shell.Application COM via cscript，前缀匹配支持用户打开的是子文件夹），
 //     避免误关用户其他资源管理器窗口、不重启 shell；
-//  2) 兜底：向全部 explorer 顶层窗口发送 WM_CLOSE 优雅关闭文件窗口。
+//  2. 兜底：向全部 explorer 顶层窗口发送 WM_CLOSE 优雅关闭文件窗口。
 //     explorer 的 shell 窗口（桌面/任务栏）会忽略 WM_CLOSE，只有文件窗口被关闭——
 //     因此**绝不 ForceKill explorer**：强杀 shell 会黑屏并打断用户工作（#24 回归）。
 func closeExplorerWindows(timeout time.Duration, folders ...string) {

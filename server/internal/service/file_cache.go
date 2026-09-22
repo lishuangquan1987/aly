@@ -52,8 +52,12 @@ var fileListCaches = struct {
 // upload 等文件变更接口成功后调用，保证下次 get_all_files 重新缓存。
 func InvalidateProjectFileList(projectName string) {
 	fileListCaches.Lock()
+	_, existed := fileListCaches.m[projectName]
 	delete(fileListCaches.m, projectName)
 	fileListCaches.Unlock()
+	if existed {
+		log.Printf("file list cache INVALIDATED: project=%s", projectName)
+	}
 }
 
 // GetProjectFileList 返回项目文件列表（含 md5/sha256），优先返回缓存。
@@ -80,6 +84,7 @@ func GetProjectFileList(projectName, workDir string, ignoreFolders, ignoreFiles 
 		if entry.built && sameFingerprint(entry.fingerprint, stamps) {
 			infos := entry.fileInfos
 			entry.mu.RUnlock()
+			log.Printf("file list cache HIT: project=%s files=%d (md5/sha256 来自缓存，未重算)", projectName, len(infos))
 			return infos, nil
 		}
 		entry.mu.RUnlock()
@@ -90,6 +95,7 @@ func GetProjectFileList(projectName, workDir string, ignoreFolders, ignoreFiles 
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("file list cache REBUILD: project=%s files=%d (全量重算 md5/sha256)", projectName, len(infos))
 
 	fileListCaches.Lock()
 	entry = fileListCaches.m[projectName]
