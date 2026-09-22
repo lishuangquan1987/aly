@@ -47,3 +47,13 @@ func IsProcessAlive(pid uint32) bool {
 func SendCloseMessageToProcess(pid uint32) {
 	// Unix 系统无窗口消息机制，跳过
 }
+
+// SendCloseMessageToExplorer 关闭 explorer 文件浏览窗口（Unix 无 explorer 兼容）
+func SendCloseMessageToExplorer(pid uint32) {
+	// Unix 系统无资源管理器，跳过
+}
+
+// FilterKillablePIDs 过滤可安全强杀的 PID（Unix 兼容实现：一律保护，不做任何强杀）
+func FilterKillablePIDs(pids []uint32) (killable []uint32, blocked []uint32) {
+	return nil, pids
+}

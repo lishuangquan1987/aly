@@ -7,10 +7,20 @@
 #   S2 杀进程：apply 时目录被进程占用（explorer 子文件夹 / 文件独占 / cmd CWD）
 #       -> 探测并击杀占用者 -> 更新成功
 #   S3 更新失败：apply 阶段被独占文件卡住 -> 回退 downloaded + 旧版仍可用
-#   S4 崩溃恢复：applying + 主目录缺失 + 版本目录存在 -> apply 恢复成功
+#   S4 崩溃恢复：applying + 主目录缺失 + 版本目录存在 -> apply 恢复成功（手工构造现场）
 #   S5 下载后服务端又发新版：已下载 V2 未应用，服务端发 V3 -> 重新下载 V3
 #   S6 回滚：apply 后 list_rollback_versions + rollback 到指定历史版本
 #   S7 服务端 get_all_files 缓存：连续两次请求，第二次命中缓存（含 md5/sha256）
+#   S8 更新各环节被**中断**（进程被杀/崩溃）：真实强杀正在运行的 client，覆盖
+#      S8a download 下载中（.part 出现时强杀）
+#      S8b apply 复制阶段中（versionDir 出现大文件时强杀）
+#      S8c apply 各环节条件驱动强杀（复制前/复制中/备份改名后/应用改名后/已完成）
+#      每轮随后重跑并断言恢复到 applied + 版本正确
+#   S9 关机/断电（中断的特殊情况）：磁盘上留下**写了一半的文件**
+#      S9a version.json 半截 -> check/apply 安全报错（不崩溃、不卡死）
+#      S9b 遗留半截 .part -> download 正常完成且文件校验通过
+#      S9c versionDir 里损坏的正式文件 -> download 重新下载并校验通过
+#   ⚠ 注意：S8（中断=进程瞬间消失）与 S9（断电=文件不完整）是两类不同场景，不可混同。
 #
 # 用法（在仓库根目录）：
 #   powershell -ExecutionPolicy Bypass -File client/aly-client/test/e2e/update_e2e.ps1
@@ -89,7 +99,10 @@ function Start-Server() {
     $script:Port = Get-Random -Minimum 23000 -Maximum 32000
     $db = "$Work\e2e.db"
     Log "启动服务端 :$Port (db=$db)"
-    $script:ServerProc = Start-Process -FilePath "$Work\server.exe" -ArgumentList "-p", "$Port", "-db", $db -PassThru -WindowStyle Hidden
+    # 重定向服务端 stdout/stderr 到文件：S7 通过日志验证缓存 HIT/REBUILD
+    $script:ServerLog = "$Work\server.log"
+    $script:ServerProc = Start-Process -FilePath "$Work\server.exe" -ArgumentList "-p", "$Port", "-db", $db -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput $script:ServerLog -RedirectStandardError "$Work\server.err"
     # 等待就绪
     $ready = $false
     for ($i = 0; $i -lt 30; $i++) {
@@ -166,6 +179,47 @@ function Invoke-Client($pkg, $clientArgs) {
     if ($all.Count -eq 0) { return $null }
     $last = $all[-1]
     try { return ($last | ConvertFrom-Json) } catch { return $last }
+}
+
+# 后台启动 aly-client 命令，返回 Process（用于"在更新环节中途中断"测试）
+function Start-ClientAsync($pkg, $clientArgs) {
+    $exe = "$pkg\UpdateFolder\aly-client.exe"
+    $out = Join-Path $Work ("async-" + [guid]::NewGuid().ToString("N").Substring(0, 6))
+    return Start-Process -FilePath $exe -ArgumentList $clientArgs -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput "$out.out" -RedirectStandardError "$out.err"
+}
+
+# 轮询等待条件成立（最多 timeoutSec 秒），成立返回 $true（用于定位"进入某环节"的瞬间）
+function Wait-Until($timeoutSec, [scriptblock]$cond) {
+    $deadline = (Get-Date).AddSeconds($timeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        if (& $cond) { return $true }
+        Start-Sleep -Milliseconds 20
+    }
+    return $false
+}
+
+# 强杀 aly-client 进程：模拟**崩溃/被杀**（进程瞬间消失，不留半截文件）
+function Stop-ClientCrash($proc) {
+    if ($proc -and -not $proc.HasExited) {
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 150
+    }
+}
+
+# 创建指定大小的文件（用于放大复制/下载耗时，制造可靠的"环节中断"时间窗口）
+function New-BigFile($path, $sizeMB) {
+    $dir = Split-Path $path -Parent
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    $fs = [System.IO.File]::Create($path)
+    $fs.SetLength([int64]$sizeMB * 1MB)
+    $fs.Close()
+}
+
+# 读取 version.json（容错：半截/损坏时返回 $null）
+function Read-VersionJson($pkg) {
+    try { return (Get-Content "$pkg\UpdateFolder\version.json" -Raw -ErrorAction Stop | ConvertFrom-Json) }
+    catch { return $null }
 }
 
 # ---------- 服务端准备：建项目 + 发布版本 ----------
@@ -367,17 +421,205 @@ try {
     Assert ($vj9.version -eq "1.0.7") "S6 rollback 后 version=1.0.7"
 
     # ---------- S7 服务端缓存 ----------
-    Log "=== S7 服务端 get_all_files 缓存 ==="
-    # 连续两次请求，第二次应命中缓存（更快）
-    $t1 = Measure-Command { $null = Api-Get "/api/file/get_all_files/e2e-app" }
-    $t2 = Measure-Command { $null = Api-Get "/api/file/get_all_files/e2e-app" }
-    Log "第一次(重建): $([math]::Round($t1.TotalMilliseconds))ms, 第二次(缓存): $([math]::Round($t2.TotalMilliseconds))ms"
-    Assert ($t2.TotalMilliseconds -lt $t1.TotalMilliseconds) "S7 第二次 get_all_files 快于第一次（缓存命中）"
-    $files = Api-Get "/api/file/get_all_files/e2e-app"
-    Assert ($files.data.Count -ge 2) "S7 get_all_files 返回文件列表"
+    Log "=== S7 服务端 get_all_files 缓存（日志验证 HIT/REBUILD） ==="
+    # 主动触发一次失效：上传探针文件 -> InvalidateProjectFileList
+    Set-Content -Path "$Work\cache-probe.txt" -Value "cache-probe" -Encoding UTF8
+    Assert (Api-Upload "e2e-app" "cache-probe.txt" "$Work\cache-probe.txt") "S7 上传探针文件（触发缓存失效）"
+    Start-Sleep -Milliseconds 300
+    # 第一次请求：应 REBUILD（失效后重建）；第二次：应 HIT（命中缓存，不重算 md5/sha256）
+    $t1 = Measure-Command { $r1 = Api-Get "/api/file/get_all_files/e2e-app" }
+    $t2 = Measure-Command { $r2 = Api-Get "/api/file/get_all_files/e2e-app" }
+    Log "第一次: $([math]::Round($t1.TotalMilliseconds))ms, 第二次: $([math]::Round($t2.TotalMilliseconds))ms"
+    Start-Sleep -Milliseconds 400
+    # 读服务端日志（log.Printf 输出到 stderr；gin 输出到 stdout，两个都读）
+    $logText = ""
+    foreach ($lf in @($script:ServerLog, "$Work\server.err")) {
+        if (Test-Path $lf) { $logText += (Get-Content $lf -Raw -ErrorAction SilentlyContinue) }
+    }
+    $rebuildCount = ([regex]::Matches($logText, "file list cache REBUILD: project=e2e-app")).Count
+    $hitCount = ([regex]::Matches($logText, "file list cache HIT: project=e2e-app")).Count
+    Log "服务端缓存日志统计: REBUILD=$rebuildCount HIT=$hitCount"
+    Assert ($rebuildCount -ge 1) "S7 日志出现 REBUILD（失效后全量重算 md5/sha256）"
+    Assert ($hitCount -ge 1) "S7 日志出现 HIT（后续请求命中缓存，未重算 md5/sha256）"
+    Assert ($r1.data.Count -eq $r2.data.Count) "S7 两次响应文件数一致"
+    $same = $true
+    for ($i = 0; $i -lt $r1.data.Count; $i++) {
+        if ($r1.data[$i].fileRelativePath -ne $r2.data[$i].fileRelativePath -or $r1.data[$i].md5 -ne $r2.data[$i].md5) { $same = $false }
+    }
+    Assert $same "S7 缓存命中返回的列表与重建一致（md5 相同）"
+    Assert ($r2.data.Count -ge 2) "S7 get_all_files 返回文件列表"
     $hasMd5 = $true
-    foreach ($f in $files.data) { if (-not $f.md5 -or -not $f.sha256) { $hasMd5 = $false } }
+    foreach ($f in $r2.data) { if (-not $f.md5 -or -not $f.sha256) { $hasMd5 = $false } }
     Assert $hasMd5 "S7 文件列表含 md5/sha256"
+
+    # ============================================================
+    # S8 更新各环节被中断（进程被杀/崩溃）后的恢复
+    # 说明：中断 ≠ 关机。S8 用 Stop-Process 强杀 client，模拟"进程瞬间消失"；
+    #       断电（文件写了一半）由 S9 单独覆盖。
+    # ============================================================
+
+    # ---------- S8a download 中途被杀 ----------
+    Log "=== S8a download 中途被杀 -> 重跑可恢复 ==="
+    # 服务端发布含 50MB 大文件的版本（放大下载耗时，制造可靠的中断窗口）
+    New-BigFile "$Work\big-src.bin" 50
+    Assert (Api-Upload "e2e-app" "big.bin" "$Work\big-src.bin") "S8a 上传 50MB 大文件"
+    $r = Api-Post "/api/project/publish_version" @{ projectName = "e2e-app"; version = "2.0.0"; logs = @("v2.0.0"); timeStr = (Get-Date -Format "yyyy-MM-dd HH:mm:ss") }
+    Assert $r.isSuccess "S8a publish 2.0.0"
+
+    $pkg8 = New-ClientEnv "1.0.7" "applied"
+    Copy-Item "$Work\fake_main.exe" "$pkg8\ApplicationFolder\app.exe"
+    $proc = Start-ClientAsync $pkg8 @("download_update")
+    $hit = Wait-Until 30 { Test-Path "$pkg8\ApplicationFolder_2.0.0\big.bin.part" }
+    Stop-ClientCrash $proc
+    Assert $hit "S8a 捕捉到下载中（.part 出现）并中断"
+    $vjA = Read-VersionJson $pkg8
+    Assert ($vjA.version_status -eq "applied") "S8a 中断后状态仍为 applied（下载未完成不写半成品状态）"
+    $du = Invoke-Client $pkg8 @("download_update")
+    Assert ($du.isSuccess -eq $true) "S8a 重跑 download 成功"
+    $vjA2 = Read-VersionJson $pkg8
+    Assert ($vjA2.version -eq "2.0.0" -and $vjA2.version_status -eq "downloaded") "S8a 恢复后 2.0.0/downloaded"
+    Assert ((Get-Item "$pkg8\ApplicationFolder_2.0.0\big.bin").Length -eq 50MB) "S8a 大文件下载完整（50MB）"
+
+    # ---------- S8b apply 复制阶段被杀 ----------
+    Log "=== S8b apply 复制阶段被杀 -> 重跑可恢复 ==="
+    # MainFolder 放一个 versionDir 没有的大文件，使复制阶段有耗时。
+    # 注意：CopyFile 先写 dst+".tmp" 再原子 rename，因此"复制进行中"应检测 .tmp 文件。
+    New-BigFile "$pkg8\ApplicationFolder\local-only.bin" 60
+    $proc = Start-ClientAsync $pkg8 @("apply_update")
+    $hit = Wait-Until 20 { (Test-Path "$pkg8\ApplicationFolder_2.0.0\local-only.bin.tmp") -or (Test-Path "$pkg8\ApplicationFolder_2.0.0\local-only.bin") -or ((Read-VersionJson $pkg8).version_status -eq "applied") }
+    Stop-ClientCrash $proc
+    Assert $hit "S8b 捕捉到复制中（versionDir 出现大文件 .tmp/正式文件）并中断"
+    $vjB = Read-VersionJson $pkg8
+    Assert ($vjB.version_status -eq "applying") "S8b 中断后 status=applying"
+    Assert (Test-Path "$pkg8\ApplicationFolder\app.exe") "S8b 中断后主目录仍存在（未进入改名阶段）"
+    $au = Invoke-Client $pkg8 @("apply_update")
+    Assert ($au.isSuccess -eq $true) "S8b 重跑 apply 成功"
+    $vjB2 = Read-VersionJson $pkg8
+    Assert ($vjB2.version -eq "2.0.0" -and $vjB2.version_status -eq "applied") "S8b 恢复后 2.0.0/applied"
+    $mainContentB = Get-Content "$pkg8\ApplicationFolder\app.exe" -Raw
+    Assert ($mainContentB -like "*main-v9-content*" -or $mainContentB -like "*main-2.0.0*") "S8b 恢复后主程序为新版本内容"
+    if (Test-Path "$pkg8\ApplicationFolder\local-only.bin") {
+        Assert ((Get-Item "$pkg8\ApplicationFolder\local-only.bin").Length -eq 60MB) "S8b 恢复后本地独有大文件完整（60MB）"
+    }
+
+    # ---------- S8c apply 各环节中断（条件驱动，精确覆盖不同环节） ----------
+    Log "=== S8c apply 各环节中断 × 6 轮（条件驱动） ==="
+    # 每轮用不同触发条件定位"已进入某环节"后立即强杀，覆盖：
+    #   immediate      : 刚启动（复制前/写 applying 前后）
+    #   copying        : 复制进行中（versionDir 出现 MainFolder 独有大文件）
+    #   mainfolder-gone: 备份改名已发生（MainFolder 消失）
+    #   versiondir-gone: 应用改名已发生（versionDir 消失、MainFolder 回来）
+    #   applied        : 已写完 applied（完成边界）
+    #   immediate-2    : 再覆盖一次早期
+    # 恢复方式：重跑 apply（applying -> 崩溃恢复分支；downloaded -> 正常流程；已完成 -> no pending）。
+    $rounds = @(
+        @{ ver = "2.1.0"; mode = "immediate" },
+        @{ ver = "2.1.1"; mode = "copying" },
+        @{ ver = "2.1.2"; mode = "mainfolder-gone" },
+        @{ ver = "2.1.3"; mode = "versiondir-gone" },
+        @{ ver = "2.1.4"; mode = "applied" },
+        @{ ver = "2.1.5"; mode = "immediate" }
+    )
+    foreach ($rd in $rounds) {
+        $ver = $rd.ver
+        Publish-Version $ver "main-$ver"
+        $du = Invoke-Client $pkg8 @("download_update")
+        if (-not $du.isSuccess) { Bad "S8c[$ver] download 失败"; continue }
+
+        $mainDir = "$pkg8\ApplicationFolder"
+        $verDir = "$pkg8\ApplicationFolder_$ver"
+        $proc = Start-ClientAsync $pkg8 @("apply_update")
+        $hit = $true
+        switch ($rd.mode) {
+            "immediate" { Stop-ClientCrash $proc }
+            "copying" {
+                # 复制中：versionDir 出现 MainFolder 独有大文件的 .tmp（复制进行中）或正式文件
+                $hit = Wait-Until 20 { (Test-Path "$verDir\big.bin.tmp") -or (Test-Path "$verDir\local-only.bin.tmp") -or (Test-Path "$verDir\big.bin") -or (Test-Path "$verDir\local-only.bin") -or ((Read-VersionJson $pkg8).version_status -eq "applied") }
+                Stop-ClientCrash $proc
+            }
+            "mainfolder-gone" {
+                # 备份改名已发生：MainFolder 消失（窗口仅两次 rename 之间，很窄；30s 兜底到"已完成"）
+                $hit = Wait-Until 20 { (-not (Test-Path $mainDir)) -or ((Read-VersionJson $pkg8).version_status -eq "applied") }
+                Stop-ClientCrash $proc
+            }
+            "versiondir-gone" {
+                # 应用改名已发生：versionDir 消失、MainFolder 回来（窗口同样很窄）
+                $hit = Wait-Until 20 { (-not (Test-Path $verDir)) -or ((Read-VersionJson $pkg8).version_status -eq "applied") }
+                Stop-ClientCrash $proc
+            }
+            "applied" {
+                $hit = Wait-Until 20 { $v = Read-VersionJson $pkg8; $null -ne $v -and $v.version_status -eq "applied" -and $v.version -eq $ver }
+                Stop-ClientCrash $proc
+            }
+        }
+        if (-not $hit) { Log "S8c[$ver] 条件 $($rd.mode) 未在 20s 内命中（仍继续中断+恢复验证）" }
+        $vjC = Read-VersionJson $pkg8
+        $phase = if ($null -eq $vjC) { "version.json 不可读" } else { "$($vjC.version_status)/$($vjC.version)" }
+
+        # 恢复：重跑 apply（applying 走崩溃恢复；downloaded 走正常流程；已完成返回 no pending）
+        $au = Invoke-Client $pkg8 @("apply_update")
+        $vjC2 = Read-VersionJson $pkg8
+        $mainOk = Test-Path "$mainDir\app.exe"
+        $ok = ($null -ne $vjC2) -and ($vjC2.version_status -eq "applied") -and ($vjC2.version -eq $ver) -and $mainOk
+        if (-not $ok) {
+            # 失败诊断：输出 apply 返回与 client 日志尾部，便于定位（含受保护进程占用）
+            $auStr = try { $au | ConvertTo-Json -Compress -Depth 5 } catch { "$au" }
+            Log "S8c[$ver] 恢复失败诊断: apply 返回=$auStr"
+            Log "  恢复后 version_status=$($vjC2.version_status) version=$($vjC2.version) mainFolder.app.exe存在=$mainOk"
+            $logPath = "$pkg8\UpdateFolder\update.log"
+            if (Test-Path $logPath) {
+                Log "  update.log 尾部:"
+                Get-Content $logPath -Tail 20 -ErrorAction SilentlyContinue | ForEach-Object { Log "    $_" }
+            }
+        }
+        Assert $ok "S8c[$ver] $($rd.mode) 中断（现场 $phase）后恢复成功 -> applied/$ver"
+    }
+
+    # ============================================================
+    # S9 关机/断电（更新过程中断电）：文件"写了一半"的特殊中断
+    # 与 S8 的"进程被杀"不同——断电可能在磁盘上留下不完整文件，
+    # 这里验证半截 version.json / .part / 损坏正式文件都能安全处理。
+    # ============================================================
+
+    # ---------- S9a 断电：version.json 半截 ----------
+    Log "=== S9a 断电：version.json 被写坏（半截 JSON） ==="
+    $pkg9 = New-ClientEnv "1.0.7" "applied"
+    Copy-Item "$Work\fake_main.exe" "$pkg9\ApplicationFolder\app.exe"
+    $halfJson = '{"version_previous":"1.0.6","versi'
+    [System.IO.File]::WriteAllText("$pkg9\UpdateFolder\version.json", $halfJson, (New-Object System.Text.UTF8Encoding($false)))
+    $cu = Invoke-Client $pkg9 @("check_update")
+    Assert ($cu.isSuccess -eq $false) "S9a 半截 version.json：check_update 安全报错（不崩溃/不卡死）"
+    $au = Invoke-Client $pkg9 @("apply_update")
+    Assert ($au.isSuccess -eq $false) "S9a 半截 version.json：apply_update 安全报错"
+
+    # ---------- S9b 断电：遗留 .part 半截文件 ----------
+    Log "=== S9b 断电：遗留半截 .part 文件 ==="
+    # S9a 故意写坏了 version.json，此处先恢复为有效的 applied 状态再继续
+    Set-JsonFile "$pkg9\UpdateFolder\version.json" @{ version_previous = "1.0.6"; version = "1.0.7"; version_status = "applied" }
+    Publish-Version "3.0.0" "main-3.0.0"
+    $partPath = "$pkg9\ApplicationFolder_3.0.0\app.exe.part"
+    New-Item -ItemType Directory -Force -Path (Split-Path $partPath) | Out-Null
+    Set-Content -Path $partPath -Value "half-downloaded-garbage" -Encoding UTF8 -NoNewline
+    $du = Invoke-Client $pkg9 @("download_update")
+    Assert ($du.isSuccess -eq $true) "S9b 存在半截 .part 时 download 成功"
+    $srv = Api-Get "/api/file/get_all_files/e2e-app"
+    $srvAppMd5 = ($srv.data | Where-Object { $_.fileRelativePath -eq "app.exe" }).md5
+    $localAppMd5 = (Get-FileHash "$pkg9\ApplicationFolder_3.0.0\app.exe" -Algorithm MD5).Hash.ToLower()
+    Assert ($localAppMd5 -eq $srvAppMd5) "S9b 下载文件与服务器 MD5 一致（未被半截 .part 污染）"
+
+    # ---------- S9c 断电：versionDir 里损坏的正式文件 ----------
+    Log "=== S9c 断电：目标版本目录存在损坏/半截正式文件 ==="
+    Publish-Version "3.0.1" "main-3.0.1"
+    $badFile = "$pkg9\ApplicationFolder_3.0.1\app.exe"
+    New-Item -ItemType Directory -Force -Path (Split-Path $badFile) | Out-Null
+    Set-Content -Path $badFile -Value "corrupted-half-file" -Encoding UTF8 -NoNewline
+    $du = Invoke-Client $pkg9 @("download_update")
+    Assert ($du.isSuccess -eq $true) "S9c 目标存在损坏文件时 download 成功"
+    $srv2 = Api-Get "/api/file/get_all_files/e2e-app"
+    $srvAppMd52 = ($srv2.data | Where-Object { $_.fileRelativePath -eq "app.exe" }).md5
+    $localAppMd52 = (Get-FileHash "$pkg9\ApplicationFolder_3.0.1\app.exe" -Algorithm MD5).Hash.ToLower()
+    Assert ($localAppMd52 -eq $srvAppMd52) "S9c 损坏文件被重新下载并校验通过（size/MD5 不匹配即重下）"
+
 
 } finally {
     if (-not $KeepRunning) {

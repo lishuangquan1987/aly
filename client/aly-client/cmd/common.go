@@ -468,7 +468,17 @@ func probeHoldersState(from, to string, attempt int, st *renameProbeState) []uin
 	seen := make(map[uint32]bool)
 	var holders []uint32
 	add := func(pids []uint32) {
-		for _, pid := range pids {
+		// 安全红线：先从探测结果中剔除系统关键进程（csrss/winlogon/services/lsass 等，
+		// 强杀会触发 Windows 关机倒计时）与 shell（explorer，强杀会黑屏）。
+		// explorer 被剔除后 holders 可能为空 -> 调用方走 closeExplorerWindows
+		// 用 WM_CLOSE 释放占用（#24），而不是强杀 shell。
+		killable, blocked := util.FilterKillablePIDs(pids)
+		if len(blocked) > 0 {
+			names := util.FindProcessNamesByPIDs(blocked)
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("probe skipped protected holders: %v", formatPidNames(blocked, names)))
+		}
+		for _, pid := range killable {
 			if pid != selfPid && !st.killedPids[pid] && !seen[pid] {
 				seen[pid] = true
 				holders = append(holders, pid)
@@ -538,8 +548,11 @@ func closeExplorerWindows(timeout time.Duration, folders ...string) {
 		}
 	}
 
-	// 兜底：WM_CLOSE 优雅关闭所有 explorer 文件窗口（shell 窗口会忽略该消息）。
-	// 不再 ForceKill explorer——杀 shell 会导致桌面/任务栏黑屏（#24）。
+	// 兜底：向 explorer 的**文件浏览窗口**（CabinetWClass/ExploreWClass）发送 WM_CLOSE。
+	// 安全红线：
+	//   1. 绝不 ForceKill explorer——杀 shell 会导致桌面/任务栏黑屏（#24）；
+	//   2. 绝不向 shell 桌面/任务栏窗口发 WM_CLOSE（SendCloseMessageToExplorer 只关文件窗口）——
+	//      向 shell 窗口发 WM_CLOSE 可能触发 Windows 的关机/注销流程提示。
 	pids, err := util.FindProcessesByName("explorer")
 	if err != nil {
 		util.AppendToLog(logDir(), "update.log",
@@ -550,12 +563,12 @@ func closeExplorerWindows(timeout time.Duration, folders ...string) {
 		return
 	}
 	for _, pid := range pids {
-		util.SendCloseMessageToProcess(pid)
+		util.SendCloseMessageToExplorer(pid)
 	}
 	// 给 explorer 一点时间处理 WM_CLOSE、关闭窗口并释放目录句柄；
 	// 若仍占用，rename 重试循环会再次进入本函数。
 	time.Sleep(500 * time.Millisecond)
-	util.AppendToLog(logDir(), "update.log", "sent WM_CLOSE to explorer windows to release folder handle")
+	util.AppendToLog(logDir(), "update.log", "sent WM_CLOSE to explorer file windows to release folder handle")
 }
 
 // nextAsideName 生成一个不冲突的"挪开目标"名称：X.old、X.old.1、X.old.2 …
