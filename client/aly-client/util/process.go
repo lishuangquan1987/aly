@@ -34,6 +34,7 @@ var (
 	procNtQueryInformationProcess = ntdll.NewProc("NtQueryInformationProcess")
 	procNtReadVirtualMemory       = ntdll.NewProc("NtReadVirtualMemory")
 	procIsWow64Process            = kernel32.NewProc("IsWow64Process")
+	procGetExitCodeProcess        = kernel32.NewProc("GetExitCodeProcess")
 )
 
 const (
@@ -47,6 +48,7 @@ const (
 
 	WAIT_OBJECT_0 = 0
 	WAIT_TIMEOUT  = 0x00000102
+	STILL_ACTIVE  = 259
 
 	WM_CLOSE = 0x0010
 
@@ -412,10 +414,19 @@ func WaitForProcessExit(pid uint32, timeout time.Duration) bool {
 }
 
 // IsProcessAlive 判断指定 PID 的进程是否存活。
-// 用 OpenProcess(PROCESS_QUERY_INFORMATION) 探测：
-//   - ERROR_INVALID_PARAMETER (87)：进程不存在 → false
-//   - ERROR_ACCESS_DENIED (5)：进程存在但权限不足 → true（保守）
-//   - 其他失败：保守返回 true
+//
+// 判定顺序：
+//  1. OpenProcess(PROCESS_QUERY_INFORMATION)：
+//     - ERROR_INVALID_PARAMETER (87)（进程不存在）→ false；
+//     - ERROR_ACCESS_DENIED (5) 或其他失败 → true（保守认为存活）；
+//  2. 打开成功后**必须再查 GetExitCodeProcess**：进程已被 TerminateProcess 结束、
+//     但仍有句柄引用其内核对象（例如父进程/启动器还持有 Process 句柄）时，
+//     OpenProcess 依旧成功、PID 依旧有效，仅凭第 1 步会把"已死进程"误判为存活。
+//     已被结束的进程会返回真实退出码，只有仍在运行的进程才返回 STILL_ACTIVE(259)。
+//
+// 该误判会直接拖垮陈旧锁（.aly.lock）回收：更新进程被强杀后立刻重试更新，
+// 残留锁会因"持有者看似存活"而被判为有效，报"另一更新正在进行中"并阻塞到
+// 30 分钟 TTL（#9 场景）。因此这里必须区分"进程对象未回收"与"进程仍在运行"。
 func IsProcessAlive(pid uint32) bool {
 	if pid == 0 {
 		return false
@@ -431,8 +442,14 @@ func IsProcessAlive(pid uint32) bool {
 		}
 		return true // 权限不足或其他：保守认为存活
 	}
-	procCloseHandle.Call(handle)
-	return true
+	defer procCloseHandle.Call(handle)
+
+	var exitCode uint32
+	ret, _, _ := procGetExitCodeProcess.Call(handle, uintptr(unsafe.Pointer(&exitCode)))
+	if ret == 0 {
+		return true // 查询失败：保守认为存活
+	}
+	return exitCode == STILL_ACTIVE
 }
 
 // KillProcessesAndWait 等待指定名称列表的进程退出，超时后强杀

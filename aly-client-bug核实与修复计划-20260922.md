@@ -625,3 +625,70 @@ os.Remove(f.Name()) // 移除占位文件，使用带 .vbs 后缀的路径
 | Restart Manager | `util/process_restartmanager.go` | 只用 `RmStartSession`/`RmRegisterResources`/`RmGetList`/`RmEndSession`（**只查不关**） |
 
 因此 `apply_update` 已无触发 Windows 关机的路径。
+
+## #26 追加修复：陈旧更新锁（.aly.lock）在"更新进程被强杀"后无法回收
+
+### 发现路径
+
+新增 E2E 场景 S8a（download 中途强杀 → 立刻重跑 download）时**偶发**失败：
+
+```
+PASS: S8a 捕捉到下载中（.part 出现）并中断
+FAIL: S8a 重跑 download 成功
+```
+
+现场（保留工作目录）特征：`UpdateFolder\.aly.lock` 残留、**没有任何 update.log**、
+`ApplicationFolder_2.0.0\big.bin.part` 半截文件仍在。手工再跑一次 download_update
+又成功 —— 典型的"时序相关"失败。
+
+### 根因
+
+`AcquireUpdateLock` 是 `download_update`/`apply_update`/`rollback` 的**第一步**
+（失败直接 `printOutput(false, "另一更新正在进行中，请稍后重试")`，因此不产生任何日志，
+与现场"无 update.log"完全吻合）。锁回收依赖 `cleanStaleLock` 判定"持有者是否存活"：
+
+```go
+if util.IsProcessAlive(uint32(info.PID)) { return false }  // 认为锁仍有效
+```
+
+而 `util.IsProcessAlive` 旧实现**只调用 OpenProcess**：只要 PID 对应的内核对象还没被回收
+（例如启动器/父进程仍持有 `Process` 句柄，E2E 里就是 PowerShell 的 `Start-Process -PassThru`
+对象），`OpenProcess` 依旧成功 → 被强杀的进程被误判为"仍在运行" → 残留锁被判为有效 →
+新一轮更新被拒绝，一直阻塞到 30 分钟 `lockTTL` 才能抢占。
+
+真实环境同样存在：C# SDK 的 `AlyUpdateClient` 启动 `aly-client.exe` 后会持有其进程句柄；
+若更新进程中途崩溃/被杀，用户立刻重试更新就会拿到"另一更新正在进行中，
+请稍后重试"——而实际并没有任何更新在跑。
+
+### 修复
+
+`util/process.go IsProcessAlive`：`OpenProcess` 成功后再查 `GetExitCodeProcess`：
+
+| 情况 | 返回 | 判定 |
+|------|------|------|
+| `OpenProcess` 失败且 errno=87（无效 PID） | — | false（已死） |
+| `OpenProcess` 失败（权限等） | — | true（保守） |
+| `GetExitCodeProcess` 成功且退出码 = `STILL_ACTIVE`(259) | — | true（真在运行） |
+| `GetExitCodeProcess` 成功且退出码 ≠ 259 | — | **false（已结束，仅内核对象未回收）** |
+| `GetExitCodeProcess` 失败 | — | true（保守） |
+
+新增 `procGetExitCodeProcess` / `STILL_ACTIVE` 常量。
+
+### 测试
+
+- `util/process_protect_test.go` 新增 2 例：
+  - `TestIsProcessAliveForRunningAndInvalidPIDs`：当前进程存活、PID 0 / 不存在 PID 为死；
+  - `TestIsProcessAliveFalseForKilledButUnreapedProcess`（关键回归）：启动子进程 →
+    `Process.Kill()` **但不调用 Wait**（句柄不释放、对象不回收）→ 必须判定为"已死"。
+    已验证：把 `IsProcessAlive` 还原为旧实现时该用例**确实 FAIL**
+    （`已被强杀的进程 (pid=24660) 必须判定为已死，否则陈旧锁无法回收`），修改后 PASS。
+- E2E 新增 **S10 关机保护**场景（#25 的端到端验证）：
+  以 `--must-close-process-name svchost.exe` 执行 apply_update，断言
+  `svchost` 取样进程全部存活（99/99）、客户端 stderr 出现
+  `skip protected pids|skip critical pid`、且更新仍正常完成。
+- E2E S8b 增加失败现场诊断（apply 返回 + update.log 尾部 + 目录清单），便于后续定位。
+
+### 最终 E2E 结果
+
+`client/aly-client/test/e2e/update_e2e.ps1`：**123/123 PASS，exit 0**
+（S1–S10 全绿；S8a/S8b 在本次修复前分别偶发失败，修复后连续通过）。

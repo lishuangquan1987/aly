@@ -5,6 +5,7 @@ package util
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -132,4 +133,63 @@ func TestExplorerFileWindowClassesExcludesShellWindows(t *testing.T) {
 	// SendCloseMessageToExplorer 对无效 PID 不应 panic
 	SendCloseMessageToExplorer(0)
 	SendCloseMessageToProcess(0)
+}
+
+// TestIsProcessAliveForRunningAndInvalidPIDs 基础语义：
+// 当前进程存活、PID 0 与不存在的 PID 判定为已死。
+func TestIsProcessAliveForRunningAndInvalidPIDs(t *testing.T) {
+	if !IsProcessAlive(uint32(os.Getpid())) {
+		t.Error("当前进程应判定为存活")
+	}
+	if IsProcessAlive(0) {
+		t.Error("PID 0 应判定为不存活")
+	}
+	if IsProcessAlive(0x7FFFFFF0) {
+		t.Error("不存在的 PID 应判定为不存活")
+	}
+}
+
+// TestIsProcessAliveFalseForKilledButUnreapedProcess 回归防护（关键）：
+// 子进程被强杀后，只要父进程仍持有 Process 句柄，其内核对象就不会被回收，
+// OpenProcess(该 PID) 依旧成功、PID 依旧有效——仅凭 OpenProcess 会把
+// "已被强杀的进程"误判为存活。
+//
+// 后果：.aly.lock 陈旧锁无法回收（cleanStaleLock 认为持有者还活着），
+// 更新进程被强杀后立刻重试更新会报"另一更新正在进行中"并阻塞到 30 分钟 TTL。
+// 因此必须再查 GetExitCodeProcess：已结束的进程返回真实退出码，而非 STILL_ACTIVE。
+func TestIsProcessAliveFalseForKilledButUnreapedProcess(t *testing.T) {
+	cmdExe := "cmd.exe"
+	if osIs64Bit() {
+		cmdExe = filepath.Join(os.Getenv("SystemRoot"), "SysWOW64", "cmd.exe")
+		if _, err := os.Stat(cmdExe); err != nil {
+			cmdExe = "cmd.exe"
+		}
+	}
+	cmd := exec.Command(cmdExe, "/c", "ping -n 30 127.0.0.1 >nul")
+	if err := cmd.Start(); err != nil {
+		t.Skipf("启动子进程失败（跳过）: %v", err)
+	}
+	pid := uint32(cmd.Process.Pid)
+
+	if !IsProcessAlive(pid) {
+		cmd.Process.Kill()
+		cmd.Wait()
+		t.Fatalf("刚启动的子进程 (pid=%d) 应判定为存活", pid)
+	}
+
+	// 强杀但**不**调用 Wait：句柄未释放、进程对象未回收，模拟"被强杀后立刻重试"现场
+	if err := cmd.Process.Kill(); err != nil {
+		t.Fatalf("强杀子进程失败: %v", err)
+	}
+
+	// 轮询等待判定转为"已死"（TerminateProcess 是异步的）
+	deadline := time.Now().Add(5 * time.Second)
+	for IsProcessAlive(pid) && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if IsProcessAlive(pid) {
+		t.Errorf("已被强杀的进程 (pid=%d) 必须判定为已死，否则陈旧锁无法回收", pid)
+	}
+
+	cmd.Wait() // 回收进程对象
 }

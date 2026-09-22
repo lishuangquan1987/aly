@@ -493,6 +493,20 @@ try {
     Assert ($vjB.version_status -eq "applying") "S8b 中断后 status=applying"
     Assert (Test-Path "$pkg8\ApplicationFolder\app.exe") "S8b 中断后主目录仍存在（未进入改名阶段）"
     $au = Invoke-Client $pkg8 @("apply_update")
+    if (-not $au.isSuccess) {
+        # 失败时打印现场，便于定位（apply 返回错误 + update.log 尾部 + 目录清单）
+        Log ("S8b 重跑 apply 失败详情: " + ($au | ConvertTo-Json -Compress))
+        if (Test-Path "$pkg8\UpdateFolder\update.log") {
+            Log ("S8b update.log 尾部: " + ((Get-Content "$pkg8\UpdateFolder\update.log" -Tail 30) -join " | "))
+        }
+        foreach ($d8 in @("ApplicationFolder", "ApplicationFolder_2.0.0")) {
+            if (Test-Path "$pkg8\$d8") {
+                Log ("S8b $d8 内容: " + ((Get-ChildItem "$pkg8\$d8" -Force | Select-Object -ExpandProperty Name) -join ", "))
+            } else {
+                Log ("S8b $d8 不存在")
+            }
+        }
+    }
     Assert ($au.isSuccess -eq $true) "S8b 重跑 apply 成功"
     $vjB2 = Read-VersionJson $pkg8
     Assert ($vjB2.version -eq "2.0.0" -and $vjB2.version_status -eq "applied") "S8b 恢复后 2.0.0/applied"
@@ -620,6 +634,42 @@ try {
     $localAppMd52 = (Get-FileHash "$pkg9\ApplicationFolder_3.0.1\app.exe" -Algorithm MD5).Hash.ToLower()
     Assert ($localAppMd52 -eq $srvAppMd52) "S9c 损坏文件被重新下载并校验通过（size/MD5 不匹配即重下）"
 
+
+    # ============================================================
+    # S10 关机保护（#25）：--must-close-process-name 指向系统关键进程时
+    # 绝不允许强杀——强杀 svchost（服务宿主）会触发 Windows
+    # "系统将在 60 秒内关机"。这里验证白名单闸门真实生效，且更新仍能完成。
+    # ============================================================
+    Log "=== S10 关机保护：受保护进程（svchost）不得被误杀 ==="
+    $pkg10 = New-ClientEnv "1.0.7" "applied"
+    Copy-Item "$Work\fake_main.exe" "$pkg10\ApplicationFolder\app.exe"
+    Publish-Version "3.1.0" "main-3.1.0"
+    $du = Invoke-Client $pkg10 @("download_update")
+    Assert ($du.isSuccess -eq $true) "S10 下载 3.1.0 成功"
+
+    $svchostBefore = @(Get-Process svchost -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
+    Assert ($svchostBefore.Count -gt 0) "S10 取样 svchost 进程（$($svchostBefore.Count) 个）作为受保护进程样本"
+
+    $s10out = "$Work\s10.out"
+    $s10err = "$Work\s10.err"
+    $s10 = Start-Process -FilePath "$pkg10\UpdateFolder\aly-client.exe" -PassThru -WindowStyle Hidden `
+        -ArgumentList @("apply_update", "--must-close-process-name", "svchost.exe") `
+        -RedirectStandardOutput $s10out -RedirectStandardError $s10err
+    $s10Exited = $s10.WaitForExit(90000)
+    if (-not $s10Exited) { Stop-Process -Id $s10.Id -Force -ErrorAction SilentlyContinue }
+    else { $s10.WaitForExit() }   # 无参重载：确保重定向的输出流已落盘
+    Assert $s10Exited "S10 apply_update 正常退出（未因受保护进程卡死等待）"
+
+    $s10ErrText = if (Test-Path $s10err) { Get-Content $s10err -Raw } else { "" }
+    $svchostAlive = 0
+    foreach ($sid in $svchostBefore) {
+        if (Get-Process -Id $sid -ErrorAction SilentlyContinue) { $svchostAlive++ }
+    }
+    Assert ($svchostAlive -eq $svchostBefore.Count) "S10 受保护进程全部存活（$svchostAlive/$($svchostBefore.Count)），未触发 Windows 关机"
+    Assert ($s10ErrText -match "skip protected pids|skip critical pid") "S10 客户端记录「跳过受保护进程」（白名单闸门生效）"
+
+    $ver10 = Read-VersionJson $pkg10
+    Assert ($ver10 -ne $null -and $ver10.version -eq "3.1.0" -and $ver10.version_status -eq "applied") "S10 更新仍正常完成（受保护进程不影响替换）"
 
 } finally {
     if (-not $KeepRunning) {
