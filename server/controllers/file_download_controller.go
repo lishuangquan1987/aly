@@ -3,18 +3,13 @@ package controllers
 import (
 	"aly/server/ent"
 	"aly/server/internal/service"
-	"aly/server/internal/utils"
 	"aly/server/models"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/utils-go/ngo/io/directory"
-	"github.com/utils-go/ngo/io/fileinfo"
 	"github.com/utils-go/ngo/io/path"
 )
 
@@ -41,119 +36,15 @@ func GetAllFilesByProjectName(ctx *gin.Context) {
 		return
 	}
 
-	var fileInfos []models.FileInfo
-	// 如果项目文件夹不存在（如项目刚创建还未上传文件），返回空列表
-	if !directory.Exists(workDir) {
-		ctx.JSON(200, models.OKWithData(fileInfos))
-		return
-	}
-	err = filepath.Walk(workDir, func(absPath string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		// 获取相对路径（正斜杠统一）
-		relPath, err := filepath.Rel(workDir, absPath)
-		if err != nil {
-			return err
-		}
-		relPath = strings.ReplaceAll(relPath, "\\", "/")
-
-		// 跳过上传中间态文件（分片暂存 xxx.chunks/、合并临时 xxx.merging、.part/.tmp），
-		// 避免上传进行中时被当作正式文件下发给客户端（#7）。
-		if isUploadTempPath(relPath) {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		if info.IsDir() {
-			return nil
-		}
-
-		// 应用忽略文件夹规则
-		for _, ignoreFolder := range p.IgnoreFolders {
-			if strings.HasPrefix(relPath, ignoreFolder+"/") || relPath == ignoreFolder {
-				return nil
-			}
-		}
-		// 应用忽略文件规则（支持 glob 匹配）
-		for _, ignoreFile := range p.IgnoreFiles {
-			if matchIgnoreFile(relPath, ignoreFile) {
-				return nil
-			}
-		}
-
-		md5Str, err := utils.GetFileMD5(absPath)
-		if err != nil {
-			return err
-		}
-		sha256Str, err := utils.GetFileSHA256(absPath)
-		if err != nil {
-			return err
-		}
-		finfo := fileinfo.GetFileInfo(absPath)
-		fileInfos = append(fileInfos, models.FileInfo{
-			FileAbsolutePath: absPath,
-			FileRelativePath: relPath,
-			LastUpdateTime:   finfo.LastWriteTime,
-			FileSize:         finfo.Length,
-			MD5:              md5Str,
-			SHA256:           sha256Str,
-		})
-		return nil
-	})
+	// 按项目缓存文件列表（含 md5/sha256）：upload 时失效，下次请求重新缓存，
+	// 避免每次 get_all_files 都对项目目录全量重算哈希（#13 性能问题）。
+	fileInfos, err := service.GetProjectFileList(p.Name, workDir, p.IgnoreFolders, p.IgnoreFiles)
 	if err != nil {
 		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
 
-	// 按相对路径排序，确保每次返回顺序一致
-	sort.Slice(fileInfos, func(i, j int) bool {
-		return fileInfos[i].FileRelativePath < fileInfos[j].FileRelativePath
-	})
-
 	ctx.JSON(200, models.OKWithData(fileInfos))
-}
-
-// matchIgnoreFile 判断文件路径是否匹配忽略规则
-// 与 publish-cli scanner.go 的 matchFile 保持一致的逻辑：
-// 精确匹配 → glob 匹配（全路径）→ glob 匹配（文件名）→ *.ext 后缀匹配
-// 注意：pattern 为 "*" 时，suffix 为空，strings.HasSuffix 恒返回 true，
-// 即忽略所有文件（类似 .gitignore 的 * 规则），这是有意设计。
-func matchIgnoreFile(relPath, pattern string) bool {
-	if relPath == pattern {
-		return true
-	}
-	if matched, err := filepath.Match(pattern, relPath); matched {
-		return true
-	} else if err != nil {
-		log.Printf("WARN: invalid ignore pattern %q: %v", pattern, err)
-	}
-	base := filepath.Base(relPath)
-	if matched, err := filepath.Match(pattern, base); matched {
-		return true
-	} else if err != nil {
-		log.Printf("WARN: invalid ignore pattern %q: %v", pattern, err)
-	}
-	if strings.HasPrefix(pattern, "*") {
-		return strings.HasSuffix(relPath, pattern[1:])
-	}
-	return false
-}
-
-// isUploadTempPath 判断路径是否含服务端上传中间态元素。
-// 服务端实际创建的中间态只有两种固定形态（file_upload_controller.go）：
-//   - {文件}.chunks/   分片暂存目录
-//   - {文件}.merging   分片合并临时文件
-// 不做 .tmp/.part 等宽泛后缀匹配，避免误伤项目内合法的同名文件/目录（#7 审查发现）。
-func isUploadTempPath(relPath string) bool {
-	for _, seg := range strings.Split(relPath, "/") {
-		if strings.HasSuffix(seg, ".chunks") || strings.HasSuffix(seg, ".merging") {
-			return true
-		}
-	}
-	return false
 }
 
 func DownloadFile(ctx *gin.Context) {
@@ -162,7 +53,7 @@ func DownloadFile(ctx *gin.Context) {
 	// 路径穿越防护：规范化路径并限制在 data 目录内
 	cleanPath := filepath.Clean(pathStr)
 	// 拒绝下载上传中间态文件（#7 纵深防御）
-	if isUploadTempPath(filepath.ToSlash(cleanPath)) {
+	if service.IsUploadTempPath(filepath.ToSlash(cleanPath)) {
 		ctx.AbortWithStatus(http.StatusNotFound)
 		return
 	}

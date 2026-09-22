@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"aly/client/aly-client/config"
@@ -207,48 +208,68 @@ func formatPidNames(pids []uint32, names map[uint32]string) []string {
 	return list
 }
 
-// closeProcessesHoldingFolder 探测并结束占用指定文件夹的进程（排除更新器自身），
-// 先发 WM_CLOSE 优雅关闭，随后直接强杀（不长时间等待优雅退出）。
-// 用户决定：谁占用杀谁——RM 探测的句柄持有者与 CWD 持有者（cmd.exe 等站在目录里的进程）
-// 一律强杀，不弹窗询问。强杀名单写入 update.log 便于排查。
-func closeProcessesHoldingFolder(folder string, timeout time.Duration) {
-	selfPid := uint32(os.Getpid())
-	pids := findHoldersOf(folder)
-	var toKill []uint32
-	for _, pid := range pids {
-		if pid != selfPid {
-			toKill = append(toKill, pid)
-		}
-	}
-	if len(toKill) == 0 {
-		return
-	}
-	// 先尝试优雅关闭（explorer 等会自行释放句柄），随后直接强杀
-	for _, pid := range toKill {
-		util.SendCloseMessageToProcess(pid)
-	}
-	wait := timeout
-	if wait > forceKillWait {
-		wait = forceKillWait
-	}
-	util.ForceKillPIDs(toKill, wait)
-	// 日志记录杀了谁，便于排查误杀
-	names := util.FindProcessNamesByPIDs(toKill)
-	util.AppendToLog(logDir(), "update.log",
-		fmt.Sprintf("killed folder holders: %v", formatPidNames(toKill, names)))
-}
-
 // forceKillWait 强制结束进程后等待退出的上限，避免更新长时间卡在等待上
 const forceKillWait = 5 * time.Second
 
-// renameDirWithKill 重命名文件夹，约定三条规则：
+// renameProbeState 一次 apply/rollback 内共享的探测状态，避免重复全量扫描（#23）：
+//   - killedPids：本次已击杀的 PID，不再重复击杀/重复计入；
+//   - deepPaths：本次已深扫（全系统句柄枚举）过的路径，不再重复深扫。
+//
+// 注意：浅扫（RM + CWD）结果不缓存——占用者会随时间变化，每次失败重试都必须重新探测，
+// 才能满足"再失败，再查杀"；只有 10s-60s 级的深扫才按路径去重。
+type renameProbeState struct {
+	killedPids map[uint32]bool
+	deepPaths  map[string]bool
+}
+
+func newRenameProbeState() *renameProbeState {
+	return &renameProbeState{
+		killedPids: make(map[uint32]bool),
+		deepPaths:  make(map[string]bool),
+	}
+}
+
+// isRenameRetryableErr 判断重命名失败错误是否属于"占用类"错误（值得探测+击杀+重试）。
+// 占用类（可重试）：ERROR_SHARING_VIOLATION(32) / ERROR_LOCK_VIOLATION(33) /
+// ERROR_USER_MAPPED_FILE(1224) / ERROR_ACCESS_DENIED(5)。
+// 非占用类（重试无意义，立即失败）：ERROR_NOT_SAME_DEVICE(17 跨卷) /
+// ERROR_DIR_NOT_EMPTY(145) / ERROR_ALREADY_EXISTS(183 目标已存在，走旁移) /
+// ERROR_PATH_NOT_FOUND(3 源不存在)。
+// 无法分类时保守视为占用类（保持旧行为：探测→击杀→重试）。
+func isRenameRetryableErr(err error) bool {
+	le, ok := err.(*os.LinkError)
+	if !ok {
+		return true
+	}
+	errno, ok := le.Err.(syscall.Errno)
+	if !ok {
+		return true
+	}
+	switch errno {
+	case 32, 33, 1224, 5:
+		return true
+	default:
+		return false
+	}
+}
+
+// renameDirWithKill 重命名文件夹（乐观模式），单次调用使用独立探测状态。
+// 约定：
 //  1. 源文件夹必须存在，否则直接失败；
 //  2. 目标文件夹必须不存在：若目标已存在（例如上一次更新留下的旧版本备份），
 //     先把它重命名为另一个不冲突的文件夹（to.old / to.old.1 / to.old.2 …）再执行正式重命名。
 //     Windows 的 MoveFileEx 无法覆盖非空目录，即使无任何进程占用也会报 Access denied；
-//  3. 重命名失败若因进程占用，探测占用 from/to 的进程并直接结束（排除更新器自身）后重试。
-//     用户决定：谁占用杀谁，不弹窗询问。
+//  3. 先直接重命名；失败时按 Windows 错误码分类——只有"占用类"错误才探测占用者并击杀后重试，
+//     非占用类错误立即失败（重试只会白杀进程）；
+//  4. 探测占用 from/to 的进程（排除更新器自身）并直接结束；RM 与 CWD 探测都找不到占用者时，
+//     兜底关闭浏览该目录的 explorer 窗口（精准 → 全部）。
 func renameDirWithKill(from, to string, timeout time.Duration) error {
+	return renameDirWithKillState(from, to, timeout, newRenameProbeState())
+}
+
+// renameDirWithKillState 重命名文件夹，st 为本次 apply/rollback 内共享的探测状态
+// （已击杀 PID / 已浅扫路径 / 已深扫路径在多次 rename 间复用，避免重复全量扫描，#23）。
+func renameDirWithKillState(from, to string, timeout time.Duration, st *renameProbeState) error {
 	const maxAttempts = 5
 	const retrySleep = 300 * time.Millisecond
 	var lastErr error
@@ -260,12 +281,12 @@ func renameDirWithKill(from, to string, timeout time.Duration) error {
 		// 2) 目标若存在：先挪到另一个不冲突的文件夹
 		if _, statErr := os.Stat(to); statErr == nil {
 			aside := nextAsideName(to)
-			if asideErr := renameWithKillRetry(to, aside, timeout); asideErr != nil {
+			if asideErr := renameWithKillRetryState(to, aside, timeout, st); asideErr != nil {
 				// 旁移失败（被占用且杀不掉）：直接返回，重试无意义
 				return fmt.Errorf("move aside %s -> %s: %v", to, aside, asideErr)
 			}
 		}
-		// 3) 正式重命名
+		// 3) 正式重命名（乐观模式：先直接试，失败才探测击杀）
 		err := os.Rename(from, to)
 		if err == nil {
 			return nil
@@ -274,30 +295,41 @@ func renameDirWithKill(from, to string, timeout time.Duration) error {
 		util.AppendToLog(logDir(), "update.log",
 			fmt.Sprintf("rename %s -> %s attempt %d/%d failed: %v", from, to, attempt, maxAttempts, err))
 
-		// 4) 直接结束占用待重命名文件夹的进程（排除更新器自身）。
-		//    前两轮浅扫（RM + 32 位 CWD），仍失败后第 3 轮起启用深扫
-		//    （全系统句柄枚举，覆盖 64 位进程/RM 探测不到的持有者）。
-		var pids []uint32
-		if attempt >= 3 {
-			pids = findDeepHolders(from, to)
-		} else {
-			pids = findHoldersOf(from, to)
+		// 4) 错误码分类：非占用类错误立即失败（重试只会白杀进程）
+		if !isRenameRetryableErr(err) {
+			return fmt.Errorf("rename %s -> %s: %v", from, to, err)
 		}
+
+		// 5) 探测占用者（浅扫 → 第 3 轮起深扫 → explorer 兜底），击杀后重试
+		pids := probeHoldersState(from, to, attempt, st)
 		if len(pids) > 0 {
 			wait := timeout
 			if wait > forceKillWait {
 				wait = forceKillWait
 			}
 			util.ForceKillPIDs(pids, wait)
+			for _, pid := range pids {
+				st.killedPids[pid] = true
+			}
+			names := util.FindProcessNamesByPIDs(pids)
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("killed folder holders: %v", formatPidNames(pids, names)))
+		} else {
+			// RM 与 CWD 探测都找不到占用者：通常是资源管理器窗口
+			// （Explorer 持目录句柄，RM 检测不到），或 64 位原生 cmd.exe 等
+			// CWD 持有者（32 位客户端无法读取其 PEB，见 util/process.go）。
+			// 先精准关闭浏览 from/to 的 Explorer 窗口，未命中再杀全部 explorer 兜底（#2）。
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("rename %s -> %s: no holders found by RM/CWD scan, closing explorer windows", from, to))
+			closeExplorerWindows(timeout, from, to)
 		}
 		time.Sleep(retrySleep)
 	}
 	return lastErr
 }
 
-// renameWithKillRetry 执行重命名；失败时探测占用 from/to 的进程并直接强杀后重试。
-// 调用方需保证目标 to 不存在（由 renameDirWithKill 负责挪开）。
-func renameWithKillRetry(from, to string, timeout time.Duration) error {
+// renameWithKillRetryState 执行重命名（乐观模式），st 为本次 apply/rollback 内共享的探测状态。
+func renameWithKillRetryState(from, to string, timeout time.Duration, st *renameProbeState) error {
 	const maxAttempts = 5
 	const retrySleep = 300 * time.Millisecond
 	var lastErr error
@@ -310,25 +342,26 @@ func renameWithKillRetry(from, to string, timeout time.Duration) error {
 		util.AppendToLog(logDir(), "update.log",
 			fmt.Sprintf("rename %s -> %s attempt %d/%d failed: %v", from, to, attempt, maxAttempts, err))
 
-		// 直接结束占用待重命名文件夹的进程（排除更新器自身）；
-		// 前两轮浅扫，第 3 轮起深扫（全系统句柄枚举）。
-		var pids []uint32
-		if attempt >= 3 {
-			pids = findDeepHolders(from, to)
-		} else {
-			pids = findHoldersOf(from, to)
+		// 错误码分类：非占用类错误立即失败（重试只会白杀进程）
+		if !isRenameRetryableErr(err) {
+			return fmt.Errorf("rename %s -> %s: %v", from, to, err)
 		}
+
+		pids := probeHoldersState(from, to, attempt, st)
 		if len(pids) > 0 {
 			wait := timeout
 			if wait > forceKillWait {
 				wait = forceKillWait
 			}
 			util.ForceKillPIDs(pids, wait)
+			for _, pid := range pids {
+				st.killedPids[pid] = true
+			}
+			names := util.FindProcessNamesByPIDs(pids)
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("killed folder holders: %v", formatPidNames(pids, names)))
 		} else {
-			// RM 与 CWD 探测都找不到占用者时，通常是资源管理器窗口
-			// 打开了该文件夹（Explorer 持目录句柄，RM 检测不到），或 64 位原生
-			// cmd.exe 等 CWD 持有者（32 位客户端无法读取其 PEB，见 util/process.go）。
-			// 先精准关闭浏览 from/to 的 Explorer 窗口，未命中再杀全部 explorer 兜底。
+			// 无占用者：explorer 兜底（#2）
 			util.AppendToLog(logDir(), "update.log",
 				fmt.Sprintf("rename %s -> %s: no holders found by RM/CWD scan, closing explorer windows", from, to))
 			closeExplorerWindows(timeout, from, to)
@@ -336,6 +369,65 @@ func renameWithKillRetry(from, to string, timeout time.Duration) error {
 		time.Sleep(retrySleep)
 	}
 	return lastErr
+}
+
+// probeHoldersState 探测占用 from/to 的进程（排除更新器自身与本次已击杀 PID）。
+// 探测策略：
+//   - 浅扫（RM + CWD）每次失败重试都重新执行——占用者会随时间变化，
+//     必须"再失败，再查杀"，结果不缓存；
+//   - 深扫（全系统句柄枚举）从第 3 轮起启用，但同一路径在本次 apply/rollback 内
+//     最多深扫一次（10s-60s 级成本，#23）。
+//
+// 只探测真实存在的路径（to 通常是尚不存在的目标目录，注册不存在的资源纯属浪费）。
+func probeHoldersState(from, to string, attempt int, st *renameProbeState) []uint32 {
+	selfPid := uint32(os.Getpid())
+	seen := make(map[uint32]bool)
+	var holders []uint32
+	add := func(pids []uint32) {
+		for _, pid := range pids {
+			if pid != selfPid && !st.killedPids[pid] && !seen[pid] {
+				seen[pid] = true
+				holders = append(holders, pid)
+			}
+		}
+	}
+
+	// 只探测存在的路径
+	var paths []string
+	for _, p := range []string{from, to} {
+		if _, statErr := os.Stat(p); statErr == nil {
+			paths = append(paths, p)
+		}
+	}
+
+	// 浅扫（RM 句柄持有者 + CWD 持有者）：每次重试都重新探测
+	if len(paths) > 0 {
+		add(findHoldersOf(paths...))
+	}
+
+	// 深扫：第 3 轮起，仅未深扫过的路径（全系统句柄枚举，覆盖 64 位进程/RM 盲区）
+	if attempt >= 3 {
+		deepUnprobed := deepScanCandidates(paths, st)
+		if len(deepUnprobed) > 0 {
+			add(findDeepHolders(deepUnprobed...))
+			for _, p := range deepUnprobed {
+				st.deepPaths[p] = true
+			}
+		}
+	}
+	return holders
+}
+
+// deepScanCandidates 返回 paths 中本次 apply/rollback 内尚未深扫过的路径。
+// 深扫（全系统句柄枚举）是 10s-60s 级操作，同一路径在本次 apply 内最多做一次（#23）。
+func deepScanCandidates(paths []string, st *renameProbeState) []string {
+	var out []string
+	for _, p := range paths {
+		if !st.deepPaths[p] {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // closeExplorerWindows 解除 Explorer 对目录的占用：

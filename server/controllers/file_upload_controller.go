@@ -101,6 +101,9 @@ func UploadFile(ctx *gin.Context) {
 		return
 	}
 
+	// 文件已变更：使该项目的文件列表缓存失效，下次 get_all_files 重新缓存
+	service.InvalidateProjectFileList(fileInfo.ProjectName)
+
 	ctx.JSON(200, models.OK())
 }
 
@@ -191,6 +194,9 @@ func UploadChunk(ctx *gin.Context) {
 		ctx.JSON(200, models.NG(fmt.Sprintf("save chunk error: %v", err)))
 		return
 	}
+
+	// 分片上传也是 upload 调用：按用户要求使缓存失效（合并完成后会再次失效）
+	service.InvalidateProjectFileList(chunkInfo.ProjectName)
 
 	ctx.JSON(200, models.OK())
 }
@@ -310,6 +316,8 @@ func UploadChunkComplete(ctx *gin.Context) {
 
 	// 清理分片目录
 	os.RemoveAll(chunksDir)
+	// 文件已变更：使该项目的文件列表缓存失效，下次 get_all_files 重新缓存
+	service.InvalidateProjectFileList(info.ProjectName)
 
 	ctx.JSON(200, models.OKWithData(map[string]interface{}{
 		"chunksComplete": true,

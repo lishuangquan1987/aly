@@ -89,12 +89,16 @@ func CloseExplorerWindowsBrowsing(folder string) (int, error) {
 	}
 	folder = strings.TrimRight(folder, `\`)
 
-	f, err := ioutil.TempFile("", "aly_closeexplorer_*.vbs")
+	// 注意：Go 1.10 的 ioutil.TempFile 不支持 "*" 占位符（Go 1.11+ 特性），
+	// 若 pattern 含 "*"，随机串会拼在末尾导致扩展名变成 ".vbs87321" 而非 ".vbs"，
+	// cscript 会拒绝执行（#4）。因此先按无扩展名前缀创建，再手动补 ".vbs" 后缀。
+	f, err := ioutil.TempFile("", "aly_closeexplorer_")
 	if err != nil {
 		return 0, fmt.Errorf("explorer close: create temp vbs failed: %v", err)
 	}
-	vbsPath := f.Name()
+	vbsPath := f.Name() + ".vbs"
 	f.Close()
+	os.Remove(f.Name()) // 移除占位文件，使用带 .vbs 后缀的路径
 	// VBScript 多行语句要求 CRLF 换行，LF 会导致编译错误（与 shortcut.go 一致）
 	content := strings.Replace(closeExplorerVBS, "\n", "\r\n", -1)
 	if err := ioutil.WriteFile(vbsPath, []byte(content), 0644); err != nil {

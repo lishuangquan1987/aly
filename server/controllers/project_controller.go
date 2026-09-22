@@ -140,6 +140,11 @@ func UpdateProject(ctx *gin.Context) {
 		updateProjectDto.IgnoreFolders,
 		updateProjectDto.IgnoreFiles)
 
+	// 忽略规则变化会影响文件列表过滤：使该项目的文件列表缓存失效
+	if result.IsSuccess {
+		service.InvalidateProjectFileList(updateProjectDto.Name)
+	}
+
 	ctx.JSON(200, result)
 }
 
@@ -156,6 +161,9 @@ func DeleteProject(ctx *gin.Context) {
 		ctx.JSON(200, models.NG(err.Error()))
 		return
 	}
+
+	// 项目已删除：释放该项目的文件列表缓存
+	service.InvalidateProjectFileList(projectNameDto.ProjectName)
 
 	ctx.JSON(200, service.DeleteProject(ctx.Request.Context(), projectNameDto.ProjectName))
 }

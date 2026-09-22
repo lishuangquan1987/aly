@@ -133,6 +133,9 @@ func Rollback() {
 		closeProcessesGracefully(fc.ExeCfg.MustCloseProcessName, closeTimeout)
 	}
 
+	// 共享探测状态：本次 rollback 内 3 次 rename 复用同一探测/击杀结果，避免重复全量扫描（#23）。
+	st := newRenameProbeState()
+
 	// Rollback target version dir already has complete files from when it was active.
 	// Unlike apply_update (which needs CopyDirWithExclude to fill in unchanged files
 	// from the current folder), rollback only needs atomic rename.
@@ -155,7 +158,7 @@ func Rollback() {
 	}
 	if _, statErr := os.Stat(prevVersionDir); statErr == nil {
 		// 旧备份目录存在：必须先挪开，否则主目录重命名会因目标非空目录报 Access denied
-		if err := renameDirWithKill(prevVersionDir, oldBackupTemp, closeTimeout); err != nil {
+		if err := renameDirWithKillState(prevVersionDir, oldBackupTemp, closeTimeout, st); err != nil {
 			versionInfo.VersionStatus = config.VersionStatusApplied
 			versionInfo.RollbackPrevious = ""
 			if wErr := config.WriteVersion(versionInfo); wErr != nil {
@@ -167,7 +170,7 @@ func Rollback() {
 	}
 
 	// Rename mainFolder -> prevVersionDir (backup current)
-	if err := renameDirWithKill(fc.MainFolder, prevVersionDir, closeTimeout); err != nil {
+	if err := renameDirWithKillState(fc.MainFolder, prevVersionDir, closeTimeout, st); err != nil {
 		if _, statErr := os.Stat(oldBackupTemp); statErr == nil {
 			if rErr := os.Rename(oldBackupTemp, prevVersionDir); rErr != nil {
 				util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: restore oldBackupTemp to prevVersionDir failed: %v", rErr))
@@ -185,7 +188,7 @@ func Rollback() {
 	}
 
 	// Rename versionDir -> mainFolder (activate rollback target)
-	if err := renameDirWithKill(versionDir, fc.MainFolder, closeTimeout); err != nil {
+	if err := renameDirWithKillState(versionDir, fc.MainFolder, closeTimeout, st); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
 		if rErr := os.Rename(prevVersionDir, fc.MainFolder); rErr != nil {
 			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: restore prevVersionDir to mainFolder failed: %v", rErr))

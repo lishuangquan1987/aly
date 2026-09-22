@@ -137,9 +137,13 @@ func ApplyUpdate() {
 	const maxAttempts = 3
 	const retryInterval = 2 * time.Second
 
+	// 共享探测状态：本次 apply 内 3 次 rename + 3 次整体重试复用同一探测/击杀结果，
+	// 避免每次重试都重新全量扫描（#23）。
+	st := newRenameProbeState()
+
 	var applyErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		applyErr = applyReplacement(fc, versionInfo, versionDir, closeTimeout)
+		applyErr = applyReplacement(fc, versionInfo, versionDir, closeTimeout, st)
 		if applyErr == nil {
 			break
 		}
@@ -179,16 +183,20 @@ func ApplyUpdate() {
 	printOutput(true, "", nil)
 }
 
-// applyReplacement 执行一次原子替换：关闭占用进程 → 复制 → 备份改名 → 替换改名。
+// applyReplacement 执行一次原子替换：按名关闭业务进程 → 复制 → 备份改名 → 替换改名。
 // 任何一步失败都会尝试回滚恢复 mainFolder，并返回错误（由调用方决定是否重试）。
-func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDir string, closeTimeout time.Duration) error {
-	// 关闭 must_close_process_name 指定的进程
+//
+// 乐观重命名（问题 3）：不再在复制前无条件全目录扫描占用者，而是先直接重命名，
+// 只在 rename 真正失败时才由 renameDirWithKillState 内部探测/击杀占用者——无占用场景
+// 零扫描，最大限度节省时间；st 为本次 apply 内共享的探测状态（跨 3 次 rename 复用）。
+func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDir string, closeTimeout time.Duration, st *renameProbeState) error {
+	// 关闭 must_close_process_name 指定的进程（业务必需：复制前关闭主程序，
+	// 否则 CopyDirWithExclude 读文件可能失败）。
 	if len(fc.ExeCfg.MustCloseProcessName) > 0 {
 		closeProcessesGracefully(fc.ExeCfg.MustCloseProcessName, closeTimeout)
 	}
-	// 自动探测并结束占用 ApplicationFolder 的进程（排除更新器自身）。
-	// 用户决定：谁占用杀谁（RM 持有者 + CWD 持有者 + explorer），不弹窗询问。
-	closeProcessesHoldingFolder(fc.MainFolder, closeTimeout)
+	// 不再调用 closeProcessesHoldingFolder 无条件全目录扫描——改成"先重命名，失败再查杀"，
+	// 与 rollback 路径行为对齐（#2 / 问题 3）。
 
 	// 从 versionDir 读取 shared.json，获取 un_copy_folders / un_copy_files
 	// 这些字段指定不应从当前 ApplicationFolder 复制到新版本目录的文件/文件夹
@@ -226,13 +234,13 @@ func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDi
 	if _, statErr := os.Stat(prevVersionDir); statErr == nil {
 		// 旧备份目录存在：必须先挪开，否则主目录重命名会因目标非空目录报 Access denied。
 		// 挪不动（被占用）则直接失败，不再静默继续。
-		if err := renameDirWithKill(prevVersionDir, oldBackupTemp, closeTimeout); err != nil {
+		if err := renameDirWithKillState(prevVersionDir, oldBackupTemp, closeTimeout, st); err != nil {
 			return fmt.Errorf("backup aside failed: %v", err)
 		}
 	}
 
 	// Rename mainFolder -> prevVersionDir (backup)
-	if err := renameDirWithKill(fc.MainFolder, prevVersionDir, closeTimeout); err != nil {
+	if err := renameDirWithKillState(fc.MainFolder, prevVersionDir, closeTimeout, st); err != nil {
 		// Restore old backup if it existed
 		if _, statErr := os.Stat(oldBackupTemp); statErr == nil {
 			if rerr := os.Rename(oldBackupTemp, prevVersionDir); rerr != nil {
@@ -244,7 +252,7 @@ func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDi
 	}
 
 	// Rename versionDir -> mainFolder
-	if err := renameDirWithKill(versionDir, fc.MainFolder, closeTimeout); err != nil {
+	if err := renameDirWithKillState(versionDir, fc.MainFolder, closeTimeout, st); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
 		if rerr := os.Rename(prevVersionDir, fc.MainFolder); rerr != nil {
 			exeDir := logDir()
