@@ -493,6 +493,35 @@ os.Remove(f.Name()) // 移除占位文件，使用带 .vbs 后缀的路径
 
 3. **修复 #4**：`explorer_close.go` / `shortcut.go` 的 `TempFile` `*` 占位符问题。
 
+## #24 追加修复（2026-09-22 实测触发，用户桌面/任务栏黑屏事故）
+
+### 事故回放
+在真实桌面环境运行"explorer 打开子文件夹"占用测试时，触发 `closeExplorerWindows`
+的兜底逻辑**强杀全部 explorer**（`ForceKillPIDs`），导致用户桌面（Progman/WorkerW）
+与任务栏（Shell_TrayWnd）黑屏；且 Windows 对被杀掉的 shell 不会自动重启，
+黑屏持续到手动重启 explorer。
+
+### 根因（两层）
+1. **VBS 精准关闭只做完全相等匹配**（`LCase(path) = target`）：用户打开的是目标目录的
+   子文件夹（浏览 `C:\app\config` 而目标是 `C:\app`）时匹配不上，`closed=0`，
+   调用方误以为"没有 explorer 窗口占用"，进而走兜底杀全部 explorer。
+2. **兜底杀全部 explorer**（`closeExplorerWindows` 中 `ForceKillPIDs`）：explorer 是
+   shell 进程（桌面/任务栏/开始菜单都靠它），强杀必然黑屏。
+
+### 修复（已实施）
+1. `util/explorer_close.go`：VBS 匹配改为**前缀匹配**——目标目录本身或目标目录的
+   任意子目录（`LCase(path) = target Or Left(LCase(path) & "\", Len(target)+1) = target & "\"`），
+   子文件夹窗口也能被精准关闭，避免触发兜底。
+2. `common.go closeExplorerWindows`：兜底从 `ForceKillPIDs` 强杀改为 **WM_CLOSE 优雅
+   关闭**——explorer 的 shell 窗口会忽略 WM_CLOSE，只有文件窗口被关闭，**绝不杀 shell**。
+
+### 测试（已补充）
+- `TestCloseExplorerWindowsSubfolderPrefixMatch`：验证前缀匹配（closed>=1）且 explorer 进程存活。
+- `TestRenameDirWithKillExplorerHoldsSubfolder`：场景 1 增强断言——rename 成功后 explorer
+  仍存活（防杀光 shell 回归）。
+- 注意：`explorer.exe <dir>` 会启动独立文件浏览实例（shell 保持不动），窗口关闭后该实例
+  延迟退出属正常；测试只保证不会把所有 explorer 杀光。
+
 ## 修复实施记录（2026-09-22 全部完成）
 
 | 顺序 | 事项 | 工作量 | 风险 |

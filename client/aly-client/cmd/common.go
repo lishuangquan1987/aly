@@ -430,11 +430,13 @@ func deepScanCandidates(paths []string, st *renameProbeState) []string {
 	return out
 }
 
-// closeExplorerWindows 解除 Explorer 对目录的占用：
-//  1) 精准方案：只关闭"当前文件夹 == 目标"的 Explorer 窗口（Shell.Application COM via
-//     cscript，业界推荐做法），避免误关用户其他资源管理器窗口、不重启 shell；
-//  2) 兜底：精准关闭未命中任何窗口（或 cscript 不可用）时，按"谁占用杀谁"结束全部
-//     explorer（系统会自动重启它）。
+// closeExplorerWindows 解除 Explorer 对目录的占用（#24 修复）：
+//  1) 精准方案：关闭"浏览目标目录或其任意子目录"的 Explorer 文件窗口
+//     （Shell.Application COM via cscript，前缀匹配支持用户打开的是子文件夹），
+//     避免误关用户其他资源管理器窗口、不重启 shell；
+//  2) 兜底：向全部 explorer 顶层窗口发送 WM_CLOSE 优雅关闭文件窗口。
+//     explorer 的 shell 窗口（桌面/任务栏）会忽略 WM_CLOSE，只有文件窗口被关闭——
+//     因此**绝不 ForceKill explorer**：强杀 shell 会黑屏并打断用户工作（#24 回归）。
 func closeExplorerWindows(timeout time.Duration, folders ...string) {
 	for _, folder := range folders {
 		closed, err := util.CloseExplorerWindowsBrowsing(folder)
@@ -446,11 +448,12 @@ func closeExplorerWindows(timeout time.Duration, folders ...string) {
 		util.AppendToLog(logDir(), "update.log",
 			fmt.Sprintf("closed %d explorer window(s) browsing %s", closed, folder))
 		if closed > 0 {
-			return // 已精准关闭目标窗口，无需杀全部 explorer
+			return // 已精准关闭目标窗口，无需兜底
 		}
 	}
 
-	// 兜底：杀全部 explorer（系统自动重启）
+	// 兜底：WM_CLOSE 优雅关闭所有 explorer 文件窗口（shell 窗口会忽略该消息）。
+	// 不再 ForceKill explorer——杀 shell 会导致桌面/任务栏黑屏（#24）。
 	pids, err := util.FindProcessesByName("explorer")
 	if err != nil {
 		util.AppendToLog(logDir(), "update.log",
@@ -463,12 +466,10 @@ func closeExplorerWindows(timeout time.Duration, folders ...string) {
 	for _, pid := range pids {
 		util.SendCloseMessageToProcess(pid)
 	}
-	wait := timeout
-	if wait > forceKillWait {
-		wait = forceKillWait
-	}
-	util.ForceKillPIDs(pids, wait)
-	util.AppendToLog(logDir(), "update.log", "closed explorer windows to release folder handle")
+	// 给 explorer 一点时间处理 WM_CLOSE、关闭窗口并释放目录句柄；
+	// 若仍占用，rename 重试循环会再次进入本函数。
+	time.Sleep(500 * time.Millisecond)
+	util.AppendToLog(logDir(), "update.log", "sent WM_CLOSE to explorer windows to release folder handle")
 }
 
 // nextAsideName 生成一个不冲突的"挪开目标"名称：X.old、X.old.1、X.old.2 …

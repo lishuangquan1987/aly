@@ -42,7 +42,12 @@ For Each wnd In shell.Windows()
       Do While Len(path) > 0 And (Left(path, 1) = "\")
         path = Mid(path, 2)
       Loop
-      If LCase(path) = target Then
+      ' #24 修复：匹配"目标目录本身"或"目标目录的任意子目录"。
+      ' 旧实现只做完全相等匹配（LCase(path) = target），当用户打开的是目标目录的
+      ' 子文件夹时（如浏览 C:\app\config 而目标是 C:\app），窗口匹配不上，
+      ' 调用方只能退化为"杀全部 explorer"，导致用户所有资源管理器窗口被关闭、
+      ' 桌面与任务栏黑屏。前缀匹配让这类窗口也能被精准关闭，无需杀全部 explorer。
+      If LCase(path) = target Or Left(LCase(path) & "\", Len(target) + 1) = target & "\" Then
         wnd.Quit()
         closed = closed + 1
       End If
@@ -81,8 +86,11 @@ Function URLDecode(s)
 End Function
 `
 
-// CloseExplorerWindowsBrowsing 关闭所有正在浏览指定文件夹的 Explorer 窗口，
-// 返回关闭的窗口数量。cscript 不可用或 VBS 执行失败时返回错误（调用方决定是否降级）。
+// CloseExplorerWindowsBrowsing 关闭所有正在浏览指定文件夹（或其任意子文件夹）的
+// Explorer 窗口，返回关闭的窗口数量。cscript 不可用或 VBS 执行失败时返回错误（调用方决定是否降级）。
+// 匹配规则（#24）：目标目录本身，或目标目录的任意子目录（前缀匹配）。
+// 例如目标 C:\app 会命中浏览 C:\app、C:\app\config、C:\app\config\x 的窗口，
+// 但不会命中 C:\app2（避免前缀误伤）。
 func CloseExplorerWindowsBrowsing(folder string) (int, error) {
 	if folder == "" {
 		return 0, fmt.Errorf("explorer close: folder is empty")

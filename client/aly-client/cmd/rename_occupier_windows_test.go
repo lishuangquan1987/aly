@@ -83,8 +83,73 @@ func killAndWait(t *testing.T, cmd *exec.Cmd) {
 	_ = cmd.Wait()
 }
 
+// explorerPIDs 返回当前所有 explorer 进程 PID（空切片表示无法枚举）。
+func explorerPIDs() []int {
+	procs, err := util.FindProcessesByName("explorer")
+	if err != nil {
+		return nil
+	}
+	var ids []int
+	for _, p := range procs {
+		ids = append(ids, int(p))
+	}
+	return ids
+}
+
+// explorerStillAlive 判断关闭窗口/重命名后系统仍存在 explorer 进程（shell 未被杀光）。
+// 注意：不做"before 的 PID 必须存活"的断言——测试可能先启动一个文件浏览实例，
+// 关闭窗口后该实例退出是正常的；这里只保证**不会把所有 explorer 杀光**
+// （杀光 shell 会导致桌面/任务栏黑屏，#24 回归防护）。
+func explorerStillAlive() bool {
+	return len(explorerPIDs()) > 0
+}
+
+// TestCloseExplorerWindowsSubfolderPrefixMatch 验证 #24 修复：
+// 精准关闭必须支持"目标目录的任意子目录"前缀匹配——当用户打开的是子文件夹
+// （如浏览 C:\app\config 而目标是 C:\app）时也能命中并关闭，
+// 避免调用方退化为"杀全部 explorer"（导致桌面/任务栏黑屏）。
+func TestCloseExplorerWindowsSubfolderPrefixMatch(t *testing.T) {
+	root, err := ioutil.TempDir("", "exp-prefix")
+	if err != nil {
+		t.Fatalf("创建临时目录失败: %v", err)
+	}
+	defer os.RemoveAll(root)
+
+	from := filepath.Join(root, "win-x64")
+	sub := filepath.Join(from, "config")
+	if err := os.MkdirAll(sub, 0755); err != nil {
+		t.Fatalf("创建子文件夹失败: %v", err)
+	}
+	mustMkdirFile(t, from, "app.exe", "app")
+	mustMkdirFile(t, sub, "a.ini", "ini")
+
+	before := explorerPIDs()
+	if !startExplorerFor(t, sub) {
+		t.Skip("explorer 不可用，跳过")
+	}
+	// 等窗口就绪
+	time.Sleep(1 * time.Second)
+
+	// 关键验证：目标传父目录 from，应能命中浏览子文件夹 sub 的窗口（前缀匹配）
+	closed, err := util.CloseExplorerWindowsBrowsing(from)
+	if err != nil {
+		t.Fatalf("CloseExplorerWindowsBrowsing(from) 失败: %v", err)
+	}
+	if closed == 0 {
+		t.Error("前缀匹配未生效：浏览子文件夹的窗口未被关闭（应 closed >= 1）")
+	}
+
+	// 修复验证：explorer 进程本身必须仍在运行（只关闭了窗口，未杀进程）
+	if !explorerStillAlive() {
+		t.Errorf("严重错误：explorer 进程被全部关闭（before=%v；若未修复 #24，此处会杀光 explorer 导致桌面黑屏）", before)
+	}
+	t.Logf("前缀匹配验证通过：closed=%d，explorer 进程存活", closed)
+}
+
 // TestRenameDirWithKillExplorerHoldsSubfolder 场景 1：
-// 子文件夹被 explorer 打开，父目录重命名应被占用拦截，最终被探测/清理后成功。
+// 子文件夹被 explorer 打开，父目录重命名应被占用拦截；
+// 修复 #24 后，内部精准关闭（前缀匹配）关闭浏览子文件夹的窗口即可成功，
+// 且 explorer 进程保持存活（不会杀光 shell 导致桌面/任务栏黑屏）。
 func TestRenameDirWithKillExplorerHoldsSubfolder(t *testing.T) {
 	root, err := ioutil.TempDir("", "rename-exp-sub")
 	if err != nil {
@@ -117,7 +182,8 @@ func TestRenameDirWithKillExplorerHoldsSubfolder(t *testing.T) {
 		_ = os.Rename(to, from)
 	}
 
-	// 乐观重命名：应探测到占用者（深扫 explorer 或 closeExplorerWindows 兜底）并成功
+	// 乐观重命名：修复 #24 后应通过精准关闭（前缀匹配）释放占用并成功，
+	// 且 explorer 进程保持存活（未被杀光）。
 	start := time.Now()
 	if err := renameDirWithKill(from, to, 30*time.Second); err != nil {
 		t.Fatalf("explorer 占用子文件夹时 renameDirWithKill 应成功，实际失败: %v (耗时 %v)", err, time.Since(start))
@@ -125,7 +191,11 @@ func TestRenameDirWithKillExplorerHoldsSubfolder(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(to, "app.exe")); err != nil {
 		t.Errorf("目标 %s 应包含 app.exe: %v", to, err)
 	}
-	t.Logf("场景 1 通过：explorer 占用子文件夹被清理，rename 成功（耗时 %v）", time.Since(start))
+	// 修复验证：rename 成功必须通过关闭窗口而非杀光 explorer（防桌面黑屏回归）
+	if !explorerStillAlive() {
+		t.Error("严重错误：rename 后 explorer 进程全部消失（回归 #24：杀光 explorer 导致桌面黑屏）")
+	}
+	t.Logf("场景 1 通过：explorer 占用子文件夹被精准关闭，rename 成功且 explorer 存活（耗时 %v）", time.Since(start))
 }
 
 // TestRenameDirWithKillFileLockedByProcess 场景 2：
