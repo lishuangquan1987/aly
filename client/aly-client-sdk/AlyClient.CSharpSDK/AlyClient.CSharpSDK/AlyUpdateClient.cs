@@ -15,7 +15,6 @@ namespace AlyClient.CSharpSDK
         private string _updateExePath;
         private readonly object _statusLock = new object();
         private AlyClientStatus _status;
-        private readonly SynchronizationContext _syncContext;
 
         private readonly object _errorLock = new object();
         private bool _isError;
@@ -49,9 +48,6 @@ namespace AlyClient.CSharpSDK
         {
             UpdatorExePath = updatorExePath
                 ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\UpdateFolder\aly-client.exe");
-            // 捕获创建线程的同步上下文（WPF/UI 线程创建实例时为 UI 上下文），
-            // 用于把后台线程的事件回调封送到 UI 线程（#21）。
-            _syncContext = SynchronizationContext.Current;
             _cts = new CancellationTokenSource();
             IsRunning = true;
 
@@ -66,43 +62,6 @@ namespace AlyClient.CSharpSDK
             });
         }
 
-        /// <summary>
-        /// 将 action 异步封送到创建实例时的同步上下文（UI 线程）执行。
-        /// 适用于状态通知类回调（StatusChanged / ErrorStatusChanged）：
-        /// 宿主在 UI 线程创建实例时自动回到 UI 线程（#21）；
-        /// 非 UI 线程创建实例（_syncContext == null）时保持原行为。
-        /// </summary>
-        private void Raise(Action action)
-        {
-            if (_syncContext != null)
-            {
-                _syncContext.Post(_ => action(), null);
-            }
-            else
-            {
-                action();
-            }
-        }
-
-        /// <summary>
-        /// 将 action **同步**封送到同步上下文执行（Send 阻塞后台线程直到宿主处理完）。
-        /// 仅用于确认类事件（RequestDownloadUpdate / RequestApplyUpdate）：宿主 handler
-        /// 需要在 SDK 继续推进前同步完成（例如调用 Cancel() 否决下载/应用），
-        /// 若用异步 Post，后台循环会立即继续并把状态推到 Downloading/Apply，
-        /// 宿主的否决将迟到失效（#21 审查发现）。MainLoop 在后台线程，阻塞安全。
-        /// </summary>
-        private void RaiseSync(Action action)
-        {
-            if (_syncContext != null)
-            {
-                _syncContext.Send(_ => action(), null);
-            }
-            else
-            {
-                action();
-            }
-        }
-
         /// <summary>Stop the background polling loop. Idempotent.</summary>
         public void Cancel()
         {
@@ -111,25 +70,15 @@ namespace AlyClient.CSharpSDK
 
         /// <summary>
         /// 自更新更新器：临时文件 + SHA256 校验 + 原子替换（File.Replace / File.Move），
-        /// 目标被占用时指数退避重试（1s、2s、4s、8s、16s，共 5 次，约 31s）。
-        /// 替换前先等待仍在运行的更新器进程退出（#22）。
-        /// 失败不静默（#8）：更新器损坏会破坏后续所有更新，必须留痕并保留旧更新器（不清空目标）。
+        /// 目标被占用时重试 3 次（间隔 1s）。失败不静默（#8）：
+        /// 更新器损坏会破坏后续所有更新，必须留痕并保留旧更新器（不清空目标）。
         /// </summary>
         private void UpdateSelf()
         {
             string src = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "aly-client.exe");
             string tmp = UpdatorExePath + ".new";
             Exception lastErr = null;
-
-            // #22：若上一次 apply 拉起的更新器进程尚未退出，File.Replace 会因目标被占用失败。
-            // 先等待 aly-client.exe 进程退出（最多 10s，步长 1s），再开始替换。
-            for (int i = 0; i < 10 && IsProcessRunning("aly-client"); i++)
-            {
-                Thread.Sleep(1000);
-            }
-
-            int[] backoffs = { 1000, 2000, 4000, 8000, 16000 }; // 指数退避（毫秒）
-            for (int i = 0; i < backoffs.Length; i++)
+            for (int i = 0; i < 3; i++)
             {
                 try
                 {
@@ -175,37 +124,12 @@ namespace AlyClient.CSharpSDK
                             lastErr = ex2;
                         }
                     }
-                    // 目标被占用（如上一更新进程尚未完全退出）：指数退避后重试（#22）。
-                    // 最后一次失败不再 sleep，立即上报错误，避免无谓延迟（审查发现）。
-                    if (i < backoffs.Length - 1)
-                    {
-                        Thread.Sleep(backoffs[i]);
-                    }
+                    // 目标被占用（如上一更新进程尚未完全退出）：等待后重试
+                    Thread.Sleep(1000);
                 }
             }
             string msg = "self-update failed: " + (lastErr != null ? lastErr.Message : "unknown");
             LogError(msg);
-        }
-
-        /// <summary>判断指定进程名（不含 .exe）是否仍在运行（排除当前进程自身）。</summary>
-        private static bool IsProcessRunning(string processName)
-        {
-            try
-            {
-                int selfId = System.Diagnostics.Process.GetCurrentProcess().Id;
-                foreach (var p in System.Diagnostics.Process.GetProcessesByName(processName))
-                {
-                    if (p.Id != selfId)
-                    {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            catch
-            {
-                return false; // 无法枚举时保守返回 false，不阻塞自更新
-            }
         }
 
         private static string ComputeSha256(string path)
@@ -262,7 +186,7 @@ namespace AlyClient.CSharpSDK
 
                             if (!status.Data.ForceUpdate)
                             {
-                                RaiseRequestDownload(status.Data.NewVersion);
+                                RequestDownloadUpdate?.Invoke(status.Data.NewVersion);
                             }
 
                             Status = AlyClientStatus.DownloadingUpdate;
@@ -297,7 +221,7 @@ namespace AlyClient.CSharpSDK
 
                         if (!status.Data.ForceUpdate)
                         {
-                            RaiseRequestApply(status.Data.NewVersion);
+                            RequestApplyUpdate?.Invoke(status.Data.NewVersion);
                         }
 
                         Status = AlyClientStatus.ApplyUpdate;
@@ -329,7 +253,7 @@ namespace AlyClient.CSharpSDK
         private void OnStatusChanged(AlyClientStatus s, string msg)
         {
             var handler = StatusChanged;
-            if (handler != null) Raise(() => handler(s, msg));
+            if (handler != null) handler(s, msg);
         }
 
         private void OnError(string msg)
@@ -351,21 +275,7 @@ namespace AlyClient.CSharpSDK
                 }
             }
             var handler = ErrorStatusChanged;
-            if (handler != null) Raise(() => handler(msg));
-        }
-
-        /// <summary>通知宿主"需要确认下载"，同步封送到 UI 线程以保留否决窗口（#21）。</summary>
-        private void RaiseRequestDownload(string version)
-        {
-            var handler = RequestDownloadUpdate;
-            if (handler != null) RaiseSync(() => handler(version));
-        }
-
-        /// <summary>通知宿主"需要确认应用"，同步封送到 UI 线程以保留否决窗口（#21）。</summary>
-        private void RaiseRequestApply(string version)
-        {
-            var handler = RequestApplyUpdate;
-            if (handler != null) RaiseSync(() => handler(version));
+            if (handler != null) handler(msg);
         }
 
         private void ClearError()

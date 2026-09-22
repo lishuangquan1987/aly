@@ -47,25 +47,15 @@ namespace AlyClient.CSharpSDK
                     using (var cts = new CancellationTokenSource())
                     using (var process = new Process { StartInfo = psi })
                     {
-                        // 必须启用事件：否则 process.Exited 永不触发（#3）。
-                        // 必须在 Start() 之前设置，否则子进程在 Start 与赋值之间退出时
-                        // 事件永不触发、cts 永不取消（#3 审查发现）。
-                        process.EnableRaisingEvents = true;
-                        process.Exited += (s, e) => cts.Cancel();
                         process.Start();
+                        process.Exited += (s, e) => cts.Cancel();
 
                         while (!cts.IsCancellationRequested)
                         {
-                            var line = process.StandardOutput.ReadLine();
-                            // 进程异常退出导致流结束时 ReadLine 返回 null：
-                            // 视为结束，避免 while 空转导致 CPU 100%（#3）
-                            if (line == null)
+                            var stdoutTask = process.StandardOutput.ReadLine();
+                            if (!string.IsNullOrEmpty(stdoutTask))
                             {
-                                break;
-                            }
-                            if (!string.IsNullOrEmpty(line))
-                            {
-                                var result = JsonConvert.DeserializeObject<AlyResponse<DownloadProgressData>>(line);
+                                var result = JsonConvert.DeserializeObject<AlyResponse<DownloadProgressData>>(stdoutTask);
                                 if (!result.IsSuccess)
                                 {
                                     return AlyResponse.NG(result.ErrorMsg);
