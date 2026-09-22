@@ -6,7 +6,92 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"aly/client/aly-client/config"
 )
+
+// TestMergeMustCloseFlag 验证 #1 修复：--must-close-process-name（逗号分隔）
+// 解析后合并进配置，且不会污染空 flag / 重复追加。
+func TestMergeMustCloseFlag(t *testing.T) {
+	fc := &FullConfig{ExeCfg: &config.Config{MustCloseProcessName: []string{"YourApp"}}}
+
+	// 空 flag：不修改
+	mergeMustCloseFlag(fc, "")
+	if len(fc.ExeCfg.MustCloseProcessName) != 1 {
+		t.Fatalf("空 flag 不应修改配置，实际 %v", fc.ExeCfg.MustCloseProcessName)
+	}
+
+	// 逗号分隔 + 空白：追加去空白
+	mergeMustCloseFlag(fc, "cmd.exe, ,conhost")
+	want := []string{"YourApp", "cmd.exe", "conhost"}
+	if len(fc.ExeCfg.MustCloseProcessName) != len(want) {
+		t.Fatalf("合并后长度应为 %d，实际 %d (%v)", len(want), len(fc.ExeCfg.MustCloseProcessName), fc.ExeCfg.MustCloseProcessName)
+	}
+	for i := range want {
+		if fc.ExeCfg.MustCloseProcessName[i] != want[i] {
+			t.Errorf("第 %d 项应为 %q，实际 %q", i, want[i], fc.ExeCfg.MustCloseProcessName[i])
+		}
+	}
+}
+
+// TestNextAsideNameStripsOldSuffix 验证 #18 修复：对已是 X.old 的路径，
+// 旁移命名应剥掉 .old 后缀收敛到 X.old / X.old.1 家族，绝不生成 X.old.old。
+func TestNextAsideNameStripsOldSuffix(t *testing.T) {
+	root, err := ioutil.TempDir("", "aside-strip-test")
+	if err != nil {
+		t.Fatalf("创建临时目录失败: %v", err)
+	}
+	defer os.RemoveAll(root)
+
+	// to = X.old 且 X.old 不存在：应返回 X.old（剥离后缀后 base=X）
+	to := filepath.Join(root, "ApplicationFolder_1.0.old")
+	if got := nextAsideName(to); got != filepath.Join(root, "ApplicationFolder_1.0.old") {
+		t.Errorf("X.old 不存在时应返回自身（base=X 的 X.old），实际 %q", got)
+	}
+
+	// to = X.old 且 X.old 存在：应返回 X.old.1，而不是 X.old.old
+	if err := os.MkdirAll(to, 0755); err != nil {
+		t.Fatalf("创建 X.old 失败: %v", err)
+	}
+	got := nextAsideName(to)
+	if got == filepath.Join(root, "ApplicationFolder_1.0.old.old") {
+		t.Errorf("不应生成 X.old.old 链式名，实际 %q", got)
+	}
+	if got != filepath.Join(root, "ApplicationFolder_1.0.old.1") {
+		t.Errorf("X.old 存在时旁移名应为 X.old.1，实际 %q", got)
+	}
+}
+
+// TestRemoveAsideVariants 验证 #18 修复：清理 X.old / X.old.N 全部旁移变体，
+// 且不误删 base 本身。
+func TestRemoveAsideVariants(t *testing.T) {
+	root, err := ioutil.TempDir("", "aside-remove-test")
+	if err != nil {
+		t.Fatalf("创建临时目录失败: %v", err)
+	}
+	defer os.RemoveAll(root)
+
+	base := filepath.Join(root, "ApplicationFolder_1.0")
+	if err := os.MkdirAll(base, 0755); err != nil {
+		t.Fatalf("创建 base 失败: %v", err)
+	}
+	for _, p := range []string{base + ".old", base + ".old.1", base + ".old.2"} {
+		if err := os.MkdirAll(p, 0755); err != nil {
+			t.Fatalf("创建旁移目录 %s 失败: %v", p, err)
+		}
+	}
+	removeAsideVariants(base)
+
+	for _, p := range []string{base + ".old", base + ".old.1", base + ".old.2"} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("旁移目录 %s 应被清理: %v", p, err)
+		}
+	}
+	// base 本身不能被误删
+	if _, err := os.Stat(base); err != nil {
+		t.Errorf("base %s 不应被删除: %v", base, err)
+	}
+}
 
 // mustMkdirFile 创建目录并在其中写入一个文件
 func mustMkdirFile(t *testing.T, dir, name, content string) {

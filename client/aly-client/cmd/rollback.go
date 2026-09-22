@@ -18,6 +18,7 @@ func Rollback() {
 	versionFlag := fs.String("version", "", "target version to rollback to")
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
 	closeTimeoutFlag := fs.Int("close-timeout", 30, "timeout seconds")
+	mustCloseFlag := fs.String("must-close-process-name", "", "comma separated process names to close")
 	fs.Parse(os.Args[2:])
 
 	closeTimeout := time.Duration(*closeTimeoutFlag) * time.Second
@@ -40,6 +41,8 @@ func Rollback() {
 		printOutput(false, err.Error(), nil)
 		return
 	}
+	// C# SDK 会传 --must-close-process-name（逗号分隔），合并进配置（#1）
+	mergeMustCloseFlag(fc, *mustCloseFlag)
 
 	versionDir, err := fc.ExeCfg.AppVersionDir(*versionFlag)
 	if err != nil {
@@ -151,11 +154,9 @@ func Rollback() {
 		printOutput(false, err.Error(), nil)
 		return
 	}
-	// Temporarily move old backup aside instead of deleting upfront (safer for power failure)
+	// 入口清理历史旁移残留（X.old / X.old.1 / X.old.2 …），避免泄漏占用磁盘（#18）
+	removeAsideVariants(prevVersionDir)
 	oldBackupTemp := prevVersionDir + ".old"
-	if err := os.RemoveAll(oldBackupTemp); err != nil {
-		util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: remove old backup temp failed: %v", err))
-	}
 	if _, statErr := os.Stat(prevVersionDir); statErr == nil {
 		// 旧备份目录存在：必须先挪开，否则主目录重命名会因目标非空目录报 Access denied
 		if err := renameDirWithKillState(prevVersionDir, oldBackupTemp, closeTimeout, st); err != nil {
@@ -207,10 +208,8 @@ func Rollback() {
 		return
 	}
 
-	// Clean up old backup AFTER successful rename
-	if err := os.RemoveAll(oldBackupTemp); err != nil {
-		util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: cleanup oldBackupTemp failed: %v", err))
-	}
+	// Clean up old backup AND any aside variants AFTER successful rename（#18）
+	removeAsideVariants(prevVersionDir)
 
 	// Update version.json
 	versionInfo.VersionPrevious = oldVersion

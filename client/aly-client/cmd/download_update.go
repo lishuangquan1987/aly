@@ -55,12 +55,7 @@ func DownloadUpdate() {
 		return
 	}
 
-	latestLog := logs[0]
-	for i := 1; i < len(logs); i++ {
-		if logs[i].ID > latestLog.ID {
-			latestLog = logs[i]
-		}
-	}
+	latestLog := findLatestLog(logs)
 	newVersion := stripVPrefix(latestLog.Version)
 
 	versionInfo, err := config.ReadVersion()

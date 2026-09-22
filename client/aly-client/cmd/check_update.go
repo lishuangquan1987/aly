@@ -162,11 +162,13 @@ func needUpdate(serverVersion, localVersion string) bool {
 	return compareVersion(serverVersion, localVersion) > 0
 }
 
-// findLatestLog 返回 ID 最大的变更日志
+// findLatestLog 返回版本号最大的变更日志；版本相同则取 ID 最大（最新记录优先）。
+// 按版本号而非 ID 取最新，避免"回滚发布"（重发旧版本号生成新记录）时取到旧版本（#19）。
 func findLatestLog(logs []model.ProjectChangeLog) model.ProjectChangeLog {
 	latest := logs[0]
 	for i := 1; i < len(logs); i++ {
-		if logs[i].ID > latest.ID {
+		c := compareVersion(stripVPrefix(logs[i].Version), stripVPrefix(latest.Version))
+		if c > 0 || (c == 0 && logs[i].ID > latest.ID) {
 			latest = logs[i]
 		}
 	}

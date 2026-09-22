@@ -471,15 +471,37 @@ func closeExplorerWindows(timeout time.Duration, folders ...string) {
 	util.AppendToLog(logDir(), "update.log", "closed explorer windows to release folder handle")
 }
 
-// nextAsideName 生成一个不冲突的"挪开目标"名称：to.old、to.old.1、to.old.2 …
-// 依次检查，返回第一个不存在的名称，避免与上次残留的 .old 冲突。
+// nextAsideName 生成一个不冲突的"挪开目标"名称：X.old、X.old.1、X.old.2 …
+// 若 to 本身已是 X.old（旁移目标/残留备份），先剥掉 .old 后缀再命名（base = X），
+// 保证旁移命名始终收敛在 X.old / X.old.N 家族内，不会产生 X.old.old 链式残留（#18）。
 func nextAsideName(to string) string {
-	aside := to + ".old"
+	base := to
+	if strings.HasSuffix(base, ".old") {
+		base = strings.TrimSuffix(base, ".old")
+	}
+	aside := base + ".old"
 	for i := 1; ; i++ {
 		if _, err := os.Stat(aside); os.IsNotExist(err) {
 			return aside
 		}
-		aside = fmt.Sprintf("%s.old.%d", to, i)
+		aside = fmt.Sprintf("%s.old.%d", base, i)
+	}
+}
+
+// removeAsideVariants 清理 base 的旁移残留：base.old、base.old.1、base.old.2 …
+// 用于 apply/rollback 入口（清历史残留）与成功路径（清本次旁移），
+// 防止 X.old / X.old.N 泄漏占用磁盘（#18）。不存在时 os.RemoveAll 返回 nil，无害。
+func removeAsideVariants(base string) {
+	// 64 个旁移变体已是极端场景上限（正常最多 1-2 个）
+	candidates := make([]string, 0, 65)
+	candidates = append(candidates, base+".old")
+	for i := 1; i <= 64; i++ {
+		candidates = append(candidates, fmt.Sprintf("%s.old.%d", base, i))
+	}
+	for _, c := range candidates {
+		if err := os.RemoveAll(c); err != nil {
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("remove aside variant %s: %v", c, err))
+		}
 	}
 }
 
@@ -570,10 +592,23 @@ func launchMainExe(cfg *config.Config, mainFolder string) {
 var launchMainExeFn = launchMainExe
 
 // applyFailureFallback 更新失败兜底（用户要求：重命名失败时启动旧 exe 并附带错误信息）。
-// 将 version.json 状态回退 downloaded、启动旧版本主程序（保证应用可用）、记录错误日志，
+// 正常情况下将 version.json 状态回退 downloaded、启动旧版本主程序（保证应用可用）、记录错误日志，
 // 返回给调用方输出的错误信息字符串。
+//
+// 特殊场景（#7）：若 MainFolder 已丢失（备份改名成功、应用改名与回滚改名都失败）
+// 但对应版本目录仍存在，则**保持 applying 状态不降级**——降级成 downloaded 会让
+// 崩溃恢复分支（只认 applying）失效，应用目录将永久缺失。保持 applying 后，
+// 下次 check_update/apply_update 会走崩溃恢复分支完成 versionDir → MainFolder 重命名。
 func applyFailureFallback(fc *FullConfig, versionInfo *config.VersionInfo, failErr error) string {
 	if versionInfo != nil {
+		if mainFolderLostButVersionDirExists(fc, versionInfo) {
+			// 主目录缺失 + 版本目录存在：保持 applying，交给崩溃恢复分支修复。
+			// 注意：主目录已丢失，无法从这里启动旧 exe（exe 位于缺失目录下，
+			// launchMainExe 会失败），故不调用启动；崩溃恢复完成后会启动主程序。
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("apply failed with main folder lost, keep applying for crash recovery: %v", failErr))
+			return failErr.Error()
+		}
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
 			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback after apply fail: write version failed: %v", wErr))
@@ -583,6 +618,21 @@ func applyFailureFallback(fc *FullConfig, versionInfo *config.VersionInfo, failE
 	launchMainExeFn(fc.ExeCfg, fc.MainFolder)
 	util.AppendToLog(logDir(), "update.log", fmt.Sprintf("apply failed, launched old exe: %v", failErr))
 	return failErr.Error()
+}
+
+// mainFolderLostButVersionDirExists 判断"主目录已丢失但对应版本目录仍存在"（#7 恢复盲区）。
+func mainFolderLostButVersionDirExists(fc *FullConfig, versionInfo *config.VersionInfo) bool {
+	if _, statErr := os.Stat(fc.MainFolder); !os.IsNotExist(statErr) {
+		return false // 主目录存在：普通失败，正常降级
+	}
+	versionDir, err := fc.ExeCfg.AppVersionDir(versionInfo.Version)
+	if err != nil {
+		return false
+	}
+	if _, statErr := os.Stat(versionDir); statErr != nil {
+		return false // 版本目录也不存在，无从恢复
+	}
+	return true
 }
 
 // filepathFromSlash converts forward-slash paths to OS-specific separators.

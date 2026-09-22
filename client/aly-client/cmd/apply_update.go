@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"aly/client/aly-client/config"
@@ -20,11 +21,28 @@ func logDir() string {
 	return dir
 }
 
+// mergeMustCloseFlag 将 --must-close-process-name（逗号分隔）解析并合并进配置。
+// C# SDK（AlyApi.cs）会显式传该参数，而 Go 端此前未定义此 flag 导致 os.Exit(2)（#1）。
+func mergeMustCloseFlag(fc *FullConfig, flagValue string) {
+	if flagValue == "" {
+		return
+	}
+	names := strings.Split(flagValue, ",")
+	for _, n := range names {
+		n = strings.TrimSpace(n)
+		if n == "" {
+			continue
+		}
+		fc.ExeCfg.MustCloseProcessName = append(fc.ExeCfg.MustCloseProcessName, n)
+	}
+}
+
 // ApplyUpdate applies a downloaded update with atomic replacement
 func ApplyUpdate() {
 	fs := flag.NewFlagSet("apply_update", flag.ExitOnError)
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
 	closeTimeoutFlag := fs.Int("close-timeout", 30, "timeout seconds for process close")
+	mustCloseFlag := fs.String("must-close-process-name", "", "comma separated process names to close")
 	fs.Parse(os.Args[2:])
 
 	closeTimeout := time.Duration(*closeTimeoutFlag) * time.Second
@@ -42,6 +60,8 @@ func ApplyUpdate() {
 		printOutput(false, err.Error(), nil)
 		return
 	}
+	// C# SDK 会传 --must-close-process-name（逗号分隔），合并进配置（#1）
+	mergeMustCloseFlag(fc, *mustCloseFlag)
 
 	versionInfo, err := config.ReadVersion()
 	if err != nil {
@@ -225,12 +245,10 @@ func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDi
 	if err != nil {
 		return err
 	}
-	// Temporarily move old backup aside instead of deleting upfront (safer for power failure)
+	// 入口清理历史旁移残留（X.old / X.old.1 / X.old.2 …），避免泄漏占用磁盘（#18）。
+	// 暂不删除旧备份本身，改为旁移（更抗断电）。
+	removeAsideVariants(prevVersionDir)
 	oldBackupTemp := prevVersionDir + ".old"
-	if err := os.RemoveAll(oldBackupTemp); err != nil {
-		exeDir := logDir()
-		util.AppendToLog(exeDir, "update.log", fmt.Sprintf("remove old backup temp: %v", err))
-	}
 	if _, statErr := os.Stat(prevVersionDir); statErr == nil {
 		// 旧备份目录存在：必须先挪开，否则主目录重命名会因目标非空目录报 Access denied。
 		// 挪不动（被占用）则直接失败，不再静默继续。
@@ -265,10 +283,7 @@ func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDi
 		return fmt.Errorf("apply rename failed: %v", err)
 	}
 
-	// Clean up old backup AFTER successful rename
-	if err := os.RemoveAll(oldBackupTemp); err != nil {
-		exeDir := logDir()
-		util.AppendToLog(exeDir, "update.log", fmt.Sprintf("cleanup old backup: %v", err))
-	}
+	// Clean up old backup AND any aside variants AFTER successful rename（#18）
+	removeAsideVariants(prevVersionDir)
 	return nil
 }

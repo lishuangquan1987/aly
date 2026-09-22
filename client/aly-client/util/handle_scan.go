@@ -133,25 +133,46 @@ func FindProcessesWithHandlesUnder(dir string) []uint32 {
 }
 
 // queryHandleTable 查询句柄表，循环扩容直到成功（0xC0000004 = 缓冲区不足）。
+// 增加重试上限与缓冲区上限：若系统句柄表异常导致 retLen 不增长（或持续返回 mismatch），
+// 直接返回错误由调用方降级处理，避免无限循环挂死/内存膨胀（#20）。
 func queryHandleTable(infoClass uintptr) ([]byte, int, error) {
+	const maxRetries = 16
+	const maxCap = 1 << 30 // 1GB 缓冲区上限，防止恶意/异常系统状态撑爆内存
+
 	var retLen uint32
 	procNtQuerySysInfo.Call(infoClass, 0, 0, uintptr(unsafe.Pointer(&retLen)))
+	// 注意：GOARCH=386 时 int 是 32 位，retLen 是 uint32，必须先在 uint32 空间
+	// 与 maxCap 比较，再转 int，避免 int(retLen) 溢出为负绕过上限（#20）。
+	if retLen > uint32(maxCap) {
+		return nil, 0, fmt.Errorf("NtQuerySystemInformation required buffer %d exceeds cap %d", retLen, maxCap)
+	}
 	capLen := int(retLen) + 65536
+	if capLen > maxCap {
+		capLen = maxCap
+	}
 	buf := make([]byte, capLen)
-	for {
+	for attempt := 0; attempt < maxRetries; attempt++ {
 		r, _, _ := procNtQuerySysInfo.Call(infoClass, uintptr(unsafe.Pointer(&buf[0])), uintptr(capLen), uintptr(unsafe.Pointer(&retLen)))
 		if r == scanStatusInfoLengthMismatch {
+			// 系统要求的长度没有超过当前缓冲区（未增长）或超出上限：继续扩容无意义，直接失败。
+			// 同样在 uint32 空间比较，避免 386 下 int 溢出（#20）。
+			if retLen <= uint32(capLen) || retLen > uint32(maxCap) {
+				return nil, 0, fmt.Errorf("NtQuerySystemInformation buffer did not converge (retLen=%d, capLen=%d)", retLen, capLen)
+			}
 			capLen = int(retLen) + 65536
+			if capLen > maxCap {
+				capLen = maxCap
+			}
 			buf = make([]byte, capLen)
 			continue
 		}
 		if r != 0 {
 			return nil, 0, fmt.Errorf("NtQuerySystemInformation class %d failed: 0x%x", infoClass, r)
 		}
-		break
+		count := *(*uint32)(unsafe.Pointer(&buf[0]))
+		return buf, int(count), nil
 	}
-	count := *(*uint32)(unsafe.Pointer(&buf[0]))
-	return buf, int(count), nil
+	return nil, 0, fmt.Errorf("NtQuerySystemInformation class %d exceeded %d retries", infoClass, maxRetries)
 }
 
 // queryObjectName 复制句柄到本进程并查询对象名（NT 命名空间形式，如 \??\C:\...）。
