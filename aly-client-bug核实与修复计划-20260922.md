@@ -544,3 +544,84 @@ os.Remove(f.Name()) // 移除占位文件，使用带 .vbs 后缀的路径
   但修复向后兼容无害，建议保留。
 - #21、#22 属 C# SDK 侧设计/健壮性缺口，不影响 Go 更新器本体；修复不改变
   `AlyApi` 公共 API 签名，宿主代码可无感升级。
+
+## #25 追加修复：apply_update 误触发 Windows 关机（2026-09-22 实测报告）
+
+### 事故现象
+
+用户在真实环境执行 `apply_update` 时，Windows 弹出“**系统将在 60 秒内关机**”的
+关机选项（可取消的关机倒计时）。
+
+### 根因（两条独立链路，均为“替换目录前清理占用者”引入）
+
+1. **强杀系统关键进程**
+   `probeHoldersState` 的深扫（`NtQuerySystemInformation` + 全系统句柄枚举）会
+   把持有目标目录/子目录句柄的 `csrss` / `winlogon` / `services` / `lsass` 等
+   系统关键进程也列为“占用者”（这些进程确实会持有卷/目录句柄，例如
+   `C:\Windows\Prefetch`、工作目录、DLL 所在目录等）。
+   `ForceKillPIDs` 随后直接 `TerminateProcess`：Windows 判定关键进程被终止，
+   立即启动关机倒计时（部分进程被杀直接蓝屏 0x000000F4）。
+   风险面更大的一点：`--must-close-process-name` 由配置/命令行传入，一旦误配成
+   `csrss.exe` 之类，`closeProcessesGracefully` 同样会走到强杀。
+
+2. **向 explorer 的 shell 窗口发送 WM_CLOSE**
+   `closeExplorerWindows` 的兜底逻辑调用 `SendCloseMessageToProcess(explorer)`，
+   该函数枚举 explorer 的**全部可见顶层窗口**——其中包含 shell 桌面/任务栏窗口
+   （`Shell_TrayWnd` / `Progman` / `WorkerW`）。
+   `#24` 当时的判断是“shell 窗口会忽略 WM_CLOSE”，实测并不成立：向 shell 窗口
+   发送 WM_CLOSE 可能被解释为“退出 shell / 结束会话”，从而弹出手机关机或注销提示。
+
+### 修复（2026-09-22，commit 见仓库）
+
+**多重闸门：任何 PID 在真正 TerminateProcess / SendMessage 之前都必须通过白名单过滤。**
+
+1. `util/process.go` 新增 `criticalProcessNames`（小写去 `.exe`）：
+   `system` / `registry` / `idle` / `secure system` / `smss` / `csrss` / `wininit` /
+   `winlogon` / `services` / `lsass` / `lsaiso` / `svchost` / `fontdrvhost` / `dwm` /
+   `sihost` / `ctfmon` / `taskhostw` / `runtimebroker` / `shellexperiencehost` /
+   `startmenuexperiencehost` / `searchhost` / `textinputhost` / `searchindexer` /
+   `spoolsv` / `audiodg` / `msmpeng` / `securityhealthservice` / `windefend` / `nissrv`。
+2. 新增 `shellProcessNames`（`explorer`）：**允许** WM_CLOSE 关闭其文件窗口，
+   **绝不**允许强杀（强杀 shell 黑屏，`#24` 回归）。
+3. 新增 `FilterKillablePIDs(pids) (killable, blocked)`，保护：
+   PID 0 / PID 4 / 当前进程自身 / 关键进程 / shell / **进程名无法识别（保守保护）**。
+   接入点：
+   - `probeHoldersState`：探测结果先过滤，被保护的记录
+     `probe skipped protected holders: [...]`；
+   - `ForceKillPIDs`、`KillPIDsAndWait`：入口过滤，被保护的写 stderr；
+   - `KillProcess`：**最后一道兜底**，受保护对象直接返回
+     `拒绝结束受保护进程 %d`。
+4. `SendCloseMessageToProcess` 发送前用 `isCriticalProcess` 过滤（给 winlogon 发
+   WM_CLOSE 会注销/关机）。
+5. 新增 `SendCloseMessageToExplorer`：**只**对 `explorerFileWindowClasses`
+   （`CabinetWClass` / `ExploreWClass`）发 WM_CLOSE，刻意排除 shell 窗口类；
+   `closeExplorerWindows` 兜底改用它。
+6. `util/process_unix.go` 补齐 `SendCloseMessageToExplorer` / `FilterKillablePIDs` 桩。
+
+### 测试
+
+- `util/process_protect_test.go`（新增 6 例）：
+  - `TestFilterKillablePIDsProtectsCritical`：`csrss`/`winlogon`/`services`/`lsass` 一律被保护；
+  - `TestFilterKillablePIDsProtectsSelfAndSystemPids`：PID 0/4/自身被保护；
+  - `TestFilterKillablePIDsProtectsExplorer`：explorer 被保护（不可强杀）；
+  - `TestFilterKillablePIDsAllowsNormalProcess`：普通进程可杀；
+  - `TestIsCriticalProcess`：关键进程判定（explorer 不算“关键”，允许发 WM_CLOSE）；
+  - `TestExplorerFileWindowClassesExcludesShellWindows`：
+    白名单只有 `CabinetWClass`/`ExploreWClass`，不含 `Shell_TrayWnd`/`Progman`/`WorkerW`。
+- client 全量测试通过：`ok aly/client/aly-client/cmd`、`ok aly/client/aly-client/util`。
+- E2E `client/aly-client/test/e2e/update_e2e.ps1`：115/115 PASS（含 S2 explorer 占用、
+  S8 各更新阶段中断、S9 断电半写文件恢复）。
+
+### 复查结论（是否还有别的关机路径）
+
+对 client 全量 grep 了 `InitiateSystemShutdown` / `ExitWindowsEx` /
+`NtShutdownSystem` / `shutdown.exe` / `taskkill` / `RmShutdown` / `RmRestart`：
+**均无使用**。客户端能影响系统的只有两类调用：
+
+| 调用 | 位置 | 现状 |
+|------|------|------|
+| `TerminateProcess` | `util/process.go` | 三重白名单过滤（探测 / 批量杀 / 单杀兜底） |
+| `SendMessage(WM_CLOSE)` | `util/process.go` | 关键进程过滤 + explorer 仅文件窗口 |
+| Restart Manager | `util/process_restartmanager.go` | 只用 `RmStartSession`/`RmRegisterResources`/`RmGetList`/`RmEndSession`（**只查不关**） |
+
+因此 `apply_update` 已无触发 Windows 关机的路径。

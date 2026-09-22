@@ -530,9 +530,11 @@ func deepScanCandidates(paths []string, st *renameProbeState) []string {
 //  1. 精准方案：关闭"浏览目标目录或其任意子目录"的 Explorer 文件窗口
 //     （Shell.Application COM via cscript，前缀匹配支持用户打开的是子文件夹），
 //     避免误关用户其他资源管理器窗口、不重启 shell；
-//  2. 兜底：向全部 explorer 顶层窗口发送 WM_CLOSE 优雅关闭文件窗口。
-//     explorer 的 shell 窗口（桌面/任务栏）会忽略 WM_CLOSE，只有文件窗口被关闭——
-//     因此**绝不 ForceKill explorer**：强杀 shell 会黑屏并打断用户工作（#24 回归）。
+//  2. 兜底：只向 explorer 的**文件浏览窗口**（CabinetWClass/ExploreWClass）发 WM_CLOSE。
+//     早期实现误以为 shell 窗口（桌面/任务栏）会忽略 WM_CLOSE，于是向 explorer 的
+//     全部顶层窗口发送——实测可能被 shell 解释为“退出 shell”，弹出关机/注销提示（#25）。
+//     因此**绝不 ForceKill explorer**（强杀 shell 会黑屏并打断用户工作，#24 回归），
+//     **也绝不向 shell 窗口发 WM_CLOSE**（#25）。
 func closeExplorerWindows(timeout time.Duration, folders ...string) {
 	for _, folder := range folders {
 		closed, err := util.CloseExplorerWindowsBrowsing(folder)
