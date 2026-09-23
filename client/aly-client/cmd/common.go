@@ -705,8 +705,15 @@ func applyFailureFallback(fc *FullConfig, versionInfo *config.VersionInfo, failE
 	if versionInfo != nil {
 		if mainFolderLostButVersionDirExists(fc, versionInfo) {
 			// 主目录缺失 + 版本目录存在：保持 applying，交给崩溃恢复分支修复。
+			// 显式写盘（不依赖 apply_update.go 中进入替换前的那次顺带写 applying），
+			// 保证即使调用路径变化，状态也确定性地保持 applying 而非降级（修复 Bug#3）。
 			// 注意：主目录已丢失，无法从这里启动旧 exe（exe 位于缺失目录下，
 			// launchMainExe 会失败），故不调用启动；崩溃恢复完成后会启动主程序。
+			versionInfo.VersionStatus = config.VersionStatusApplying
+			if wErr := config.WriteVersion(versionInfo); wErr != nil {
+				util.AppendToLog(logDir(), "update.log",
+					fmt.Sprintf("keep applying: write version failed: %v", wErr))
+			}
 			util.AppendToLog(logDir(), "update.log",
 				fmt.Sprintf("apply failed with main folder lost, keep applying for crash recovery: %v", failErr))
 			return failErr.Error()

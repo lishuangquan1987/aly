@@ -106,6 +106,16 @@ RESULTS += scenario("B2'-rollback中断后重跑rollback", ROLLBACK_STEPS,
                     expect="1.0.0", resume_desc="rollback --version 1.0.0",
                     rollback_to="1.0.0")
 
+# H: rollback 中断 + 期间服务器发新版（B2 + G 组合）：
+# check 必须优先续回滚（RollbackPrevious 分支），绝不因服务器 V4 转向下载/升级。
+RESULTS += scenario("H-回滚中断+服务器发V4", ROLLBACK_STEPS,
+                    lambda e: cmd_rollback(e, "1.0.0"),
+                    {MAIN: "2.0.0", vdir("1.0.0"): "1.0.0", vdir("3.0.0"): "3.0.0"},
+                    Version("3.0.0", "2.0.0", "downloaded"),
+                    server_after="4.0.0", expect="1.0.0",
+                    resume_desc="check→download→apply（用户意图=回滚到1.0.0，服务器已发V4）",
+                    server_final="4.0.0")
+
 print("=" * 108)
 print("多轮恢复最终判定（最多 %d 轮）：共 %d 场景" % (MAX_ROUNDS, len(RESULTS)))
 print("=" * 108)

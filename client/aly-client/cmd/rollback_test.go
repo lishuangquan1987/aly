@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"aly/client/aly-client/config"
 )
@@ -234,5 +235,165 @@ func TestListRollbackExcludesPending(t *testing.T) {
 	}
 	if !strings.Contains(out, `"current_version":"1.0"`) {
 		t.Errorf("current_version 应显示真实内容版本 1.0，实际输出: %s", out)
+	}
+}
+
+// TestRollbackResumesInterruptedAfterTargetConsumed 验证 Bug#1 B2'：
+// 回滚激活已完成但未写 applied（status=applying + rollback_previous + rollback_target，
+// 目标目录已被消耗），重跑 rollback --version 不再报 "version not found"，
+// 而是委托 resumeRollback 补写 applied、保持回滚结果。
+func TestRollbackResumesInterruptedAfterTargetConsumed(t *testing.T) {
+	pkg := setupRollbackLayout(t, `{
+  "version_previous": "2.0",
+  "version": "3.0",
+  "version_status": "applying",
+  "rollback_previous": "2.0",
+  "rollback_target": "1.0"
+}`)
+
+	// 现场：MainFolder=1.0 内容（回滚已完成），目标目录 App_1.0 已消耗，
+	// 备份 App_2.0 与待应用目录 App_3.0 仍在
+	writePkgFile(t, pkg, "ApplicationFolder/v1.txt", "v1")
+	writePkgFile(t, pkg, "ApplicationFolder_2.0/v2.txt", "v2")
+	writePkgFile(t, pkg, "ApplicationFolder_3.0/v3.txt", "v3")
+
+	os.Args = []string{"aly-client", "rollback", "--version", "1.0"}
+	Rollback()
+
+	// 回滚结果保持：MainFolder 仍为 1.0 内容，目标目录不重建
+	assertPkgExists(t, pkg, "ApplicationFolder/v1.txt")
+	assertPkgMissing(t, pkg, "ApplicationFolder_1.0")
+	// 待应用目录未被触碰
+	assertPkgExists(t, pkg, "ApplicationFolder_3.0/v3.txt")
+
+	vi, err := config.ReadVersion()
+	if err != nil {
+		t.Fatalf("ReadVersion 失败: %v", err)
+	}
+	if vi.Version != "1.0" || vi.VersionPrevious != "2.0" || vi.VersionStatus != config.VersionStatusApplied {
+		t.Errorf("应补写 Version=1.0/VersionPrevious=2.0/applied，实际 %+v", vi)
+	}
+	if vi.RollbackPrevious != "" || vi.RollbackTarget != "" {
+		t.Errorf("回滚标记应被清空，实际 %+v", vi)
+	}
+}
+
+// TestResumeRollbackRedoSwap 验证 resumeRollback 分支 2：MainFolder 存在 + 目标目录存在
+// → 重做回滚替换（仅重命名），备份以 rollback_previous 命名。
+func TestResumeRollbackRedoSwap(t *testing.T) {
+	root := setupRollbackLayout(t, `{
+  "version_previous": "2.0",
+  "version": "3.0",
+  "version_status": "applying",
+  "rollback_previous": "2.0",
+  "rollback_target": "1.0"
+}`)
+	// MainFolder = 2.0 内容（回滚前的活动版本），目标目录 1.0 存在（崩溃发生在备份改名前）
+	writePkgFile(t, root, "ApplicationFolder/v2.txt", "v2")
+	writePkgFile(t, root, "ApplicationFolder_1.0/v1.txt", "v1")
+
+	fc := &FullConfig{
+		ExeCfg:     &config.Config{MainExeRelativePath: "../ApplicationFolder/app.exe"},
+		MainFolder: filepath.Join(root, "ApplicationFolder"),
+	}
+	vi, err := config.ReadVersion()
+	if err != nil {
+		t.Fatalf("ReadVersion 失败: %v", err)
+	}
+	if err := resumeRollback(fc, vi, 5*time.Second, "1.0"); err != nil {
+		t.Fatalf("resumeRollback 分支2 失败: %v", err)
+	}
+
+	// 目标版本激活，备份 = 回滚前版本 2.0
+	assertPkgExists(t, root, "ApplicationFolder/v1.txt")
+	assertPkgMissing(t, root, "ApplicationFolder/v2.txt")
+	assertPkgMissing(t, root, "ApplicationFolder_1.0")
+	assertPkgExists(t, root, "ApplicationFolder_2.0/v2.txt")
+
+	vi2, err := config.ReadVersion()
+	if err != nil {
+		t.Fatalf("ReadVersion 失败: %v", err)
+	}
+	if vi2.Version != "1.0" || vi2.VersionPrevious != "2.0" || vi2.VersionStatus != config.VersionStatusApplied {
+		t.Errorf("应恢复为 Version=1.0/VersionPrevious=2.0/applied，实际 %+v", vi2)
+	}
+	if vi2.RollbackPrevious != "" || vi2.RollbackTarget != "" {
+		t.Errorf("回滚标记应被清空，实际 %+v", vi2)
+	}
+}
+
+// TestResumeRollbackRestoreBackup 验证 resumeRollback 分支 4：MainFolder 缺失 + 目标目录缺失
+// + 备份存在（B2' 且主目录丢失）→ 放弃回滚，恢复回滚前版本备份。
+func TestResumeRollbackRestoreBackup(t *testing.T) {
+	root := setupRollbackLayout(t, `{
+  "version_previous": "2.0",
+  "version": "3.0",
+  "version_status": "applying",
+  "rollback_previous": "2.0",
+  "rollback_target": "1.0"
+}`)
+	// 主目录缺失；目标目录 1.0 缺失；备份 2.0 存在
+	if err := os.RemoveAll(filepath.Join(root, "ApplicationFolder")); err != nil {
+		t.Fatalf("移除 MainFolder 失败: %v", err)
+	}
+	writePkgFile(t, root, "ApplicationFolder_2.0/v2.txt", "v2")
+
+	fc := &FullConfig{
+		ExeCfg:     &config.Config{MainExeRelativePath: "../ApplicationFolder/app.exe"},
+		MainFolder: filepath.Join(root, "ApplicationFolder"),
+	}
+	vi, err := config.ReadVersion()
+	if err != nil {
+		t.Fatalf("ReadVersion 失败: %v", err)
+	}
+	if err := resumeRollback(fc, vi, 5*time.Second, "1.0"); err != nil {
+		t.Fatalf("resumeRollback 分支4 失败: %v", err)
+	}
+
+	// 恢复回滚前版本 2.0 到主目录
+	assertPkgExists(t, root, "ApplicationFolder/v2.txt")
+	assertPkgMissing(t, root, "ApplicationFolder_2.0")
+
+	vi2, err := config.ReadVersion()
+	if err != nil {
+		t.Fatalf("ReadVersion 失败: %v", err)
+	}
+	if vi2.Version != "2.0" || vi2.VersionStatus != config.VersionStatusApplied {
+		t.Errorf("应归位为 Version=2.0/applied（放弃回滚），实际 %+v", vi2)
+	}
+}
+
+// TestResumeRollbackLegacyAbortNoTarget 验证老数据兜底：applying + rollback_previous 但
+// 无 rollback_target 且无 CLI 目标时，安全放弃回滚（归位到回滚前版本），绝不升级。
+func TestResumeRollbackLegacyAbortNoTarget(t *testing.T) {
+	root := setupRollbackLayout(t, `{
+  "version_previous": "2.0",
+  "version": "3.0",
+  "version_status": "applying",
+  "rollback_previous": "2.0"
+}`)
+	// MainFolder 存在（回滚前的活动版本 2.0 内容）
+	writePkgFile(t, root, "ApplicationFolder/v2.txt", "v2")
+
+	fc := &FullConfig{
+		ExeCfg:     &config.Config{MainExeRelativePath: "../ApplicationFolder/app.exe"},
+		MainFolder: filepath.Join(root, "ApplicationFolder"),
+	}
+	vi, err := config.ReadVersion()
+	if err != nil {
+		t.Fatalf("ReadVersion 失败: %v", err)
+	}
+	if err := resumeRollback(fc, vi, 5*time.Second, ""); err != nil {
+		t.Fatalf("resumeRollback 老数据兜底失败: %v", err)
+	}
+
+	// 归位到回滚前版本 2.0（不升级到 3.0）
+	assertPkgExists(t, root, "ApplicationFolder/v2.txt")
+	vi2, err := config.ReadVersion()
+	if err != nil {
+		t.Fatalf("ReadVersion 失败: %v", err)
+	}
+	if vi2.Version != "2.0" || vi2.VersionStatus != config.VersionStatusApplied {
+		t.Errorf("应归位为 Version=2.0/applied，实际 %+v", vi2)
 	}
 }

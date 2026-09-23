@@ -1,5 +1,5 @@
 ====================================================================================================
-总计场景：46，不一致/失败：20
+总计场景：46，不一致/失败：8
 ====================================================================================================
 [PASS] A-apply中断                          crash@apply:start                resume=check→download→apply         OK（活动版本 2.0.0）
 [PASS] A-apply中断                          crash@apply:write_applying       resume=check→download→apply         OK（活动版本 2.0.0）
@@ -12,70 +12,48 @@
 [PASS] A-apply中断                          crash@apply:write_applied        resume=check→download→apply         OK（活动版本 2.0.0）
 [FAIL] B1-rollback中断(无待应用版本)              crash@rb:start                   resume=check→apply                  意图错乱：期望 1.0.0，实际活动 2.0.0
         disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-        Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-   note=
+        Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-   note=
 [FAIL] B1-rollback中断(无待应用版本)              crash@rb:write_applying          resume=check→apply                  意图错乱：期望 1.0.0，实际活动 2.0.0
         disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-        Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-   note=
+        Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-   note=
 [FAIL] B1-rollback中断(无待应用版本)              crash@rb:remove_aside_entry      resume=check→apply                  意图错乱：期望 1.0.0，实际活动 2.0.0
         disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-        Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-   note=
+        Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-   note=
 [FAIL] B1-rollback中断(无待应用版本)              crash@rb:aside_prev              resume=check→apply                  意图错乱：期望 1.0.0，实际活动 2.0.0
         disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-        Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-   note=
-[FAIL] B1-rollback中断(无待应用版本)              crash@rb:rename_backup           resume=check→apply                  意图错乱：期望 1.0.0，实际活动 2.0.0
-        disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-        Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-   note=
-[FAIL] B1-rollback中断(无待应用版本)              crash@rb:rename_activate         resume=check→apply                  意图错乱：期望 1.0.0，实际活动 2.0.0
-        disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-        Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-   note=
-[FAIL] B1-rollback中断(无待应用版本)              crash@rb:remove_aside_done       resume=check→apply                  意图错乱：期望 1.0.0，实际活动 2.0.0
-        disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-        Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-   note=
+        Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-   note=
+[PASS] B1-rollback中断(无待应用版本)              crash@rb:rename_backup           resume=check→apply                  OK（活动版本 1.0.0）
+[PASS] B1-rollback中断(无待应用版本)              crash@rb:rename_activate         resume=check→apply                  OK（活动版本 1.0.0）
+[PASS] B1-rollback中断(无待应用版本)              crash@rb:remove_aside_done       resume=check→apply                  OK（活动版本 1.0.0）
 [FAIL] B2-rollback中断(有待应用版本)              crash@rb:start                   resume=check→download→apply         意图错乱：期望 1.0.0，实际活动 3.0.0
         disk={'App': '3.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-        Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-   note=用户意图=回滚到1.0.0
+        Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-   note=用户意图=回滚到1.0.0
 [FAIL] B2-rollback中断(有待应用版本)              crash@rb:write_applying          resume=check→download→apply         意图错乱：期望 1.0.0，实际活动 3.0.0
         disk={'App': '3.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-        Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-   note=用户意图=回滚到1.0.0
+        Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-   note=用户意图=回滚到1.0.0
 [FAIL] B2-rollback中断(有待应用版本)              crash@rb:remove_aside_entry      resume=check→download→apply         意图错乱：期望 1.0.0，实际活动 3.0.0
         disk={'App': '3.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-        Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-   note=用户意图=回滚到1.0.0
+        Version=3.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-   note=用户意图=回滚到1.0.0
 [FAIL] B2-rollback中断(有待应用版本)              crash@rb:aside_prev              resume=check→download→apply         意图错乱：期望 1.0.0，实际活动 3.0.0
         disk={'App': '3.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-        Version=3.0.0 Prev=1.0.0 Status=applied RollbackPrev=-   note=用户意图=回滚到1.0.0
-[FAIL] B2-rollback中断(有待应用版本)              crash@rb:rename_backup           resume=check→download→apply         意图错乱：期望 1.0.0，实际活动 3.0.0
-        disk={'App': '3.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-        Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-   note=用户意图=回滚到1.0.0
-[FAIL] B2-rollback中断(有待应用版本)              crash@rb:rename_activate         resume=check→download→apply         意图错乱：期望 1.0.0，实际活动 3.0.0
-        disk={'App': '3.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-        Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-   note=用户意图=回滚到1.0.0
-[FAIL] B2-rollback中断(有待应用版本)              crash@rb:remove_aside_done       resume=check→download→apply         意图错乱：期望 1.0.0，实际活动 3.0.0
-        disk={'App': '3.0.0', 'App_2.0.0': '1.0.0'}
-        Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-   note=用户意图=回滚到1.0.0
+        Version=3.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-   note=用户意图=回滚到1.0.0
+[PASS] B2-rollback中断(有待应用版本)              crash@rb:rename_backup           resume=check→download→apply         OK（活动版本 1.0.0）
+[PASS] B2-rollback中断(有待应用版本)              crash@rb:rename_activate         resume=check→download→apply         OK（活动版本 1.0.0）
+[PASS] B2-rollback中断(有待应用版本)              crash@rb:remove_aside_done       resume=check→download→apply         OK（活动版本 1.0.0）
 [PASS] B2'-rollback中断后重跑rollback          crash@rb:start                   resume=rollback --version 1.0.0     OK（活动版本 1.0.0）
 [PASS] B2'-rollback中断后重跑rollback          crash@rb:write_applying          resume=rollback --version 1.0.0     OK（活动版本 1.0.0）
 [PASS] B2'-rollback中断后重跑rollback          crash@rb:remove_aside_entry      resume=rollback --version 1.0.0     OK（活动版本 1.0.0）
 [PASS] B2'-rollback中断后重跑rollback          crash@rb:aside_prev              resume=rollback --version 1.0.0     OK（活动版本 1.0.0）
 [PASS] B2'-rollback中断后重跑rollback          crash@rb:rename_backup           resume=rollback --version 1.0.0     OK（活动版本 1.0.0）
 [PASS] B2'-rollback中断后重跑rollback          crash@rb:rename_activate         resume=rollback --version 1.0.0     OK（活动版本 1.0.0）
-[FAIL] B2'-rollback中断后重跑rollback          crash@rb:remove_aside_done       resume=rollback --version 1.0.0     status 停在 applying（未完成恢复）
-        disk={'App': '1.0.0', 'App_2.0.0': '2.0.0', 'App_3.0.0': '3.0.0'}
-        Version=3.0.0 Prev=2.0.0 Status=applying RollbackPrev=2.0.0   note=
+[PASS] B2'-rollback中断后重跑rollback          crash@rb:remove_aside_done       resume=rollback --version 1.0.0     OK（活动版本 1.0.0）
 [PASS] C-apply中断后强制download               crash@apply:start                resume=check→download(强制)→apply     OK（活动版本 2.0.0）
 [PASS] C-apply中断后强制download               crash@apply:write_applying       resume=check→download(强制)→apply     OK（活动版本 2.0.0）
-[FAIL] C-apply中断后强制download               crash@apply:copy                 resume=check→download(强制)→apply     版本错配：磁盘内容是 1.0.0，version.json 声明 2.0.0
-        disk={'App': '1.0.0'}
-        Version=2.0.0 Prev=2.0.0 Status=applied RollbackPrev=-   note=
-[FAIL] C-apply中断后强制download               crash@apply:remove_aside_entry   resume=check→download(强制)→apply     版本错配：磁盘内容是 1.0.0，version.json 声明 2.0.0
-        disk={'App': '1.0.0'}
-        Version=2.0.0 Prev=2.0.0 Status=applied RollbackPrev=-   note=
+[PASS] C-apply中断后强制download               crash@apply:copy                 resume=check→download(强制)→apply     OK（活动版本 2.0.0）
+[PASS] C-apply中断后强制download               crash@apply:remove_aside_entry   resume=check→download(强制)→apply     OK（活动版本 2.0.0）
 [PASS] C-apply中断后强制download               crash@apply:aside_prev           resume=check→download(强制)→apply     OK（活动版本 2.0.0）
-[FAIL] C-apply中断后强制download               crash@apply:rename_backup        resume=check→download(强制)→apply     版本错配：磁盘内容是 1.0.0，version.json 声明 2.0.0
-        disk={'App': '1.0.0'}
-        Version=2.0.0 Prev=2.0.0 Status=applied RollbackPrev=-   note=
-[FAIL] C-apply中断后强制download               crash@apply:rename_activate      resume=check→download(强制)→apply     MainFolder 缺失（应用不可用）
-        disk={'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-        Version=2.0.0 Prev=2.0.0 Status=applying RollbackPrev=-   note=
+[PASS] C-apply中断后强制download               crash@apply:rename_backup        resume=check→download(强制)→apply     OK（活动版本 2.0.0）
+[PASS] C-apply中断后强制download               crash@apply:rename_activate      resume=check→download(强制)→apply     OK（活动版本 2.0.0）
 [PASS] C-apply中断后强制download               crash@apply:remove_aside_done    resume=check→download(强制)→apply     OK（活动版本 2.0.0）
 [PASS] C-apply中断后强制download               crash@apply:write_applied        resume=check→download(强制)→apply     OK（活动版本 2.0.0）
 [PASS] D-download中断                       crash@dl:start                   resume=check→download→apply         OK（活动版本 2.0.0）
@@ -84,8 +62,6 @@
 [PASS] D-download中断                       crash@dl:download                resume=check→download→apply         OK（活动版本 2.0.0）
 [PASS] D-download中断                       crash@dl:write_version           resume=check→download→apply         OK（活动版本 2.0.0）
 [PASS] E-多次下载导致目录错配                       crash@dl:write_version(V2)       resume=download V3 → apply          OK（活动版本 3.0.0） | applied
-[FAIL] F-version.json损坏                   crash@write_version 期间断电         resume=check_update / apply_update / rollback ReadVersion 解析失败 → 全部命令 return false，无任何重建/自愈路径，需人工删文件
-        disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-        损坏（不可解析）   note=E2E S9a 仅断言『安全报错』，未要求自愈
+[PASS] F-version.json损坏(自愈)               crash@write_version 期间断电         resume=check→download→apply（自愈重置后）  自愈：重置后重下重装 → 应用可用（applied）
 
 明细已写入 result.json

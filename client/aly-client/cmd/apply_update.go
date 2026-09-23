@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -69,6 +68,9 @@ func ApplyUpdate() {
 		return
 	}
 
+	// 机会式清理历史版本快照（保留最近 N 个，Bug#6）
+	pruneVersionSnapshots(fc, defaultSnapshotKeep)
+
 	// Check version_status
 	switch versionInfo.VersionStatus {
 	case config.VersionStatusApplied:
@@ -76,6 +78,17 @@ func ApplyUpdate() {
 		return
 
 	case config.VersionStatusApplying:
+		// 回滚中断（status=applying && rollback_previous != ""）：按回滚语义恢复，
+		// 绝不按 versionInfo.Version 升级（修复 Bug#1/#5）。apply_update 是 SDK 宿主
+		// check→apply 循环中实际被调用的命令，在此委托即可让回滚自动续跑（无需改 SDK）。
+		if versionInfo.RollbackPrevious != "" {
+			if err := resumeRollback(fc, versionInfo, closeTimeout, ""); err != nil {
+				printOutput(false, fmt.Sprintf("rollback crash recovery failed: %v", err), nil)
+				return
+			}
+			printOutput(true, "", nil)
+			return
+		}
 		// Crash recovery
 		if _, statErr := os.Stat(fc.MainFolder); statErr == nil {
 			// Main folder exists —— 需要区分两种情况：
@@ -97,9 +110,7 @@ func ApplyUpdate() {
 				if wErr := config.WriteVersion(versionInfo); wErr != nil {
 					util.AppendToLog(logDir(), "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
 				}
-				if versionInfo.AfterApplyUpdateScript != "" {
-					runScript(filepath.Join(fc.MainFolder, versionInfo.AfterApplyUpdateScript), fc.MainFolder)
-				}
+				runPostApplyScript(fc, versionInfo.AfterApplyUpdateScript, versionInfo.Version)
 				launchMainExe(fc.ExeCfg, fc.MainFolder)
 				printOutput(true, "", nil)
 				return
@@ -125,9 +136,7 @@ func ApplyUpdate() {
 					util.AppendToLog(logDir(), "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
 				}
 				// Run post-update script and launch main exe
-				if versionInfo.AfterApplyUpdateScript != "" {
-					runScript(filepath.Join(fc.MainFolder, versionInfo.AfterApplyUpdateScript), fc.MainFolder)
-				}
+				runPostApplyScript(fc, versionInfo.AfterApplyUpdateScript, versionInfo.Version)
 				launchMainExe(fc.ExeCfg, fc.MainFolder)
 				printOutput(true, "", nil)
 				return
@@ -192,9 +201,7 @@ func ApplyUpdate() {
 	}
 
 	// Run post-update script if configured
-	if versionInfo.AfterApplyUpdateScript != "" {
-		runScript(filepath.Join(fc.MainFolder, versionInfo.AfterApplyUpdateScript), fc.MainFolder)
-	}
+	runPostApplyScript(fc, versionInfo.AfterApplyUpdateScript, versionInfo.Version)
 
 	// Launch main exe
 	launchMainExe(fc.ExeCfg, fc.MainFolder)
@@ -245,9 +252,11 @@ func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDi
 	if err != nil {
 		return err
 	}
-	// 入口清理历史旁移残留（X.old / X.old.1 / X.old.2 …），避免泄漏占用磁盘（#18）。
-	// 暂不删除旧备份本身，改为旁移（更抗断电）。
-	removeAsideVariants(prevVersionDir)
+	// 防御：Version == VersionPrevious（异常/遗留状态）时备份目录与版本目录同路径，
+	// 旁移-备份-激活会自毁（静默装回旧版本，Bug#3 变体）→ 明确报错交由失败兜底处理。
+	if versionInfo.VersionPrevious != "" && versionInfo.VersionPrevious == versionInfo.Version {
+		return fmt.Errorf("版本状态异常：Version == VersionPrevious(%s)，拒绝替换", versionInfo.Version)
+	}
 	oldBackupTemp := prevVersionDir + ".old"
 	if _, statErr := os.Stat(prevVersionDir); statErr == nil {
 		// 旧备份目录存在：必须先挪开，否则主目录重命名会因目标非空目录报 Access denied。

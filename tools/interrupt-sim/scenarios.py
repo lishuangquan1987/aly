@@ -191,23 +191,29 @@ def scenario_e():
 
 
 # ============================================================
-# 场景族 F：version.json 损坏（断电半写）→ 全命令失败，无自愈
+# 场景族 F：version.json 损坏（断电半写）→ Bug#4 修复后自愈
 # ============================================================
 def scenario_f():
     disk = {MAIN: "2.0.0", vdir("1.0.0"): "1.0.0"}
-    ver = Version("2.0.0", "1.0.0", "applied")
-    env = Env(disk, ver, "2.0.0")
-    # 模拟 version.json 半截 JSON
-    env.ver = None  # ReadVersion 返回 error
+    # version.json 损坏 → ReadVersion 自愈返回空 VersionInfo（status="" → 首次部署语义）
+    # → check 走 checkUpdateApplied → 重新下载应用，可自愈（修复 Bug#4 后）。
+    # 注：预置无 VersionPrevious（损坏前状态未知），备份目录名为空版本（App_，pre-existing
+    # 边缘，list_rollback 会过滤，仅浪费一个目录），应用本身恢复可用。
+    env = Env(disk, Version("", "", ""), "2.0.0")
+    try:
+        host_recovery(env)
+    except Crash:
+        pass
+    ok = env.ver.VersionStatus == "applied" and env.disk.dirs.get(MAIN) == env.ver.Version
     RESULTS.append({
-        "family": "F-version.json损坏",
+        "family": "F-version.json损坏(自愈)",
         "crash_at": "write_version 期间断电",
-        "resume": "check_update / apply_update / rollback",
-        "ok": False,
-        "result": "ReadVersion 解析失败 → 全部命令 return false，无任何重建/自愈路径，需人工删文件",
+        "resume": "check→download→apply（自愈重置后）",
+        "ok": ok,
+        "result": "自愈：重置后重下重装 → %s" % ("应用可用（applied）" if ok else "未收敛"),
         "disk": dict(sorted(env.disk.dirs.items())),
-        "version": "损坏（不可解析）",
-        "note": "E2E S9a 仅断言『安全报错』，未要求自愈",
+        "version": repr(env.ver),
+        "note": "预置无 VersionPrevious，备份目录名为空版本（pre-existing 边缘，不影响应用可用性）",
     })
 
 

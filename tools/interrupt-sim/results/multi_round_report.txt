@@ -1,5 +1,5 @@
 ============================================================================================================
-多轮恢复最终判定（最多 4 轮）：共 48 场景
+多轮恢复最终判定（最多 4 轮）：共 55 场景
 ============================================================================================================
 
 --- A-apply中断(服务器不变) ---
@@ -14,90 +14,72 @@
   [PASS] crash@apply:write_applied    1轮 OK（活动版本 2.0.0）                     
 
 --- G-apply中断+服务器发V3 ---
-  [WARN] crash@apply:start            1轮 回滚目录 App_2.0.0 装的是 1.0.0，名字却是 2.0. applied
-         disk={'App': '3.0.0', 'App_2.0.0': '1.0.0'}
-         Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
-  [WARN] crash@apply:write_applying   1轮 回滚目录 App_2.0.0 装的是 1.0.0，名字却是 2.0. applied
-         disk={'App': '3.0.0', 'App_2.0.0': '1.0.0'}
-         Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
-  [WARN] crash@apply:copy             1轮 回滚目录 App_2.0.0 装的是 1.0.0，名字却是 2.0. applied
-         disk={'App': '3.0.0', 'App_2.0.0': '1.0.0'}
-         Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
-  [WARN] crash@apply:remove_aside_entry 1轮 回滚目录 App_2.0.0 装的是 1.0.0，名字却是 2.0. applied
-         disk={'App': '3.0.0', 'App_2.0.0': '1.0.0'}
-         Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
+  [PASS] crash@apply:start            1轮 OK（活动版本 3.0.0）                     
+  [PASS] crash@apply:write_applying   1轮 OK（活动版本 3.0.0）                     
+  [WARN] crash@apply:copy             1轮 意图错乱：期望 3.0.0，实际活动 2.0.0           applied
+         disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
+         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
+  [WARN] crash@apply:remove_aside_entry 1轮 意图错乱：期望 3.0.0，实际活动 2.0.0           applied
+         disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
+         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
   [PASS] crash@apply:aside_prev       1轮 OK（活动版本 3.0.0）                     
-  [WARN] crash@apply:rename_backup    1轮 回滚目录 App_2.0.0 装的是 1.0.0，名字却是 2.0. applied
-         disk={'App': '3.0.0', 'App_2.0.0': '1.0.0'}
-         Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
-  [PASS] crash@apply:rename_activate  2轮 OK（活动版本 3.0.0）                     
-  [PASS] crash@apply:remove_aside_done 1轮 OK（活动版本 3.0.0）                     
-  [PASS] crash@apply:write_applied    1轮 OK（活动版本 3.0.0）                     
+  [WARN] crash@apply:rename_backup    1轮 意图错乱：期望 3.0.0，实际活动 2.0.0           applied
+         disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
+         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
+  [WARN] crash@apply:rename_activate  1轮 意图错乱：期望 3.0.0，实际活动 2.0.0           recovered: renamed versionDir -> MainFolder
+         disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
+         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
+  [WARN] crash@apply:remove_aside_done 1轮 意图错乱：期望 3.0.0，实际活动 2.0.0           recovered: marked applied
+         disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
+         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
+  [WARN] crash@apply:write_applied    1轮 意图错乱：期望 3.0.0，实际活动 2.0.0           recovered: marked applied
+         disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
+         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
 
 --- C-apply中断+强制download ---
   [PASS] crash@apply:start            1轮 OK（活动版本 2.0.0）                     
   [PASS] crash@apply:write_applying   1轮 OK（活动版本 2.0.0）                     
-  [WARN] crash@apply:copy             1轮 版本错配：磁盘内容是 1.0.0，version.json 声明 2 applied
-         disk={'App': '1.0.0'}
-         Version=2.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
-  [WARN] crash@apply:remove_aside_entry 1轮 版本错配：磁盘内容是 1.0.0，version.json 声明 2 applied
-         disk={'App': '1.0.0'}
-         Version=2.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
+  [PASS] crash@apply:copy             1轮 OK（活动版本 2.0.0）                     
+  [PASS] crash@apply:remove_aside_entry 1轮 OK（活动版本 2.0.0）                     
   [PASS] crash@apply:aside_prev       1轮 OK（活动版本 2.0.0）                     
-  [WARN] crash@apply:rename_backup    1轮 版本错配：磁盘内容是 1.0.0，version.json 声明 2 applied
-         disk={'App': '1.0.0'}
-         Version=2.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
-  [FAIL] crash@apply:rename_activate  2轮 MainFolder 缺失（应用不可用）               FAILED (keep applying): copy to version dir: App not found
-         disk={'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-         Version=2.0.0 Prev=2.0.0 Status=applying RollbackPrev=-
+  [PASS] crash@apply:rename_backup    1轮 OK（活动版本 2.0.0）                     
+  [PASS] crash@apply:rename_activate  1轮 OK（活动版本 2.0.0）                     
   [PASS] crash@apply:remove_aside_done 1轮 OK（活动版本 2.0.0）                     
   [PASS] crash@apply:write_applied    1轮 OK（活动版本 2.0.0）                     
 
 --- B1-rollback中断(无待应用版本) ---
   [WARN] crash@rb:start               1轮 意图错乱：期望 1.0.0，实际活动 2.0.0           no pending update to apply
          disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-
+         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
   [WARN] crash@rb:write_applying      1轮 意图错乱：期望 1.0.0，实际活动 2.0.0           no pending update to apply
          disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-
-  [WARN] crash@rb:remove_aside_entry  1轮 意图错乱：期望 1.0.0，实际活动 2.0.0           recovered: marked applied
+         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
+  [WARN] crash@rb:remove_aside_entry  1轮 意图错乱：期望 1.0.0，实际活动 2.0.0           applied
          disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-
+         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
   [WARN] crash@rb:aside_prev          1轮 意图错乱：期望 1.0.0，实际活动 2.0.0           applied
          disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-
-  [WARN] crash@rb:rename_backup       1轮 意图错乱：期望 1.0.0，实际活动 2.0.0           recovered: marked applied
-         disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-
-  [WARN] crash@rb:rename_activate     1轮 意图错乱：期望 1.0.0，实际活动 2.0.0           recovered: renamed versionDir -> MainFolder
-         disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-
-  [WARN] crash@rb:remove_aside_done   1轮 意图错乱：期望 1.0.0，实际活动 2.0.0           applied
-         disk={'App': '2.0.0', 'App_1.0.0': '1.0.0'}
-         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-
+         Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
+  [PASS] crash@rb:rename_backup       1轮 OK（活动版本 1.0.0）                     
+  [PASS] crash@rb:rename_activate     1轮 OK（活动版本 1.0.0）                     
+  [PASS] crash@rb:remove_aside_done   1轮 OK（活动版本 1.0.0）                     
 
 --- B2-rollback中断(有待应用V3) ---
   [WARN] crash@rb:start               1轮 意图错乱：期望 1.0.0，实际活动 3.0.0           applied
          disk={'App': '3.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-         Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
+         Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-
   [WARN] crash@rb:write_applying      1轮 意图错乱：期望 1.0.0，实际活动 3.0.0           applied
          disk={'App': '3.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-         Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
+         Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-
   [WARN] crash@rb:remove_aside_entry  1轮 意图错乱：期望 1.0.0，实际活动 3.0.0           applied
          disk={'App': '3.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-         Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
+         Version=3.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
   [WARN] crash@rb:aside_prev          1轮 意图错乱：期望 1.0.0，实际活动 3.0.0           applied
          disk={'App': '3.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-         Version=3.0.0 Prev=1.0.0 Status=applied RollbackPrev=-
-  [WARN] crash@rb:rename_backup       1轮 意图错乱：期望 1.0.0，实际活动 3.0.0           applied
-         disk={'App': '3.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-         Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
-  [WARN] crash@rb:rename_activate     1轮 意图错乱：期望 1.0.0，实际活动 3.0.0           recovered: renamed versionDir -> MainFolder
-         disk={'App': '3.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0'}
-         Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
-  [WARN] crash@rb:remove_aside_done   1轮 意图错乱：期望 1.0.0，实际活动 3.0.0           applied
-         disk={'App': '3.0.0', 'App_2.0.0': '1.0.0'}
-         Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-
+         Version=3.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
+  [PASS] crash@rb:rename_backup       1轮 OK（活动版本 1.0.0）                     
+  [PASS] crash@rb:rename_activate     1轮 OK（活动版本 1.0.0）                     
+  [PASS] crash@rb:remove_aside_done   1轮 OK（活动版本 1.0.0）                     
 
 --- B2'-rollback中断后重跑rollback ---
   [PASS] crash@rb:start               1轮 OK（活动版本 1.0.0）                     
@@ -106,8 +88,23 @@
   [PASS] crash@rb:aside_prev          1轮 OK（活动版本 1.0.0）                     
   [PASS] crash@rb:rename_backup       1轮 OK（活动版本 1.0.0）                     
   [PASS] crash@rb:rename_activate     1轮 OK（活动版本 1.0.0）                     
-  [FAIL] crash@rb:remove_aside_done   1轮 status 停在 applying（未完成恢复）          version 1.0.0 not found
-         disk={'App': '1.0.0', 'App_2.0.0': '2.0.0', 'App_3.0.0': '3.0.0'}
-         Version=3.0.0 Prev=2.0.0 Status=applying RollbackPrev=2.0.0
+  [PASS] crash@rb:remove_aside_done   1轮 OK（活动版本 1.0.0）                     
+
+--- H-回滚中断+服务器发V4 ---
+  [WARN] crash@rb:start               1轮 意图错乱：期望 1.0.0，实际活动 4.0.0           applied
+         disk={'App': '4.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0', 'App_3.0.0': '3.0.0'}
+         Version=4.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-
+  [WARN] crash@rb:write_applying      1轮 意图错乱：期望 1.0.0，实际活动 4.0.0           applied
+         disk={'App': '4.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0', 'App_3.0.0': '3.0.0'}
+         Version=4.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-
+  [WARN] crash@rb:remove_aside_entry  1轮 意图错乱：期望 1.0.0，实际活动 4.0.0           applied
+         disk={'App': '4.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0', 'App_3.0.0': '3.0.0'}
+         Version=4.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
+  [WARN] crash@rb:aside_prev          1轮 意图错乱：期望 1.0.0，实际活动 4.0.0           applied
+         disk={'App': '4.0.0', 'App_1.0.0': '1.0.0', 'App_2.0.0': '2.0.0', 'App_3.0.0': '3.0.0'}
+         Version=4.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-
+  [PASS] crash@rb:rename_backup       1轮 OK（活动版本 1.0.0）                     
+  [PASS] crash@rb:rename_activate     1轮 OK（活动版本 1.0.0）                     
+  [PASS] crash@rb:remove_aside_done   1轮 OK（活动版本 1.0.0）                     
 
 明细已写入 result_final.json

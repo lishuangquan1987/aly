@@ -67,20 +67,22 @@ class Disk:
 
 class Version:
     def __init__(self, version="", previous="", status="", rollback_previous="",
-                 after_script=""):
+                 after_script="", rollback_target=""):
         self.Version = version
         self.VersionPrevious = previous
         self.VersionStatus = status
         self.RollbackPrevious = rollback_previous
+        self.RollbackTarget = rollback_target
         self.AfterApplyUpdateScript = after_script
 
     def copy(self):
         return Version(self.Version, self.VersionPrevious, self.VersionStatus,
-                       self.RollbackPrevious, self.AfterApplyUpdateScript)
+                       self.RollbackPrevious, self.AfterApplyUpdateScript, self.RollbackTarget)
 
     def __repr__(self):
-        return "Version=%s Prev=%s Status=%s RollbackPrev=%s" % (
-            self.Version, self.VersionPrevious, self.VersionStatus, self.RollbackPrevious or "-")
+        return "Version=%s Prev=%s Status=%s RollbackPrev=%s RollbackTarget=%s" % (
+            self.Version, self.VersionPrevious, self.VersionStatus, self.RollbackPrevious or "-",
+            self.RollbackTarget or "-")
 
 
 class Env:
@@ -117,12 +119,16 @@ def cmd_download_update(env):
     env.tick("dl:start")
     new_version = env.server_version
 
-    # 守卫（71-81 行）
-    if vi.VersionStatus != "applying":
-        if vi.VersionStatus == "downloaded" and vi.Version == new_version:
-            return "skip: already downloaded"
-        if cmp_version(new_version, vi.Version) <= 0:
-            return "skip: already latest"
+    # applying 期间：不下载、不改写版本状态，由 apply_update 恢复在途操作（修复 Bug#3）。
+    # download 不得把 applying 降级成 downloaded、不得覆盖 VersionPrevious/RollbackPrevious。
+    if vi.VersionStatus == "applying":
+        return "skipped: applying in progress"
+
+    # 守卫（applying 已在上面早退，此处无需再保留例外）
+    if vi.VersionStatus == "downloaded" and vi.Version == new_version:
+        return "skip: already downloaded"
+    if cmp_version(new_version, vi.Version) <= 0:
+        return "skip: already latest"
 
     target = env.version_dir(new_version)
     env.tick("dl:mkdir")
@@ -138,22 +144,33 @@ def cmd_download_update(env):
     env.disk.dirs[target] = new_version
 
     env.tick("dl:write_version")
-    # 196-204 行：注意 VersionPrevious 被无条件改写成旧 Version
-    vi.VersionPrevious = vi.Version
+    # 195-204 行：VersionPrevious 仅在可确定时更新（修复 Bug#2）：
+    #   downloaded → 保持不变（MainFolder 仍是 VersionPrevious 的内容）
+    #   applied / 空 → VersionPrevious = Version（当前活动内容版本）
+    if vi.VersionStatus != "downloaded":
+        vi.VersionPrevious = vi.Version
     vi.Version = new_version
     vi.VersionStatus = "downloaded"
     vi.RollbackPrevious = ""
+    vi.RollbackTarget = ""
     return "downloaded"
 
 
 def cmd_check_update(env):
     """check_update.go：返回 (need_download, new_version)"""
     vi = env.ver
+    # 回滚中断：优先完成回滚，绝不因服务器发布新版本而转向下载/升级（修复 Bug#1/#5）
+    if vi.RollbackPrevious:
+        target = vi.RollbackTarget or vi.Version
+        return False, target
     if vi.VersionStatus in ("", "applied"):
         if cmp_version(env.server_version, vi.Version) > 0:
             return True, env.server_version
         return False, vi.Version
     # downloaded / applying
+    if vi.VersionStatus == "applying":
+        # applying（更新中断，非回滚）：先完成在途 apply，不转向重下（修复 Bug#3）
+        return False, vi.Version
     if cmp_version(env.server_version, vi.Version) > 0:
         return True, env.server_version
     return False, vi.Version  # 继续 apply 已下载版本
@@ -175,8 +192,15 @@ def _apply_replacement(env, vi, version_dir):
     prev_dir = env.version_dir(vi.VersionPrevious)
     old_backup_temp = prev_dir + ".old"
 
+    # 防御：Version == VersionPrevious（异常/遗留状态）→ 拒绝替换（Bug#3 变体：
+    # 备份目录与版本目录同路径，旁移-备份-激活会自毁成静默装回旧版本）
+    if vi.VersionPrevious and vi.VersionPrevious == vi.Version:
+        raise RenameErr("reject: Version == VersionPrevious(%s)" % vi.Version)
+
     env.tick("apply:remove_aside_entry")
-    env.disk.remove_aside_variants(prev_dir)  # ← 入口无条件清理 .old 系列
+    # 加固①：不再在入口清理 .old 残留（崩溃点"旁移后/备份改名前"时该残留是尚未被
+    # 本次替换覆盖的历史快照），清理时机后移到成功路径（apply:remove_aside_done）。
+    # env.disk.remove_aside_variants(prev_dir)  ← 已移除
 
     if env.disk.exists(prev_dir):
         env.tick("apply:aside_prev")
@@ -198,6 +222,9 @@ def cmd_apply_update(env):
         return "no pending update to apply"
 
     if vi.VersionStatus == "applying":
+        # 回滚中断：按回滚语义恢复（修复 Bug#1/#5），绝不按 vi.Version 升级
+        if vi.RollbackPrevious:
+            return cmd_resume_rollback(env, vi.RollbackTarget)
         vd = env.version_dir(vi.Version)
         if env.disk.exists(MAIN):
             if not env.disk.exists(vd):
@@ -242,6 +269,12 @@ def cmd_rollback(env, target):
     """rollback.go"""
     vi = env.ver
     env.tick("rb:start")
+
+    # 回滚中断续跑：目标目录可能已被消耗（激活已完成）→ 委托崩溃恢复（修复 Bug#1 B2'），
+    # 不再以 "version not found" 拒绝。
+    if vi.VersionStatus == "applying" and vi.RollbackPrevious:
+        return cmd_resume_rollback(env, vi.RollbackTarget or target)
+
     vd = env.version_dir(target)
     if not env.disk.exists(vd):
         return "version %s not found" % target
@@ -268,18 +301,19 @@ def cmd_rollback(env, target):
                 vi.VersionPrevious = old_version
                 vi.VersionStatus = "applied"
                 vi.RollbackPrevious = ""
+                vi.RollbackTarget = ""
                 return "recovered: renamed %s -> MainFolder" % vd
             return "CRASH RECOVERY FAILED"
 
     env.tick("rb:write_applying")
     vi.VersionStatus = "applying"
     vi.RollbackPrevious = old_version
+    vi.RollbackTarget = target
 
     prev_dir = env.version_dir(old_version)
     old_backup_temp = prev_dir + ".old"
 
-    env.tick("rb:remove_aside_entry")
-    env.disk.remove_aside_variants(prev_dir)
+    # 加固①：不再在入口清理 .old 残留，清理时机后移到成功路径（rb:remove_aside_done）
 
     try:
         if env.disk.exists(prev_dir):
@@ -295,6 +329,7 @@ def cmd_rollback(env, target):
         # 失败路径：状态一律写回 applied + 清空 RollbackPrevious（rollback.go 各失败分支）
         vi.VersionStatus = "applied"
         vi.RollbackPrevious = ""
+        vi.RollbackTarget = ""
         return "FAILED: %s" % e
 
     env.tick("rb:remove_aside_done")
@@ -303,7 +338,78 @@ def cmd_rollback(env, target):
     vi.Version = target
     vi.VersionStatus = "applied"
     vi.RollbackPrevious = ""
+    vi.RollbackTarget = ""
     return "rolled back to %s" % target
+
+
+def cmd_resume_rollback(env, target):
+    """rollback.go resumeRollback：完成一次被中断的回滚（status=applying && rollback_previous != ""）。
+    按磁盘现场 4 分支恢复，只做重命名；绝不把回滚当成升级处理。"""
+    vi = env.ver
+    old_version = vi.RollbackPrevious
+
+    # 无法确定目标（老数据无 rollback_target 且无 CLI 目标）：安全放弃回滚，
+    # 恢复/归位到回滚前版本，绝不升级（修复 Bug#1 兜底）。
+    if not target:
+        if not env.disk.exists(MAIN):
+            prev_dir = env.version_dir(old_version)
+            if env.disk.exists(prev_dir):
+                env.disk.rename(prev_dir, MAIN)
+        vi.Version = old_version
+        vi.VersionPrevious = old_version
+        vi.VersionStatus = "applied"
+        vi.RollbackPrevious = ""
+        vi.RollbackTarget = ""
+        return "aborted rollback, restored to %s" % old_version
+
+    vd = env.version_dir(target)
+    prev_dir = env.version_dir(old_version)
+
+    if env.disk.exists(MAIN):
+        # MainFolder 存在
+        if not env.disk.exists(vd):
+            # 分支 1：激活已完成（目标目录已消耗）→ 补写 applied
+            vi.Version = target
+            vi.VersionPrevious = old_version
+            vi.VersionStatus = "applied"
+            vi.RollbackPrevious = ""
+            vi.RollbackTarget = ""
+            return "recovered: rollback already applied (%s)" % target
+        # 分支 2：备份改名前的崩溃 → 重做回滚替换（仅重命名）
+        env.disk.remove_aside_variants(prev_dir)
+        old_backup_temp = prev_dir + ".old"
+        if env.disk.exists(prev_dir):
+            env.disk.rename(prev_dir, old_backup_temp)
+        env.disk.rename(MAIN, prev_dir)
+        env.disk.rename(vd, MAIN)
+        env.disk.remove_aside_variants(prev_dir)
+        vi.Version = target
+        vi.VersionPrevious = old_version
+        vi.VersionStatus = "applied"
+        vi.RollbackPrevious = ""
+        vi.RollbackTarget = ""
+        return "recovered: redone rollback swap (%s)" % target
+
+    # MainFolder 缺失
+    if env.disk.exists(vd):
+        # 分支 3：备份改名后、激活前崩溃 → 激活目标
+        env.disk.rename(vd, MAIN)
+        vi.Version = target
+        vi.VersionPrevious = old_version
+        vi.VersionStatus = "applied"
+        vi.RollbackPrevious = ""
+        vi.RollbackTarget = ""
+        return "recovered: activated %s" % target
+    if env.disk.exists(prev_dir):
+        # 分支 4：目标已消耗（B2'）→ 放弃回滚，恢复回滚前版本
+        env.disk.rename(prev_dir, MAIN)
+        vi.Version = old_version
+        vi.VersionPrevious = old_version
+        vi.VersionStatus = "applied"
+        vi.RollbackPrevious = ""
+        vi.RollbackTarget = ""
+        return "aborted rollback, restored to %s" % old_version
+    return "CRASH RECOVERY FAILED: neither main, target, nor backup exists"
 
 
 def cmp_version(a, b):

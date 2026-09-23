@@ -97,6 +97,41 @@ func checkUpdateApplied(fc *FullConfig, localVersion string) {
 
 // checkUpdatePending 处理 downloaded / applying 状态：优先继续 apply，只有服务器版本不一致才重新下载
 func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVersion string) {
+	// 回滚中断（status=applying && rollback_previous != ""）：优先完成回滚，
+	// 绝不因服务器发布新版本而转向下载/升级（修复 Bug#1/#5）。
+	// SDK 据此得到 NeedDownloadUpdate=false → 调用 apply_update → resumeRollback 续跑回滚。
+	if versionInfo.RollbackPrevious != "" {
+		target := versionInfo.RollbackTarget
+		if target == "" {
+			target = versionInfo.Version // 老数据兜底：至少不下载、不升级
+		}
+		prev := versionInfo.RollbackPrevious
+		printOutput(true, "", &model.CheckUpdateData{
+			HasUpdate:          true,
+			NeedDownloadUpdate: false,
+			CurrentVersion:     stripVPrefix(prev),
+			NewVersion:         stripVPrefix(target),
+		})
+		return
+	}
+
+	// applying（更新中断，非回滚）：先完成/重试在途 apply，不因服务器新版本转向重下（修复 Bug#3）。
+	// 若 apply 失败且主目录/版本目录都不存在，applyFailureFallback 会降级为 downloaded，
+	// 下一轮 check 走下方 downloaded 分支即可下载新版本（逃生口保留）。
+	if versionInfo.VersionStatus == config.VersionStatusApplying {
+		currentVer := versionInfo.VersionPrevious
+		if currentVer == "" {
+			currentVer = versionInfo.Version
+		}
+		printOutput(true, "", &model.CheckUpdateData{
+			HasUpdate:          true,
+			NeedDownloadUpdate: false,
+			CurrentVersion:     stripVPrefix(currentVer),
+			NewVersion:         stripVPrefix(versionInfo.Version),
+		})
+		return
+	}
+
 	// 只请求变更日志（1 次 HTTP），减少断网时的等待
 	logs, logsErr := apiclient.GetProjectChangeLogs(fc.Shared.ServerURL, fc.Shared.ProjectName)
 	if logsErr != nil {

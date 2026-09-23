@@ -65,19 +65,23 @@ func DownloadUpdate() {
 	}
 	currentVersion := stripVPrefix(versionInfo.Version)
 
+	// applying 期间：不重复下载、不改写版本状态。由 apply_update 走崩溃恢复分支完成在途操作
+	// （修复 Bug#3：download 不得把 applying 降级成 downloaded、不得覆盖 VersionPrevious/RollbackPrevious）。
+	if versionInfo.VersionStatus == config.VersionStatusApplying {
+		util.AppendToLog(logDir(), "download.log", "applying 进行中，跳过 download（由 apply_update 恢复）")
+		printOutput(true, "", &model.DownloadUpdateData{Version: currentVersion})
+		return
+	}
+
 	// Guard: if this exact version was already downloaded, skip re-download.
-	// Exception: when status is "applying" (crash recovery), allow re-download
-	// even if same version, since downloaded files may be corrupted.
-	if versionInfo.VersionStatus != config.VersionStatusApplying {
-		if versionInfo.VersionStatus == config.VersionStatusDownloaded &&
-			currentVersion == newVersion {
-			printOutput(true, "", &model.DownloadUpdateData{Version: newVersion})
-			return
-		}
-		if compareVersion(newVersion, currentVersion) <= 0 {
-			printOutput(false, "already at latest version", nil)
-			return
-		}
+	if versionInfo.VersionStatus == config.VersionStatusDownloaded &&
+		currentVersion == newVersion {
+		printOutput(true, "", &model.DownloadUpdateData{Version: newVersion})
+		return
+	}
+	if compareVersion(newVersion, currentVersion) <= 0 {
+		printOutput(false, "already at latest version", nil)
+		return
 	}
 
 	serverFiles, err := apiclient.GetAllFiles(fc.Shared.ServerURL, fc.Shared.ProjectName)
@@ -193,7 +197,14 @@ func DownloadUpdate() {
 	}
 
 	// Update version.json
-	versionInfo.VersionPrevious = versionInfo.Version
+	// VersionPrevious 语义 = "MainFolder 当前真实内容版本"，仅在可确定时更新（修复 Bug#2）：
+	//   - downloaded：MainFolder 仍是 VersionPrevious 的内容 → 保持不变（"待应用期间发布新版"
+	//     不再把 VersionPrevious 错写成从未应用过的中间版本）
+	//   - applied / 空：MainFolder = Version → 记录为 VersionPrevious
+	//   （applying 已在函数开头 return，不会走到这里）
+	if versionInfo.VersionStatus != config.VersionStatusDownloaded {
+		versionInfo.VersionPrevious = versionInfo.Version
+	}
 	versionInfo.Version = newVersion
 	versionInfo.VersionStatus = config.VersionStatusDownloaded
 	versionInfo.RollbackPrevious = ""
