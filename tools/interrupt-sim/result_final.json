@@ -1,0 +1,855 @@
+[
+  {
+    "family": "A-apply中断(服务器不变)",
+    "crash_at": "apply:start",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 默认）"
+  },
+  {
+    "family": "A-apply中断(服务器不变)",
+    "crash_at": "apply:write_applying",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 默认）"
+  },
+  {
+    "family": "A-apply中断(服务器不变)",
+    "crash_at": "apply:copy",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 默认）"
+  },
+  {
+    "family": "A-apply中断(服务器不变)",
+    "crash_at": "apply:remove_aside_entry",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 默认）"
+  },
+  {
+    "family": "A-apply中断(服务器不变)",
+    "crash_at": "apply:aside_prev",
+    "rounds": 1,
+    "converged": true,
+    "last": "no pending update to apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 默认）"
+  },
+  {
+    "family": "A-apply中断(服务器不变)",
+    "crash_at": "apply:rename_backup",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 默认）"
+  },
+  {
+    "family": "A-apply中断(服务器不变)",
+    "crash_at": "apply:rename_activate",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: renamed versionDir -> MainFolder",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 默认）"
+  },
+  {
+    "family": "A-apply中断(服务器不变)",
+    "crash_at": "apply:remove_aside_done",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: marked applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 默认）"
+  },
+  {
+    "family": "A-apply中断(服务器不变)",
+    "crash_at": "apply:write_applied",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: marked applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 默认）"
+  },
+  {
+    "family": "G-apply中断+服务器发V3",
+    "crash_at": "apply:start",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": true,
+    "result": "OK（活动版本 3.0.0）",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(V3)→apply"
+  },
+  {
+    "family": "G-apply中断+服务器发V3",
+    "crash_at": "apply:write_applying",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": true,
+    "result": "OK（活动版本 3.0.0）",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(V3)→apply"
+  },
+  {
+    "family": "G-apply中断+服务器发V3",
+    "crash_at": "apply:copy",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": false,
+    "result": "意图错乱：期望 3.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(V3)→apply"
+  },
+  {
+    "family": "G-apply中断+服务器发V3",
+    "crash_at": "apply:remove_aside_entry",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": false,
+    "result": "意图错乱：期望 3.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(V3)→apply"
+  },
+  {
+    "family": "G-apply中断+服务器发V3",
+    "crash_at": "apply:aside_prev",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": true,
+    "result": "OK（活动版本 3.0.0）",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(V3)→apply"
+  },
+  {
+    "family": "G-apply中断+服务器发V3",
+    "crash_at": "apply:rename_backup",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": false,
+    "result": "意图错乱：期望 3.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(V3)→apply"
+  },
+  {
+    "family": "G-apply中断+服务器发V3",
+    "crash_at": "apply:rename_activate",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: renamed versionDir -> MainFolder",
+    "ok": false,
+    "result": "意图错乱：期望 3.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(V3)→apply"
+  },
+  {
+    "family": "G-apply中断+服务器发V3",
+    "crash_at": "apply:remove_aside_done",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: marked applied",
+    "ok": false,
+    "result": "意图错乱：期望 3.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(V3)→apply"
+  },
+  {
+    "family": "G-apply中断+服务器发V3",
+    "crash_at": "apply:write_applied",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: marked applied",
+    "ok": false,
+    "result": "意图错乱：期望 3.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(V3)→apply"
+  },
+  {
+    "family": "C-apply中断+强制download",
+    "crash_at": "apply:start",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(无条件)→apply"
+  },
+  {
+    "family": "C-apply中断+强制download",
+    "crash_at": "apply:write_applying",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(无条件)→apply"
+  },
+  {
+    "family": "C-apply中断+强制download",
+    "crash_at": "apply:copy",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(无条件)→apply"
+  },
+  {
+    "family": "C-apply中断+强制download",
+    "crash_at": "apply:remove_aside_entry",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(无条件)→apply"
+  },
+  {
+    "family": "C-apply中断+强制download",
+    "crash_at": "apply:aside_prev",
+    "rounds": 1,
+    "converged": true,
+    "last": "no pending update to apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(无条件)→apply"
+  },
+  {
+    "family": "C-apply中断+强制download",
+    "crash_at": "apply:rename_backup",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(无条件)→apply"
+  },
+  {
+    "family": "C-apply中断+强制download",
+    "crash_at": "apply:rename_activate",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: renamed versionDir -> MainFolder",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(无条件)→apply"
+  },
+  {
+    "family": "C-apply中断+强制download",
+    "crash_at": "apply:remove_aside_done",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: marked applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(无条件)→apply"
+  },
+  {
+    "family": "C-apply中断+强制download",
+    "crash_at": "apply:write_applied",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: marked applied",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download(无条件)→apply"
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:start",
+    "rounds": 1,
+    "converged": true,
+    "last": "no pending update to apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 不会续跑 rollback）"
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:write_applying",
+    "rounds": 1,
+    "converged": true,
+    "last": "no pending update to apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 不会续跑 rollback）"
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:remove_aside_entry",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 不会续跑 rollback）"
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:aside_prev",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 不会续跑 rollback）"
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:rename_backup",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: redone rollback swap (1.0.0)",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 不会续跑 rollback）"
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:rename_activate",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: activated 1.0.0",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 不会续跑 rollback）"
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:remove_aside_done",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: rollback already applied (1.0.0)",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→apply（SDK 不会续跑 rollback）"
+  },
+  {
+    "family": "B2-rollback中断(有待应用V3)",
+    "crash_at": "rb:start",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 3.0.0",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0）"
+  },
+  {
+    "family": "B2-rollback中断(有待应用V3)",
+    "crash_at": "rb:write_applying",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 3.0.0",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0）"
+  },
+  {
+    "family": "B2-rollback中断(有待应用V3)",
+    "crash_at": "rb:remove_aside_entry",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 3.0.0",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0）"
+  },
+  {
+    "family": "B2-rollback中断(有待应用V3)",
+    "crash_at": "rb:aside_prev",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 3.0.0",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0）"
+  },
+  {
+    "family": "B2-rollback中断(有待应用V3)",
+    "crash_at": "rb:rename_backup",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: redone rollback swap (1.0.0)",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0）"
+  },
+  {
+    "family": "B2-rollback中断(有待应用V3)",
+    "crash_at": "rb:rename_activate",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: activated 1.0.0",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0）"
+  },
+  {
+    "family": "B2-rollback中断(有待应用V3)",
+    "crash_at": "rb:remove_aside_done",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: rollback already applied (1.0.0)",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0）"
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:start",
+    "rounds": 1,
+    "converged": true,
+    "last": "rolled back to 1.0.0",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "rollback --version 1.0.0"
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:write_applying",
+    "rounds": 1,
+    "converged": true,
+    "last": "rolled back to 1.0.0",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "rollback --version 1.0.0"
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:remove_aside_entry",
+    "rounds": 1,
+    "converged": true,
+    "last": "version 1.0.0 not found",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "rollback --version 1.0.0"
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:aside_prev",
+    "rounds": 1,
+    "converged": true,
+    "last": "version 1.0.0 not found",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "rollback --version 1.0.0"
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:rename_backup",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: redone rollback swap (1.0.0)",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "rollback --version 1.0.0"
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:rename_activate",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: activated 1.0.0",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "rollback --version 1.0.0"
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:remove_aside_done",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: rollback already applied (1.0.0)",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "rollback --version 1.0.0"
+  },
+  {
+    "family": "H-回滚中断+服务器发V4",
+    "crash_at": "rb:start",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 4.0.0",
+    "disk": {
+      "App": "4.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=4.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0，服务器已发V4）"
+  },
+  {
+    "family": "H-回滚中断+服务器发V4",
+    "crash_at": "rb:write_applying",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 4.0.0",
+    "disk": {
+      "App": "4.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=4.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0，服务器已发V4）"
+  },
+  {
+    "family": "H-回滚中断+服务器发V4",
+    "crash_at": "rb:remove_aside_entry",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 4.0.0",
+    "disk": {
+      "App": "4.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=4.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0，服务器已发V4）"
+  },
+  {
+    "family": "H-回滚中断+服务器发V4",
+    "crash_at": "rb:aside_prev",
+    "rounds": 1,
+    "converged": true,
+    "last": "applied",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 4.0.0",
+    "disk": {
+      "App": "4.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=4.0.0 Prev=1.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0，服务器已发V4）"
+  },
+  {
+    "family": "H-回滚中断+服务器发V4",
+    "crash_at": "rb:rename_backup",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: redone rollback swap (1.0.0)",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0，服务器已发V4）"
+  },
+  {
+    "family": "H-回滚中断+服务器发V4",
+    "crash_at": "rb:rename_activate",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: activated 1.0.0",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0，服务器已发V4）"
+  },
+  {
+    "family": "H-回滚中断+服务器发V4",
+    "crash_at": "rb:remove_aside_done",
+    "rounds": 1,
+    "converged": true,
+    "last": "recovered: rollback already applied (1.0.0)",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=- RollbackTarget=-",
+    "resume": "check→download→apply（用户意图=回滚到1.0.0，服务器已发V4）"
+  }
+]
