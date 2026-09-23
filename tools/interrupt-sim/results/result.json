@@ -1,0 +1,611 @@
+[
+  {
+    "family": "A-apply中断",
+    "crash_at": "apply:start",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "A-apply中断",
+    "crash_at": "apply:write_applying",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "A-apply中断",
+    "crash_at": "apply:copy",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "A-apply中断",
+    "crash_at": "apply:remove_aside_entry",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "A-apply中断",
+    "crash_at": "apply:aside_prev",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "A-apply中断",
+    "crash_at": "apply:rename_backup",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "A-apply中断",
+    "crash_at": "apply:rename_activate",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "A-apply中断",
+    "crash_at": "apply:remove_aside_done",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "A-apply中断",
+    "crash_at": "apply:write_applied",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:start",
+    "resume": "check→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:write_applying",
+    "resume": "check→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:remove_aside_entry",
+    "resume": "check→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:aside_prev",
+    "resume": "check→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:rename_backup",
+    "resume": "check→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:rename_activate",
+    "resume": "check→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B1-rollback中断(无待应用版本)",
+    "crash_at": "rb:remove_aside_done",
+    "resume": "check→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 2.0.0",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B2-rollback中断(有待应用版本)",
+    "crash_at": "rb:start",
+    "resume": "check→download→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 3.0.0",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": "用户意图=回滚到1.0.0"
+  },
+  {
+    "family": "B2-rollback中断(有待应用版本)",
+    "crash_at": "rb:write_applying",
+    "resume": "check→download→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 3.0.0",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": "用户意图=回滚到1.0.0"
+  },
+  {
+    "family": "B2-rollback中断(有待应用版本)",
+    "crash_at": "rb:remove_aside_entry",
+    "resume": "check→download→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 3.0.0",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": "用户意图=回滚到1.0.0"
+  },
+  {
+    "family": "B2-rollback中断(有待应用版本)",
+    "crash_at": "rb:aside_prev",
+    "resume": "check→download→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 3.0.0",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": "用户意图=回滚到1.0.0"
+  },
+  {
+    "family": "B2-rollback中断(有待应用版本)",
+    "crash_at": "rb:rename_backup",
+    "resume": "check→download→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 3.0.0",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": "用户意图=回滚到1.0.0"
+  },
+  {
+    "family": "B2-rollback中断(有待应用版本)",
+    "crash_at": "rb:rename_activate",
+    "resume": "check→download→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 3.0.0",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": "用户意图=回滚到1.0.0"
+  },
+  {
+    "family": "B2-rollback中断(有待应用版本)",
+    "crash_at": "rb:remove_aside_done",
+    "resume": "check→download→apply",
+    "ok": false,
+    "result": "意图错乱：期望 1.0.0，实际活动 3.0.0",
+    "disk": {
+      "App": "3.0.0",
+      "App_2.0.0": "1.0.0"
+    },
+    "version": "Version=3.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": "用户意图=回滚到1.0.0"
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:start",
+    "resume": "rollback --version 1.0.0",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:write_applying",
+    "resume": "rollback --version 1.0.0",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:remove_aside_entry",
+    "resume": "rollback --version 1.0.0",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:aside_prev",
+    "resume": "rollback --version 1.0.0",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:rename_backup",
+    "resume": "rollback --version 1.0.0",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:rename_activate",
+    "resume": "rollback --version 1.0.0",
+    "ok": true,
+    "result": "OK（活动版本 1.0.0）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=1.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "B2'-rollback中断后重跑rollback",
+    "crash_at": "rb:remove_aside_done",
+    "resume": "rollback --version 1.0.0",
+    "ok": false,
+    "result": "status 停在 applying（未完成恢复）",
+    "disk": {
+      "App": "1.0.0",
+      "App_2.0.0": "2.0.0",
+      "App_3.0.0": "3.0.0"
+    },
+    "version": "Version=3.0.0 Prev=2.0.0 Status=applying RollbackPrev=2.0.0",
+    "note": ""
+  },
+  {
+    "family": "C-apply中断后强制download",
+    "crash_at": "apply:start",
+    "resume": "check→download(强制)→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "C-apply中断后强制download",
+    "crash_at": "apply:write_applying",
+    "resume": "check→download(强制)→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "C-apply中断后强制download",
+    "crash_at": "apply:copy",
+    "resume": "check→download(强制)→apply",
+    "ok": false,
+    "result": "版本错配：磁盘内容是 1.0.0，version.json 声明 2.0.0",
+    "disk": {
+      "App": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "C-apply中断后强制download",
+    "crash_at": "apply:remove_aside_entry",
+    "resume": "check→download(强制)→apply",
+    "ok": false,
+    "result": "版本错配：磁盘内容是 1.0.0，version.json 声明 2.0.0",
+    "disk": {
+      "App": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "C-apply中断后强制download",
+    "crash_at": "apply:aside_prev",
+    "resume": "check→download(强制)→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "C-apply中断后强制download",
+    "crash_at": "apply:rename_backup",
+    "resume": "check→download(强制)→apply",
+    "ok": false,
+    "result": "版本错配：磁盘内容是 1.0.0，version.json 声明 2.0.0",
+    "disk": {
+      "App": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "C-apply中断后强制download",
+    "crash_at": "apply:rename_activate",
+    "resume": "check→download(强制)→apply",
+    "ok": false,
+    "result": "MainFolder 缺失（应用不可用）",
+    "disk": {
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=2.0.0 Prev=2.0.0 Status=applying RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "C-apply中断后强制download",
+    "crash_at": "apply:remove_aside_done",
+    "resume": "check→download(强制)→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "C-apply中断后强制download",
+    "crash_at": "apply:write_applied",
+    "resume": "check→download(强制)→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=2.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "D-download中断",
+    "crash_at": "dl:start",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "D-download中断",
+    "crash_at": "dl:mkdir",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "D-download中断",
+    "crash_at": "dl:scan",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "D-download中断",
+    "crash_at": "dl:download",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "D-download中断",
+    "crash_at": "dl:write_version",
+    "resume": "check→download→apply",
+    "ok": true,
+    "result": "OK（活动版本 2.0.0）",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "Version=2.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": ""
+  },
+  {
+    "family": "E-多次下载导致目录错配",
+    "crash_at": "dl:write_version(V2)",
+    "resume": "download V3 → apply",
+    "ok": true,
+    "result": "OK（活动版本 3.0.0） | applied",
+    "disk": {
+      "App": "3.0.0",
+      "App_1.0.0": "1.0.0",
+      "App_2.0.0": "2.0.0"
+    },
+    "version": "Version=3.0.0 Prev=1.0.0 Status=applied RollbackPrev=-",
+    "note": "VersionPrevious 被改写成 2.0.0，而 mainFolder 里其实是 1.0.0"
+  },
+  {
+    "family": "F-version.json损坏",
+    "crash_at": "write_version 期间断电",
+    "resume": "check_update / apply_update / rollback",
+    "ok": false,
+    "result": "ReadVersion 解析失败 → 全部命令 return false，无任何重建/自愈路径，需人工删文件",
+    "disk": {
+      "App": "2.0.0",
+      "App_1.0.0": "1.0.0"
+    },
+    "version": "损坏（不可解析）",
+    "note": "E2E S9a 仅断言『安全报错』，未要求自愈"
+  }
+]
