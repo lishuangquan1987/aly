@@ -110,8 +110,17 @@ applied ──(download_update)──→ downloaded ──(apply_update starts)�
                   │                        ├──(success)──→ applied
                   │                        └──(crash)──→ detected on next startup → auto-recover
                   │
-                  └──(check_update)──→ directly returns has_update=true
+                  └──(check_update)──→ has_update=true (server reachable)
 ```
+
+`check_update` only reports a pending apply while the server is reachable: with
+`version_status=downloaded` and an unreachable server (or no usable change logs) it returns
+`has_update=false`, so the host does not show a "ready to update" prompt that would
+disagree with the online state. Nothing is discarded — the downloaded version directory and
+`version.json` stay untouched, and `apply_update` runs as soon as the server is reachable again.
+`applying` is the deliberate exception: crash recovery and rollback resumption are always
+reported, even offline, otherwise a machine left without its application folder could never
+recover by itself.
 
 Crash recovery: if `version_status` is `applying` on startup, the updater re-executes the atomic rename step — the update is never left in a broken half-state.
 

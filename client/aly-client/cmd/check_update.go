@@ -95,7 +95,12 @@ func checkUpdateApplied(fc *FullConfig, localVersion string) {
 	}
 }
 
-// checkUpdatePending 处理 downloaded / applying 状态：优先继续 apply，只有服务器版本不一致才重新下载
+// checkUpdatePending 处理 downloaded / applying 状态：优先继续 apply，只有服务器版本不一致才重新下载。
+//
+// 断网（服务器不可达 / 无可用变更日志）：downloaded 状态不报告待应用更新（has_update=false）——
+// 无法与服务器核对就不上报，避免断网时上位机显示"可更新"、联网时却是另一种状态；已下载内容
+// 与 version.json 保持不动，服务器恢复后自动继续 apply。
+// applying（崩溃恢复）与回滚续跑必须在断网时照样上报（见函数内提前返回的两条分支）。
 func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVersion string) {
 	// 回滚中断（status=applying && rollback_previous != ""）：优先完成回滚，
 	// 绝不因服务器发布新版本而转向下载/升级（修复 Bug#1/#5）。
@@ -141,16 +146,16 @@ func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVe
 	serverReachable := logsErr == nil && len(logs) > 0
 
 	if !serverReachable {
-		// 断网：继续 apply 已下载的版本
-		currentVer := versionInfo.VersionPrevious
-		if currentVer == "" {
-			currentVer = versionInfo.Version
-		}
+		// 断网（或服务器无可用变更日志）：本机虽有已下载的待应用版本，但无法与服务器核对，
+		// 不报告"待应用更新"（否则断网时上位机显示 ready to apply，与联网时状态不一致）。
+		// 已下载内容与 version.json 原样保留（check_update 只读），服务器可达后走下方联网分支继续 apply。
+		// 注意：applying（崩溃恢复）与回滚续跑分支已在上方提前返回，不受此判断影响 —— 那两条路径
+		// 必须在断网时照样报 has_update=true，否则主目录缺失/回滚中断的机器永远无法自愈。
 		printOutput(true, "", &model.CheckUpdateData{
-			HasUpdate:          true,
-			NeedDownloadUpdate: false,
-			CurrentVersion:     stripVPrefix(currentVer),
-			NewVersion:         stripVPrefix(versionInfo.Version),
+			HasUpdate: false,
+			// 当前实际内容版本（downloaded 状态下 MainFolder 仍是 VersionPrevious 的内容；
+			// 首次部署时为"未知"，输出空串，不再回退成待应用的 Version 造成 current == new 自相矛盾）
+			CurrentVersion: stripVPrefix(versionInfo.VersionPrevious),
 		})
 		return
 	}

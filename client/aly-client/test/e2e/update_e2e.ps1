@@ -20,6 +20,9 @@
 #      S9a version.json 半截 -> check/apply 安全报错（不崩溃、不卡死）
 #      S9b 遗留半截 .part -> download 正常完成且文件校验通过
 #      S9c versionDir 里损坏的正式文件 -> download 重新下载并校验通过
+#   S11 断网语义：downloaded 状态在服务器不可达时不上报"待应用更新"
+#       （has_update=false，上位机不显示 ready to apply），已下载内容保留；
+#       服务器可达后同一现场仍继续 apply（联网语义不变）
 #   ⚠ 注意：S8（中断=进程瞬间消失）与 S9（断电=文件不完整）是两类不同场景，不可混同。
 #
 # 用法（在仓库根目录）：
@@ -670,6 +673,50 @@ try {
 
     $ver10 = Read-VersionJson $pkg10
     Assert ($ver10 -ne $null -and $ver10.version -eq "3.1.0" -and $ver10.version_status -eq "applied") "S10 更新仍正常完成（受保护进程不影响替换）"
+
+    # ============================================================
+    # S11 断网语义：downloaded 状态在服务器不可达时不再上报"待应用更新"
+    # 背景：断网时上报 has_update=true 会让上位机显示 ready to apply，
+    #       与联网时（服务器可能已有更高版本）的状态不一致；且无法核对。
+    # 约束：已下载内容与 version.json 必须原样保留，服务器可达后继续 apply；
+    #       applying（崩溃恢复/回滚续跑）不受影响（另有单测覆盖）。
+    # ============================================================
+    Log "=== S11 断网 + downloaded：不上报待应用更新，联网后继续 apply ==="
+    # 版本号必须高于此前所有已发布版本（S9/S10 已发到 3.1.0）：check_update 取"最大版本号"的变更日志
+    $pkg11 = New-ClientEnv "3.2.0" "downloaded"
+    Publish-Version "3.2.0" "main-3.2.0"
+    # 复现现场：version_previous 为空（首次部署，下载完成但未应用）
+    Set-JsonFile "$pkg11\UpdateFolder\version.json" @{ version_previous = ""; version = "3.2.0"; version_status = "downloaded" }
+    Copy-Item "$Work\fake_main.exe" "$pkg11\ApplicationFolder\app.exe"
+    New-Item -ItemType Directory -Force -Path "$pkg11\ApplicationFolder_3.2.0" | Out-Null
+    Set-Content -Path "$pkg11\ApplicationFolder_3.2.0\app.exe" -Value "downloaded-v3.2.0" -Encoding UTF8
+
+    # 断网：--url 指向确定无人监听的本地端口（覆盖 shared.json），不依赖停服务端。
+    # 注意：断网时 client 会向 stderr 打印一行 GetProjectChangeLogs 告警，而 Windows PowerShell 5.1
+    # 在 $ErrorActionPreference='Stop' 下会把原生命令的 stderr 当成终止性错误，故此处临时放宽。
+    $eapSaved = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    try {
+        $cuOff = Invoke-Client $pkg11 @("check_update", "--url", "http://127.0.0.1:1")
+    } finally {
+        $ErrorActionPreference = $eapSaved
+    }
+    Assert ($cuOff.isSuccess -eq $true) "S11 断网 check_update 安全返回 isSuccess=true（不报错/不卡死）"
+    Assert ($cuOff.data.has_update -eq $false) "S11 断网 + downloaded：不上报待应用更新（has_update=false）"
+    Assert ($cuOff.data.need_download_update -eq $false) "S11 断网 + downloaded：不要求下载"
+    Assert ($cuOff.data.current_version -eq "") "S11 断网 + downloaded（previous 为空）：current_version 为空，不回退成待应用版本"
+    $vj11 = Read-VersionJson $pkg11
+    Assert ($vj11.version -eq "3.2.0" -and $vj11.version_status -eq "downloaded") "S11 断网 check_update 不改写 version.json（仍 3.2.0/downloaded）"
+    Assert (Test-Path "$pkg11\ApplicationFolder_3.2.0\app.exe") "S11 断网 check_update 不丢弃已下载内容"
+
+    # 联网对照（同一现场）：服务器最新版本 == 本地待应用版本 → 仍继续 apply，语义未变
+    $cuOn = Invoke-Client $pkg11 @("check_update")
+    Assert ($cuOn.data.has_update -eq $true) "S11 联网 check_update：仍上报待应用更新"
+    Assert ($cuOn.data.need_download_update -eq $false) "S11 联网 check_update：无需重新下载（继续 apply）"
+    $au11 = Invoke-Client $pkg11 @("apply_update")
+    Assert ($au11.isSuccess -eq $true) "S11 联网 apply_update 成功"
+    $vj11b = Read-VersionJson $pkg11
+    Assert ($vj11b.version -eq "3.2.0" -and $vj11b.version_status -eq "applied") "S11 联网 apply 后状态 applied（3.2.0）"
 
 } finally {
     if (-not $KeepRunning) {

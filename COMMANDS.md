@@ -61,8 +61,12 @@ aly-client.exe check_update [--url <服务器地址>] [--project-name <项目名
 1. 加载完整配置（`client.json` → `.updator/shared.json` + CLI 参数覆盖）
 2. 读取 `version.json`，根据 `version_status` 分三路处理：
    - `applied` 或空：联系服务端比对版本，一致或断网 → 无更新；不一致 → `need_download_update=true`
-   - `downloaded`：联系服务端比对版本，一致或断网 → 继续 apply（`need_download_update=false`）；不一致 → 重新下载
-   - `applying`：同 `downloaded`，支持崩溃恢复
+   - `downloaded`：联系服务端比对版本，一致 → 继续 apply（`need_download_update=false`）；更高 → 重新下载；
+     **断网（服务器不可达 / 无可用变更日志）→ 无更新（`has_update=false`）**：无法与服务器核对就不上报
+     "待应用更新"，避免断网时上位机显示"可更新"、联网时却是另一种状态。已下载内容与 `version.json`
+     原样保留（`check_update` 只读），服务器可达后自动继续 apply
+   - `applying`：**不受断网影响**，始终上报继续 apply（崩溃恢复；`rollback_previous` 非空时为回滚续跑）——
+     否则主目录已改名/回滚中断的机器永远无法自愈
 3. 调用 `GET /api/project/get_project_by_name/{projectName}` 获取项目信息（含 `force_update`）
 4. 调用 `GET /api/project/get_project_change_logs/{projectName}` 获取变更日志
 5. 取最新一条日志的版本号，与本地 `version.json` 的版本号做比较
@@ -79,7 +83,10 @@ aly-client.exe check_update [--url <服务器地址>] [--project-name <项目名
 // 无更新
 {"isSuccess":true,"data":{"has_update":false,"need_download_update":false,"current_version":"1.0.0"}}
 
-// 已有未完成的更新（downloaded/applying + 断网）
+// 已有未完成的更新（downloaded + 断网）：不上报（无法核对），已下载内容保留，联网后继续 apply
+{"isSuccess":true,"data":{"has_update":false,"need_download_update":false,"current_version":"1.0.0"}}
+
+// 更新中断（applying / 回滚续跑）：断网也必须上报，否则无法自愈
 {"isSuccess":true,"data":{"has_update":true,"need_download_update":false,"current_version":"1.0.0","new_version":"1.0.1"}}
 
 // 失败
