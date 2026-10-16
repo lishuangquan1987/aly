@@ -68,6 +68,13 @@ client.RequestApplyUpdate += (newVersion) =>
 | `DownloadedUpdate` | Download complete, waiting to apply |
 | `ApplyUpdate` | Performing atomic replace + restart |
 
+If a check reports no pending update while a status is still displayed, `StatusChanged` fires
+`None` once — this clears a stale panel after the network drops mid-flow (e.g. "Found new
+version" / "Downloading..." never resolves). A downloaded update is only reported as pending
+while the server is reachable: **offline machines show no update prompt** and the pending
+download stays on disk until the server is reachable again (the network check is the only
+thing skipped; nothing is discarded).
+
 ### Force Update vs Non-Force
 
 - **`force_update = true`**: The SDK downloads and applies automatically — `RequestDownloadUpdate` / `RequestApplyUpdate` are **not raised**.

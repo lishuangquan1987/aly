@@ -177,7 +177,22 @@ namespace AlyClient.CSharpSDK
                         }
 
                         ClearError();
-                        if (!status.Data.HasUpdate) { Thread.Sleep(1000); continue; }
+                        if (!status.Data.HasUpdate)
+                        {
+                            // 无待处理更新：复位残留状态，避免宿主面板停在旧状态。
+                            // 典型场景：已提示"发现新版本/正在下载"后网络中断（或本机处于
+                            // downloaded 状态但服务器不可达，client 现在返回 has_update=false），
+                            // 此时断网不应继续显示"可更新/正在下载"。仅在状态需要变化时
+                            // 发一次事件（不新增事件、不改线程模型）。
+                            // 文案用中性的"Update status cleared"：这里的 has_update=false 可能是
+                            // "服务器不可达、无法核对"，不等价于核对过的"没有更新"。
+                            if (TryClearStatus())
+                            {
+                                OnStatusChanged(AlyClientStatus.None, "Update status cleared");
+                            }
+                            Thread.Sleep(1000);
+                            continue;
+                        }
 
                         if (status.Data.NeedDownloadUpdate)
                         {
@@ -247,6 +262,20 @@ namespace AlyClient.CSharpSDK
             finally
             {
                 IsRunning = false;
+            }
+        }
+
+        /// <summary>
+        /// 把当前状态复位为 <see cref="AlyClientStatus.None"/>，返回是否真的发生了变化。
+        /// 检查与置位在同一次 _statusLock 内完成（Status 对外宣称线程安全），状态事件由调用方在锁外发出。
+        /// </summary>
+        private bool TryClearStatus()
+        {
+            lock (_statusLock)
+            {
+                if (_status == AlyClientStatus.None) return false;
+                _status = AlyClientStatus.None;
+                return true;
             }
         }
 

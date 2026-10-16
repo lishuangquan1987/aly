@@ -20,7 +20,10 @@ namespace AlyClient.CSharpSDK
         public static Task<AlyResponse<CheckSelfUpdateData>> CheckSelfUpdateAsync(string alyExePath)
             => RunAsync<CheckSelfUpdateData>("check_self_update", alyExePath);
 
-        /// <summary>检查应用是否有新版本可更新</summary>
+        /// <summary>
+        /// 检查应用是否有新版本可更新。服务器不可达时返回 has_update=false
+        /// （即使本机已有已下载的待应用版本：无法与服务器核对就不上报，联网后自动继续 apply）。
+        /// </summary>
         public static Task<AlyResponse<CheckUpdateData>> CheckUpdateAsync(string alyExePath)
             => RunAsync<CheckUpdateData>("check_update", alyExePath);
 
