@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -72,6 +73,21 @@ func emptyLogsServer(t *testing.T) string {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"isSuccess":true,"errorMsg":"","data":[]}`))
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// logsServer 返回一个"服务器可达且含变更日志"的 server_url：GetProjectChangeLogs 返回给定版本列表。
+func logsServer(t *testing.T, versions ...string) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		items := make([]string, 0, len(versions))
+		for i, v := range versions {
+			items = append(items, fmt.Sprintf(`{"id":%d,"version":%q}`, i+1, v))
+		}
+		w.Write([]byte(`{"isSuccess":true,"errorMsg":"","data":[` + strings.Join(items, ",") + `]}`))
 	}))
 	t.Cleanup(srv.Close)
 	return srv.URL
@@ -245,5 +261,192 @@ func TestCheckUpdateEmptyChangeLogsNotReported(t *testing.T) {
 	}
 	if got.Data.CurrentVersion != "1.0" {
 		t.Errorf("current_version 应为实际内容版本 1.0，实际 %q", got.Data.CurrentVersion)
+	}
+}
+
+// TestCheckUpdateInvalidEqualVersionsNotReported 验证 F4：downloaded 且
+// Version == VersionPrevious（异常/遗留状态，apply 会拒绝替换）时，check 不再上报
+// "待应用更新"，避免 SDK 反复 apply → 拒绝 → 兜底回 downloaded 的反复杀进程循环。
+func TestCheckUpdateInvalidEqualVersionsNotReported(t *testing.T) {
+	pkg := setupCheckUpdateLayout(t,
+		`{"version_previous":"2.0","version":"2.0","version_status":"downloaded"}`,
+		logsServer(t, "2.0"))
+	// 待应用目录存在且非空 → 走 F4 非法状态判定（而不是 F3"产物丢失→重下"）
+	writePkgFile(t, pkg, "ApplicationFolder_2.0/x.txt", "x")
+
+	os.Args = []string{"aly-client", "check_update"}
+	got := runCheckUpdate(t)
+
+	if !got.IsSuccess {
+		t.Errorf("非法状态应安全返回 isSuccess=true，实际 false")
+	}
+	if got.Data.HasUpdate {
+		t.Errorf("Version == VersionPrevious 时不应上报待应用更新，实际 has_update=true")
+	}
+	if got.Data.NeedDownloadUpdate {
+		t.Errorf("服务器无更高版本时不应要求下载，实际 need_download_update=true")
+	}
+	if got.Data.CurrentVersion != "2.0" {
+		t.Errorf("current_version 应为 2.0，实际 %q", got.Data.CurrentVersion)
+	}
+}
+
+// TestCheckUpdatePendingDirMissingRequestsRedownload 验证 F3（check 侧）：downloaded 状态但
+// 待应用版本目录缺失/为空（下载产物丢失），且服务器版本正好是该待应用版本 →
+// 要求重新下载（download_update 允许同版本重下补齐）。
+func TestCheckUpdatePendingDirMissingRequestsRedownload(t *testing.T) {
+	setupCheckUpdateLayout(t,
+		`{"version_previous":"1.0","version":"2.0","version_status":"downloaded"}`,
+		logsServer(t, "2.0"))
+
+	os.Args = []string{"aly-client", "check_update"}
+	got := runCheckUpdate(t)
+
+	if !got.Data.HasUpdate || !got.Data.NeedDownloadUpdate {
+		t.Errorf("待应用目录丢失且服务器同版本时应要求重新下载，实际 has=%v need=%v",
+			got.Data.HasUpdate, got.Data.NeedDownloadUpdate)
+	}
+	if got.Data.NewVersion != "2.0" {
+		t.Errorf("new_version 应为待应用版本 2.0，实际 %q", got.Data.NewVersion)
+	}
+	if got.Data.CurrentVersion != "1.0" {
+		t.Errorf("current_version 应为真实内容版本 1.0，实际 %q", got.Data.CurrentVersion)
+	}
+}
+
+// TestCheckUpdatePendingDirMissingServerLowerFallsThroughToApply 验证 F3 的边界（B3）：
+// 待应用目录丢失但服务器版本**低于**待应用版本（例如回滚发布后该版本的变更日志被删除）时，
+// 不能要求重下（download 会因"already at latest version"拒绝，永远补不回来），
+// 必须落到"继续 apply"，由 apply_update 的 F3 守卫拒绝并自愈为 applied + Previous。
+func TestCheckUpdatePendingDirMissingServerLowerFallsThroughToApply(t *testing.T) {
+	setupCheckUpdateLayout(t,
+		`{"version_previous":"1.0","version":"2.0","version_status":"downloaded"}`,
+		logsServer(t, "1.5"))
+
+	os.Args = []string{"aly-client", "check_update"}
+	got := runCheckUpdate(t)
+
+	if !got.Data.HasUpdate || got.Data.NeedDownloadUpdate {
+		t.Errorf("服务器低于待应用版本时应交给 apply 自愈（true/false），实际 has=%v need=%v",
+			got.Data.HasUpdate, got.Data.NeedDownloadUpdate)
+	}
+	if got.Data.NewVersion != "2.0" {
+		t.Errorf("new_version 应为待应用版本 2.0，实际 %q", got.Data.NewVersion)
+	}
+}
+
+// TestDownloadNormalizesInvalidEqualVersions 验证 F4 的修复路径：downloaded 且
+// Version == VersionPrevious 时，按 downloaded 不变式（主目录内容 == VersionPrevious）状态等价于
+// applied → download_update 直接归一化为 applied（不下载、不空转），并输出标准完成行。
+func TestDownloadNormalizesInvalidEqualVersions(t *testing.T) {
+	pkg := setupCheckUpdateLayout(t,
+		`{"version_previous":"2.0","version":"2.0","version_status":"downloaded"}`,
+		logsServer(t, "2.0"))
+
+	os.Args = []string{"aly-client", "download_update"}
+	out := captureStdout(t, DownloadUpdate)
+
+	if !strings.Contains(out, `"data":null`) {
+		t.Errorf("归一化路径应以标准完成行收尾，实际输出: %s", out)
+	}
+	vi, err := config.ReadVersion()
+	if err != nil {
+		t.Fatalf("ReadVersion 失败: %v", err)
+	}
+	if vi.VersionStatus != config.VersionStatusApplied || vi.Version != "2.0" {
+		t.Errorf("应归一化为 applied/2.0，实际 %+v", vi)
+	}
+	if vi.VersionPrevious != "2.0" {
+		t.Errorf("归一化不得改写 VersionPrevious，实际 %q", vi.VersionPrevious)
+	}
+	// 未发生下载：不应凭空创建版本目录
+	assertPkgMissing(t, pkg, "ApplicationFolder_2.0")
+}
+
+// TestDownloadDoesNotNormalizeWhenServerHasNewerVersion 验证 B1：非法状态（downloaded 且
+// Version == VersionPrevious）只在"服务器没有更高版本"时才归一化为 applied；服务器已发新版时
+// 必须照常下载更高版本 —— 否则本次下载会变成空操作，紧随其后的 apply 只会报"无待应用更新"。
+func TestDownloadDoesNotNormalizeWhenServerHasNewerVersion(t *testing.T) {
+	setupCheckUpdateLayout(t,
+		`{"version_previous":"2.0","version":"2.0","version_status":"downloaded"}`,
+		logsServer(t, "3.0"))
+
+	os.Args = []string{"aly-client", "download_update"}
+	captureStdout(t, DownloadUpdate)
+
+	vi, err := config.ReadVersion()
+	if err != nil {
+		t.Fatalf("ReadVersion 失败: %v", err)
+	}
+	if vi.VersionStatus == config.VersionStatusApplied {
+		t.Errorf("服务器有更高版本时不得归一化为 applied（会使本次下载变成空操作），实际 %+v", vi)
+	}
+}
+
+// TestCheckUpdateInvalidEqualVersionsRedownloadsWhenServerNewer 验证 F4 的自愈出路：
+// 同一非法状态在服务器有更高版本时仍走重新下载（download_update 会把 Version 改成新版本，
+// 从而修好 Version == VersionPrevious）。
+func TestCheckUpdateInvalidEqualVersionsRedownloadsWhenServerNewer(t *testing.T) {
+	setupCheckUpdateLayout(t,
+		`{"version_previous":"2.0","version":"2.0","version_status":"downloaded"}`,
+		logsServer(t, "3.0"))
+
+	os.Args = []string{"aly-client", "check_update"}
+	got := runCheckUpdate(t)
+
+	if !got.Data.HasUpdate || !got.Data.NeedDownloadUpdate {
+		t.Errorf("服务器更高时应上报 need_download_update=true，实际 has=%v need=%v",
+			got.Data.HasUpdate, got.Data.NeedDownloadUpdate)
+	}
+	if got.Data.NewVersion != "3.0" {
+		t.Errorf("new_version 应为 3.0，实际 %q", got.Data.NewVersion)
+	}
+}
+
+// TestCheckUpdateDownloadedCurrentVersionIsPrevious 验证 F10：联网分支的 current_version
+// 与断网分支统一为"MainFolder 真实内容版本（VersionPrevious）"。
+func TestCheckUpdateDownloadedCurrentVersionIsPrevious(t *testing.T) {
+	pkg := setupCheckUpdateLayout(t,
+		`{"version_previous":"1.0","version":"2.0","version_status":"downloaded"}`,
+		logsServer(t, "1.0"))
+	// 待应用目录存在且非空（否则会走 F3"产物丢失→重下"分支，测不到本口径）
+	writePkgFile(t, pkg, "ApplicationFolder_2.0/x.txt", "x")
+
+	os.Args = []string{"aly-client", "check_update"}
+	got := runCheckUpdate(t)
+
+	if !got.Data.HasUpdate || got.Data.NeedDownloadUpdate {
+		t.Errorf("服务器未超过待应用版本时应继续 apply（true/false），实际 has=%v need=%v",
+			got.Data.HasUpdate, got.Data.NeedDownloadUpdate)
+	}
+	if got.Data.CurrentVersion != "1.0" {
+		t.Errorf("current_version 应为真实内容版本 1.0，实际 %q", got.Data.CurrentVersion)
+	}
+	if got.Data.NewVersion != "2.0" {
+		t.Errorf("new_version 应为待应用版本 2.0，实际 %q", got.Data.NewVersion)
+	}
+}
+
+// TestCheckUpdateDownloadedEmptyPreviousReportsEmptyCurrent 验证 F10 的另一半：
+// VersionPrevious 为空（首次部署，内容版本未知）时输出空 current_version，
+// 不再回退成待应用版本（旧实现会输出 current == new 的自相矛盾报文）。
+func TestCheckUpdateDownloadedEmptyPreviousReportsEmptyCurrent(t *testing.T) {
+	pkg := setupCheckUpdateLayout(t,
+		`{"version_previous":"","version":"2.0","version_status":"downloaded"}`,
+		logsServer(t, "1.0"))
+	// 待应用目录存在且非空（否则会走 F3"产物丢失→重下"分支）
+	writePkgFile(t, pkg, "ApplicationFolder_2.0/x.txt", "x")
+
+	os.Args = []string{"aly-client", "check_update"}
+	got := runCheckUpdate(t)
+
+	if !got.Data.HasUpdate {
+		t.Errorf("服务器未超过待应用版本时应上报继续 apply，实际 has_update=false")
+	}
+	if got.Data.CurrentVersion != "" {
+		t.Errorf("内容版本未知时应输出空 current_version，实际 %q", got.Data.CurrentVersion)
+	}
+	if got.Data.NewVersion != "2.0" {
+		t.Errorf("new_version 应为 2.0，实际 %q", got.Data.NewVersion)
 	}
 }

@@ -14,12 +14,25 @@ const (
 	VersionStatusApplied    = "applied"
 )
 
+// ApplyStageActivating 标记 apply 已经进入"激活改名"阶段（备份改名已完成、即将把
+// 版本目录改名为主目录）。崩溃恢复据此区分"改名确实发生过（版本目录被消耗）"与
+// "版本目录本来就不存在"（状态被手工改坏 / 下载产物丢失），避免凭空写 applied。
+const ApplyStageActivating = "activating"
+
 // VersionInfo represents the version.json structure.
 type VersionInfo struct {
 	VersionPrevious        string `json:"version_previous"`
 	Version                string `json:"version"`
 	VersionStatus          string `json:"version_status"`
 	AfterApplyUpdateScript string `json:"after_apply_update_script,omitempty"`
+	// ApplyStage 仅 apply 在途期间写入（applying 状态下的崩溃恢复证据），
+	// 任何终态写入都会清空；老文件没有该字段（omitempty），按历史启发式兼容。
+	ApplyStage string `json:"apply_stage,omitempty"`
+	// DownloadedFileCount 记录本机下载产物里的常规文件数（download_update 成功时写入，
+	// 不含 .part/.tmp 临时文件）。apply_update 用它兜住"目录还在但文件被删/重下中途被杀"
+	// 的残缺现场：文件数少于记录值 → 拒绝替换并自愈，避免混装旧/新文件的半成品被当成新版本。
+	// 老文件没有该字段（omitempty，视为 0 = 未知）→ 退化为"目录存在且非空"的弱校验。
+	DownloadedFileCount int `json:"downloaded_file_count,omitempty"`
 	// RollbackPrevious 记录回滚开始时 MainFolder 的真实内容版本（pre-rollback active version）。
 	// 仅 rollback 在 status=applying 期间写入，用于崩溃恢复时正确还原备份目录对应的版本，
 	// 避免 downloaded 状态下回滚导致的"目录名与实际内容错配"（#5）。

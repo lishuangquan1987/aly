@@ -73,7 +73,10 @@ func ApplyUpdate() {
 
 	// Check version_status
 	switch versionInfo.VersionStatus {
-	case config.VersionStatusApplied:
+	case config.VersionStatusApplied, "":
+		// applied 与"空状态"（version.json 缺失 / 损坏被隔离后重置 / 首次部署）同义：
+		// 都没有"已下载待应用"的版本。空状态此前会 fall through 到替换流程，出现
+		// "把 MainFolder 改名到自己"的假成功（{P:"",V:"",S:""} → applied，F1）。
 		printOutput(false, "no pending update to apply", nil)
 		return
 
@@ -105,11 +108,19 @@ func ApplyUpdate() {
 			}
 			if _, statErr2 := os.Stat(versionDir); os.IsNotExist(statErr2) {
 				// 新版本已应用完成：补齐状态、执行后置脚本、启动主程序。
+				if versionInfo.ApplyStage != config.ApplyStageActivating {
+					// F5：缺少"激活改名已开始"的证据（老版本写的状态 / 状态被手工改坏）。
+					// 仍按历史启发式判定为已完成（兼容老现场），但必须留痕，便于事后核对
+					// "磁盘内容与写入的版本号是否真的匹配"。
+					util.AppendToLog(logDir(), "update.log",
+						"apply crash recovery: versionDir 缺失但缺少 apply_stage=activating 证据，按历史启发式判定为已完成")
+				}
+				clearUpdateTransientState(versionInfo)
 				versionInfo.VersionStatus = config.VersionStatusApplied
-				versionInfo.RollbackPrevious = ""
 				if wErr := config.WriteVersion(versionInfo); wErr != nil {
 					util.AppendToLog(logDir(), "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
 				}
+				cleanupOrphanBackupIfUnreferenced(fc, versionInfo)
 				runPostApplyScript(fc, versionInfo.AfterApplyUpdateScript, versionInfo.Version)
 				launchMainExe(fc.ExeCfg, fc.MainFolder)
 				printOutput(true, "", nil)
@@ -130,11 +141,12 @@ func ApplyUpdate() {
 					return
 				}
 				// Update status to applied
+				clearUpdateTransientState(versionInfo)
 				versionInfo.VersionStatus = config.VersionStatusApplied
-				versionInfo.RollbackPrevious = ""
 				if wErr := config.WriteVersion(versionInfo); wErr != nil {
 					util.AppendToLog(logDir(), "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
 				}
+				cleanupOrphanBackupIfUnreferenced(fc, versionInfo)
 				// Run post-update script and launch main exe
 				runPostApplyScript(fc, versionInfo.AfterApplyUpdateScript, versionInfo.Version)
 				launchMainExe(fc.ExeCfg, fc.MainFolder)
@@ -146,7 +158,72 @@ func ApplyUpdate() {
 		}
 
 	case config.VersionStatusDownloaded:
-		// Normal flow, continue
+		// 正常流程。替换前先把"待应用现场"校验清楚（F3/F4/A1）：
+		// 拒绝的分支都在写 applying 之前返回 —— 不写状态、不关进程、不改名。
+		if versionInfo.Version == "" {
+			// A1：downloaded 但 Version 为空属异常/遗留状态：AppVersionDir("") 会退化成
+			// 无版本号备份目录（ApplicationFolder_），把它当待应用版本会装入陈旧内容或
+			// 做一次"改名到自己"的假成功。与 F3 一致自愈为 applied + 真实内容版本。
+			util.AppendToLog(logDir(), "update.log",
+				"apply 拒绝：downloaded 但 Version 为空（异常/遗留状态，不替换）")
+			clearUpdateTransientState(versionInfo)
+			versionInfo.Version = versionInfo.VersionPrevious
+			versionInfo.VersionStatus = config.VersionStatusApplied
+			if wErr := config.WriteVersion(versionInfo); wErr != nil {
+				util.AppendToLog(logDir(), "update.log", fmt.Sprintf("repair write version failed: %v", wErr))
+			}
+			printOutput(false, "版本状态异常：Version 为空，已回退为 applied（原本就没有可应用的版本号）", nil)
+			return
+		}
+		if versionInfo.VersionPrevious != "" && versionInfo.VersionPrevious == versionInfo.Version {
+			// 异常/遗留状态：Version == VersionPrevious 时备份目录与版本目录同路径，
+			// 旁移-备份-激活会自毁。应用层提前拒绝（applyReplacement 里还有一道守卫），
+			// 避免"拒绝 → 兜底回 downloaded → check 仍要求 apply"的反复杀进程循环（F4）。
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("apply 拒绝：Version == VersionPrevious(%s)（异常/遗留状态，不替换）", versionInfo.Version))
+			printOutput(false, fmt.Sprintf("版本状态异常：Version == VersionPrevious(%s)，拒绝替换", versionInfo.Version), nil)
+			return
+		}
+		pendingDir, verErr := fc.ExeCfg.AppVersionDir(versionInfo.Version)
+		if verErr != nil {
+			printOutput(false, verErr.Error(), nil)
+			return
+		}
+		pendingCount, countErr := countRegularFiles(pendingDir)
+		if countErr != nil && !os.IsNotExist(countErr) {
+			// A2：目录存在但读不到（ACL/杀软锁/慢盘超时）：不得据此自愈丢弃可能有效的待应用包
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("apply 拒绝：待应用版本目录不可读 %s: %v", pendingDir, countErr))
+			printOutput(false, fmt.Sprintf("待应用版本目录不可读: %s（%v），未做任何改动", pendingDir, countErr), nil)
+			return
+		}
+		incomplete := countErr != nil /*目录缺失*/ || pendingCount == 0 ||
+			(versionInfo.DownloadedFileCount > 0 && pendingCount < versionInfo.DownloadedFileCount)
+		if incomplete {
+			// 下载产物缺失/为空/文件数少于下载完成时记录的数量：此前会把 MainFolder 自拷贝进
+			// 版本目录后整体改名，报"更新成功"但内容其实没变（或混装旧/新文件的半成品）。
+			// 这里拒绝替换，并把状态自愈成 applied + 真实内容版本 Previous，
+			// 让下一轮 check 重新下载（F3 逃生口）。
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("apply 拒绝：待应用版本目录缺失、为空或不完整 %s（现有文件 %d，记录 %d；回退为 applied/%s，等待重新下载）",
+					pendingDir, pendingCount, versionInfo.DownloadedFileCount, versionInfo.VersionPrevious))
+			clearUpdateTransientState(versionInfo)
+			versionInfo.Version = versionInfo.VersionPrevious
+			versionInfo.VersionStatus = config.VersionStatusApplied
+			if wErr := config.WriteVersion(versionInfo); wErr != nil {
+				util.AppendToLog(logDir(), "update.log", fmt.Sprintf("repair write version failed: %v", wErr))
+			}
+			printOutput(false, fmt.Sprintf("待应用版本目录缺失、为空或不完整: %s（已回退为 applied/%s，等待重新下载）",
+				pendingDir, versionInfo.Version), nil)
+			return
+		}
+
+	default:
+		// 未知 version_status：不猜测、绝不替换（此前会 fall through 到 downloaded 流程）(F6)。
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("apply 拒绝：未知 version_status %q（不替换）", versionInfo.VersionStatus))
+		printOutput(false, fmt.Sprintf("unknown version_status %q, refuse to apply", versionInfo.VersionStatus), nil)
+		return
 	}
 
 	// Set version_status = "applying"
@@ -193,12 +270,16 @@ func ApplyUpdate() {
 	}
 
 	// Update version.json
+	clearUpdateTransientState(versionInfo)
 	versionInfo.VersionStatus = config.VersionStatusApplied
-	versionInfo.RollbackPrevious = ""
 	if err := config.WriteVersion(versionInfo); err != nil {
 		printOutput(false, fmt.Sprintf("write version: %v", err), nil)
 		return
 	}
+
+	// F2：首次更新（Previous 为空）刚生成的备份是无版本号目录（ApplicationFolder_），
+	// 不可回滚、不会被 prune 清理 → 成功且确认不再引用后删除，避免每台机器多占一份应用体积。
+	cleanupOrphanBackupIfUnreferenced(fc, versionInfo)
 
 	// Run post-update script if configured
 	runPostApplyScript(fc, versionInfo.AfterApplyUpdateScript, versionInfo.Version)
@@ -279,6 +360,16 @@ func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDi
 	}
 
 	// Rename versionDir -> mainFolder
+	// F5：改名前把"已进入激活阶段"写进 version.json。崩溃恢复据此区分
+	//   (a) 改名确实发生过 → 版本目录被消耗（apply_update 的 applying + 主目录在 + 版本目录不在）；
+	//   (b) 版本目录本来就不存在（状态被手工改坏 / 下载产物丢失）→ 不能凭空写 applied。
+	// 写失败不阻断替换（标记只是"证据"，缺失时崩溃恢复退回历史启发式并留痕）。
+	if versionInfo.VersionStatus == config.VersionStatusApplying {
+		versionInfo.ApplyStage = config.ApplyStageActivating
+		if wErr := config.WriteVersion(versionInfo); wErr != nil {
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("write apply_stage failed: %v", wErr))
+		}
+	}
 	if err := renameDirWithKillState(versionDir, fc.MainFolder, closeTimeout, st); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
 		if rerr := os.Rename(prevVersionDir, fc.MainFolder); rerr != nil {

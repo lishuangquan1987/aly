@@ -162,6 +162,99 @@ func loadSharedFromVersionDirs(cfg *config.Config) (*config.SharedConfig, error)
 	return nil, fmt.Errorf("no readable shared.json in version dirs: %v", lastErr)
 }
 
+// clearUpdateTransientState 清空一次更新"过程中的临时字段"：
+//   - RollbackPrevious / RollbackTarget：仅回滚现场使用。任何离开回滚现场的写入都必须清空，
+//     否则残留的 RollbackTarget 会被 prune 当成保护对象（永久占一份快照空间）并造成语义混淆（F7）；
+//   - ApplyStage：apply 在途的阶段标记，只在 applying 期间有效，终态写入必须清空（F5）。
+//
+// 注意：不碰 Version / VersionPrevious —— 那是恒定的"内容版本"语义，由调用方自行维护。
+func clearUpdateTransientState(vi *config.VersionInfo) {
+	if vi == nil {
+		return
+	}
+	vi.RollbackPrevious = ""
+	vi.RollbackTarget = ""
+	vi.ApplyStage = ""
+}
+
+// countRegularFiles 统计目录下的常规文件数（不含 .part/.tmp 临时文件）。
+//
+// 调用方必须区分三类结果（F3/A2）：
+//   - err == nil 且 count == 0 → 目录存在但为空；
+//   - os.IsNotExist(err)      → 目录缺失；
+//   - 其它 err                → 目录存在但读不到（ACL/杀软锁、慢盘超时等）：
+//     不得与"缺失/为空"混为一谈（否则会丢弃可能有效的待应用包），由调用方决定报错或跳过。
+func countRegularFiles(path string) (int, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	if !info.IsDir() {
+		return 0, fmt.Errorf("not a directory: %s", path)
+	}
+	count := 0
+	walkErr := filepath.Walk(path, func(p string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if fi.IsDir() {
+			return nil
+		}
+		name := fi.Name()
+		if strings.HasSuffix(name, ".part") || strings.HasSuffix(name, ".tmp") {
+			return nil // 下载/复制的临时文件不计入
+		}
+		if fi.Mode().IsRegular() {
+			count++
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return 0, walkErr
+	}
+	return count, nil
+}
+
+// removeOrphanBackupDir 删除"无版本号的备份目录"（F2）。
+//
+// VersionPrevious == ""（首次更新 / 损坏自愈后首次更新）时，AppVersionDir("") 会退化成
+// {MainFolder}_{空}（例如 ApplicationFolder_）：它既不在 list_rollback_versions 里
+// （isLikelyVersion("") == false）、也不会被 prune 清理（同一过滤），属于纯垃圾，
+// 但占据一份完整应用体积。apply/rollback 成功且现场确认不再引用它时删除。
+//
+// 附带清理 .old / .old.N 旁移残留（removeAsideVariants）。
+func removeOrphanBackupDir(fc *FullConfig) {
+	if fc == nil || fc.ExeCfg == nil {
+		return
+	}
+	dir, err := fc.ExeCfg.AppVersionDir("")
+	if err != nil || dir == "" {
+		return
+	}
+	removeAsideVariants(dir)
+	if _, statErr := os.Stat(dir); os.IsNotExist(statErr) {
+		return
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		util.AppendToLog(logDir(), "update.log", fmt.Sprintf("remove orphan backup dir %s: %v", dir, err))
+		return
+	}
+	util.AppendToLog(logDir(), "update.log", fmt.Sprintf("removed orphan (no-version) backup dir %s", dir))
+}
+
+// cleanupOrphanBackupIfUnreferenced 在写好 applied 终态后调用：仅当新状态不再引用
+// "无版本号目录"（AppVersionDir("")）时才清理它（F2）。
+// 判定：Previous 为空（本次更新没有可回滚的上一个版本）且 Version 非空
+// （Version 为空时 AppVersionDir("") 仍可能被当作"当前/待应用版本目录"引用，绝不删）。
+func cleanupOrphanBackupIfUnreferenced(fc *FullConfig, vi *config.VersionInfo) {
+	if fc == nil || vi == nil {
+		return
+	}
+	if vi.VersionPrevious == "" && vi.Version != "" {
+		removeOrphanBackupDir(fc)
+	}
+}
+
 // printProgress 输出下载进度到 stdout，每行统一用 {isSuccess, errorMsg, data} 包裹的 JSON。
 // data 中包含 index/total/file/status/file_size/error 字段。
 func printProgress(index, total int, file, status string, fileSize int64, errMsg string) {
@@ -709,6 +802,9 @@ func applyFailureFallback(fc *FullConfig, versionInfo *config.VersionInfo, failE
 			// 保证即使调用路径变化，状态也确定性地保持 applying 而非降级（修复 Bug#3）。
 			// 注意：主目录已丢失，无法从这里启动旧 exe（exe 位于缺失目录下，
 			// launchMainExe 会失败），故不调用启动；崩溃恢复完成后会启动主程序。
+			// 保留 ApplyStage（崩溃恢复的证据），但清掉陈旧的回滚标记（F7）。
+			versionInfo.RollbackPrevious = ""
+			versionInfo.RollbackTarget = ""
 			versionInfo.VersionStatus = config.VersionStatusApplying
 			if wErr := config.WriteVersion(versionInfo); wErr != nil {
 				util.AppendToLog(logDir(), "update.log",
@@ -718,6 +814,8 @@ func applyFailureFallback(fc *FullConfig, versionInfo *config.VersionInfo, failE
 				fmt.Sprintf("apply failed with main folder lost, keep applying for crash recovery: %v", failErr))
 			return failErr.Error()
 		}
+		// 失败兜底回到 downloaded：清空本次 apply/回滚留下的过渡字段（F7/F5）。
+		clearUpdateTransientState(versionInfo)
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
 			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback after apply fail: write version failed: %v", wErr))

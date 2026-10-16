@@ -49,8 +49,12 @@ func CheckUpdate() {
 		checkUpdatePending(fc, versionInfo, localVersion)
 
 	default:
-		// 未知状态视为 applied，避免静默失败
-		fmt.Fprintf(os.Stderr, "check_update: unknown version_status %q, treating as applied\n", status)
+		// 未知状态一律按 applied 处理（与 apply/download/rollback 的口径统一，F6）：
+		// check 只比较版本、不做替换；download_update 会把它重写成 downloaded 从而修复；
+		// apply_update 对未知状态直接拒绝替换。这里不再"静默当成 applied"，而是明确告警。
+		// 注意：check_update 可能被宿主每秒调用，故只写 stderr，不写 update.log（避免刷爆日志）。
+		fmt.Fprintf(os.Stderr,
+			"check_update: unknown version_status %q, treating as applied (only download_update can rewrite it)\n", status)
 		checkUpdateApplied(fc, localVersion)
 	}
 }
@@ -160,19 +164,75 @@ func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVe
 		return
 	}
 
+	// F3：待应用版本目录缺失/为空/文件数少于下载时记录的数量（下载产物丢失或残缺）。
+	// 注意此处只做本地判断，决策融合进下面的版本比较：服务器同版本 → 要求重下同版本补齐；
+	// 服务器更高 → 按常规"重新下载更高版本"（download 会连同状态一起修复）；
+	// 服务器更低 → 落到"继续 apply"，由 apply_update 的 F3 守卫拒绝并自愈为 applied + Previous。
+	// apply_update 侧另有兜底：拒绝替换并自愈（防直接调用时假成功）。
+	// A2：目录存在但读不到（ACL/杀软锁）时不当成"丢失"，避免无谓重下。
+	pendingMissing := false
+	if pendingDir, dirErr := fc.ExeCfg.AppVersionDir(versionInfo.Version); dirErr == nil {
+		pendingCount, countErr := countRegularFiles(pendingDir)
+		switch {
+		case countErr != nil && !os.IsNotExist(countErr):
+			fmt.Fprintf(os.Stderr,
+				"check_update: pending version dir unreadable (%s: %v), skip re-download decision\n", pendingDir, countErr)
+		case pendingCount == 0:
+			pendingMissing = true
+			fmt.Fprintf(os.Stderr,
+				"check_update: pending version dir missing or empty (%s), need re-download\n", pendingDir)
+		case versionInfo.DownloadedFileCount > 0 && pendingCount < versionInfo.DownloadedFileCount:
+			pendingMissing = true
+			fmt.Fprintf(os.Stderr,
+				"check_update: pending version dir incomplete (%s: %d files < recorded %d), need re-download\n",
+				pendingDir, pendingCount, versionInfo.DownloadedFileCount)
+		}
+	}
+
 	latestLog := findLatestLog(logs)
 	serverVersion := stripVPrefix(latestLog.Version)
 
 	if !needUpdate(serverVersion, localVersion) {
-		// 服务器版本不高于本地待应用版本：继续 apply 已下载版本
-		currentVer := versionInfo.VersionPrevious
-		if currentVer == "" {
-			currentVer = versionInfo.Version
+		// F3：服务器"正好是该待应用版本"但产物丢失/残缺 → 重下同版本补齐。
+		// 仅在 serverVersion == localVersion 时成立：服务器更低时 download 会因
+		// "already at latest version"拒绝重下（永远补不回来），必须落到下面的 apply 自愈。
+		if pendingMissing && serverVersion == localVersion {
+			forceUpdate := false
+			project, projectErr := apiclient.FindProjectByName(fc.Shared.ServerURL, fc.Shared.ProjectName)
+			if projectErr != nil {
+				fmt.Fprintf(os.Stderr, "check_update: FindProjectByName failed: %v\n", projectErr)
+			} else {
+				forceUpdate = project.ForceUpdate
+			}
+			printOutput(true, "", &model.CheckUpdateData{
+				HasUpdate:          true,
+				NeedDownloadUpdate: true,
+				CurrentVersion:     stripVPrefix(versionInfo.VersionPrevious),
+				NewVersion:         stripVPrefix(versionInfo.Version),
+				ForceUpdate:        &forceUpdate,
+			})
+			return
 		}
+		// 异常/遗留状态：VersionPrevious == Version 且非空 —— 备份目录与版本目录同路径，
+		// apply_update 会拒绝替换。此时不再上报"待应用更新"，否则 SDK 会反复
+		// apply → 拒绝 → 兜底回 downloaded，每轮都要关掉并拉起主程序（F4）。
+		if versionInfo.VersionPrevious != "" && versionInfo.VersionPrevious == versionInfo.Version {
+			fmt.Fprintf(os.Stderr,
+				"check_update: version_status=downloaded but version_previous == version (%s): invalid state, not reporting pending update\n",
+				versionInfo.Version)
+			printOutput(true, "", &model.CheckUpdateData{
+				HasUpdate:      false,
+				CurrentVersion: stripVPrefix(versionInfo.Version),
+			})
+			return
+		}
+		// 服务器版本不高于本地待应用版本：继续 apply 已下载版本。
+		// current_version 用"MainFolder 真实内容版本"（VersionPrevious）：为空即未知（首次部署），
+		// 不再回退成待应用的 Version 造成 current == new 自相矛盾（与断网分支口径统一，F10）。
 		printOutput(true, "", &model.CheckUpdateData{
 			HasUpdate:          true,
 			NeedDownloadUpdate: false,
-			CurrentVersion:     stripVPrefix(currentVer),
+			CurrentVersion:     stripVPrefix(versionInfo.VersionPrevious),
 			NewVersion:         stripVPrefix(versionInfo.Version),
 		})
 	} else {

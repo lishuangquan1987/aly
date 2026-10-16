@@ -73,13 +73,57 @@ func DownloadUpdate() {
 		return
 	}
 
-	// Guard: if this exact version was already downloaded, skip re-download.
+	// F4：非法状态（downloaded 且 VersionPrevious == Version，非空）：备份目录与版本目录同路径，
+	// apply/rollback 都会拒绝替换。按 downloaded 的不变式（MainFolder 内容 == VersionPrevious），
+	// 此时主目录内容就是 Version 本身 → 状态等价于 applied，直接归一化。
+	// 注意：必须限定"服务器没有更高版本"时才归一化 —— 否则服务器已发新版时会把本次
+	// 下载请求变成空操作（check 已要求下载更高版本，归一化会让紧随其后的 apply 报"无待应用更新"）。
 	if versionInfo.VersionStatus == config.VersionStatusDownloaded &&
-		currentVersion == newVersion {
-		printOutput(true, "", &model.DownloadUpdateData{Version: newVersion})
+		versionInfo.VersionPrevious != "" && versionInfo.VersionPrevious == versionInfo.Version &&
+		!needUpdate(newVersion, currentVersion) {
+		util.AppendToLog(logDir(), "download.log",
+			fmt.Sprintf("非法状态 downloaded 且 Version == VersionPrevious(%s)：归一化为 applied", versionInfo.Version))
+		versionInfo.VersionStatus = config.VersionStatusApplied
+		clearUpdateTransientState(versionInfo)
+		if wErr := config.WriteVersion(versionInfo); wErr != nil {
+			printProgressFail(0, 0, "version.json", 0, fmt.Sprintf("write version: %v", wErr))
+			return
+		}
+		// 用标准完成行（data:null）收尾：SDK 视其为"下载完成"，随后 apply 会返回"无待应用更新"
+		printProgressDone()
 		return
 	}
-	if compareVersion(newVersion, currentVersion) <= 0 {
+
+	// Guard: if this exact version was already downloaded, skip re-download.
+	// F3：必须确认待应用版本目录真的存在且含文件 —— 否则"下载产物丢失"会被当成"已下载"跳过，
+	// 后续 apply 只能拿到空/残缺目录（apply 已改为拒绝并自愈）；这里直接重新下载补齐。
+	reDownload := false
+	if versionInfo.VersionStatus == config.VersionStatusDownloaded &&
+		currentVersion == newVersion {
+		targetDir, dErr := fc.ExeCfg.AppVersionDir(newVersion)
+		if dErr != nil {
+			reDownload = true // 连目标路径都算不出来：交给下面的正常流程报错
+		} else {
+			pendingCount, countErr := countRegularFiles(targetDir)
+			switch {
+			case countErr == nil && pendingCount > 0:
+				printOutput(true, "", &model.DownloadUpdateData{Version: newVersion})
+				return
+			case countErr != nil && !os.IsNotExist(countErr):
+				// A2：目录存在但读不到（ACL/杀软锁/慢盘）：不当成"丢失"而触发全量重下
+				util.AppendToLog(logDir(), "download.log",
+					fmt.Sprintf("downloaded 状态但待应用版本目录不可读（%s: %v），跳过重下", targetDir, countErr))
+				printOutput(true, "", &model.DownloadUpdateData{Version: newVersion})
+				return
+			default:
+				util.AppendToLog(logDir(), "download.log",
+					fmt.Sprintf("downloaded 状态但待应用版本目录缺失或为空（%s），重新下载补齐", targetDir))
+				// 允许"重下同版本"：否则下面的"已是最新"判断会直接返回错误，产物永远补不回来
+				reDownload = true
+			}
+		}
+	}
+	if !reDownload && compareVersion(newVersion, currentVersion) <= 0 {
 		printOutput(false, "already at latest version", nil)
 		return
 	}
@@ -105,6 +149,24 @@ func DownloadUpdate() {
 		printOutput(false, fmt.Sprintf("create target dir: %v", err), nil)
 		return
 	}
+
+	// B2：同版本重下（reDownload）中途失败时，目标目录会留下"半成品"文件。此时 version.json
+	// 仍是 downloaded/该版本（下载未完成不写状态是既定不变量），半成品目录会让后续 apply 误判
+	// "产物还在"并混装旧/新文件 → 失败时把目标目录清掉，让下一轮重新识别为"产物丢失"再重下。
+	// 注意：仅对 reDownload 生效（首次下载失败保留已校验文件，供断点续传复用）。
+	downloadedOK := false
+	defer func() {
+		if !reDownload || downloadedOK {
+			return
+		}
+		if err := os.RemoveAll(targetDir); err != nil {
+			util.AppendToLog(logDir(), "download.log",
+				fmt.Sprintf("clean partial re-download dir %s failed: %v", targetDir, err))
+			return
+		}
+		util.AppendToLog(logDir(), "download.log",
+			fmt.Sprintf("同版本重下失败，已清理半成品目录 %s", targetDir))
+	}()
 
 	// 只打印真正需要下载的差异文件：本地已匹配、或目标目录已有正确文件的
 	// 都不输出（不打印 SKIP），total 取差异文件数，避免界面按行统计进度出错。
@@ -207,12 +269,24 @@ func DownloadUpdate() {
 	}
 	versionInfo.Version = newVersion
 	versionInfo.VersionStatus = config.VersionStatusDownloaded
-	versionInfo.RollbackPrevious = ""
+	// 新的待应用现场：清掉上一轮回滚/apply 留下的过渡字段（RollbackPrevious/RollbackTarget/ApplyStage，F7/F5）
+	clearUpdateTransientState(versionInfo)
 	versionInfo.AfterApplyUpdateScript = latestLog.AfterApplyUpdateScript
+	// 记录下载产物里的文件数（不含 .part/.tmp）：apply_update 据此识别"目录还在但文件被删/
+	// 重下中途被杀"的残缺现场，避免混装半成品（B2）。算不出来（读目录失败）时置 0 = 未知，
+	// apply 退化为"目录存在且非空"的弱校验。
+	if count, cErr := countRegularFiles(targetDir); cErr == nil {
+		versionInfo.DownloadedFileCount = count
+	} else {
+		versionInfo.DownloadedFileCount = 0
+		util.AppendToLog(logDir(), "download.log",
+			fmt.Sprintf("count downloaded files in %s failed: %v", targetDir, cErr))
+	}
 	if err := config.WriteVersion(versionInfo); err != nil {
 		printProgressFail(0, 0, "version.json", 0, fmt.Sprintf("write version: %v", err))
 		return
 	}
+	downloadedOK = true // 成功：取消"失败清理半成品目录"的兜底
 
 	printProgressDone()
 }

@@ -23,6 +23,11 @@
 #   S11 断网语义：downloaded 状态在服务器不可达时不上报"待应用更新"
 #       （has_update=false，上位机不显示 ready to apply），已下载内容保留；
 #       服务器可达后同一现场仍继续 apply（联网语义不变）
+#   S12 状态守卫：空状态（version.json 缺失）与未知 version_status → apply_update 拒绝替换，
+#       不写状态、不关进程、不产生无名备份目录
+#   S13 待应用目录丢失：apply 拒绝并自愈为 applied/真实内容版本；check 随后重新下载并完成更新
+#   S14 非法状态 Version == VersionPrevious：check 不上报待应用更新（服务器有更高版本时仍重下自愈）
+#   S15 首次更新（version_previous 为空）：不残留不可回滚、不会被 prune 清理的无名备份目录
 #   ⚠ 注意：S8（中断=进程瞬间消失）与 S9（断电=文件不完整）是两类不同场景，不可混同。
 #
 # 用法（在仓库根目录）：
@@ -182,6 +187,15 @@ function Invoke-Client($pkg, $clientArgs) {
     if ($all.Count -eq 0) { return $null }
     $last = $all[-1]
     try { return ($last | ConvertFrom-Json) } catch { return $last }
+}
+
+# 运行可能向 stderr 打印告警的命令（断网/产物丢失/非法状态等）：
+# Windows PowerShell 5.1 在 $ErrorActionPreference='Stop' 下会把原生命令的 stderr 当成
+# 终止性错误，导致脚本中途退出 —— 调用期间临时放宽，其余行为与 Invoke-Client 一致。
+function Invoke-ClientLenient($pkg, $clientArgs) {
+    $eapSaved = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    try { return Invoke-Client $pkg $clientArgs } finally { $ErrorActionPreference = $eapSaved }
 }
 
 # 后台启动 aly-client 命令，返回 Process（用于"在更新环节中途中断"测试）
@@ -351,14 +365,15 @@ try {
     Publish-Version "1.0.5" "main-v6-content" "config-v6"
     $du = Invoke-Client $pkg @("download_update")
     Assert ($du.isSuccess -eq $true) "S3 download_update: 成功"
-    # 独占锁定当前主目录（ApplicationFolder）中的文件，使复制阶段失败。
-    # 注意：CopyDirWithExclude 的 CopyFile(overwrite=false) 会跳过已存在的目标，
-    # 因此必须先删除 versionDir 里的目标文件，复制才会真正读被锁的源文件。
+    # 独占锁定"复制阶段必须读取的源文件"，使复制失败。
+    # 注意：CopyDirWithExclude 的 CopyFile(overwrite=false) 会跳过已存在的目标 ——
+    # 因此在 MainFolder 里新建一个 versionDir 没有的文件并锁住它，复制才会去读它。
+    # （不再删除 versionDir 里的目标文件：那属于"待应用产物残缺"，现在会被 apply 的
+    #  downloaded_file_count 守卫拦下并自愈为 applied，见 S13d；本条用例只覆盖失败兜底。）
     # 用 -EncodedCommand（base64）避免 -Command 引号转义破坏 File.Open 参数。
-    $verDir5 = "$pkg\ApplicationFolder_1.0.5"
-    if (Test-Path "$verDir5\app.exe") { Remove-Item -Force "$verDir5\app.exe" }
-    $curFile = "$pkg\ApplicationFolder\app.exe"
-    $psScript3 = "`$s=[System.IO.File]::Open('$curFile',[System.IO.FileMode]::Open,[System.IO.FileAccess]::ReadWrite,[System.IO.FileShare]::None); Start-Sleep -Seconds 60"
+    $srcLock = "$pkg\ApplicationFolder\s3-locked.bin"
+    Set-Content -Path $srcLock -Value "s3-locked-source" -Encoding UTF8 -NoNewline
+    $psScript3 = "`$s=[System.IO.File]::Open('$srcLock',[System.IO.FileMode]::Open,[System.IO.FileAccess]::ReadWrite,[System.IO.FileShare]::None); Start-Sleep -Seconds 60"
     $enc3 = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($psScript3))
     $locker3 = Start-Process powershell.exe -ArgumentList "-NoProfile","-NonInteractive","-EncodedCommand",$enc3 -PassThru -WindowStyle Hidden
     Start-Sleep -Seconds 2
@@ -572,6 +587,11 @@ try {
         if (-not $hit) { Log "S8c[$ver] 条件 $($rd.mode) 未在 20s 内命中（仍继续中断+恢复验证）" }
         $vjC = Read-VersionJson $pkg8
         $phase = if ($null -eq $vjC) { "version.json 不可读" } else { "$($vjC.version_status)/$($vjC.version)" }
+        # F5：若现场是"applying 且版本目录已消失"（激活改名已完成），必须留有
+        # apply_stage=activating 作为"改名确实发生过"的证据（供崩溃恢复判定，不凭空写 applied）
+        if ($null -ne $vjC -and $vjC.version_status -eq "applying" -and -not (Test-Path $verDir)) {
+            Assert ($vjC.apply_stage -eq "activating") "S8c[$ver] 激活阶段留有 apply_stage 证据"
+        }
 
         # 恢复：重跑 apply（applying 走崩溃恢复；downloaded 走正常流程；已完成返回 no pending）
         $au = Invoke-Client $pkg8 @("apply_update")
@@ -692,15 +712,8 @@ try {
     Set-Content -Path "$pkg11\ApplicationFolder_3.2.0\app.exe" -Value "downloaded-v3.2.0" -Encoding UTF8
 
     # 断网：--url 指向确定无人监听的本地端口（覆盖 shared.json），不依赖停服务端。
-    # 注意：断网时 client 会向 stderr 打印一行 GetProjectChangeLogs 告警，而 Windows PowerShell 5.1
-    # 在 $ErrorActionPreference='Stop' 下会把原生命令的 stderr 当成终止性错误，故此处临时放宽。
-    $eapSaved = $ErrorActionPreference
-    $ErrorActionPreference = "SilentlyContinue"
-    try {
-        $cuOff = Invoke-Client $pkg11 @("check_update", "--url", "http://127.0.0.1:1")
-    } finally {
-        $ErrorActionPreference = $eapSaved
-    }
+    # 注意：断网时 client 会向 stderr 打印告警，故用 Invoke-ClientLenient（临时放宽 ErrorActionPreference）
+    $cuOff = Invoke-ClientLenient $pkg11 @("check_update", "--url", "http://127.0.0.1:1")
     Assert ($cuOff.isSuccess -eq $true) "S11 断网 check_update 安全返回 isSuccess=true（不报错/不卡死）"
     Assert ($cuOff.data.has_update -eq $false) "S11 断网 + downloaded：不上报待应用更新（has_update=false）"
     Assert ($cuOff.data.need_download_update -eq $false) "S11 断网 + downloaded：不要求下载"
@@ -717,6 +730,141 @@ try {
     Assert ($au11.isSuccess -eq $true) "S11 联网 apply_update 成功"
     $vj11b = Read-VersionJson $pkg11
     Assert ($vj11b.version -eq "3.2.0" -and $vj11b.version_status -eq "applied") "S11 联网 apply 后状态 applied（3.2.0）"
+
+    # ============================================================
+    # S12 状态守卫：空状态 / 未知 version_status → apply_update 拒绝替换
+    # ============================================================
+    Log "=== S12 空状态/未知状态：apply_update 拒绝替换 ==="
+    $pkg12 = New-ClientEnv "3.3.0" "applied"
+    Copy-Item "$Work\fake_main.exe" "$pkg12\ApplicationFolder\app.exe"
+    # 空状态：version.json 缺失（首次部署 / 损坏被隔离后的语义）
+    Remove-Item "$pkg12\UpdateFolder\version.json" -Force
+    $au12 = Invoke-Client $pkg12 @("apply_update")
+    Assert ($au12.isSuccess -eq $false) "S12 空状态 apply 拒绝（isSuccess=false）"
+    Assert (Test-Path "$pkg12\ApplicationFolder\app.exe") "S12 空状态 apply 未破坏主目录"
+    Assert (-not (Test-Path "$pkg12\ApplicationFolder_")) "S12 空状态 apply 未产生无名备份目录"
+
+    # 未知状态：手工改坏 status（不得被猜测成 downloaded 后照做替换）
+    Set-JsonFile "$pkg12\UpdateFolder\version.json" @{ version_previous = "1.0"; version = "3.3.0"; version_status = "Downloaded" }
+    $au12b = Invoke-Client $pkg12 @("apply_update")
+    Assert ($au12b.isSuccess -eq $false) "S12 未知状态 apply 拒绝（isSuccess=false）"
+    $vj12 = Read-VersionJson $pkg12
+    Assert ($vj12.version_status -eq "Downloaded") "S12 未知状态未被静默改写"
+    Assert (Test-Path "$pkg12\ApplicationFolder\app.exe") "S12 未知状态 apply 未破坏主目录"
+
+    # ============================================================
+    # S13 待应用目录丢失：apply 拒绝 + 自愈，check 重新下载后收敛
+    # ============================================================
+    Log "=== S13 待应用目录丢失：apply 自愈为 applied，check 重新下载 ==="
+    $pkg13 = New-ClientEnv "1.0.7" "applied"
+    Copy-Item "$Work\fake_main.exe" "$pkg13\ApplicationFolder\app.exe"
+    Publish-Version "3.4.0" "main-3.4.0"
+    $du13 = Invoke-Client $pkg13 @("download_update")
+    Assert ($du13.isSuccess -eq $true) "S13 download 3.4.0 成功"
+    $vj13a = Read-VersionJson $pkg13
+    Assert ($vj13a.version_status -eq "downloaded" -and $vj13a.version -eq "3.4.0") "S13 下载后状态 3.4.0/downloaded"
+
+    # 模拟待应用产物丢失（目录被删/被清理）
+    Remove-Item -Recurse -Force "$pkg13\ApplicationFolder_3.4.0"
+    $au13 = Invoke-Client $pkg13 @("apply_update")
+    Assert ($au13.isSuccess -eq $false) "S13 待应用目录丢失时 apply 拒绝（不再自拷贝假成功）"
+    $vj13b = Read-VersionJson $pkg13
+    Assert ($vj13b.version_status -eq "applied" -and $vj13b.version -eq "1.0.7") "S13 状态自愈为 applied/1.0.7（真实内容版本）"
+    Assert (-not (Test-Path "$pkg13\ApplicationFolder_3.4.0")) "S13 拒绝路径未把主目录自拷贝成待应用目录"
+
+    # 自愈后 check 会重新要求下载，更新可正常收敛
+    $cu13 = Invoke-Client $pkg13 @("check_update")
+    Assert ($cu13.data.has_update -eq $true -and $cu13.data.need_download_update -eq $true) "S13 check 重新要求下载"
+    Assert ($cu13.data.new_version -eq "3.4.0") "S13 new_version=3.4.0"
+    $du13b = Invoke-Client $pkg13 @("download_update")
+    Assert ($du13b.isSuccess -eq $true) "S13 重新下载成功"
+    $au13b = Invoke-Client $pkg13 @("apply_update")
+    Assert ($au13b.isSuccess -eq $true) "S13 重新 apply 成功"
+    $vj13c = Read-VersionJson $pkg13
+    Assert ($vj13c.version -eq "3.4.0" -and $vj13c.version_status -eq "applied") "S13 收敛为 3.4.0/applied"
+
+    # ---------- S13c 服务器版本与待应用版本相同、产物丢失 → 重下同版本补齐 ----------
+    Log "=== S13c 同版本重下：产物丢失但服务器没有更高版本 ==="
+    $pkg13c = New-ClientEnv "1.0.7" "applied"
+    Copy-Item "$Work\fake_main.exe" "$pkg13c\ApplicationFolder\app.exe"
+    $du13c0 = Invoke-Client $pkg13c @("download_update")
+    Assert ($du13c0.isSuccess -eq $true) "S13c 下载 3.4.0 成功"
+    $vj13c0 = Read-VersionJson $pkg13c
+    Assert ($vj13c0.version -eq "3.4.0" -and $vj13c0.version_previous -eq "1.0.7" -and $vj13c0.version_status -eq "downloaded") "S13c 状态 1.0.7->3.4.0/downloaded"
+
+    Remove-Item -Recurse -Force "$pkg13c\ApplicationFolder_3.4.0"
+    # F3 会向 stderr 打印"pending version dir missing"告警 → 用 lenient 调用
+    $cu13c = Invoke-ClientLenient $pkg13c @("check_update")
+    Assert ($cu13c.data.has_update -eq $true -and $cu13c.data.need_download_update -eq $true) "S13c 产物丢失时要求重新下载"
+    Assert ($cu13c.data.new_version -eq "3.4.0") "S13c new_version=3.4.0（同版本重下）"
+    $du13c = Invoke-Client $pkg13c @("download_update")
+    Assert ($du13c.isSuccess -eq $true) "S13c 同版本重下成功（不报 already at latest version）"
+    $vj13c1 = Read-VersionJson $pkg13c
+    Assert ($vj13c1.downloaded_file_count -ge 1) "S13c 重下后记录 downloaded_file_count=$($vj13c1.downloaded_file_count)"
+    Assert (Test-Path "$pkg13c\ApplicationFolder_3.4.0\app.exe") "S13c 待应用目录已补齐"
+    $au13c = Invoke-Client $pkg13c @("apply_update")
+    Assert ($au13c.isSuccess -eq $true) "S13c 补齐后 apply 成功"
+    $vj13c3 = Read-VersionJson $pkg13c
+    Assert ($vj13c3.version -eq "3.4.0" -and $vj13c3.version_status -eq "applied") "S13c 收敛为 3.4.0/applied"
+
+    # ---------- S13d 待应用目录残缺（文件数少于下载时记录的数量）→ apply 拒绝并自愈 ----------
+    Log "=== S13d 待应用目录残缺：按 downloaded_file_count 拒绝替换 ==="
+    $pkg13d = New-ClientEnv "1.0.7" "applied"
+    Copy-Item "$Work\fake_main.exe" "$pkg13d\ApplicationFolder\app.exe"
+    $du13d = Invoke-Client $pkg13d @("download_update")
+    Assert ($du13d.isSuccess -eq $true) "S13d 下载 3.4.0 成功"
+    $vj13d = Read-VersionJson $pkg13d
+    Assert ($vj13d.downloaded_file_count -ge 2) "S13d 已记录 downloaded_file_count=$($vj13d.downloaded_file_count)"
+    # 删掉一个正式文件（目录仍非空）→ 文件数少于记录值；.part 临时文件不在记录范围内
+    $victim = Get-ChildItem "$pkg13d\ApplicationFolder_3.4.0" -Recurse -File | Where-Object { $_.Name -notlike '*.part' } | Select-Object -First 1
+    Assert ($null -ne $victim) "S13d 取样一个待应用文件用于删除"
+    Remove-Item $victim.FullName -Force
+    $au13d = Invoke-Client $pkg13d @("apply_update")
+    Assert ($au13d.isSuccess -eq $false) "S13d 残缺失配时 apply 拒绝（不再混装半成品）"
+    $vj13d2 = Read-VersionJson $pkg13d
+    Assert ($vj13d2.version_status -eq "applied" -and $vj13d2.version -eq "1.0.7") "S13d 自愈为 applied/1.0.7（真实内容版本）"
+    Assert (Test-Path "$pkg13d\ApplicationFolder\app.exe") "S13d 主目录未被替换"
+
+    # ============================================================
+    # S14 非法状态 Version == VersionPrevious（downloaded）：check 不上报待应用更新
+    # ============================================================
+    Log "=== S14 Version==VersionPrevious：check 不上报待应用更新 ==="
+    $pkg14 = New-ClientEnv "3.5.0" "downloaded"
+    Publish-Version "3.5.0" "main-3.5.0"
+    Set-JsonFile "$pkg14\UpdateFolder\version.json" @{ version_previous = "3.5.0"; version = "3.5.0"; version_status = "downloaded" }
+    Copy-Item "$Work\fake_main.exe" "$pkg14\ApplicationFolder\app.exe"
+    New-Item -ItemType Directory -Force -Path "$pkg14\ApplicationFolder_3.5.0" | Out-Null
+    Copy-Item "$Work\fake_main.exe" "$pkg14\ApplicationFolder_3.5.0\app.exe"
+
+    # F4 会向 stderr 打印"invalid state"告警 → 用 lenient 调用
+    $cu14 = Invoke-ClientLenient $pkg14 @("check_update")
+    Assert ($cu14.data.has_update -eq $false) "S14 非法状态 check 不上报待应用更新（has_update=false）"
+    $au14 = Invoke-Client $pkg14 @("apply_update")
+    Assert ($au14.isSuccess -eq $false) "S14 非法状态 apply 仍拒绝替换"
+
+    # 自愈出路：服务器有更高版本时照旧要求重新下载（download 会把 Version 改成新版本）
+    Publish-Version "3.5.1" "main-3.5.1"
+    $cu14b = Invoke-Client $pkg14 @("check_update")
+    Assert ($cu14b.data.has_update -eq $true -and $cu14b.data.need_download_update -eq $true) "S14 服务器更高时仍要求重新下载（自愈出路）"
+
+    # ============================================================
+    # S15 首次更新（version_previous 为空）不残留无名备份目录
+    # ============================================================
+    Log "=== S15 首次更新不残留 ApplicationFolder_ 垃圾备份 ==="
+    $pkg15 = New-ClientEnv "3.6.0" "downloaded"
+    Publish-Version "3.6.0" "main-3.6.0"
+    Set-JsonFile "$pkg15\UpdateFolder\version.json" @{ version_previous = ""; version = "3.6.0"; version_status = "downloaded" }
+    Copy-Item "$Work\fake_main.exe" "$pkg15\ApplicationFolder\app.exe"
+    New-Item -ItemType Directory -Force -Path "$pkg15\ApplicationFolder_3.6.0" | Out-Null
+    Copy-Item "$Work\fake_main.exe" "$pkg15\ApplicationFolder_3.6.0\app.exe"
+
+    $au15 = Invoke-Client $pkg15 @("apply_update")
+    Assert ($au15.isSuccess -eq $true) "S15 首次更新 apply 成功"
+    $vj15 = Read-VersionJson $pkg15
+    Assert ($vj15.version -eq "3.6.0" -and $vj15.version_status -eq "applied") "S15 状态 applied/3.6.0"
+    Assert ($vj15.version_previous -eq "") "S15 version_previous 仍为空（首次更新无上一版本）"
+    Assert (-not (Test-Path "$pkg15\ApplicationFolder_")) "S15 未残留无名备份目录 ApplicationFolder_"
+    Assert (Test-Path "$pkg15\ApplicationFolder\app.exe") "S15 主目录已就位"
 
 } finally {
     if (-not $KeepRunning) {

@@ -57,6 +57,13 @@ func pruneVersionSnapshots(fc *FullConfig, keep int, extraVersions ...string) {
 				protected[d] = true
 			}
 		}
+		// F2（历史残留）：Version 与 VersionPrevious 都非空时，"无版本号备份目录"
+		// （AppVersionDir("")，例如 ApplicationFolder_）不可能被任何版本字段引用，
+		// 而且 isLikelyVersion("")==false 让它永远进不了下面的候选集合（既不可回滚、
+		// 也永不清理）→ 这里直接清掉旧版本留下的垃圾备份。
+		if vi.Version != "" && vi.VersionPrevious != "" {
+			removeOrphanBackupDir(fc)
+		}
 	}
 	for _, v := range extraVersions {
 		if v == "" {
