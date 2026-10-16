@@ -397,3 +397,101 @@ func TestResumeRollbackLegacyAbortNoTarget(t *testing.T) {
 		t.Errorf("应归位为 Version=2.0/applied，实际 %+v", vi2)
 	}
 }
+
+// TestRollbackRejectsDuringInterruptedApply 验证 F9：status=applying 且 rollback_previous 为空
+// 表示"有一笔未完成的 apply"。此时执行 rollback 会把待应用的升级包旁移后删除，并把 MainFolder
+// 的旧内容改名成 App_{Version}（目录名与内容错配，之后回滚到该版本会装入错内容）→ 必须拒绝。
+func TestRollbackRejectsDuringInterruptedApply(t *testing.T) {
+	pkg := setupRollbackLayout(t, `{
+  "version_previous": "1.0",
+  "version": "2.0",
+  "version_status": "applying"
+}`)
+	writePkgFile(t, pkg, "ApplicationFolder/v1.txt", "v1")
+	writePkgFile(t, pkg, "ApplicationFolder_0.9/v09.txt", "v09")   // 回滚目标
+	writePkgFile(t, pkg, "ApplicationFolder_2.0/v2.pending", "v2") // 在途升级包
+	before := readFileOrFail(t, filepath.Join(pkg, "UpdateFolder", "version.json"))
+
+	os.Args = []string{"aly-client", "rollback", "--version", "0.9"}
+	out := captureStdout(t, Rollback)
+
+	if !strings.Contains(out, `"isSuccess":false`) || !strings.Contains(out, "未完成的更新") {
+		t.Errorf("应拒绝在“未完成的 apply”现场回滚，实际输出: %s", out)
+	}
+	if after := readFileOrFail(t, filepath.Join(pkg, "UpdateFolder", "version.json")); after != before {
+		t.Errorf("拒绝路径不得改写 version.json，改前=%q 改后=%q", before, after)
+	}
+	assertPkgExists(t, pkg, "ApplicationFolder/v1.txt")
+	assertPkgExists(t, pkg, "ApplicationFolder_0.9/v09.txt")
+	assertPkgExists(t, pkg, "ApplicationFolder_2.0/v2.pending")
+}
+
+// TestRollbackRejectsUnknownStatus 验证 F6：未知 version_status 时回滚拒绝替换（与 apply 口径一致），
+// 只有 download_update 能把它重写成 downloaded 完成修复。
+func TestRollbackRejectsUnknownStatus(t *testing.T) {
+	pkg := setupRollbackLayout(t, `{
+  "version_previous": "1.0",
+  "version": "2.0",
+  "version_status": "Applying"
+}`)
+	writePkgFile(t, pkg, "ApplicationFolder/v1.txt", "v1")
+	writePkgFile(t, pkg, "ApplicationFolder_0.9/v09.txt", "v09")
+	before := readFileOrFail(t, filepath.Join(pkg, "UpdateFolder", "version.json"))
+
+	os.Args = []string{"aly-client", "rollback", "--version", "0.9"}
+	out := captureStdout(t, Rollback)
+
+	if !strings.Contains(out, `"isSuccess":false`) || !strings.Contains(out, "unknown version_status") {
+		t.Errorf("未知状态回滚应被拒绝，实际输出: %s", out)
+	}
+	if after := readFileOrFail(t, filepath.Join(pkg, "UpdateFolder", "version.json")); after != before {
+		t.Errorf("拒绝路径不得改写 version.json，改前=%q 改后=%q", before, after)
+	}
+	assertPkgExists(t, pkg, "ApplicationFolder/v1.txt")
+	assertPkgExists(t, pkg, "ApplicationFolder_0.9/v09.txt")
+}
+
+// TestRollbackFailureRestoresPreStatus 验证 F8：downloaded 状态下回滚失败时，状态必须恢复为
+// 回滚前的 downloaded，而不是一律写 applied——否则 version.json 会声称 Version 已生效，
+// 而磁盘内容其实是 VersionPrevious（状态与内容错配，且此后无法自愈）。
+// 失败注入：删掉主目录，使 rename(MainFolder -> 备份) 因"源不存在"立即失败
+// （非占用类错误，不重试）。此时 loadFullConfig 会回退读取版本目录里的 shared.json。
+func TestRollbackFailureRestoresPreStatus(t *testing.T) {
+	pkg := setupRollbackLayout(t, `{
+  "version_previous": "1.0",
+  "version": "2.0",
+  "version_status": "downloaded"
+}`)
+	// 回滚目标存在；主目录删除（构造失败现场）
+	writePkgFile(t, pkg, "ApplicationFolder_0.9/v09.txt", "v09")
+	writePkgFile(t, pkg, "ApplicationFolder_0.9/.updator/shared.json",
+		`{"server_url":"http://127.0.0.1:2000","project_name":"test"}`)
+	writePkgFile(t, pkg, "ApplicationFolder_2.0/v2.pending", "v2pend")
+	if err := os.RemoveAll(filepath.Join(pkg, "ApplicationFolder")); err != nil {
+		t.Fatalf("删除主目录失败: %v", err)
+	}
+
+	os.Args = []string{"aly-client", "rollback", "--version", "0.9"}
+	out := captureStdout(t, Rollback)
+
+	if !strings.Contains(out, `"isSuccess":false`) {
+		t.Errorf("主目录缺失时回滚应失败，实际输出: %s", out)
+	}
+	vi, err := config.ReadVersion()
+	if err != nil {
+		t.Fatalf("ReadVersion 失败: %v", err)
+	}
+	if vi.VersionStatus != config.VersionStatusDownloaded {
+		t.Errorf("回滚失败后应恢复回滚前状态 downloaded，实际 %q（Version=%s Previous=%s）",
+			vi.VersionStatus, vi.Version, vi.VersionPrevious)
+	}
+	if vi.Version != "2.0" || vi.VersionPrevious != "1.0" {
+		t.Errorf("回滚失败不得改写 Version/VersionPrevious，实际 %+v", vi)
+	}
+	if vi.RollbackPrevious != "" || vi.RollbackTarget != "" || vi.ApplyStage != "" {
+		t.Errorf("回滚标记与 apply 阶段标记应被清空，实际 %+v", vi)
+	}
+	// 目标目录未被消耗、待应用目录未被触碰
+	assertPkgExists(t, pkg, "ApplicationFolder_0.9/v09.txt")
+	assertPkgExists(t, pkg, "ApplicationFolder_2.0/v2.pending")
+}
