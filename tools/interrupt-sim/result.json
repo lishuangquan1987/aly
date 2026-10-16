@@ -607,10 +607,9 @@
     "result": "自愈：重置后重下重装 → 应用可用（applied）",
     "disk": {
       "App": "2.0.0",
-      "App_": "2.0.0",
       "App_1.0.0": "1.0.0"
     },
     "version": "Version=2.0.0 Prev= Status=applied RollbackPrev=- RollbackTarget=-",
-    "note": "预置无 VersionPrevious，备份目录名为空版本（pre-existing 边缘，不影响应用可用性）"
+    "note": "预置无 VersionPrevious；无名备份目录 App_ 已由 F2 加固在成功路径清理"
   }
 ]

@@ -80,7 +80,29 @@ python3 scenarios.py     # 单轮场景（46 场景，含 download 中断、目�
 | H. 回滚中断 + 期间服务器发新版 | ✅ 真正中断点 PASS | check 在回滚中断期强制不下载，先完成回滚（Bug #5，无需改 SDK） |
 | D. download 中断 | ✅ 5/5 PASS | 与修复前一致 |
 | E. 多次下载导致目录错配 | ✅ PASS | `VersionPrevious` 不再被覆盖，备份目录命名正确（Bug #2） |
-| F. 断电写坏 version.json | ✅ PASS | ReadVersion 自愈：重置为首次部署语义后重下重装，应用可用（Bug #4） |
+| F. 断电写坏 version.json | ✅ PASS | ReadVersion 自愈：重置为首次部署语义后重下重装，应用可用（Bug #4）；无名备份目录 `App_` 已在成功路径清理（F2） |
+
+### 模型覆盖边界（2026-10 状态机加固后）
+
+**已建模**（`sim.py` 与 Go 侧同步）：
+
+- apply 的空状态 / 未知 `version_status` 守卫（F1/F6：拒绝替换，不再 fall through 成"自改名假成功"）；
+- `downloaded` 现场校验与自愈（F3：待应用版本目录缺失 → 拒绝并回退 applied+Previous；F4：`Version == VersionPrevious` → 拒绝，
+  check 也不上报）；
+- `apply_stage=activating` 证据（F5：进入激活改名前写入，终态清空；缺证据时 Go 侧退回历史启发式并写 update.log，模型不区分两条路径）；
+- 无名备份目录 `App_` 的清理（F2：首次更新成功路径 + prune 入口清历史残留）；
+- 过渡字段清空（F7：RollbackPrevious / RollbackTarget / ApplyStage）；
+- rollback 失败恢复回滚前状态（F8）与升级中断期拒绝 rollback（F9）；
+- `downloaded` 但 `Version` 为空（A1）、产物丢失时的"同版本重下"与两条限定条件
+  （B1：服务器有更高版本时不归一化；B3：仅在服务器版本相同时才要求重下同版本）。
+
+**未建模**（模型无法表达，由 Go 单测 + E2E 覆盖）：
+
+- **服务器不可达**：模型假定 `server_version` 始终可知，`check_update` 的断网分支（downloaded 不再上报待应用更新）不在模型内；
+- `check_update` 输出字段 `current_version` 的口径；
+- **下载产物完整性**：`downloaded_file_count`（apply 依据"文件数少于下载完成时记录的数量"
+  拒绝残缺目录）——磁盘模型只区分目录存在/不存在，无法表达"目录非空但文件缺失"；
+- 进程查杀/占用、`update.log`、全局更新锁、后置脚本。
 
 ### 剩余 FAIL/WARN 分类（均非本批次修复范围内的缺陷）
 

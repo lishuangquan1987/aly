@@ -197,8 +197,8 @@ def scenario_f():
     disk = {MAIN: "2.0.0", vdir("1.0.0"): "1.0.0"}
     # version.json 损坏 → ReadVersion 自愈返回空 VersionInfo（status="" → 首次部署语义）
     # → check 走 checkUpdateApplied → 重新下载应用，可自愈（修复 Bug#4 后）。
-    # 注：预置无 VersionPrevious（损坏前状态未知），备份目录名为空版本（App_，pre-existing
-    # 边缘，list_rollback 会过滤，仅浪费一个目录），应用本身恢复可用。
+    # 注：预置无 VersionPrevious（损坏前状态未知），首次 apply 的备份目录名会退化为空版本（App_）；
+    # F2 加固后该无名备份在成功路径即被清理（此前会残留成不可见、不可回滚的垃圾目录）。
     env = Env(disk, Version("", "", ""), "2.0.0")
     try:
         host_recovery(env)
@@ -213,7 +213,7 @@ def scenario_f():
         "result": "自愈：重置后重下重装 → %s" % ("应用可用（applied）" if ok else "未收敛"),
         "disk": dict(sorted(env.disk.dirs.items())),
         "version": repr(env.ver),
-        "note": "预置无 VersionPrevious，备份目录名为空版本（pre-existing 边缘，不影响应用可用性）",
+        "note": "预置无 VersionPrevious；无名备份目录 App_ 已由 F2 加固在成功路径清理",
     })
 
 

@@ -122,15 +122,36 @@ disagree with the online state. Nothing is discarded — the downloaded version 
 reported, even offline, otherwise a machine left without its application folder could never
 recover by itself.
 
-Crash recovery: if `version_status` is `applying` on startup, the updater re-executes the atomic rename step — the update is never left in a broken half-state.
+Crash recovery: if `version_status` is `applying` on startup, the updater re-executes the atomic rename step — the update is never left in a broken half-state. The updater writes `apply_stage=activating` right before the final activate rename, and that marker is the evidence used to decide whether the rename already happened (legacy states without it fall back to the old heuristic and log a warning).
+
+State guards (a write never happens on an inconsistent state):
+
+- `apply_update` refuses to replace when `version_status` is empty or unknown (an empty state means
+  "no pending update", exactly like `applied`), and refuses `version_previous == version` (the backup
+  and version directories would collide). Unknown values are only repaired by `download_update`,
+  which rewrites the state as `downloaded`.
+- `apply_update` validates the downloaded package first: if `ApplicationFolder_{version}` is missing,
+  empty or has fewer files than the `downloaded_file_count` recorded at download time (files deleted,
+  or a same-version re-download killed halfway), it refuses the replace and self-heals to `applied` +
+  the real content version, so the next `check_update` re-downloads instead of "succeeding" with a
+  copy of the current folder or a mixed old/new package. An empty `version` in the `downloaded` state
+  is rejected the same way, and a directory that exists but cannot be read is reported without any
+  state change.
+- `rollback` refuses to run while an apply is unfinished (`applying` with no `rollback_previous`), and
+  on failure restores the pre-rollback status instead of always writing `applied`.
+- First-ever updates (`version_previous` empty) used to leave a nameless `ApplicationFolder_` backup
+  that no rollback could reach and `prune` never cleaned; it is now removed on success (and pruned when
+  leftover from older builds).
 
 ### Atomic Replace
 
 `apply_update` performs:
 1. Copy all files from current `ApplicationFolder` into `ApplicationFolder_{new_version}` (excluding ignored paths) so the new version directory is complete.
-2. Rename `ApplicationFolder` → `ApplicationFolder_{previous_version}` (backup).
-3. Rename `ApplicationFolder_{new_version}` → `ApplicationFolder`.
-4. If any rename fails, revert `version_status` to `downloaded` so it can be retried.
+2. Rename `ApplicationFolder` → `ApplicationFolder_{previous_version}` (backup; the nameless
+   `ApplicationFolder_` when there is no previous version).
+3. Rename `ApplicationFolder_{new_version}` → `ApplicationFolder` (after writing `apply_stage=activating`).
+4. If any rename fails, revert `version_status` to `downloaded` so it can be retried (and clear the
+   transient `rollback_previous`/`rollback_target`/`apply_stage` fields).
 
 ### Client API Overview
 

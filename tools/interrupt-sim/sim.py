@@ -16,6 +16,21 @@ aly-client 更新状态机「中断 → 恢复」模拟器
   版本目录   = "App_" + version
   旁移残留   = "App_" + version + ".old" / ".old.N"
 
+已建模（2026-10 状态机加固后同步）：
+  - F1/F6  apply：空状态（"")与未知 status 一律拒绝替换（此前会 fall through 成"自改名假成功"）
+  - F3/F4  apply：downloaded 现场校验 —— 版本目录缺失/为空 → 拒绝并自愈为 applied+VersionPrevious；
+           Version == VersionPrevious → 拒绝（check 不再上报，避免反复杀进程）
+  - F5     apply：进入"激活改名"前写 apply_stage=activating，作为崩溃恢复"改名确实发生过"的证据
+  - F2     首次更新（VersionPrevious 为空）成功后删除无名备份目录 App_（不可回滚、不会被 prune 清理）
+  - F7     所有终态写入清空 RollbackPrevious/RollbackTarget/ApplyStage
+  - F8     rollback 失败恢复"回滚前状态"（不再一律写 applied）
+  - F9     status=applying 且 rollback_previous 为空（未完成的 apply）→ 拒绝 rollback
+
+未建模（模型外，改动本身有 Go 单测/E2E 覆盖）：
+  - 服务器不可达（check_update 断网语义；本模型假定 server_version 始终可知）
+  - check_update 输出字段 current_version 的口径（模型只关心 need_download/new_version）
+  - 进程查杀、日志、锁、后置脚本
+
 一致性判据（恢复是否成功）：
   1. MainFolder 必须存在（否则应用打不开）
   2. status=applied 时：MainFolder 内容版本 == version.json.Version
@@ -67,17 +82,20 @@ class Disk:
 
 class Version:
     def __init__(self, version="", previous="", status="", rollback_previous="",
-                 after_script="", rollback_target=""):
+                 after_script="", rollback_target="", apply_stage=""):
         self.Version = version
         self.VersionPrevious = previous
         self.VersionStatus = status
         self.RollbackPrevious = rollback_previous
         self.RollbackTarget = rollback_target
         self.AfterApplyUpdateScript = after_script
+        # F5：仅 apply 在途（applying）期间写入，终态一律清空
+        self.ApplyStage = apply_stage
 
     def copy(self):
         return Version(self.Version, self.VersionPrevious, self.VersionStatus,
-                       self.RollbackPrevious, self.AfterApplyUpdateScript, self.RollbackTarget)
+                       self.RollbackPrevious, self.AfterApplyUpdateScript, self.RollbackTarget,
+                       self.ApplyStage)
 
     def __repr__(self):
         return "Version=%s Prev=%s Status=%s RollbackPrev=%s RollbackTarget=%s" % (
@@ -94,6 +112,8 @@ class Env:
         self.server_version = server_version
         self.crash_at = crash_at  # (op, step) 命中即抛 Crash
         self.log = []
+        # F4：check 判定"状态非法、无动作可做"时置位，宿主本轮不再 apply/download
+        self.host_idle = False
 
     # ---- 断点工具 ----
     def tick(self, step):
@@ -124,10 +144,25 @@ def cmd_download_update(env):
     if vi.VersionStatus == "applying":
         return "skipped: applying in progress"
 
+    # F4：非法状态（downloaded 且 VersionPrevious == Version）→ 归一化为 applied；
+    # B1：仅当服务器没有更高版本时才归一化，否则会把"下载更高版本"的请求变成空操作
+    if (vi.VersionStatus == "downloaded" and vi.VersionPrevious
+            and vi.VersionPrevious == vi.Version
+            and cmp_version(new_version, vi.Version) <= 0):
+        vi.VersionStatus = "applied"
+        vi.RollbackPrevious = ""
+        vi.RollbackTarget = ""
+        vi.ApplyStage = ""
+        return "normalized: illegal state -> applied"
+
     # 守卫（applying 已在上面早退，此处无需再保留例外）
+    re_download = False
     if vi.VersionStatus == "downloaded" and vi.Version == new_version:
-        return "skip: already downloaded"
-    if cmp_version(new_version, vi.Version) <= 0:
+        if env.disk.exists(env.version_dir(new_version)):
+            return "skip: already downloaded"
+        # F3：产物丢失 → 允许"重下同版本"补齐（需旁路下面的"已是最新"判断）
+        re_download = True
+    if not re_download and cmp_version(new_version, vi.Version) <= 0:
         return "skip: already latest"
 
     target = env.version_dir(new_version)
@@ -153,6 +188,7 @@ def cmd_download_update(env):
     vi.VersionStatus = "downloaded"
     vi.RollbackPrevious = ""
     vi.RollbackTarget = ""
+    vi.ApplyStage = ""  # F5/F7：新的待应用现场，清掉上一轮的过渡字段
     return "downloaded"
 
 
@@ -173,6 +209,15 @@ def cmd_check_update(env):
         return False, vi.Version
     if cmp_version(env.server_version, vi.Version) > 0:
         return True, env.server_version
+    # F3：待应用版本目录缺失 → 仅当服务器"正好是该待应用版本"时要求重下同版本补齐；
+    # 服务器更低（B3：download 会因 already at latest 拒绝）时落到"继续 apply"，由 apply 自愈
+    if not env.disk.exists(env.version_dir(vi.Version)) and env.server_version == vi.Version:
+        return True, vi.Version
+    # F4：非法状态（Version == VersionPrevious，备份目录与版本目录同路径）→ apply 会拒绝；
+    # check 不上报待应用更新，避免宿主反复 apply → 拒绝 → 兜底回 downloaded 的杀进程循环。
+    if vi.VersionPrevious and vi.VersionPrevious == vi.Version:
+        env.host_idle = True
+        return False, vi.Version
     return False, vi.Version  # 继续 apply 已下载版本
 
 
@@ -207,6 +252,8 @@ def _apply_replacement(env, vi, version_dir):
         env.disk.rename(prev_dir, old_backup_temp)
     env.tick("apply:rename_backup")
     env.disk.rename(MAIN, prev_dir)
+    # F5：进入"激活改名"前写 apply_stage=activating（崩溃恢复的证据）
+    vi.ApplyStage = "activating"
     env.tick("apply:rename_activate")
     env.disk.rename(version_dir, MAIN)
     env.tick("apply:remove_aside_done")
@@ -218,8 +265,12 @@ def cmd_apply_update(env):
     vi = env.ver
     env.tick("apply:start")
 
-    if vi.VersionStatus == "applied":
+    if vi.VersionStatus in ("", "applied"):
+        # F1：空状态（version.json 缺失/损坏自愈重置）与 applied 同义，拒绝替换
         return "no pending update to apply"
+    if vi.VersionStatus not in ("applying", "downloaded"):
+        # F6：未知 status 不猜测、不替换（只允许 download_update 重写成 downloaded 修复）
+        return "unknown version_status: refuse to apply"
 
     if vi.VersionStatus == "applying":
         # 回滚中断：按回滚语义恢复（修复 Bug#1/#5），绝不按 vi.Version 升级
@@ -228,10 +279,17 @@ def cmd_apply_update(env):
         vd = env.version_dir(vi.Version)
         if env.disk.exists(MAIN):
             if not env.disk.exists(vd):
-                # 分支 1：认为新版本已就位（78-106 行）
+                # 分支 1：认为新版本已就位（78-106 行）。
+                # F5：Go 侧此时会检查 apply_stage==activating 作为"改名确实发生过"的证据，
+                # 缺证据（老现场）退回历史启发式并写 update.log；两条路径结果都是补写 applied，
+                # 故模型不区分，只做过渡字段清理。
                 env.tick("apply:recover_mark_applied")
                 vi.VersionStatus = "applied"
                 vi.RollbackPrevious = ""
+                vi.RollbackTarget = ""
+                vi.ApplyStage = ""
+                if not vi.VersionPrevious and vi.Version:
+                    env.disk.dirs.pop(vdir(""), None)  # F2：清理无名备份目录
                 return "recovered: marked applied"
             # versionDir 仍存在 -> fall through 重做替换
         else:
@@ -240,14 +298,36 @@ def cmd_apply_update(env):
                 env.disk.rename(vd, MAIN)
                 vi.VersionStatus = "applied"
                 vi.RollbackPrevious = ""
+                vi.RollbackTarget = ""
+                vi.ApplyStage = ""
+                if not vi.VersionPrevious and vi.Version:
+                    env.disk.dirs.pop(vdir(""), None)  # F2：清理无名备份目录
                 return "recovered: renamed versionDir -> MainFolder"
             return "CRASH RECOVERY FAILED: neither main nor version dir exists"
 
-    # status == downloaded（或 fall through）
+    # status == downloaded：替换前校验现场（A1/F3/F4），拒绝路径不写状态、不改名
+    if not vi.Version:
+        # A1：Version 为空时 AppVersionDir("") 退化成无名备份目录，不得当待应用版本
+        vi.Version = vi.VersionPrevious
+        vi.VersionStatus = "applied"
+        vi.RollbackPrevious = ""
+        vi.RollbackTarget = ""
+        vi.ApplyStage = ""
+        return "refuse: empty version -> repaired to applied/%s" % vi.Version
+    if vi.VersionPrevious and vi.VersionPrevious == vi.Version:
+        return "refuse: Version == VersionPrevious(%s)" % vi.Version
+    vd = env.version_dir(vi.Version)
+    if not env.disk.exists(vd):
+        # F3：待应用版本目录缺失 → 拒绝替换（否则自拷贝假成功），并自愈为 applied+VersionPrevious
+        vi.RollbackPrevious = ""
+        vi.RollbackTarget = ""
+        vi.ApplyStage = ""
+        vi.Version = vi.VersionPrevious
+        vi.VersionStatus = "applied"
+        return "refuse: pending version dir missing -> repaired to applied/%s" % vi.Version
+
     env.tick("apply:write_applying")
     vi.VersionStatus = "applying"
-
-    vd = env.version_dir(vi.Version)
     try:
         _apply_replacement(env, vi, vd)
     except (RenameErr, Crash) as e:
@@ -262,6 +342,11 @@ def cmd_apply_update(env):
     env.tick("apply:write_applied")
     vi.VersionStatus = "applied"
     vi.RollbackPrevious = ""
+    vi.RollbackTarget = ""
+    vi.ApplyStage = ""
+    if not vi.VersionPrevious and vi.Version:
+        # F2：首次更新（无上一版本）不保留无名备份目录 App_
+        env.disk.dirs.pop(vdir(""), None)
     return "applied"
 
 
@@ -274,6 +359,15 @@ def cmd_rollback(env, target):
     # 不再以 "version not found" 拒绝。
     if vi.VersionStatus == "applying" and vi.RollbackPrevious:
         return cmd_resume_rollback(env, vi.RollbackTarget or target)
+
+    # F6：未知 version_status 不猜测、不替换（与 apply 口径一致；只有 download 能重写修复）
+    if vi.VersionStatus not in ("", "applied", "downloaded", "applying"):
+        return "unknown version_status: refuse to rollback"
+
+    # F9：status=applying 且 rollback_previous 为空 = 有一笔未完成的 apply；
+    # 此时回滚会把待应用升级包旁移删除、并把主目录旧内容改名成 App_{Version}（目录名与内容错配）
+    if vi.VersionStatus == "applying" and not vi.RollbackPrevious:
+        return "refuse: apply in progress (run apply_update first)"
 
     vd = env.version_dir(target)
     if not env.disk.exists(vd):
@@ -305,6 +399,9 @@ def cmd_rollback(env, target):
                 return "recovered: renamed %s -> MainFolder" % vd
             return "CRASH RECOVERY FAILED"
 
+    # F8：记住回滚前状态，失败时恢复它（不再一律写 applied）
+    pre_status = vi.VersionStatus
+
     env.tick("rb:write_applying")
     vi.VersionStatus = "applying"
     vi.RollbackPrevious = old_version
@@ -326,10 +423,11 @@ def cmd_rollback(env, target):
     except (RenameErr, Crash) as e:
         if isinstance(e, Crash):
             raise
-        # 失败路径：状态一律写回 applied + 清空 RollbackPrevious（rollback.go 各失败分支）
-        vi.VersionStatus = "applied"
+        # 失败路径：F8 恢复回滚前状态 + 清空过渡字段（rollback.go 各失败分支）
+        vi.VersionStatus = pre_status
         vi.RollbackPrevious = ""
         vi.RollbackTarget = ""
+        vi.ApplyStage = ""
         return "FAILED: %s" % e
 
     env.tick("rb:remove_aside_done")
@@ -339,6 +437,9 @@ def cmd_rollback(env, target):
     vi.VersionStatus = "applied"
     vi.RollbackPrevious = ""
     vi.RollbackTarget = ""
+    vi.ApplyStage = ""
+    if not vi.VersionPrevious and vi.Version:
+        env.disk.dirs.pop(vdir(""), None)  # F2：清理无名备份目录
     return "rolled back to %s" % target
 
 
@@ -458,9 +559,14 @@ def check_consistent(env, expect_version=None):
 
 def host_recovery(env, use_rollback=None, always_download=False):
     """宿主程序的常规恢复流程：check_update -> [download] -> apply_update"""
+    env.host_idle = False
     need_dl, nv = cmd_check_update(env)
+    # 显式回滚是用户发起的动作，独立于 check 的"无动作可做"判定，必须先于 host_idle 返回
+    # （F4 状态下 rollback 到其它目标版本仍然合法，只有 target == Version 才被拒绝）
     if use_rollback:
         return cmd_rollback(env, use_rollback)
+    if env.host_idle:
+        return "idle: no actionable update"  # F4
     if need_dl or always_download:
         cmd_download_update(env)
     return cmd_apply_update(env)

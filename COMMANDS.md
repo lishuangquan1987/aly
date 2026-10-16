@@ -71,6 +71,27 @@ aly-client.exe check_update [--url <服务器地址>] [--project-name <项目名
 4. 调用 `GET /api/project/get_project_change_logs/{projectName}` 获取变更日志
 5. 取最新一条日志的版本号，与本地 `version.json` 的版本号做比较
 
+> **产物丢失（`downloaded` 但待应用目录缺失/为空/文件数少于 `downloaded_file_count`）的口径**：
+> - 服务器版本**正好等于**待应用版本 → `has_update=true` / `need_download_update=true`（重下同版本补齐；
+>   `download_update` 会旁路"已是最新"判断）；
+> - 服务器版本**更高** → 按常规重新下载更高版本（`download_update` 会连同状态一起修复；此时不会把
+>   非法状态归一化为 `applied`，否则本次下载会变成空操作）；
+> - 服务器版本**更低**（例如回滚发布后该版本的变更日志被删除）→ 落到 `has_update=true` /
+>   `need_download_update=false`，交给 `apply_update` 拒绝并自愈为 `applied` + `version_previous`
+>   （否则 `download_update` 会报 "already at latest version"，产物永远补不回来）。
+>
+> **断网 / 无法核对的口径**：
+> - 服务器**没有任何变更日志**（例如服务端数据被清理）与"连不上"同样处理：`downloaded` 状态不上报待应用更新；
+> - `applying`（崩溃恢复）与 `rollback_previous` 非空（回滚续跑）**不受断网影响**，必须照常上报 —— 否则
+>   主目录已改名 / 回滚中断的机器永远无法自愈；
+> - `current_version` 统一为"MainFolder 真实内容版本"（`downloaded` 时即 `version_previous`，未知则为空串）。
+>
+> **已知策略边界**（产品/运维口径，非缺陷）：
+> - 服务端版本**低于**本地待应用版本（回滚发布 / 下架）时，客户端仍会继续 apply 本地已下载的更高版本，
+>   即"下架"无法阻止已下载的升级；
+> - `rollback` 成功后若服务端版本仍更高，下一轮 `check_update` 会再次升级（缺少 rollback pin 策略），
+>   需要运维侧同步下架/重发服务端版本，回滚才能保持。
+
 **返回示例**：
 
 ```json
@@ -192,15 +213,22 @@ aly-client.exe download_update [--url <服务器地址>] [--project-name <项目
 
 1. 获取服务端变更日志，取最新版本号
 2. 读取 `version.json` 获取当前版本号
-3. 若 `newVersion <= currentVersion`，返回"已是最新版本"
-4. 获取服务端所有文件列表，与本地的 `ApplicationFolder` 对比 MD5，得出需下载的文件列表
-5. 为目标版本创建目录 `PackageFolder/ApplicationFolder_{newVersion}/`
-6. 逐文件下载：
+3. 若状态为 `downloaded` 且版本号与目标相同 → 跳过下载；但会**校验目标目录是否存在且非空**，
+   缺失/为空时视为"下载产物丢失"，照常重新下载补齐（否则后续 `apply_update` 只能拿到空目录）
+4. 若 `newVersion <= currentVersion`，返回"已是最新版本"
+5. 获取服务端所有文件列表，与本地的 `ApplicationFolder` 对比 MD5，得出需下载的文件列表
+6. 为目标版本创建目录 `PackageFolder/ApplicationFolder_{newVersion}/`
+7. 逐文件下载：
    - 若目标目录中已存在同名文件且 MD5+SHA256 校验通过 → `SKIP`
    - **大文件断点续传**（>100MB）：写入 `.part` 临时文件，支持 `Range` 请求头断点续传，完成后重命名
    - **小文件直接下载**：写入 `.part` 临时文件，完成后重命名
-7. 每个文件下载后校验 MD5+SHA256，不匹配则重试最多 3 次
-8. 全部成功后更新 `version.json`：`version_status → "downloaded"`，记录新旧版本号，并从服务端变更日志同步 `after_apply_update_script` 字段
+8. 每个文件下载后校验 MD5+SHA256，不匹配则重试最多 3 次
+9. 全部成功后更新 `version.json`：`version_status → "downloaded"`，记录新旧版本号、
+   `downloaded_file_count`（本次下载产物里的常规文件数，不含 `.part`/`.tmp`），清空
+   `rollback_previous`/`rollback_target`/`apply_stage` 过渡字段，并从服务端变更日志同步
+   `after_apply_update_script` 字段；
+   若是"同版本重下"（`downloaded` 但产物丢失）且中途失败，会清理目标目录，避免留下
+   非空半成品目录让后续 `apply_update` 误判为"产物还在"
 
 **进度输出**（每行一个 JSON，最后一行 `data: null` 表示全部完成。所有服务端文件都有进度行，`total` = 服务端文件总数，`index` 1..total 无重复）：
 
@@ -258,12 +286,24 @@ aly-client.exe apply_update [--main-exe-path <路径>] [--close-timeout <秒数>
 **实现逻辑**：
 
 1. 读取 `version.json`，检查 `version_status`：
-   - `applied` → 返回"没有待应用的更新"
+   - `applied` **或空**（`version.json` 缺失 / 损坏被隔离后重置）→ 返回"没有待应用的更新"
+     （空状态此前会误走替换流程，出现"把主目录改名到自己"的假成功）
    - `applying` → 崩溃恢复流程：
-     - 若 `ApplicationFolder` 存在 → 重新走步骤 4 的替换
-     - 若 `ApplicationFolder` 不存在但 `ApplicationFolder_{version}` 存在 → 直接重命名并跳到步骤 6
+     - 若 `ApplicationFolder` 存在且 `ApplicationFolder_{version}` 不存在 → 视为"改名已完成"，补写 `applied`
+       （以进入激活改名阶段时写入的 `apply_stage=activating` 作为证据；老现场无该字段时按历史启发式判定并在 `update.log` 留痕）
+     - 若 `ApplicationFolder` 存在且 `ApplicationFolder_{version}` 也存在 → 重新走步骤 4 的替换
+     - 若 `ApplicationFolder` 不存在但 `ApplicationFolder_{version}` 存在 → 直接重命名并跳到步骤 7
      - 两者都不存在 → 返回错误
-   - `downloaded` → 正常执行
+   - `downloaded` → 先校验现场，各拒绝分支都在写状态/关进程/改名**之前**返回：
+     - `version` 为空 → 拒绝替换并自愈为 `applied`（`AppVersionDir("")` 会退化成无版本号备份目录
+       `ApplicationFolder_`，把它当待应用版本会装入陈旧内容或做一次"改名到自己"的假成功）
+     - `version_previous` 非空且等于 `version` → 拒绝替换（备份目录与版本目录同路径，旁移-备份-激活会自毁）
+     - `ApplicationFolder_{version}` 不存在、为空、或文件数少于 `downloaded_file_count`
+       （目录还在但文件被删 / 同版本重下中途被杀）→ 拒绝替换，并把状态自愈为 `applied` + 真实内容版本
+       （`version → version_previous`），让下一轮 `check_update` 重新下载。否则会把当前主目录自拷贝进版本目录后改名，
+       报"更新成功"但内容其实没变（或混装旧/新文件的半成品）
+     - 目录存在但**读不到**（ACL / 杀软锁 / 慢盘超时）→ 只报错、不做任何改动（不得据此丢弃可能有效的待应用包）
+   - 其它**未知取值** → 拒绝替换并报错（不再按 `downloaded` 处理；只有 `download_update` 能把它重写为 `downloaded` 修复）
 
 2. 将 `version_status` 设为 `applying`（标记开始）
 
@@ -274,11 +314,16 @@ aly-client.exe apply_update [--main-exe-path <路径>] [--close-timeout <秒数>
 
 4. **原子替换**（三步确保崩溃可恢复）：
    - ① 将 `ApplicationFolder` 内容（排除忽略规则）复制到 `ApplicationFolder_{version}`
-   - ② 将 `ApplicationFolder` 重命名为 `ApplicationFolder_{previousVersion}`
-   - ③ 将 `ApplicationFolder_{version}` 重命名为 `ApplicationFolder`
+   - ② 将 `ApplicationFolder` 重命名为 `ApplicationFolder_{previousVersion}`（为空时该名字退化为 `ApplicationFolder_`，
+     属"无版本号备份"，见步骤 5）
+   - ③ 将 `ApplicationFolder_{version}` 重命名为 `ApplicationFolder`（改名前先把 `apply_stage=activating` 写入
+     `version.json`，作为崩溃恢复判定"改名确实发生过"的证据）
    - 任一步失败则回滚并重置状态为 `downloaded`
 
-5. 更新 `version.json`：`version_status → "applied"`
+5. 更新 `version.json`：`version_status → "applied"`，并清空 `rollback_previous`/`rollback_target`/`apply_stage`；
+   若 `version_previous` 为空（首次更新），同时删除无版本号的备份目录 `ApplicationFolder_`
+   —— 它不在回滚列表里、也不会被 prune 清理，属纯垃圾（一份完整应用体积）；prune 入口也会清理历史残留
+   （仅在 `version` 与 `version_previous` 都非空、确认无人引用时）
 
 6. **执行后更新脚本**：从 `version.json` 的 `after_apply_update_script` 字段读取脚本路径（该字段在 download_update 时从服务端变更日志同步），异步执行，失败仅记日志到 `update.log`
 
@@ -295,6 +340,15 @@ aly-client.exe apply_update [--main-exe-path <路径>] [--close-timeout <秒数>
 
 // 替换失败已回滚
 {"isSuccess":false,"errorMsg":"backup rename failed: ...","data":null}
+
+// 未知状态 / 空状态 拒绝替换
+{"isSuccess":false,"errorMsg":"unknown version_status \"Downloaded\", refuse to apply","data":null}
+
+// Version == VersionPrevious（异常状态）拒绝替换
+{"isSuccess":false,"errorMsg":"版本状态异常：Version == VersionPrevious(2.0)，拒绝替换","data":null}
+
+// 待应用版本目录缺失/为空：拒绝替换并自愈为 applied + 真实内容版本
+{"isSuccess":false,"errorMsg":"待应用版本目录缺失或为空: ...\\ApplicationFolder_2.0（已回退为 applied/1.0，等待重新下载）","data":null}
 ```
 
 **示例 1：正常应用更新**
@@ -382,6 +436,16 @@ aly-client.exe rollback --version <目标版本号> [--main-exe-path <路径>] [
 
 - **不执行 `CopyDirWithExclude`**：回滚的目标版本目录是之前 apply 时保存的完整快照，无需补全文件
 - **直接做原子重命名**：`ApplicationFolder` ↔ `ApplicationFolder_{previousVersion}` 交换
+- **备份目录名取"MainFolder 真实内容版本"**：`downloaded` 状态下取 `version_previous`，
+  `applying` + `rollback_previous` 非空时取 `rollback_previous`
+- **拒绝在"未完成的 apply"现场回滚**：`version_status=applying` 且 `rollback_previous` 为空说明有一笔在途升级，
+  此时回滚会把待应用升级包旁移后删除、并把主目录旧内容改名成 `ApplicationFolder_{version}`（目录名与内容错配，
+  之后回滚到该版本会装入错内容）→ 必须先执行 `apply_update` 完成恢复
+- **拒绝未知 `version_status`**（与 `apply_update` 口径一致）
+- **失败时恢复"回滚前状态"**（不再一律写 `applied`）：在 `downloaded` 状态下回滚失败时，写 `applied` 会让
+  `version.json` 声称 `version` 已生效，而磁盘内容其实是 `version_previous`（状态与内容错配，且此后无法自愈）
+- 成功/失败都会清空 `rollback_previous`/`rollback_target`/`apply_stage` 过渡字段；
+  `version_previous` 为空时清理无版本号备份目录（同 `apply_update` 步骤 5）
 
 同样支持 `applying` 状态下的崩溃恢复。
 
@@ -1253,6 +1317,14 @@ aly-publish publish --version 1.0.0 --message "首次发布"
 | `downloaded` | 已下载待应用 |
 | `applying` | 正在应用更新 |
 | `applied` | 更新已应用 |
+| 空（缺失） | 同 `applied`：首次部署，或 `version.json` 损坏被隔离后重置 |
+| 未知取值 | 一律按 `applied` 比较版本；`apply_update`/`rollback` 拒绝对其做替换，只有 `download_update` 能重写为 `downloaded` 完成修复 |
+
+`version.json` 的可选字段：`after_apply_update_script`（download 时从服务端变更日志同步）、
+`rollback_previous` / `rollback_target`（仅回滚在途期间）、`apply_stage`（仅 apply 在途期间，进入激活改名阶段时写
+`activating`，崩溃恢复据此判定"改名确实发生过"，任何终态写入都会清空）、
+`downloaded_file_count`（download 成功时记录的产物文件数，apply 用它识别"目录还在但文件缺失"的残缺现场；
+老文件没有该字段时退化为"目录存在且非空"的弱校验）。
 
 ### C. 配置文件的存储位置
 
