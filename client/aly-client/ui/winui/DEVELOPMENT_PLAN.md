@@ -554,3 +554,68 @@ C# SDK 里真正执行拷贝的是 `UpdateSelf()`（`AlyUpdateClient.cs:76-133`�
 > 2. **§4.2 圆角** —— **本期不做**，窗口用直角 + 1px 描边（内容区圆角仍可自绘）。
 > 3. **§6.3 B UI 自更新方案**（延迟替换 + 自我重启）—— **接受**。
 > 4. **§1.3 前置任务**（用 Go 1.10.8 重建 `aly-client.exe`、给 `build.bat` 加 go 版本校验）—— **纳入本计划执行并提交**。
+
+---
+
+## 12. 验收结果（执行期回填）
+
+> 分支 `feat/aly-client-ui`。以下均为**实测**结果，命令与输出可在提交历史中复核。
+> 标注「待 XP」的项目需要 Windows XP SP3 x86 真机/虚拟机，本机无法覆盖。
+
+### 12.1 已完成（有实测证据）
+
+| # | 项目 | 结果 | 证据 |
+|---|------|------|------|
+| 1 | 生产代码用 Go 1.10.8 编译 | 通过 | `GOROOT=/usr/local/go`（go1.10.8）+ `GOOS=windows GOARCH=386 CGO_ENABLED=0`，`BUILD_EXIT=0` |
+| 2 | 32 位 + XP 可加载的 PE 头 | 通过 | `Machine=0x014C`、`SubsystemVer=4.0`、`Subsystem=2(GUI)`；Go 1.26 构建的旧产物是 `6.1`，XP 加载器会直接拒绝 |
+| 3 | 静态导入表无 XP 之后的 API | 通过 | 仅导入 `kernel32.dll`(29)、`winmm.dll`(2)、`ws2_32.dll`(1)；29 个 kernel32 函数全为 XP 时代接口，无 `GetTickCount64` / `InitializeCriticalSectionEx` 等 Vista+ API |
+| 4 | 动态加载的 DLL 均为 XP 自带 | 通过 | comctl32 / advapi32 / gdi32 / msimg32 / comdlg32 / gdiplus / ole32 / oleaut32 / opengl32 / pdh / kernel32 / shell32 / user32 / uxtheme / winspool.drv，无 `dwmapi` / `shcore` / `api-ms-win-*` |
+| 5 | 新 API 均有降级路径 | 通过 | `win.GetSystemMetricsForDpi` 用 `LazyProc.Find() != nil` 回退 `GetSystemMetrics`；`win.GetDpiForWindow` 内部走 `GetDC(0)+GetDeviceCaps(LOGPIXELSY)`，不调用 Win10 的 `GetDpiForWindow` |
+| 6 | ComCtl32 v6 manifest 已嵌入 | 通过 | exe 内含 `Microsoft.Windows.Common-Controls` 与 `dpiAware` 字符串；未嵌入时 `walk.NewMainWindow()` 报 `TTM_ADDTOOL failed` 且进程 exit 1 |
+| 7 | 右下角定位 + topmost + 不进任务栏 | 通过 | Win32 实测：窗口 `(1524,856)-(1904,1016)`、工作区 `(0,0)-(1920,1032)`、右侧/底部间隙均 16px、`exStyle=0x10188` → `TOPMOST=True TOOLWINDOW=True`、无任务栏按钮 |
+| 8 | 高 DPI 缩放 | 通过 | 144 DPI 下窗口 570x240（380x160 等比）、间隙 24px（16x1.5）；144 DPI 由 `GetDpiForWindow` 取得 |
+| 9 | `-mode auto` 无更新/失败时静默 | 通过 | 2.5s 内退出、`exitCode=0`、**从未出现窗口** |
+| 10 | `-mode check` 无更新/失败时 5s 自动关闭 | 通过 | 2.0s 窗口可见 → 7.5s 进程已退出 |
+| 11 | `-mode rollback` 列表失败时表现 | 通过 | 2.5s 窗口可见（错误卡片）→ 7.5s 进程退出 |
+| 12 | 单实例互斥 | 通过 | 同时启动两个 `-mode check`：第二个立刻退出（`exitCode=0`），第一个仍在运行，**可见 UI 窗口数恰好为 1** |
+| 13 | 自绘卡片渲染 | 通过 | 像素级采样：白底 133992px、描边 `#E5E7EB` 四边完整、标题 `#111827`、状态 `#6B7280`；进度条 2/5 时强调色 `#2563EB` 恰好 1872px = 522x9x2/5 |
+| 14 | 无标题栏外观 | 通过 | 清 `WS_CAPTION|WS_THICKFRAME|WS_MINIMIZEBOX|WS_MAXIMIZEBOX|WS_SYSMENU` + `SWP_FRAMECHANGED` |
+| 15 | 单元测试 | 通过 | `go test ./ui/winui/...` 5 个包全 ok（view / app / bridge / flow / i18n），含 60+ 用例 |
+| 16 | 部署链路 | 通过 | `go run deploy-client.go` 构建并部署两个 exe 到 8 个目标；仓库内 `aly-client.exe` 与部署物 SHA256 一致 |
+| 17 | 自更新替换语义 | 通过 | 单测：源缺失时**目标文件原样保留**；`MoveFileEx(REPLACE_EXISTING)` 原子替换 |
+| 18 | 延迟替换脚本的命令行传递 | 通过 | 真实 spawn 写入「带空格的目录」成功，证明 `SysProcAttr.CmdLine` 原样传递（用 `exec.Command("cmd.exe","/c",...)` 会因 Go 转义引号而失败） |
+
+### 12.2 待 XP 真机复测
+
+| # | 检查 | 说明 |
+|---|------|------|
+| 1 | SxS 是否接受本 manifest | 只声明 `dpiAware`，刻意未写 `dpiAwareness`/`PerMonitorV2`（Win10 1703+ schema，XP 的 SxS 解析器可能拒绝整个 manifest） |
+| 2 | 控件是否有 XP 主题 | 需目视确认 ComCtl32 v6 生效 |
+| 3 | 386 线程栈 | 长时间运行 / 大量进度行是否崩溃；若崩溃，按计划尝试 `import _ "runtime/cgo"` 或 `-linkmode internal` 重测 |
+| 4 | 界面在 XP 上的观感 | 字体回退 Tahoma、直角描边、扁平配色是否协调 |
+| 5 | `uxtheme` / `gdiplus` 的实际加载 | 两者均为 XP 自带（SP1+），但需实机确认无加载失败 |
+
+### 12.3 待可用更新服务器
+
+| # | 检查 | 说明 |
+|---|------|------|
+| 1 | 真实下载 | `download_update` 的进度行解析、进度条推进、90s 活性检测 |
+| 2 | 真实应用 | `apply_update` 的目录改名、主程序重启、`applying` 崩溃恢复自动续跑 |
+| 3 | 真实回滚 | `list_rollback_versions` 的版本列表、`rollback --version` 执行 |
+| 4 | 强制更新全自动 | `force_update=true` 时跳过两次确认 |
+| 5 | 与主程序联调 | 主程序把启动 `aly-client.exe` 改为 `..\UpdateFolder\aly-client-ui.exe -mode auto -lang zh-CN` |
+
+### 12.4 与计划的偏差（执行期修正）
+
+执行中发现并已修正的计划问题，详见 `IMPLEMENTATION_PLAN.md` 各任务处的「执行期修正」：
+
+1. **任务 3 依赖任务 4** —— 没有 manifest 时 `walk.NewMainWindow()` 直接失败，故 manifest 必须先做。
+2. **任务 8 的结果类型判定** —— 不能按字段零值判断，须按**键存在性**（`has_update` 缺失且 `current_version` 为空时会误判）。
+3. **任务 9 的 `exec.ExitError.ExitCode()`** —— Go 1.12 才有，Go 1.10 必须走 `syscall.WaitStatus.ExitStatus()`。
+4. **任务 12 的 DPI 坐标** —— walk 的 canvas 是 96-DPI 逻辑坐标，不能自己再缩放（双重缩放会让底部元素不可见）；`SetBounds` 收逻辑值而 `GetMonitorInfo` 给物理值。
+5. **任务 14/15 的 `Synchronize`** —— 是**异步**的，计划里「闭包内赋值、闭包外读取」的写法会永远拿到零值（询问框永远返回「否」、版本选择永远返回空）。已改为 channel 阻塞等待。
+6. **任务 14 的编排位置** —— 计划的编排代码在后台分支里调用 `w.Run()`，但 walk 消息循环必须在主线程且只能跑一次。
+7. **任务 16 的 `spawnDetached`** —— `exec.Command("cmd.exe","/c",cmdLine)` 的引号会被 Go 转义成 `\"`，cmd.exe 不认；须用 `SysProcAttr.CmdLine` 原样传递。
+8. **任务 16 的 `replaceFromSource`** —— 「先删后改名」存在空窗期，改为 `MoveFileEx(REPLACE_EXISTING)`。
+9. **任务 16 的互斥体命名** —— `Global\` 在 XP 多用户下会因 ACL 失败，改用会话命名空间。
+10. **测试策略** —— 既有测试使用 `t.Cleanup`（Go 1.14+），Go 1.10.8 无法编译测试；且交叉编译的测试二进制无法执行。故：**生产代码用 Go 1.10.8 编译，测试用现代 Go 原生跑**。
