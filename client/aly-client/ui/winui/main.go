@@ -7,15 +7,17 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/lxn/walk"
+	"aly/client/aly-client/ui/winui/view"
 )
 
 func main() {
-	// M0 骨架：仅验证 walk 能在 Go 1.10.8 + GOARCH=386 下编译链接。
-	mw, err := walk.NewMainWindow()
+	w, err := view.New()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "walk init failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "create window failed: %v\n", err)
 		os.Exit(1)
 	}
-	mw.Dispose()
+	// M0 阶段：直接显示，用于验证右下角定位 / topmost / 不进任务栏。
+	// 按需显示与 5s 自动关闭在任务 11 接入。
+	w.Show()
+	os.Exit(w.Run())
 }
