@@ -407,6 +407,12 @@ git commit -m "feat(ui): 右下角定位纯函数与单元测试"
 
 ## 任务 3：最小窗口（右下角 + topmost + 不进任务栏 + 按需显示）
 
+> ⚠️ **执行期修正（2026-10-19，实测发现）：任务 4（manifest）必须先于本任务的运行验证。**
+> 没有嵌入 ComCtl32 v6 manifest 时，`walk.NewMainWindow()` 会在创建 ToolTip 时报
+> `create window failed: TTM_ADDTOOL failed`，进程立即以 exit 1 退出。
+> 因此：**先做任务 4 生成 `rsrc.syso`，再回来验证本任务的窗口**。
+> 提交顺序同样建议 manifest 在前（保证每个提交都可运行）。
+
 **文件：**
 - 创建：`client/aly-client/ui/winui/view/window.go`
 - 修改：`client/aly-client/ui/winui/main.go`

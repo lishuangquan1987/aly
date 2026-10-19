@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity
+      version="1.0.0.0"
+      processorArchitecture="*"
+      name="Aly.Client.UI"
+      type="win32"/>
+  <description>aly-client-ui</description>
+
+  <!-- walk 依赖 Common Controls v6 才能创建控件（否则 TTM_ADDTOOL 等调用失败）。
+       XP 自带 comctl32 v6.0，因此有本 manifest 时 XP 也能得到主题化控件。 -->
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+          type="win32"
+          name="Microsoft.Windows.Common-Controls"
+          version="6.0.0.0"
+          processorArchitecture="*"
+          publicKeyToken="6595b64144ccf1df"
+          language="*"/>
+    </dependentAssembly>
+  </dependency>
+
+  <!-- 只声明 dpiAware。
+       不要写 dpiAwareness / PerMonitorV2：那是 Win10 1703+ 的 schema，
+       XP 的 SxS 解析器可能拒绝整个 manifest。 -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true</dpiAware>
+    </windowsSettings>
+  </application>
+</assembly>
