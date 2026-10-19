@@ -162,6 +162,20 @@ func (w *Window) Quit() {
 	_ = w.mw.Close()
 }
 
+// AskYesNo 弹出一个模态确认框，**阻塞**直到用户选择，返回是否选了「是」。
+//
+// 注意：walk 的 WindowBase.Synchronize 是**异步**的（入队 + PostMessage，
+// 不等待），直接在里面写外部变量会读到未赋值的结果。这里用 channel 等待
+// 回调真正执行完，因此本方法只能在**非 UI 线程**调用（后台 goroutine）。
+func (w *Window) AskYesNo(title, text string) bool {
+	ch := make(chan bool, 1)
+	w.mw.Synchronize(func() {
+		res := walk.MsgBox(w.mw, title, text, walk.MsgBoxYesNo|walk.MsgBoxIconQuestion)
+		ch <- res == walk.DlgCmdYes
+	})
+	return <-ch
+}
+
 // Synchronize 把 fn 投递到 UI 线程执行（供后台 goroutine 使用）。
 func (w *Window) Synchronize(fn func()) {
 	w.mw.Synchronize(fn)

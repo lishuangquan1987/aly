@@ -144,3 +144,18 @@ func TestNormalizeMode(t *testing.T) {
 		}
 	}
 }
+
+func TestVersionLabel(t *testing.T) {
+	cases := map[string]string{
+		"":       "",
+		"1.0.1":  "v1.0.1",
+		"v1.0.1": "v1.0.1",
+		"0.9":    "v0.9",
+	}
+	for in, want := range cases {
+		if got := versionLabel(in); got != want {
+			t.Errorf("versionLabel(%q)=%q want %q", in, got, want)
+		}
+	}
+}
+

@@ -66,8 +66,7 @@ func SelfDirOf(exePath string) (string, error) {
 // FindAlyClient 定位 aly-client.exe。
 //
 // 候选顺序（DEVELOPMENT_PLAN §3.2）：
-//  1. 与 UI 同目录 —— UI 部署在 UpdateFolder，aly-client.exe 也在那里，
-//     这是最常见的布局，也最省事；
+//  1. 与 UI 同目录 —— UI 部署在 UpdateFolder，aly-client.exe 也在那里；
 //  2. 由 client.json 的 main_exe_relative_path 推导主程序目录再找。
 func FindAlyClient(selfDir string) (string, error) {
 	same := filepath.Join(selfDir, "aly-client.exe")
@@ -91,15 +90,6 @@ func FindAlyClient(selfDir string) (string, error) {
 func fileExists(p string) bool {
 	st, err := os.Stat(p)
 	return err == nil && !st.IsDir()
-}
-
-// outcome 是一次检查的可展示结果。
-type outcome struct {
-	decision flow.Decision
-	current  string
-	newer    string
-	// problem 非空表示检查没成功（找不到 exe / 网络失败 / 服务端报错）。
-	problem string
 }
 
 // Run 是 UI 主入口：装配窗口、按模式决定是否立即显示、后台调用 aly-client。
@@ -128,75 +118,134 @@ func Run(opt Options) int {
 	}
 
 	exePath, findErr := FindAlyClient(self)
+	interactive := mode == "check"
 
-	go func() {
-		res := runCheck(exePath, findErr)
-
-		w.Synchronize(func() {
-			// ① 检查没成功
-			//
-			// check（用户主动点按钮）：必须让用户看见，否则就是「点了没反应」。
-			// auto（主程序启动时自动跑）：**静默退出**——网络不通/未配置服务器
-			// 是常态，每次启动都弹错误框会变成骚扰（DEVELOPMENT_PLAN §4.1）。
-			if res.problem != "" {
-				if mode != "check" {
-					w.Quit()
-					return
-				}
-				w.SetContent(title, res.current, i18n.T(i18n.KeyOffline))
-				w.SetDetail(res.problem)
-				w.SetError(true)
-				w.Show()
-				_ = w.AutoCloseAfter(autoCloseDelay)
-				return
-			}
-
-			// ② 无更新
-			if res.decision.Action == flow.ActionNone {
-				if mode == "check" {
-					w.SetContent(title, res.current, i18n.T(i18n.KeyNoUpdate))
-					w.SetDetail("")
-					w.SetError(false)
-					_ = w.AutoCloseAfter(autoCloseDelay)
-				} else {
-					// auto：无更新不显示 —— 结束消息循环，进程直接退出
-					w.Quit()
-				}
-				return
-			}
-
-			// ③ 有更新：显示（下载/应用编排在任务 14 接入）
-			w.SetContent(title, res.newer, i18n.Fmt(i18n.KeyFoundVersion, res.newer))
-			w.SetDetail("")
-			w.SetError(false)
-			w.Show()
-		})
-	}()
+	go runFlow(w, interactive, exePath, findErr)
 
 	return w.Run()
 }
 
-// runCheck 调用 check_update 并交给状态机决策。
-func runCheck(exePath string, findErr error) outcome {
+// runFlow 在后台 goroutine 里跑完整流程；所有 UI 变更都经 Synchronize。
+//
+// 终止策略：每条路径都必须让窗口**退出或自动关闭**，绝不留下一个
+// 无标题栏、无关闭按钮的窗口卡住用户。
+func runFlow(w *view.Window, interactive bool, exePath string, findErr error) {
+	// ① 定位 aly-client.exe 失败
 	if findErr != nil {
-		return outcome{problem: findErr.Error()}
+		fail(w, interactive, "", i18n.T(i18n.KeyOffline), findErr.Error())
+		return
 	}
 
 	cl := bridge.New(exePath)
-	p, err := cl.CheckUpdate(context.Background())
+	ctx := context.Background()
+
+	// ② 检查更新
+	res := checkUpdate(cl, ctx)
+	if res.problem != "" {
+		// check（用户主动）：必须可见，否则「点了没反应」。
+		// auto（启动时自动跑）：静默退出——网络不通是常态，弹框会变骚扰。
+		if !interactive {
+			quit(w)
+			return
+		}
+		fail(w, true, res.current, i18n.T(i18n.KeyOffline), res.problem)
+		return
+	}
+
+	// ③ 无更新
+	if res.decision.Action == flow.ActionNone {
+		if !interactive {
+			quit(w)
+			return
+		}
+		w.Synchronize(func() {
+			w.SetContent(title, versionLabel(res.current), i18n.T(i18n.KeyNoUpdate))
+			w.SetDetail("")
+			w.SetError(false)
+		})
+		autoClose(w)
+		return
+	}
+
+	newer := res.newer
+	show := func(status string) {
+		w.Synchronize(func() {
+			w.SetContent(title, versionLabel(newer), status)
+			w.SetDetail("")
+			w.SetError(false)
+			w.Show()
+		})
+	}
+
+	// ④ 需要下载
+	if res.decision.Action == flow.ActionDownload {
+		if res.decision.Ask && !w.AskYesNo(title, i18n.Fmt(i18n.KeyAskDownload, newer)) {
+			quit(w) // 用户拒绝
+			return
+		}
+
+		show(i18n.T(i18n.KeyDownloading))
+		_, dlErr := cl.DownloadUpdate(ctx, func(pi bridge.ProgressInfo) {
+			w.Synchronize(func() {
+				w.SetProgress(pi.Index, pi.Total)
+				w.SetContent(title, versionLabel(newer),
+					i18n.Fmt(i18n.KeyDownloading, pi.File, pi.Index, pi.Total))
+			})
+		})
+		if dlErr != nil {
+			fail(w, interactive, newer, i18n.T(i18n.KeyErrorGeneric), dlErr.Error())
+			return
+		}
+		w.Synchronize(func() {
+			w.SetProgress(0, 0) // 收起进度条
+			w.SetContent(title, versionLabel(newer), i18n.T(i18n.KeyDownloaded))
+		})
+	}
+
+	// ⑤ 应用
+	if res.decision.Ask && !w.AskYesNo(title, i18n.Fmt(i18n.KeyAskApply, newer)) {
+		quit(w) // 用户选择稍后
+		return
+	}
+	show(i18n.T(i18n.KeyApplying))
+
+	if _, apErr := cl.ApplyUpdate(ctx); apErr != nil {
+		fail(w, interactive, newer, i18n.T(i18n.KeyErrorGeneric), apErr.Error())
+		return
+	}
+
+	// 成功后 aly-client 会 launchMainExe 拉起主程序，UI 使命结束。
+	w.Synchronize(func() {
+		w.SetContent(title, versionLabel(newer), i18n.T(i18n.KeyApplyDone))
+	})
+	time.Sleep(1200 * time.Millisecond) // 让用户看清「更新完成」
+	quit(w)
+}
+
+// checkOutcome 是一次检查的可展示结果。
+type checkOutcome struct {
+	decision flow.Decision
+	current  string
+	newer    string
+	// problem 非空表示检查没成功（网络失败 / 服务端报错）。
+	problem string
+}
+
+// checkUpdate 调用 check_update 并交给状态机决策。
+func checkUpdate(cl *bridge.Client, ctx context.Context) checkOutcome {
+	p, err := cl.CheckUpdate(ctx)
 	if err != nil {
-		// 传输层失败（超时/进程异常退出）：报「无法检查」，不要谎称已是最新
-		return outcome{problem: err.Error()}
+		// 传输层失败（超时/进程异常退出）：报「无法检查」，不谎称已是最新
+		return checkOutcome{problem: err.Error()}
 	}
 	if p.Check == nil {
-		return outcome{problem: "unexpected response from aly-client check_update"}
+		return checkOutcome{problem: "unexpected response from aly-client check_update"}
 	}
 
 	c := p.Check
-	res := outcome{current: c.CurrentVersion, newer: c.NewVersion}
+	res := checkOutcome{current: c.CurrentVersion, newer: c.NewVersion}
 
 	if !p.Success {
-		// 服务端明确返回失败（例如未配置 server_url）
 		res.problem = p.ErrMsg
 		if res.problem == "" {
 			res.problem = "check_update failed"
@@ -212,4 +261,42 @@ func runCheck(exePath string, findErr error) outcome {
 		CurrentVersion: c.CurrentVersion,
 	})
 	return res
+}
+
+// versionLabel 把版本号格式化成「v1.0.1」；空串返回空（不显示 v）。
+func versionLabel(v string) string {
+	if v == "" {
+		return ""
+	}
+	if strings.HasPrefix(v, "v") {
+		return v
+	}
+	return "v" + v
+}
+
+// fail 展示错误态。interactive 为 false（auto/silent）时静默退出。
+func fail(w *view.Window, interactive bool, version, status, detail string) {
+	if !interactive {
+		quit(w)
+		return
+	}
+	w.Synchronize(func() {
+		w.SetContent(title, versionLabel(version), status)
+		w.SetDetail(detail)
+		w.SetError(true)
+		w.Show()
+	})
+	autoClose(w)
+}
+
+// autoClose 在 autoCloseDelay 后关闭窗口。
+func autoClose(w *view.Window) {
+	w.Synchronize(func() {
+		_ = w.AutoCloseAfter(autoCloseDelay)
+	})
+}
+
+// quit 结束消息循环。
+func quit(w *view.Window) {
+	w.Synchronize(func() { w.Quit() })
 }
