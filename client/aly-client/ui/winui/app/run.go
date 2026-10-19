@@ -98,10 +98,29 @@ func Run(opt Options) int {
 	mode := NormalizeMode(opt.Mode)
 	i18n.SetLang(i18n.ParseLang(opt.Lang))
 
+	// 单实例：第二个实例直接退出，避免两个右下角窗口互相覆盖、
+	// 也避免两个进程同时去替换 aly-client.exe。
+	// 互斥体需持有到进程结束，故用 defer。
+	first, release := AcquireSingleInstance()
+	if !first {
+		return 0
+	}
+	defer release()
+
 	self, err := SelfDirOf(os.Args[0])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "resolve self dir failed: %v\n", err)
 		return 2
+	}
+
+	// 启动时自更新（对齐 SDK 构造函数顺序：在首次 check 之前）。
+	// 两者都是「有差异才动」，失败不阻断启动。
+	if mf, mfErr := mainFolderOf(self); mfErr == nil {
+		_ = UpdateUpdater(self, mf)
+		if replaced, upErr := UpdateSelfUI(self, mf); upErr == nil && replaced {
+			// 已派生延迟替换脚本，本实例立即退出让位
+			return 0
+		}
 	}
 
 	w, err := view.New()
@@ -282,6 +301,16 @@ func runRollback(w *view.Window, exePath string, findErr error) {
 	})
 	time.Sleep(1200 * time.Millisecond)
 	quit(w)
+}
+
+// mainFolderOf 由 UI 自身目录推导主程序目录（读 client.json）。
+// 失败时调用方通常忽略——自更新不是启动的前提条件。
+func mainFolderOf(selfDir string) (string, error) {
+	rel, err := ReadMainExeRelativePath(selfDir)
+	if err != nil {
+		return "", err
+	}
+	return MainFolder(selfDir, rel)
 }
 
 // checkOutcome 是一次检查的可展示结果。
