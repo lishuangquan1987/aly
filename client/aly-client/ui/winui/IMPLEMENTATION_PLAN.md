@@ -1101,6 +1101,15 @@ git commit -m "feat(ui): 只读 client.json 的 main_exe_relative_path（不共�
 
 ## 任务 8：`bridge` —— 逐行 JSON 解析（纯函数 + 契约测试）
 
+> ⚠️ **执行期修正（2026-10-19，实测发现）：结果类型必须用「键存在性」判定，不能用字段零值。**
+> 原计划的探测方式 `if chk.HasUpdate || chk.CurrentVersion != ""` 有缺陷：
+> `check_update` 在 `has_update=false` 且 `current_version` 为空时，`CheckUpdateData`
+> 所有字段都是零值，会被误判成 `CheckSelfUpdateData`。
+> 正确做法：先 `json.Unmarshal(data, &map[string]json.RawMessage)` 取键集合，再按
+> 各 DTO 互不重叠的判别键分流：`index`→进度、`has_update`→CheckUpdate、
+> `need_update`→CheckSelfUpdate、`versions`→RollbackList、`version`→Rollback。
+> 已按此实现并补了回归用例 `TestParseLineCheckUpdateNoUpdateEmptyCurrentVersion`。
+
 **文件：**
 - 创建：`client/aly-client/ui/winui/bridge/parse.go`
 - 测试：`client/aly-client/ui/winui/bridge/parse_test.go`
