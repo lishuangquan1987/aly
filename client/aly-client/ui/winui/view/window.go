@@ -154,6 +154,14 @@ func (w *Window) Run() int {
 	return w.mw.Run()
 }
 
+// Quit 结束消息循环并释放窗口，使 Run 返回。
+//
+// 用于「无更新 → 不显示 → 直接退出」的静默路径：窗口从未显示过，
+// 也必须让 Run() 返回，否则进程会带着一个隐藏窗口常驻。
+func (w *Window) Quit() {
+	_ = w.mw.Close()
+}
+
 // Synchronize 把 fn 投递到 UI 线程执行（供后台 goroutine 使用）。
 func (w *Window) Synchronize(fn func()) {
 	w.mw.Synchronize(fn)
