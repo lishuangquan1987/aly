@@ -39,3 +39,29 @@ func TestCalcBottomRightExactFit(t *testing.T) {
 		t.Fatalf("want (0,0), got (%d,%d)", x, y)
 	}
 }
+
+func TestProgressFillWidth(t *testing.T) {
+	cases := []struct {
+		name     string
+		w, c, m  int
+		want     int
+	}{
+		{"zero total width", 0, 1, 2, 0},
+		{"zero cur", 100, 0, 5, 0},
+		{"zero max", 100, 1, 0, 0},
+		{"negative max", 100, 1, -3, 0},
+		{"half", 100, 1, 2, 50},
+		{"third", 300, 1, 3, 100},
+		{"full", 100, 5, 5, 100},
+		{"cur over max clamps", 100, 9, 5, 100},
+		{"small fraction floors", 100, 1, 1000, 0},
+		{"progress done line", 348, 3, 3, 348},
+	}
+	for _, tc := range cases {
+		got := ProgressFillWidth(tc.w, tc.c, tc.m)
+		if got != tc.want {
+			t.Errorf("%s: ProgressFillWidth(%d,%d,%d)=%d want %d",
+				tc.name, tc.w, tc.c, tc.m, got, tc.want)
+		}
+	}
+}

@@ -38,8 +38,9 @@ func main() {
 
 	case "check":
 		// 手动检查：总是弹窗；无更新时显示提示并在 autoCloseDelay 后自动关闭。
-		// （任务 13 接入真实的 check 结果；这里先验证显示/自动关闭链路）
+		// （任务 13 接入真实的 check 结果；这里先验证「无更新」这条路径）
 		w.Show()
+		w.SetContent("aly-client-ui", "", i18n.T(i18n.KeyNoUpdate))
 		_ = w.AutoCloseAfter(autoCloseDelay)
 		os.Exit(w.Run())
 

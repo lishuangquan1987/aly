@@ -27,3 +27,17 @@ func CalcBottomRight(wa Rect, win Size, margin int) (int, int) {
 	}
 	return x, y
 }
+
+// ProgressFillWidth 计算进度条填充宽度：cur/max 映射到 [0, w]。
+//
+// 边界处理：max<=0 或 cur<=0 → 0（只画底槽）；
+// cur>max → 夹到 w（避免溢出卡片）。
+func ProgressFillWidth(w, cur, max int) int {
+	if w <= 0 || max <= 0 || cur <= 0 {
+		return 0
+	}
+	if cur >= max {
+		return w
+	}
+	return w * cur / max
+}

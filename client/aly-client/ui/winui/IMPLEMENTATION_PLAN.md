@@ -1911,6 +1911,27 @@ git commit -m "feat(ui): 按需显示 + check 模式无更新 5s 自动关闭"
 
 ## 任务 12：`view` —— 自绘卡片与进度条（现代化样式）
 
+> ⚠️ **执行期修正（2026-10-19，实测发现两个关键坑）：**
+>
+> **坑 1：walk 的 canvas 坐标是 96-DPI 逻辑值，不能自己再按 DPI 缩放。**
+> `ClientBounds()` 内部已 `RectangleTo96DPI`；`FillRectangle`/`DrawRectangle`/
+> `DrawText` 内部又 `RectangleFrom96DPI(bounds, canvas.dpix)` 转回物理像素。
+> 若在绘制代码里再用 `IntFrom96DPI` 缩放一次，就是**双重缩放**：底部元素会被
+> 放大到可视区之外而完全不可见（曾导致进度条画不出来、描边只剩左/上两边）。
+> 结论：`card.go` 里一律用主题的 96-DPI 基准常量直接画，**不要 sx()**。
+>
+> **坑 2：`SetBounds` 收逻辑值，`GetMonitorInfo` 给物理值。**
+> `SetBounds` 内部会 `RectangleFrom96DPI`，而 `GetMonitorInfo` 返回物理像素。
+> 混用会在高 DPI 下把窗口推出屏幕外。定位统一在物理像素下算，
+> 然后用 **`SetBoundsPixels`** 落地。
+>
+> 另：验证截图时，截图进程必须先 `SetProcessDPIAware()` **再**加载 System.Drawing，
+> 否则拿到的是虚拟化的逻辑窗口矩形，PrintWindow 会把位图裁小、误判成"没画出来"。
+>
+> 另：`BoxLayout` 默认 margins 是 9px，会把卡片缩进、露出窗口底色，需
+> `SetMargins(walk.Margins{})` 清零；标题栏需清掉 `WS_CAPTION|WS_THICKFRAME|...`，
+> 但**不要 OR `WS_POPUP`**（0x80000000 溢出 `SetWindowLong` 的 int32）。
+
 **文件：**
 - 创建：`client/aly-client/ui/winui/view/theme/theme.go`
 - 创建：`client/aly-client/ui/winui/view/card.go`
