@@ -24,6 +24,7 @@ aly/
 | **aly-publish** | CLI tool to init configs, scan files, and publish versions | Developers / CI |
 | **aly-publish-gui** | Desktop GUI wrapping aly-publish via subprocess | Non-technical publishers |
 | **aly-client** | The updater executable — runs on end-user machines | End users (via your app) |
+| **aly-client-ui** | Optional GUI front-end for aly-client (bottom-right, topmost, XP-compatible) | End users (via your app) |
 
 ## Quick Start
 
@@ -80,6 +81,7 @@ PackageFolder/
 ├── ApplicationFolder_V1.0.0/     # Previous version snapshot (for rollback)
 ├── UpdateFolder/
 │   ├── aly-client.exe            # The updater itself
+│   ├── aly-client-ui.exe         # Optional GUI front-end (bottom-right, topmost)
 │   ├── client.json               # main_exe_relative_path, must_close_process_name
 │   └── version.json              # Version state machine
 ```
@@ -194,12 +196,26 @@ Requires Go 1.10 (Windows XP compatibility, no Go modules). Source must be under
 :: Copy source to GOPATH
 xcopy /e /i /y client\aly-client %GOPATH%\src\aly\client\aly-client
 
-:: Build
+:: Build the updater (console)
 set GOOS=windows
 set GOARCH=386
 set GO111MODULE=off
+set CGO_ENABLED=0
 go build -ldflags="-s -w" -o aly-client.exe aly/client/aly-client
+
+:: Build the optional GUI front-end (no console window)
+go build -ldflags="-s -w -H=windowsgui" -o aly-client-ui.exe aly/client/aly-client/ui/winui
 ```
+
+> `aly-client-ui` is written with [lxn/walk] and needs the ComCtl32 v6 manifest.
+> The repository already contains `client/aly-client/ui/winui/rsrc.syso`, which
+> `go build` links automatically. Do **not** delete it, otherwise the UI fails at
+> startup with `TTM_ADDTOOL failed`.
+>
+> Locally you can run `go run deploy-client.go` (WSL + Go 1.10.8) to build both
+> executables and deploy them to every target listed in `config.json`.
+
+[lxn/walk]: https://github.com/lxn/walk
 
 ## License
 

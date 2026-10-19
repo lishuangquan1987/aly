@@ -1,9 +1,11 @@
 # Aly 项目命令行参考文档
 
-本文档涵盖两个命令行工具的所有命令：
+本文档涵盖以下命令行工具的所有命令：
 
 1. **`aly-client.exe`**（位于 `client/aly-client/`）— 自动更新客户端，负责检查、下载、应用更新及回滚
-2. **`aly-publish.exe`**（位于 `publish/publish-cli/`）— 发布命令行工具，负责项目管理、文件比对、暂存和推送发布
+2. **`aly-client-ui.exe`**（位于 `client/aly-client/ui/winui/`）— 可选的更新客户端图形界面，
+   在屏幕右下角以 topmost 窗口按需显示，调用 `aly-client.exe` 完成实际工作
+3. **`aly-publish.exe`**（位于 `publish/publish-cli/`）— 发布命令行工具，负责项目管理、文件比对、暂存和推送发布
 
 ---
 
@@ -524,6 +526,62 @@ aly-client.exe check_self_update
 
 ```bash
 aly-client.exe check_self_update --main-exe-path ../MyApp/MyApp.exe
+```
+
+---
+
+### 1.8 aly-client-ui — 图形界面的启动模式
+
+`aly-client-ui.exe` 没有子命令，只有启动参数。它本身不实现更新逻辑，
+而是以子进程方式调用同目录（或主程序目录）的 `aly-client.exe` 并解析其 JSON 输出。
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `-mode` | `auto` | `auto` / `check` / `update` / `rollback` / `silent` |
+| `-lang` | `zh-CN` | `zh-CN` / `en-US`；未知值回退中文 |
+| `-url` | 空 | 预留，当前不生效（`aly-client.exe` 自己读 `client.json`） |
+| `-project-name` | 空 | 预留，当前不生效 |
+
+#### 模式行为
+
+| 模式 | 窗口是否显示 | 说明 |
+|------|--------------|------|
+| `auto` | **有更新才显示** | 主程序启动时调用。无更新、检查失败（网络不通/未配置服务器）一律**静默退出**，不打扰用户 |
+| `silent` | 同 `auto` | 语义等价，保留以表达「明确不要打扰」 |
+| `check` | **总是显示** | 用户主动点「检查更新」时调用。无更新显示「已是最新版本」并 **5 秒自动关闭**；出错显示错误原因并 5 秒自动关闭 |
+| `rollback` | 总是显示 | 列出可回滚版本供选择（当前版本不在列表里），选定后执行 `rollback --version <v>` |
+| `update` | 总是显示 | 保留 |
+
+**界面特征**：右下角（工作区，已扣任务栏）、`HWND_TOPMOST`、`WS_EX_TOOLWINDOW`
+（不进任务栏、不进 Alt-Tab）、`SWP_NOACTIVATE`（不抢焦点，不打断全屏主程序）。
+尺寸 380x160（96 DPI），随系统 DPI 等比缩放。
+
+**单实例**：用命名互斥体保证同一会话只有一个 UI 实例；重复启动的实例立刻以 exit code 0 退出。
+
+**更新流程**（非强制更新时会弹确认框，强制更新全自动）：
+
+```
+check_update → 有更新 → 询问下载 → download_update（进度条）
+             → 询问应用 → apply_update → 主程序被重启
+```
+
+**UI 与更新器自更新**：启动时比对 `<主程序目录>/aly-client-ui.exe` 与
+`<UpdateFolder>/aly-client-ui.exe`，有差异则落到 `.new` 并派生 detached 脚本
+在自身退出后替换并重启；同时用同样的方式同步 `aly-client.exe`。
+
+**退出码**：`0` 正常 / `2` 初始化失败（窗口创建失败、自身路径解析失败）。
+
+#### 示例
+
+```bat
+:: 主程序启动时调用（推荐）
+..\UpdateFolder\aly-client-ui.exe -mode auto -lang zh-CN
+
+:: 用户点「检查更新」
+..\UpdateFolder\aly-client-ui.exe -mode check -lang zh-CN
+
+:: 回滚界面
+..\UpdateFolder\aly-client-ui.exe -mode rollback -lang en-US
 ```
 
 ---

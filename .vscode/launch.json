@@ -7,9 +7,66 @@
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/server/cmd/main.go",
-      "args": ["-p", "2000"],
+      "args": [
+        "-p",
+        "2000"
+      ],
       "cwd": "${workspaceFolder}/server",
       "env": {}
+    },
+    {
+      "name": "Debug aly-client",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/client/aly-client",
+      "args": [
+        "check_update"
+      ],
+      "cwd": "${workspaceFolder}/client/aly-client",
+      "env": {
+        "GO111MODULE": "off",
+        "GOOS": "windows",
+        "GOARCH": "386"
+      }
+    },
+    {
+      "name": "Debug aly-client-ui (check mode)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/client/aly-client/ui/winui",
+      "args": [
+        "-mode",
+        "check",
+        "-lang",
+        "zh-CN"
+      ],
+      "cwd": "${workspaceFolder}/client/aly-client",
+      "env": {
+        "GO111MODULE": "off",
+        "GOOS": "windows",
+        "GOARCH": "386"
+      }
+    },
+    {
+      "name": "Debug aly-client-ui (auto mode)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/client/aly-client/ui/winui",
+      "args": [
+        "-mode",
+        "auto",
+        "-lang",
+        "zh-CN"
+      ],
+      "cwd": "${workspaceFolder}/client/aly-client",
+      "env": {
+        "GO111MODULE": "off",
+        "GOOS": "windows",
+        "GOARCH": "386"
+      }
     }
   ]
 }
