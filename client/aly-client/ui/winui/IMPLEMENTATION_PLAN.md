@@ -28,6 +28,7 @@
 | `//go:build` 指令（1.17） | `// +build windows` |
 | `os.UserHomeDir`（1.12） | 读 `%USERPROFILE%` 环境变量 |
 | `filepath.IsLocal`、`os.MkdirTemp`（1.16） | `ioutil.TempDir` |
+| `t.Cleanup`（1.14，**测试代码也要遵守**） | `defer` 或显式清理（既有测试已违反此条，故测试只能用现代 Go 跑，见 §2） |
 
 **统一约定**：所有文件顶部（除 `_test.go`）加 `// +build windows`；`package` 声明前留一空行。
 
@@ -69,14 +70,34 @@
 
 ## 2. 测试策略
 
+> ⚠️ **执行期修正（2026-10-19，实测发现）**
+>
+> 1. **测试必须用现代 Go 跑，不能用 Go 1.10.8。**
+>    既有测试文件使用 `t.Cleanup`（Go **1.14** 才引入），例如 `cmd/apply_update_test.go:26`、`config/version_test.go:19`。
+>    用 Go 1.10.8 跑 `go test ./...` 会直接 `[build failed]`：
+>    `t.Cleanup undefined (type *testing.T has no field or method Cleanup)`。
+>    → **生产代码用 Go 1.10.8 编译；测试用本机 go1.26 跑**（Go 向后兼容，能在 1.10 下编译的代码必然能在 1.26 下编译）。
+> 2. **不能用 `GOOS=windows GOARCH=386 go test`。** 交叉编译出的测试二进制在 Linux/异架构下无法执行。
+>    测试用**宿主 GOOS/GOARCH（windows/amd64）** 原生运行。
+> 3. **既有基线有 2 个失败**（与 UI 改动无关，Go 1.10 与 1.26 下同样失败，均为 CWD 进程探测的环境问题）：
+>    - `cmd`：`TestRenameDirWithKillCmdCwdOccupiesFolder`
+>    - `util`：`TestFindProcessesWithCWDUnder`
+>    → 判定「本次改动是否引入回归」时，以「除这 2 个外无新增失败」为准。
+> 4. **新增测试代码避免 `t.Cleanup`**（用 `defer` 或显式清理），使新包在 Go 1.10 下也能编译，便于将来在 XP 侧验证。
+
 - **可单测**（纯函数，无 walk 窗口）：`bridge/parse.go`、`flow/updater.go`、`view/geometry.go`、`i18n`、`app/config.go`。
 - **不可单测**（需真实窗口/消息循环）：`view/window.go`、`view/card.go`、`view/progress.go` → 用**手工验收清单**（任务 2、11、12、16）。
-- **单元测试运行方式**（在 GOPATH 内，宿主 amd64 即可，无需 386）：
-  ```bash
-  cd %GOPATH%/src/aly/client/aly-client
-  GO111MODULE=off GOOS=windows go test ./ui/winui/...
+- **单元测试运行方式**（GOPATH 内，宿主 windows/amd64 原生跑）：
+  ```powershell
+  $gp = "$env:TEMP\acgopath"
+  New-Item -ItemType Directory -Force -Path "$gp\src\aly\client" | Out-Null
+  Copy-Item -Recurse -Force "E:\Project2026\aly\client\aly-client" "$gp\src\aly\client\aly-client"
+  $env:GOPATH = $gp; $env:GO111MODULE = "off"; $env:GOOS = "windows"; $env:GOARCH = "amd64"
+  cd "$gp\src\aly\client\aly-client"
+  go test ./ui/winui/...          # 只跑 UI 包
+  go test ./...                   # 全量（基线：cmd/util 各 1 个既有失败）
   ```
-- **发布构建**始终 386（见任务 1、4）。
+- **发布构建**始终 Go 1.10.8 + 386（见任务 0、1、5）。
 
 ---
 
