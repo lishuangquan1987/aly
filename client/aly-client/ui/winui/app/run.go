@@ -120,7 +120,11 @@ func Run(opt Options) int {
 	exePath, findErr := FindAlyClient(self)
 	interactive := mode == "check"
 
-	go runFlow(w, interactive, exePath, findErr)
+	if mode == "rollback" {
+		go runRollback(w, exePath, findErr)
+	} else {
+		go runFlow(w, interactive, exePath, findErr)
+	}
 
 	return w.Run()
 }
@@ -219,6 +223,64 @@ func runFlow(w *view.Window, interactive bool, exePath string, findErr error) {
 		w.SetContent(title, versionLabel(newer), i18n.T(i18n.KeyApplyDone))
 	})
 	time.Sleep(1200 * time.Millisecond) // 让用户看清「更新完成」
+	quit(w)
+}
+
+// runRollback 执行 -mode rollback：列出可回滚版本，让用户选一个并回滚。
+//
+// 终止策略同 runFlow：每条路径都必须退出或自动关闭。
+func runRollback(w *view.Window, exePath string, findErr error) {
+	if findErr != nil {
+		fail(w, true, "", i18n.T(i18n.KeyOffline), findErr.Error())
+		return
+	}
+
+	cl := bridge.New(exePath)
+	ctx := context.Background()
+
+	// 先让窗口可见，否则获取列表期间用户看不到任何反馈
+	w.Synchronize(func() {
+		w.SetContent(title, "", i18n.T(i18n.KeyVersionList))
+		w.SetDetail("")
+		w.SetError(false)
+		w.Show()
+	})
+
+	p, err := cl.ListRollbackVersions(ctx)
+	if err != nil {
+		fail(w, true, "", i18n.T(i18n.KeyErrorGeneric), err.Error())
+		return
+	}
+	if p.Versions == nil {
+		msg := p.ErrMsg
+		if msg == "" {
+			msg = "list_rollback_versions returned no data"
+		}
+		fail(w, true, "", i18n.T(i18n.KeyErrorGeneric), msg)
+		return
+	}
+
+	v := w.ChooseVersion(p.Versions.CurrentVersion, p.Versions.Versions)
+	if v == "" {
+		quit(w) // 用户取消
+		return
+	}
+
+	w.Synchronize(func() {
+		w.SetContent(title, versionLabel(v), i18n.T(i18n.KeyApplying))
+		w.SetDetail("")
+		w.SetError(false)
+	})
+
+	if _, rbErr := cl.Rollback(ctx, v); rbErr != nil {
+		fail(w, true, versionLabel(v), i18n.T(i18n.KeyErrorGeneric), rbErr.Error())
+		return
+	}
+
+	w.Synchronize(func() {
+		w.SetContent(title, versionLabel(v), i18n.T(i18n.KeyApplyDone))
+	})
+	time.Sleep(1200 * time.Millisecond)
 	quit(w)
 }
 
