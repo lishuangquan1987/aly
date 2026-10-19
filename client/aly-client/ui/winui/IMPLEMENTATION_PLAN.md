@@ -29,6 +29,8 @@
 | `os.UserHomeDir`（1.12） | 读 `%USERPROFILE%` 环境变量 |
 | `filepath.IsLocal`、`os.MkdirTemp`（1.16） | `ioutil.TempDir` |
 | `t.Cleanup`（1.14，**测试代码也要遵守**） | `defer` 或显式清理（既有测试已违反此条，故测试只能用现代 Go 跑，见 §2） |
+| `exec.ExitError.ExitCode()`（1.12） | `ee.Sys().(syscall.WaitStatus).ExitStatus()` |
+| `os.ProcessState.ExitCode()`（1.12） | 同上，从 `WaitStatus` 取 |
 
 **统一约定**：所有文件顶部（除 `_test.go`）加 `// +build windows`；`package` 声明前留一空行。
 
