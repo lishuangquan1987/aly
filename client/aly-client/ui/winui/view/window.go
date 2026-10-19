@@ -3,6 +3,7 @@
 package view
 
 import (
+	"time"
 	"unsafe"
 
 	"github.com/lxn/walk"
@@ -90,4 +91,20 @@ func (w *Window) Run() int {
 // Synchronize 把 fn 投递到 UI 线程执行（供后台 goroutine 使用）。
 func (w *Window) Synchronize(fn func()) {
 	w.mw.Synchronize(fn)
+}
+
+// AutoCloseAfter 在 d 之后关闭窗口（并结束消息循环），返回可取消的句柄。
+//
+// 用 Close() 而不是 Hide()：-mode check 由主程序按需启动，提示展示完必须让
+// 进程退出；只隐藏会让 Run() 的消息循环常驻，每点一次「检查更新」漏一个进程。
+//
+// 回调经 walk.Synchronize 回到 UI 线程，不能直接操作控件。
+// 用途：-mode check 下「无更新」提示显示 5s 后自动关闭（DEVELOPMENT_PLAN §4.1）。
+// 若期间用户已交互（点按/下载开始），调用方需主动 Cancel。
+func (w *Window) AutoCloseAfter(d time.Duration) *AutoClose {
+	return ScheduleAutoClose(d, func() {
+		w.Synchronize(func() {
+			_ = w.mw.Close()
+		})
+	})
 }
