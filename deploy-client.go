@@ -152,6 +152,28 @@ func main() {
 	}
 	fmt.Println("  Build OK\n")
 
+	// ── Step 2b: Build UI (XP 32-bit) ──
+	fmt.Println("  [2b/4] Building aly-client-ui.exe (GOARCH=386) ...")
+	buildUICmd := fmt.Sprintf(
+		"cd %s && GOROOT=%s GOPATH=%s GOOS=windows GOARCH=386 CGO_ENABLED=0 %s build -ldflags=\"-s -w -H=windowsgui\" -o aly-client-ui.exe aly/client/aly-client/ui/winui",
+		wslSrc, wslGoroot, wslGopath, wslGo,
+	)
+	if err := wsl(buildUICmd); err != nil {
+		fmt.Printf("  [ERROR] UI build failed: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("  UI Build OK\n")
+
+	// ── Step 2c: 回拷 aly-client.exe 到仓库 ──
+	// 部署目标只包含 config.json 里的目录，不含源码仓库；而仓库里的
+	// client/aly-client/aly-client.exe 是被 git 跟踪的交付物，必须与部署的一致。
+	fmt.Println("  [2c/4] Copying aly-client.exe back to repo ...")
+	if err := wsl("cp -f " + wslSrc + "/aly-client.exe " + linuxSrc + "/aly-client.exe"); err != nil {
+		fmt.Printf("  [WARN] copy back to repo failed: %v\n", err)
+	} else {
+		fmt.Println("  Done\n")
+	}
+
 	// ── Step 3: Deploy to all targets ──
 	targets := loadDeployTargets()
 	if len(targets) == 0 {
@@ -167,7 +189,15 @@ func main() {
 				continue
 			}
 			if err := wsl("cp -f " + wslSrc + "/aly-client.exe " + t.wsl + "/"); err != nil {
-				fmt.Printf("         [FAIL] copy failed: %v\n", err)
+				fmt.Printf("         [FAIL] copy aly-client.exe failed: %v\n", err)
+				fail = true
+				continue
+			}
+			// UI 与更新器一样部署到所有目标：
+			//   UpdateFolder\aly-client-ui.exe  ← 实际运行的 UI
+			//   主程序目录\aly-client-ui.exe    ← 随包分发，并作为 UI 自更新的比对源
+			if err := wsl("cp -f " + wslSrc + "/aly-client-ui.exe " + t.wsl + "/"); err != nil {
+				fmt.Printf("         [FAIL] copy aly-client-ui.exe failed: %v\n", err)
 				fail = true
 				continue
 			}
@@ -197,6 +227,7 @@ func main() {
 	if len(targets) > 0 {
 		for _, t := range targets {
 			fmt.Printf("  Deployed: %s\\aly-client.exe\n", t.win)
+			fmt.Printf("  Deployed: %s\\aly-client-ui.exe\n", t.win)
 		}
 	} else {
 		fmt.Println("  No targets deployed (check config.json)")
