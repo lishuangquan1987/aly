@@ -118,7 +118,7 @@ jobs:
           path: publish/publish-cli/aly-publish-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
 
   build-aly-client:
-    name: Build aly-client (Windows XP / 32-bit)
+    name: Build aly-client + aly-client-ui (Windows XP / 32-bit)
     runs-on: windows-latest
     env:
       GOPATH: C:\Users\runneradmin\go
@@ -154,19 +154,64 @@ jobs:
           mkdir "%GOPATH%\src\aly\client"
           xcopy /e /i /y client\aly-client "%GOPATH%\src\aly\client\aly-client"
 
-      - name: Install deps & Build (32-bit, XP compatible)
+      - name: Build aly-client (console, 32-bit, XP compatible)
         shell: cmd
-        run: |
-          set GOOS=windows
-          set GOARCH=386
-          set GO111MODULE=off
-          go build -ldflags="-s -w" -o aly-client.exe aly/client/aly-client
+        env:
+          GOOS: windows
+          GOARCH: 386
+          GO111MODULE: 'off'
+          CGO_ENABLED: '0'
+        run: go build -ldflags="-s -w" -o aly-client.exe aly/client/aly-client
 
-      - name: Upload aly-client artifact
+      # aly-client-ui 是 walk 写的 GUI 前端：必须 -H=windowsgui（否则弹黑框），
+      # 且依赖 rsrc.syso 里嵌入的 ComCtl32 v6 manifest（仓库已提交该文件，
+      # go build 会自动链接同目录的 *.syso）。
+      - name: Build aly-client-ui (GUI, 32-bit, XP compatible)
+        shell: cmd
+        env:
+          GOOS: windows
+          GOARCH: 386
+          GO111MODULE: 'off'
+          CGO_ENABLED: '0'
+        run: go build -ldflags="-s -w -H=windowsgui" -o aly-client-ui.exe aly/client/aly-client/ui/winui
+
+      # 防止再次误发在 XP 上根本无法加载的产物：
+      # 旧仓库里的 aly-client.exe 曾是 Go 1.26 构建（SubsystemVer=6.1），XP 直接拒绝。
+      - name: Verify XP compatibility (PE header + manifest)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @('aly-client.exe', 'aly-client-ui.exe')
+          foreach ($f in $files) {
+            $path = (Resolve-Path $f).Path
+            $bytes = [IO.File]::ReadAllBytes($path)
+            $pe = [BitConverter]::ToInt32($bytes, 0x3C)
+            if ([BitConverter]::ToUInt32($bytes, $pe) -ne 0x00004550) { throw "$f : bad PE signature" }
+            $machine = [BitConverter]::ToUInt16($bytes, $pe + 4)
+            $magic = [BitConverter]::ToUInt16($bytes, $pe + 24)
+            $is64 = ($magic -eq 0x20B)
+            $subOff = $pe + 24 + $(if ($is64) { 50 } else { 48 })
+            $subMaj = [BitConverter]::ToUInt16($bytes, $subOff)
+            $subMin = [BitConverter]::ToUInt16($bytes, $subOff + 2)
+            Write-Host ('{0}: machine=0x{1:X4} subsystemVer={2}.{3}' -f $f, $machine, $subMaj, $subMin)
+            if ($machine -ne 0x014C) { throw ('{0} is not 32-bit (machine=0x{1:X4})' -f $f, $machine) }
+            if ($subMaj -gt 5) {
+              throw ('{0} subsystem version {1}.{2} is > 5.1; Windows XP refuses to load it' -f $f, $subMaj, $subMin)
+            }
+          }
+          $ui = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Resolve-Path 'aly-client-ui.exe').Path))
+          if ($ui -notmatch 'Microsoft\.Windows\.Common-Controls') {
+            throw 'aly-client-ui.exe has no ComCtl32 v6 manifest (rsrc.syso missing/not linked?)'
+          }
+          Write-Host 'XP compatibility checks passed.'
+
+      - name: Upload client artifacts
         uses: actions/upload-artifact@v4
         with:
           name: aly-client-win-xp
-          path: aly-client.exe
+          path: |
+            aly-client.exe
+            aly-client-ui.exe
 
   publish-sdk-nuget:
     name: Publish AlyClient.CSharpSDK to NuGet
@@ -263,4 +308,5 @@ jobs:
             aly-publish-darwin-amd64/aly-publish-darwin-amd64 \
             aly-publish-darwin-arm64/aly-publish-darwin-arm64 \
             aly-client-win-xp/aly-client.exe \
+            aly-client-win-xp/aly-client-ui.exe \
             --clobber

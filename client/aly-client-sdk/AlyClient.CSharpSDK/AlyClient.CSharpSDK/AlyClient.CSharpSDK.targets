@@ -4,14 +4,19 @@
   <!--
     AlyClient.CSharpSDK: deploy runtime files to ../UpdateFolder/
 
-    aly-client.exe is downloaded from GitHub Releases on first build.
-    client.json is auto-generated with a default template.
+    aly-client.exe 和 aly-client-ui.exe 都在首次构建时从 GitHub Releases 下载。
+    client.json 不存在时用默认模板生成。
+
+    aly-client-ui.exe 是可选的图形前端；设置 AlyIncludeClientUi=false 可跳过，
+    下载失败也只警告（不会让已有项目的构建失败）。
   -->
 
   <PropertyGroup>
     <AlyUpdateFolder Condition="'$(AlyUpdateFolder)' == ''">$(OutDir)..\UpdateFolder\</AlyUpdateFolder>
     <AlyClientVersion Condition="'$(AlyClientVersion)' == ''">ALY_CLIENT_VERSION_PLACEHOLDER</AlyClientVersion>
     <AlyClientDownloadUrl Condition="'$(AlyClientDownloadUrl)' == ''">https://github.com/lishuangquan1987/aly/releases/download/v$(AlyClientVersion)/aly-client.exe</AlyClientDownloadUrl>
+    <AlyClientUiDownloadUrl Condition="'$(AlyClientUiDownloadUrl)' == ''">https://github.com/lishuangquan1987/aly/releases/download/v$(AlyClientVersion)/aly-client-ui.exe</AlyClientUiDownloadUrl>
+    <AlyIncludeClientUi Condition="'$(AlyIncludeClientUi)' == ''">true</AlyIncludeClientUi>
   </PropertyGroup>
 
   <Target Name="AlyDeployToUpdateFolder" BeforeTargets="Build">
@@ -35,6 +40,19 @@ try {
                       File="$(AlyUpdateFolder)client.json"
                       Lines="{&quot;main_exe_relative_path&quot;: &quot;../ApplicationFolder/YourApp.exe&quot;,&quot;must_close_process_name&quot;: [&quot;YourApp&quot;]}"
                       Overwrite="true" />
+
+    <!-- Download aly-client-ui.exe (optional GUI front-end) from GitHub Releases if not present.
+         失败只警告：UI 是可选组件，不能因为它缺失就中断宿主项目的构建。 -->
+    <Exec Condition="'$(AlyIncludeClientUi)' == 'true' AND !Exists('$(AlyUpdateFolder)aly-client-ui.exe')"
+          ContinueOnError="true"
+          Command="powershell -NoProfile -Command &quot;
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
+try {
+  Invoke-WebRequest -Uri '$(AlyClientUiDownloadUrl)' -OutFile '$(AlyUpdateFolder)aly-client-ui.exe' -ErrorAction Stop;
+  Write-Host 'Downloaded aly-client-ui.exe v$(AlyClientVersion) successfully';
+} catch {
+  Write-Warning &quot;aly-client-ui.exe not downloaded (optional GUI front-end): $($_.Exception.Message)&quot;;
+}&quot;" />
 
   </Target>
 

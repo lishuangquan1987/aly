@@ -13,6 +13,9 @@ server/aly-server-*
 
 # client build artifacts
 client/aly-update.exe
+# aly-client-ui 是构建产物（由 build-ui.bat / deploy-client.go / CI 生成）
+client/aly-client/ui/winui/aly-client-ui.exe
+client/aly-client/ui/winui/*.exe
 client/test/temp_test/
 client/test/*.exe
 test_data/
