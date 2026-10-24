@@ -301,7 +301,7 @@ func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDi
 	// 关闭 must_close_process_name 指定的进程（业务必需：复制前关闭主程序，
 	// 否则 CopyDirWithExclude 读文件可能失败）。
 	if len(fc.ExeCfg.MustCloseProcessName) > 0 {
-		closeProcessesGracefully(fc.ExeCfg.MustCloseProcessName, closeTimeout)
+		closeProcessesForApply(fc.ExeCfg.MustCloseProcessName)
 	}
 	// 不再调用 closeProcessesHoldingFolder 无条件全目录扫描——改成"先重命名，失败再查杀"，
 	// 与 rollback 路径行为对齐（#2 / 问题 3）。

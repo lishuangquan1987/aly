@@ -367,6 +367,43 @@ func closeProcessesGracefully(names []string, timeout time.Duration) {
 	}
 }
 
+// closeProcessesForApply sends WM_CLOSE, waits 2 seconds, then kills survivors.
+func closeProcessesForApply(names []string) {
+	seen := make(map[uint32]bool)
+	var pids []uint32
+	for _, name := range names {
+		found, err := util.FindProcessesByName(name)
+		if err != nil {
+			util.AppendToLog(".", "update.log", fmt.Sprintf("closeProcessesForApply: find process %s failed: %v", name, err))
+			continue
+		}
+		for _, pid := range found {
+			if !seen[pid] {
+				seen[pid] = true
+				pids = append(pids, pid)
+				if strings.ToLower(strings.TrimSuffix(name, ".exe")) == "explorer" {
+					util.SendCloseMessageToExplorer(pid)
+				} else {
+					util.SendCloseMessageToProcess(pid)
+				}
+			}
+		}
+	}
+	if len(pids) == 0 {
+		return
+	}
+	time.Sleep(2 * time.Second)
+	var alive []uint32
+	for _, pid := range pids {
+		if util.IsProcessAlive(pid) {
+			alive = append(alive, pid)
+		}
+	}
+	if len(alive) > 0 {
+		util.ForceKillPIDs(alive, forceKillWait)
+	}
+}
+
 // formatPidNames 将进程 PID 格式化为去重、排序的进程名列表（未知名回退 PID），用于日志
 func formatPidNames(pids []uint32, names map[uint32]string) []string {
 	seen := make(map[string]bool)
