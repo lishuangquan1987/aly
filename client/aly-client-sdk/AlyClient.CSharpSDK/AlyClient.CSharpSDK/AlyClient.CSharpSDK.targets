@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
   <!--
@@ -23,8 +23,10 @@
 
     <MakeDir Directories="$(AlyUpdateFolder)" />
 
-    <!-- Download aly-client.exe from GitHub Releases if not present -->
+    <!-- Download aly-client.exe from GitHub Releases if not present.
+         下载失败只警告：更新器是运行时可选组件，不能因为它（网络/仓库不可达）阻断宿主构建。 -->
     <Exec Condition="!Exists('$(AlyUpdateFolder)aly-client.exe')"
+          ContinueOnError="WarnAndContinue"
           Command="powershell -NoProfile -Command &quot;
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
 try {
