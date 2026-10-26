@@ -43,6 +43,14 @@ namespace AlyClient.CSharpSDK
             set => _updateExePath = string.IsNullOrEmpty(value) ? value : Path.GetFullPath(value);
         }
 
+        /// <summary>
+        /// 应用更新前需要关闭的本进程名（不带 .exe，多个用逗号分隔）。
+        /// 宿主应用必须设置（如 Process.GetCurrentProcess().ProcessName）：
+        /// 不设置时更新器在替换文件阶段探测到目录被本进程占用后会直接强杀，
+        /// 应用没有机会优雅退出（停止监听、保存设置）。
+        /// </summary>
+        public string MustCloseProcessNames { get; set; }
+
         /// <param name="updatorExePath">Defaults to ../UpdateFolder/aly-client.exe relative to BaseDirectory</param>
         public AlyUpdateClient(string updatorExePath = null)
         {
@@ -242,7 +250,7 @@ namespace AlyClient.CSharpSDK
                         Status = AlyClientStatus.ApplyUpdate;
                         OnStatusChanged(Status, "Applying update...");
 
-                        AlyApi.ApplyUpdateAsync(UpdatorExePath);
+                        AlyApi.ApplyUpdateAsync(UpdatorExePath, MustCloseProcessNames);
                         // 不 break：apply_update 成功后宿主程序会被重启；
                         // 如果失败或用户取消则继续轮询后续更新。
                         Thread.Sleep(5000);
