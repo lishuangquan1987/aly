@@ -26,6 +26,10 @@ var (
 	linuxSrc  string // 源码在 WSL 中的挂载路径
 )
 
+// deployFiles 是每次构建并部署的交付物：更新器与图形前端必须同进同退，
+// 否则会出现"aly-client.exe 演示版有新功能、aly-client-ui.exe 还是旧版"的错位。
+var deployFiles = []string{"aly-client.exe", "aly-client-ui.exe"}
+
 type deployTarget struct {
 	win string
 	wsl string
@@ -164,15 +168,32 @@ func main() {
 	}
 	fmt.Println("  UI Build OK\n")
 
-	// ── Step 2c: 回拷 aly-client.exe 到仓库 ──
+	// ── Step 2c: 回拷两个 exe 到仓库 ──
 	// 部署目标只包含 config.json 里的目录，不含源码仓库；而仓库里的
-	// client/aly-client/aly-client.exe 是被 git 跟踪的交付物，必须与部署的一致。
-	fmt.Println("  [2c/4] Copying aly-client.exe back to repo ...")
-	if err := wsl("cp -f " + wslSrc + "/aly-client.exe " + linuxSrc + "/aly-client.exe"); err != nil {
-		fmt.Printf("  [WARN] copy back to repo failed: %v\n", err)
-	} else {
-		fmt.Println("  Done\n")
+	// client/aly-client/aly-client.exe 与 client/aly-client/aly-client-ui.exe
+	// 都是随包交付物（也是 UI 自更新"主程序目录 → UpdateFolder"的比对源），
+	// 必须与部署的一致 —— 两个 exe 走完全相同的回拷流程。
+	fmt.Println("  [2c/4] Copying aly-client.exe + aly-client-ui.exe back to repo ...")
+	for _, name := range deployFiles {
+		if err := wsl("cp -f " + wslSrc + "/" + name + " " + linuxSrc + "/" + name); err != nil {
+			fmt.Printf("  [WARN] copy %s back to repo failed: %v\n", name, err)
+		} else {
+			fmt.Printf("         OK %s\n", name)
+		}
 	}
+	fmt.Println()
+
+	// ── Step 2d: 构建产物校验 ──
+	// 两个 exe 都必须构建成功，否则部署会"只拷一半"，导致 UI 与更新器版本错位。
+	fmt.Println("  [2d/4] Verifying build artifacts ...")
+	for _, name := range deployFiles {
+		out, err := wslOutput("test -f " + wslSrc + "/" + name + " && echo ok")
+		if err != nil || out != "ok" {
+			fmt.Printf("  [ERROR] %s missing after build: %v\n", name, err)
+			os.Exit(1)
+		}
+	}
+	fmt.Println("  Both artifacts OK\n")
 
 	// ── Step 3: Deploy to all targets ──
 	targets := loadDeployTargets()
@@ -188,27 +209,33 @@ func main() {
 				fail = true
 				continue
 			}
-			if err := wsl("cp -f " + wslSrc + "/aly-client.exe " + t.wsl + "/"); err != nil {
-				fmt.Printf("         [FAIL] copy aly-client.exe failed: %v\n", err)
-				fail = true
+			// 两个 exe 都部署到所有目标，且失败即中止该目标：
+			//   UpdateFolder\aly-client.exe      ← 更新器（真正执行下载/替换）
+			//   UpdateFolder\aly-client-ui.exe   ← 实际运行的 UI
+			//   主程序目录\aly-client.exe        ← 随包分发，更新器自更新的比对源
+			//   主程序目录\aly-client-ui.exe     ← 随包分发，UI 自更新的比对源
+			sizes := ""
+			targetOK := true
+			for _, name := range deployFiles {
+				if err := wsl("cp -f " + wslSrc + "/" + name + " " + t.wsl + "/"); err != nil {
+					fmt.Printf("         [FAIL] copy %s failed: %v\n", name, err)
+					fail = true
+					targetOK = false
+					break
+				}
+				out, err := wslOutput("stat -c%s " + t.wsl + "/" + name)
+				if err == nil {
+					var size int64
+					fmt.Sscanf(out, "%d", &size)
+					sizes += fmt.Sprintf("%s=%.1fMB ", name, float64(size)/1024/1024)
+				} else {
+					sizes += name + "=? "
+				}
+			}
+			if !targetOK {
 				continue
 			}
-			// UI 与更新器一样部署到所有目标：
-			//   UpdateFolder\aly-client-ui.exe  ← 实际运行的 UI
-			//   主程序目录\aly-client-ui.exe    ← 随包分发，并作为 UI 自更新的比对源
-			if err := wsl("cp -f " + wslSrc + "/aly-client-ui.exe " + t.wsl + "/"); err != nil {
-				fmt.Printf("         [FAIL] copy aly-client-ui.exe failed: %v\n", err)
-				fail = true
-				continue
-			}
-			out, err := wslOutput("stat -c%s " + t.wsl + "/aly-client.exe")
-			if err == nil {
-				var size int64
-				fmt.Sscanf(out, "%d", &size)
-				fmt.Printf("         OK (%.1f MB)\n", float64(size)/1024/1024)
-			} else {
-				fmt.Println("         OK")
-			}
+			fmt.Printf("         OK (%s)\n", strings.TrimSpace(sizes))
 		}
 		if fail {
 			os.Exit(1)

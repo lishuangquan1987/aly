@@ -71,18 +71,18 @@ go build -ldflags="-s -w -H=windowsgui" -o aly-client-ui.exe aly/client/aly-clie
 
 ### 4. 将 exe 复制回工作目录
 
+更新器与图形前端都是随包交付物，**两者回拷方式一致**（放在同一目录，供部署与
+UI 自更新的"主程序目录 → UpdateFolder"比对使用）：
+
 ```batch
-copy /y aly-client.exe client\aly-client\aly-client.exe
+copy /y aly-client.exe    client\aly-client\aly-client.exe
+copy /y aly-client-ui.exe client\aly-client\aly-client-ui.exe
 del aly-client.exe
+del aly-client-ui.exe
 ```
 
-> `aly-client-ui.exe` 是**构建产物**，已在 `.gitignore` 中忽略，通常不需要回拷。
-> 需要留档时执行：
->
-> ```batch
-> copy /y aly-client-ui.exe client\aly-client\ui\winui\aly-client-ui.exe
-> del aly-client-ui.exe
-> ```
+> 用 `deploy-client.bat` 时会自动完成这两步回拷；手工构建时才需要执行上面的命令。
+> 不再把 UI 放到 `ui\winui\` 下（该目录的 exe 已被 `.gitignore` 忽略）。
 
 ## 一键编译脚本
 
