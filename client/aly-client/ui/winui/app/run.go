@@ -117,7 +117,9 @@ func Run(opt Options) int {
 	// 两者都是「有差异才动」，失败不阻断启动。
 	if mf, mfErr := mainFolderOf(self); mfErr == nil {
 		_ = UpdateUpdater(self, mf)
-		if replaced, upErr := UpdateSelfUI(self, mf); upErr == nil && replaced {
+		// 重启时透传原参数，保证自更新后仍按同一模式运行
+		//（否则手动「检查更新」重启后会变成静默的 auto 模式）
+		if replaced, upErr := UpdateSelfUI(self, mf, os.Args[1:]); upErr == nil && replaced {
 			// 已派生延迟替换脚本，本实例立即退出让位
 			return 0
 		}

@@ -128,6 +128,63 @@ func TestUpdateUpdaterCopies(t *testing.T) {
 	}
 }
 
+// UpdateUpdater 与 UpdateSelfUI 口径一致（见 selfupdate.go）：
+// 内容相同不重写、源缺失不算错误。
+func TestUpdateUpdaterNoChangeIsNoop(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	update := filepath.Join(dir, "UpdateFolder")
+	main := filepath.Join(dir, "win-x64")
+	for _, d := range []string{update, main} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+	}
+	dst := filepath.Join(update, "aly-client.exe")
+	writeF(t, filepath.Join(main, "aly-client.exe"), "SAME")
+	writeF(t, dst, "SAME")
+
+	// 把目标 mtime 拨到一小时前：若发生重写，mtime 会变
+	old := time.Now().Add(-time.Hour).Truncate(time.Second)
+	if err := os.Chtimes(dst, old, old); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
+
+	if err := UpdateUpdater(update, main); err != nil {
+		t.Fatalf("UpdateUpdater: %v", err)
+	}
+	st, err := os.Stat(dst)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if !st.ModTime().Equal(old) {
+		t.Fatal("内容一致时不应改写目标文件（与 UpdateSelfUI 口径一致）")
+	}
+}
+
+// 主程序目录没有随包分发的 aly-client.exe 时：跳过且保留 UpdateFolder 里的旧文件。
+func TestUpdateUpdaterMissingSrcIsNotError(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	update := filepath.Join(dir, "UpdateFolder")
+	main := filepath.Join(dir, "win-x64")
+	for _, d := range []string{update, main} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+	}
+	writeF(t, filepath.Join(update, "aly-client.exe"), "UPDATER-V1")
+
+	if err := UpdateUpdater(update, main); err != nil {
+		t.Fatalf("源缺失不应报错: %v", err)
+	}
+	if got := readF(t, filepath.Join(update, "aly-client.exe")); got != "UPDATER-V1" {
+		t.Fatalf("目标应保持旧内容，实际 %q", got)
+	}
+}
+
 // UpdateSelfUI 的 spawn 用注入桩替换，避免测试真的去 move/start 进程。
 func TestUpdateSelfUIReplacesAndSpawns(t *testing.T) {
 	dir, cleanup := mkTmp(t)
@@ -151,7 +208,8 @@ func TestUpdateSelfUIReplacesAndSpawns(t *testing.T) {
 	}
 	defer func() { spawnDetachedFn = orig }()
 
-	replaced, err := UpdateSelfUI(update, main)
+	// 重启必须带上原参数：否则手动「检查更新」重启后会退化为静默 auto 模式
+	replaced, err := UpdateSelfUI(update, main, []string{"-mode", "check", "-lang", "zh-CN"})
 	if err != nil {
 		t.Fatalf("UpdateSelfUI: %v", err)
 	}
@@ -162,8 +220,11 @@ func TestUpdateSelfUIReplacesAndSpawns(t *testing.T) {
 	if got := readF(t, filepath.Join(update, "aly-client-ui.exe.new")); got != "UI-V2" {
 		t.Fatalf(".new content wrong: %q", got)
 	}
-	// 延迟脚本必须包含 move 与 start，且路径带引号
-	for _, want := range []string{"move /y", "start \"\"", "aly-client-ui.exe.new"} {
+	// 延迟脚本必须包含 move 与 start，且路径带引号；并透传原启动参数
+	for _, want := range []string{
+		"move /y", "start \"\"", "aly-client-ui.exe.new",
+		`"-mode" "check"`, `"-lang" "zh-CN"`,
+	} {
 		if !containsStr(spawned, want) {
 			t.Fatalf("spawn cmdline %q should contain %q", spawned, want)
 		}
@@ -191,7 +252,7 @@ func TestUpdateSelfUINoChangeIsNoop(t *testing.T) {
 	}
 	defer func() { spawnDetachedFn = orig }()
 
-	replaced, err := UpdateSelfUI(update, main)
+	replaced, err := UpdateSelfUI(update, main, nil)
 	if err != nil {
 		t.Fatalf("UpdateSelfUI: %v", err)
 	}
@@ -212,7 +273,7 @@ func TestUpdateSelfUIMissingSrcIsNotError(t *testing.T) {
 		}
 	}
 	// 主程序目录没有随包分发的 UI
-	replaced, err := UpdateSelfUI(update, main)
+	replaced, err := UpdateSelfUI(update, main, nil)
 	if err != nil {
 		t.Fatalf("missing src should not be an error, got %v", err)
 	}
