@@ -58,6 +58,46 @@ client.RequestApplyUpdate += (newVersion) =>
 };
 ```
 
+## GUI Front-End (aly-client-ui) — Recommended
+
+`AlyUpdateUIClient` hands the whole lifecycle (check → download → apply → restart your app)
+to the standalone `aly-client-ui.exe` window, so the host app does **not** need to draw any
+update UI, poll in the background, or handle process restart itself:
+
+```csharp
+using AlyClient.CSharpSDK;
+
+var ui = new AlyUpdateUIClient();           // defaults to ..\UpdateFolder\aly-client-ui.exe
+ui.Exited += code => Console.WriteLine("aly-client-ui exit " + code);
+
+// At startup: hidden unless an update is found; silent when offline / up to date.
+ui.LaunchAuto();
+
+// When the user clicks "Check for updates": always shows feedback, auto-closes when no update.
+ui.LaunchCheck();
+
+// Other modes
+ui.LaunchUpdate();     // download + apply without asking
+ui.LaunchRollback();   // version picker for rollback
+ui.LaunchSilent();     // same as auto: quiet unless an update is confirmed
+```
+
+| Member | Purpose |
+|--------|---------|
+| `Launch(AlyUpdateUiMode)` | Start the UI with a specific `-mode` |
+| `LaunchAuto/Check/Update/Rollback/Silent()` | Convenience wrappers for the modes above |
+| `UiExePath` / `Language` | Override exe path (`zh-CN` / `en-US`) |
+| `IsRunning` / `LastExitCode` | Last process state |
+| `Started` / `Exited` | Process lifecycle events (exit code) |
+
+Notes:
+
+- `aly-client-ui.exe` is a single-instance app. Calling `Launch` while the previous window is
+  still alive returns a failed `AlyResponse` (`already running`) instead of silently doing nothing.
+- After `apply_update` the UI relaunches your main executable (see `client.json`
+  `main_exe_relative_path` / `must_close_process_name`), so the host does not need to restart itself.
+- Deployed next to `aly-client.exe` by the NuGet targets; set `AlyIncludeClientUi=false` to skip it.
+
 ## Update Lifecycle
 
 | Status | Meaning |
@@ -118,6 +158,8 @@ await AlyApi.RollbackAsync(exePath, "1.0.0");
 
 ## Prerequisites
 
-- .NET Framework 4.0+ or .NET Standard 2.0+
+- `.NET Framework 4.0+` or `.NET Standard 2.0+`
 - `..\UpdateFolder\aly-client.exe` (deployed by NuGet build targets)
+- `..\UpdateFolder\aly-client-ui.exe` (optional GUI front-end, deployed by the same targets;
+  required by `AlyUpdateUIClient`)
 - A Aly server running and configured in `..\UpdateFolder\.updator\shared.json` (or passed via CLI args to `aly-client.exe`)
