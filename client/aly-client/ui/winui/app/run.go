@@ -182,15 +182,24 @@ func runFlow(w *view.Window, interactive bool, exePath string, findErr error) {
 			return
 		}
 		w.Synchronize(func() {
+			w.SetNotes(nil) // 无更新：清掉可能残留的发布内容（窗口同时回落默认高度）
 			w.SetContent(title, versionLabel(res.current), i18n.T(i18n.KeyNoUpdate))
 			w.SetDetail("")
 			w.SetError(false)
 		})
-		autoClose(w)
+		// 用户主动检查且服务端没有更新：弹框明确告知"没有可用的更新"。
+		// 原来只让卡片停 5 秒后自动关闭，容易被当成"点了没反应"。
+		w.ShowInfo(title, i18n.T(i18n.KeyNoUpdateBox))
+		quit(w)
 		return
 	}
 
 	newer := res.newer
+
+	// 把新版本的发布内容交给卡片：有内容时窗口自动加高并在右下角重新定位。
+	// 放在任何 show() 之前，保证第一次弹出就带着"本次更新内容"。
+	w.Synchronize(func() { w.SetNotes(res.notes) })
+
 	show := func(status string) {
 		w.Synchronize(func() {
 			w.SetContent(title, versionLabel(newer), status)
@@ -202,6 +211,9 @@ func runFlow(w *view.Window, interactive bool, exePath string, findErr error) {
 
 	// ④ 需要下载
 	if res.decision.Action == flow.ActionDownload {
+		// 先显示卡片（带新版本发布内容）再询问：用户要先看到"这次更新了什么"才好决定，
+		// 否则确认框会盖在尚未显示的卡片之前，发布内容形同不存在。
+		show(i18n.Fmt(i18n.KeyFoundVersion, newer))
 		if res.decision.Ask && !w.AskYesNo(title, i18n.Fmt(i18n.KeyAskDownload, newer)) {
 			quit(w) // 用户拒绝
 			return
@@ -226,9 +238,13 @@ func runFlow(w *view.Window, interactive bool, exePath string, findErr error) {
 	}
 
 	// ⑤ 应用
-	if res.decision.Ask && !w.AskYesNo(title, i18n.Fmt(i18n.KeyAskApply, newer)) {
-		quit(w) // 用户选择稍后
-		return
+	if res.decision.Ask {
+		// 已下载待应用的场景同样先展示卡片（含发布内容）再询问
+		show(i18n.Fmt(i18n.KeyFoundVersion, newer))
+		if !w.AskYesNo(title, i18n.Fmt(i18n.KeyAskApply, newer)) {
+			quit(w) // 用户选择稍后
+			return
+		}
 	}
 	show(i18n.T(i18n.KeyApplying))
 
@@ -318,6 +334,8 @@ type checkOutcome struct {
 	decision flow.Decision
 	current  string
 	newer    string
+	// notes 是新版本的发布内容（服务端变更日志），为空表示没有可展示的内容。
+	notes []string
 	// problem 非空表示检查没成功（网络失败 / 服务端报错）。
 	problem string
 }
@@ -334,7 +352,7 @@ func checkUpdate(cl *bridge.Client, ctx context.Context) checkOutcome {
 	}
 
 	c := p.Check
-	res := checkOutcome{current: c.CurrentVersion, newer: c.NewVersion}
+	res := checkOutcome{current: c.CurrentVersion, newer: c.NewVersion, notes: c.ReleaseNotes}
 
 	if !p.Success {
 		res.problem = p.ErrMsg
@@ -372,6 +390,7 @@ func fail(w *view.Window, interactive bool, version, status, detail string) {
 		return
 	}
 	w.Synchronize(func() {
+		w.SetNotes(nil) // 错误态不展示发布内容（窗口回落默认高度）
 		w.SetContent(title, versionLabel(version), status)
 		w.SetDetail(detail)
 		w.SetError(true)

@@ -97,8 +97,9 @@ aly-client.exe check_update [--url <服务器地址>] [--project-name <项目名
 **返回示例**：
 
 ```json
-// 有更新（需要下载）
-{"isSuccess":true,"data":{"has_update":true,"need_download_update":true,"current_version":"1.0.0","new_version":"1.0.1","force_update":false}}
+// 有更新（需要下载）：release_notes 透传服务端 project_change_logs.logs，
+// 供宿主 / aly-client-ui 展示"本次更新了哪些内容"；服务端未配置时该字段不出现
+{"isSuccess":true,"data":{"has_update":true,"need_download_update":true,"current_version":"1.0.0","new_version":"1.0.1","force_update":false,"release_notes":["修复：测长偶发偏差","新增：点间距支持 2.5m"]}}
 
 // 有更新（已下载，只需 apply）
 {"isSuccess":true,"data":{"has_update":true,"need_download_update":false,"current_version":"1.0.0","new_version":"1.0.1"}}

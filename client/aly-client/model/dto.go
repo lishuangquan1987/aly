@@ -62,6 +62,9 @@ type CheckUpdateData struct {
 	CurrentVersion     string `json:"current_version"`
 	NewVersion         string `json:"new_version,omitempty"`
 	ForceUpdate        *bool  `json:"force_update,omitempty"`
+	// ReleaseNotes 是新版本的变更内容（服务端 project_change_logs.logs），
+	// 仅在上报新版本时下发，供宿主/UI 提示"本次更新了哪些内容"。
+	ReleaseNotes []string `json:"release_notes,omitempty"`
 }
 
 // DiffFileItem 表示 check_diff 输出中的单个差异文件

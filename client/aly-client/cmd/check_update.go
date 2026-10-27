@@ -95,6 +95,8 @@ func checkUpdateApplied(fc *FullConfig, localVersion string) {
 			CurrentVersion:     localVersion,
 			NewVersion:         serverVersion,
 			ForceUpdate:        &forceUpdate,
+			// 新版本的变更内容：宿主/UI 用来提示"这次更新了什么"
+			ReleaseNotes: latestLog.Logs,
 		})
 	}
 }
@@ -250,6 +252,8 @@ func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVe
 			CurrentVersion:     localVersion,
 			NewVersion:         serverVersion,
 			ForceUpdate:        &forceUpdate,
+			// 服务器版本更高、需要重新下载时同样带出变更内容
+			ReleaseNotes: latestLog.Logs,
 		})
 	}
 }

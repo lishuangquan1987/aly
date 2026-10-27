@@ -25,9 +25,20 @@ type Card struct {
 	version  string
 	status   string
 	detail   string
+	notes    []string
 	cur, max int
 	isError  bool
 }
+
+// 发布内容（变更日志）区域的排版常量（96-DPI 逻辑像素）。
+const (
+	// notesLineH 单行发布内容的高度。
+	notesLineH = 20
+	// notesMaxLines 最多显示几行，超出部分不画（卡片高度有上限，避免遮挡主程序）。
+	notesMaxLines = 5
+	// notesGap 状态/详情与发布内容之间的留白，也计入卡片增高量。
+	notesGap = 12
+)
 
 // NewCard 创建自绘卡片。
 func NewCard(parent walk.Container) (*Card, error) {
@@ -70,6 +81,37 @@ func (c *Card) SetDetail(detail string) {
 	}
 	c.detail = detail
 	c.invalidate()
+}
+
+// SetNotes 设置新版本的发布内容（变更日志，每项一行）。
+// 传 nil/空 切片表示不展示，卡片回落默认高度。
+func (c *Card) SetNotes(notes []string) {
+	if c == nil {
+		return
+	}
+	c.notes = notes
+	c.invalidate()
+}
+
+// NotesLines 返回实际会绘制的发布内容行数（最多 notesMaxLines 行）。
+func (c *Card) NotesLines() int {
+	if c == nil {
+		return 0
+	}
+	n := len(c.notes)
+	if n > notesMaxLines {
+		n = notesMaxLines
+	}
+	return n
+}
+
+// NotesHeight 返回发布内容区域需要额外增加的高度（逻辑像素）；0 表示不需要加高。
+func (c *Card) NotesHeight() int {
+	n := c.NotesLines()
+	if n == 0 {
+		return 0
+	}
+	return notesGap + n*notesLineH
 }
 
 // SetError 标记当前状态是否为错误（影响状态行颜色）。
@@ -181,6 +223,17 @@ func (c *Card) paint(canvas *walk.Canvas) error {
 		_ = drawText(canvas, c.detail, theme.BodyFont(), theme.TextSecondary,
 			left, b.Y+pad+2*lineH+10, contentW, 18,
 			walk.TextLeft|walk.TextVCenter|walk.TextSingleLine|walk.TextEndEllipsis)
+	}
+
+	// 发布内容（新版本变更日志）：每项一行，单行超长省略。
+	// 行数超过 notesMaxLines 时只画前几行（窗口高度由 Window.SetNotes 按 NotesLines 调整）。
+	if n := c.NotesLines(); n > 0 {
+		top := b.Y + pad + 3*lineH + 8
+		for i := 0; i < n; i++ {
+			_ = drawText(canvas, "· "+c.notes[i], theme.BodyFont(), theme.TextSecondary,
+				left, top+i*notesLineH, contentW, notesLineH,
+				walk.TextLeft|walk.TextVCenter|walk.TextSingleLine|walk.TextEndEllipsis)
+		}
 	}
 	return nil
 }

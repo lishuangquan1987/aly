@@ -47,10 +47,11 @@ func TestNeedUpdate(t *testing.T) {
 type checkUpdateResult struct {
 	IsSuccess bool `json:"isSuccess"`
 	Data      struct {
-		HasUpdate          bool   `json:"has_update"`
-		NeedDownloadUpdate bool   `json:"need_download_update"`
-		CurrentVersion     string `json:"current_version"`
-		NewVersion         string `json:"new_version"`
+		HasUpdate          bool     `json:"has_update"`
+		NeedDownloadUpdate bool     `json:"need_download_update"`
+		CurrentVersion     string   `json:"current_version"`
+		NewVersion         string   `json:"new_version"`
+		ReleaseNotes       []string `json:"release_notes"`
 	} `json:"data"`
 }
 
@@ -88,6 +89,31 @@ func logsServer(t *testing.T, versions ...string) string {
 			items = append(items, fmt.Sprintf(`{"id":%d,"version":%q}`, i+1, v))
 		}
 		w.Write([]byte(`{"isSuccess":true,"errorMsg":"","data":[` + strings.Join(items, ",") + `]}`))
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// notesServer 返回一个"服务器有新版本且带变更内容"的 server_url：
+// 变更日志里除 version 外还带 logs 数组，用于验证 check_update 是否把发布内容透传出去。
+// 注意 applied 分支要求 project 接口也成功（serverReachable 需要 projectErr == nil），
+// 因此这里对 get_project_by_name 返回一个合法项目对象。
+func notesServer(t *testing.T, version string, notes []string) string {
+	t.Helper()
+	logsJSON, err := json.Marshal(notes)
+	if err != nil {
+		t.Fatalf("序列化 logs 失败: %v", err)
+	}
+	logsBody := `{"isSuccess":true,"errorMsg":"","data":[{"id":1,"version":"` + version + `","logs":` + string(logsJSON) + `}]}`
+	projectBody := `{"isSuccess":true,"errorMsg":"","data":{"id":1,"name":"test","title":"test","version":"` +
+		version + `","force_update":false}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "change_logs") {
+			w.Write([]byte(logsBody))
+			return
+		}
+		w.Write([]byte(projectBody))
 	}))
 	t.Cleanup(srv.Close)
 	return srv.URL
@@ -448,5 +474,50 @@ func TestCheckUpdateDownloadedEmptyPreviousReportsEmptyCurrent(t *testing.T) {
 	}
 	if got.Data.NewVersion != "2.0" {
 		t.Errorf("new_version 应为 2.0，实际 %q", got.Data.NewVersion)
+	}
+}
+
+// ============================================================
+// check_update：新版本发布内容（release_notes）
+// ============================================================
+
+// TestCheckUpdateReportsReleaseNotes 验证上报新版本时一并透传发布内容：
+// release_notes ← 服务端 project_change_logs.logs，供宿主/UI 展示"这次更新了什么"。
+func TestCheckUpdateReportsReleaseNotes(t *testing.T) {
+	notes := []string{"修复：测长偶发偏差", "新增：点间距支持 2.5m"}
+	setupCheckUpdateLayout(t,
+		`{"version_previous":"","version":"1.0","version_status":"applied"}`,
+		notesServer(t, "2.0", notes))
+
+	os.Args = []string{"aly-client", "check_update"}
+	got := runCheckUpdate(t)
+
+	if !got.Data.HasUpdate || !got.Data.NeedDownloadUpdate {
+		t.Fatalf("服务器更高时应上报 need_download_update=true，实际 has=%v need=%v",
+			got.Data.HasUpdate, got.Data.NeedDownloadUpdate)
+	}
+	if len(got.Data.ReleaseNotes) != len(notes) {
+		t.Fatalf("release_notes 应透传 %d 条，实际 %d 条（%v）",
+			len(notes), len(got.Data.ReleaseNotes), got.Data.ReleaseNotes)
+	}
+	for i := range notes {
+		if got.Data.ReleaseNotes[i] != notes[i] {
+			t.Errorf("release_notes[%d] 应为 %q，实际 %q", i, notes[i], got.Data.ReleaseNotes[i])
+		}
+	}
+}
+
+// TestCheckUpdateOmitsReleaseNotesWhenEmpty 验证服务端没有变更内容时不输出 release_notes
+// （omitempty）：宿主据此不会弹出空的"更新内容"面板。
+func TestCheckUpdateOmitsReleaseNotesWhenEmpty(t *testing.T) {
+	setupCheckUpdateLayout(t,
+		`{"version_previous":"","version":"1.0","version_status":"applied"}`,
+		logsServer(t, "2.0"))
+
+	os.Args = []string{"aly-client", "check_update"}
+	out := captureStdout(t, CheckUpdate)
+
+	if strings.Contains(out, "release_notes") {
+		t.Errorf("没有变更内容时不应输出 release_notes，实际 %q", out)
 	}
 }

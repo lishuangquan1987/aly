@@ -6,6 +6,7 @@ package i18n
 var enUS = map[string]string{
 	KeyChecking:        "Checking for updates…",
 	KeyNoUpdate:        "You are up to date",
+	KeyNoUpdateBox:     "You are already on the latest version. No updates available.",
 	KeyFoundVersion:    "New version v%s available",
 	KeyDownloading:     "Downloading %s (%d/%d)",
 	KeyDownloaded:      "Download complete",

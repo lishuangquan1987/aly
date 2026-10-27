@@ -26,6 +26,7 @@ const (
 const (
 	KeyChecking        = "checking"
 	KeyNoUpdate        = "no_update"
+	KeyNoUpdateBox     = "no_update_box"
 	KeyFoundVersion    = "found_version"
 	KeyDownloading     = "downloading"
 	KeyDownloaded      = "downloaded"

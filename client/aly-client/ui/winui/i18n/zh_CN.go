@@ -6,6 +6,7 @@ package i18n
 var zhCN = map[string]string{
 	KeyChecking:        "正在检查更新…",
 	KeyNoUpdate:        "已是最新版本",
+	KeyNoUpdateBox:     "当前已是最新版本，没有可用的更新。",
 	KeyFoundVersion:    "发现新版本 v%s",
 	KeyDownloading:     "正在下载 %s（%d/%d）",
 	KeyDownloaded:      "下载完成",

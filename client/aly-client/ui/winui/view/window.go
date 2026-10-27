@@ -14,6 +14,8 @@ const (
 	defaultW = 380
 	defaultH = 160
 	margin   = 16
+	// maxH 是带发布内容时的窗口高度上限（逻辑像素）：避免盖住主程序太多区域。
+	maxH = 300
 )
 
 // Window 是贴屏幕右下角的顶层窗口。
@@ -22,6 +24,8 @@ const (
 type Window struct {
 	mw   *walk.MainWindow
 	card *Card
+	// h 是当前窗口的逻辑高度：默认 defaultH，展示发布内容时由 SetNotes 增加。
+	h int
 }
 
 // New 创建窗口：定位到所在显示器工作区右下角，设为 topmost + 工具窗口，
@@ -31,7 +35,7 @@ func New() (*Window, error) {
 	if err != nil {
 		return nil, err
 	}
-	w := &Window{mw: mw}
+	w := &Window{mw: mw, h: defaultH}
 
 	if err := mw.SetTitle("aly-client-ui"); err != nil {
 		return nil, err
@@ -102,6 +106,28 @@ func (w *Window) SetError(v bool) {
 	}
 }
 
+// SetNotes 设置新版本的发布内容（变更日志）。
+//
+// 有内容时窗口自动加高并在右下角重新定位（向上生长），无内容时回落默认高度。
+// 传 nil/空 表示不展示。
+func (w *Window) SetNotes(notes []string) {
+	if w.card == nil {
+		return
+	}
+	w.card.SetNotes(notes)
+
+	h := defaultH + w.card.NotesHeight()
+	if h > maxH {
+		h = maxH
+	}
+	if h == w.h {
+		return
+	}
+	w.h = h
+	// 高度变化后重新贴右下角（positionBottomRight 使用 w.h）
+	w.positionBottomRight()
+}
+
 // positionBottomRight 取窗口所在显示器的工作区（已扣除任务栏）并贴右下角。
 //
 // **坐标约定（重要）**：GetMonitorInfo 返回**物理像素**，而 walk 的 SetBounds
@@ -123,7 +149,7 @@ func (w *Window) positionBottomRight() {
 	}
 
 	d := dpiOf(w.mw.Handle())
-	winSize := Size{W: sx(defaultW, d), H: sx(defaultH, d)}
+	winSize := Size{W: sx(defaultW, d), H: sx(w.h, d)}
 	x, y := CalcBottomRight(wa, winSize, sx(margin, d))
 
 	// 先定位再显示，避免窗口先闪现在屏幕左上角
@@ -174,6 +200,20 @@ func (w *Window) AskYesNo(title, text string) bool {
 		ch <- res == walk.DlgCmdYes
 	})
 	return <-ch
+}
+
+// ShowInfo 弹出模态提示框（只有一个「确定」），**阻塞**直到用户点确定。
+// 与 AskYesNo 一样，只能在**非 UI 线程**调用（后台 goroutine）。
+//
+// 用途：用户主动「检查更新」且服务端无更新时，明确告知"没有可用的更新"
+// （卡片 5 秒自动关闭容易被忽略，用户会以为点了没反应）。
+func (w *Window) ShowInfo(title, text string) {
+	ch := make(chan struct{}, 1)
+	w.mw.Synchronize(func() {
+		walk.MsgBox(w.mw, title, text, walk.MsgBoxOK|walk.MsgBoxIconInformation)
+		ch <- struct{}{}
+	})
+	<-ch
 }
 
 // Synchronize 把 fn 投递到 UI 线程执行（供后台 goroutine 使用）。
