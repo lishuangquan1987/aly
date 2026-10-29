@@ -31,10 +31,11 @@ aly-client.exe <命令> [选项]
 |------|------|
 | `check_update` | 检查是否有新版本 |
 | `check_diff` | 比对本地的服务端文件差异 |
-| `download_update` | 下载变更文件到版本目录 |
-| `apply_update` | 应用已下载的更新（原子替换） |
+| `download_update` | 下载变更文件到版本目录（字节级进度 + 物化未变化文件） |
+| `apply_update` | 应用已下载的更新（纯 rename 原子替换） |
 | `list_rollback_versions` | 列出可回滚的历史版本 |
 | `rollback` | 回滚到指定版本 |
+| `clean` | 清理历史版本快照与临时文件 |
 | `check_self_update` | 检查更新程序自身是否需要更新 |
 
 ---
@@ -214,31 +215,39 @@ aly-client.exe download_update [--url <服务器地址>] [--project-name <项目
 
 **实现逻辑**：
 
-1. 获取服务端变更日志，取最新版本号
+1. 获取服务端变更日志，取最新版本号（semver 感知比较：`1.0.0-beta` < `1.0.0`，纯数字旧格式行为不变）
 2. 读取 `version.json` 获取当前版本号
 3. 若状态为 `downloaded` 且版本号与目标相同 → 跳过下载；但会**校验目标目录是否存在且非空**，
    缺失/为空时视为"下载产物丢失"，照常重新下载补齐（否则后续 `apply_update` 只能拿到空目录）
 4. 若 `newVersion <= currentVersion`，返回"已是最新版本"
-5. 获取服务端所有文件列表，与本地的 `ApplicationFolder` 对比 MD5，得出需下载的文件列表
+5. 获取服务端所有文件列表，与本地的 `ApplicationFolder` 对比 MD5，得出需下载的差异文件列表
+   （本地已匹配、或目标目录已有校验通过文件的**都不输出进度行**，`total` 只计差异文件数）
 6. 为目标版本创建目录 `PackageFolder/ApplicationFolder_{newVersion}/`
 7. 逐文件下载：
-   - 若目标目录中已存在同名文件且 MD5+SHA256 校验通过 → `SKIP`
    - **大文件断点续传**（>100MB）：写入 `.part` 临时文件，支持 `Range` 请求头断点续传，完成后重命名
-   - **小文件直接下载**：写入 `.part` 临时文件，完成后重命名
-8. 每个文件下载后校验 MD5+SHA256，不匹配则重试最多 3 次
-9. 全部成功后更新 `version.json`：`version_status → "downloaded"`，记录新旧版本号、
-   `downloaded_file_count`（本次下载产物里的常规文件数，不含 `.part`/`.tmp`），清空
-   `rollback_previous`/`rollback_target`/`apply_stage` 过渡字段，并从服务端变更日志同步
-   `after_apply_update_script` 字段；
-   若是"同版本重下"（`downloaded` 但产物丢失）且中途失败，会清理目标目录，避免留下
-   非空半成品目录让后续 `apply_update` 误判为"产物还在"
+   - **小文件直接下载**：同样走 `.part` 临时文件，完成后重命名
+8. 每个文件下载后校验 MD5+SHA256，不匹配则重试最多 3 次；**单文件 3 次重试仍失败不中断整体**，
+   记入失败清单继续下一个文件，全部跑完后统一输出失败结果（`failed_files` 数组列出失败文件；
+   此时不写 `version.json` 的待应用状态，避免半成品被 apply 激活——重试时已成功文件全部跳过，
+   等效"只重失败文件"）
+9. 全部成功后执行**物化收尾**：把 `MainFolder` 中未变化的文件拷进版本目录（排除
+   `un_copy_folders`/`un_copy_files`），让 `apply_update` 只剩三次纯 rename——关进程窗口从分钟级
+   降到秒级；物化失败会让整轮下载失败（重试成本很低：已下载/已物化文件全部跳过）
+10. 全部成功后更新 `version.json`：`version_status → "downloaded"`，记录新旧版本号、
+    `downloaded_file_count`（本次下载产物里的常规文件数，不含 `.part`/`.tmp`），清空
+    `rollback_previous`/`rollback_target`/`apply_stage` 过渡字段，并从服务端变更日志同步
+    `after_apply_update_script` 字段；
+    若是"同版本重下"（`downloaded` 但产物丢失）且中途失败，会清理目标目录，避免留下
+    非空半成品目录让后续 `apply_update` 误判为"产物还在"
 
-**进度输出**（每行一个 JSON，最后一行 `data: null` 表示全部完成。所有服务端文件都有进度行，`total` = 服务端文件总数，`index` 1..total 无重复）：
+**进度输出**（每行一个 JSON。**只输出差异文件**的 START/DONE 行与 FAIL 行；`total` = 差异文件总数，
+`index` 1..total 无重复。BEGIN 行预告 `total_bytes` 全量；START/DONE 行携带字节级进度字段
+`downloaded_bytes`/`total_bytes`/`speed_bps`——旧版宿主无这些字段时回退文件计数展示，互不影响）：
 
 ```
-{"isSuccess":true,"data":{"index":1,"total":5,"file":"app.exe","status":"START","file_size":5242880}}
-{"isSuccess":true,"data":{"index":1,"total":5,"file":"app.exe","status":"DONE","file_size":5242880}}
-{"isSuccess":true,"data":{"index":2,"total":5,"file":"new.dll","status":"SKIP","file_size":102400}}
+{"isSuccess":true,"data":{"index":0,"total":5,"file":"","status":"BEGIN","file_size":0,"downloaded_bytes":0,"total_bytes":734003200,"speed_bps":0}}
+{"isSuccess":true,"data":{"index":1,"total":5,"file":"app.exe","status":"START","file_size":5242880,"downloaded_bytes":0,"total_bytes":734003200,"speed_bps":0}}
+{"isSuccess":true,"data":{"index":1,"total":5,"file":"app.exe","status":"DONE","file_size":5242880,"downloaded_bytes":5242880,"total_bytes":734003200,"speed_bps":2411724}}
 ...
 {"isSuccess":true,"data":null}   ← 完成行
 ```
@@ -246,11 +255,14 @@ aly-client.exe download_update [--url <服务器地址>] [--project-name <项目
 **返回示例**：
 
 ```json
-// 成功（所有文件下载完成后输出 data:null）
+// 成功（所有文件下载完成且物化完成）
 {"isSuccess":true,"data":null}
 
 // 失败（文件中途校验失败）
 {"isSuccess":false,"errorMsg":"app.exe: checksum mismatch","data":null}
+
+// 失败（单文件 3 次重试仍失败，其余文件照常下载；重试只重失败文件）
+{"isSuccess":false,"errorMsg":"下载完成但有 2 个文件失败: a.dll, b.dll","data":{"version":"2.0.0","failed_files":["a.dll","b.dll"]}}
 ```
 
 **示例 1：下载默认项目的最新更新**
@@ -315,12 +327,12 @@ aly-client.exe apply_update [--main-exe-path <路径>] [--close-timeout <秒数>
    - 等待超时（默认 30s）
    - 超时后 `TerminateProcess` 强杀
 
-4. **原子替换**（三步确保崩溃可恢复）：
-   - ① 将 `ApplicationFolder` 内容（排除忽略规则）复制到 `ApplicationFolder_{version}`
-   - ② 将 `ApplicationFolder` 重命名为 `ApplicationFolder_{previousVersion}`（为空时该名字退化为 `ApplicationFolder_`，
-     属"无版本号备份"，见步骤 5）
-   - ③ 将 `ApplicationFolder_{version}` 重命名为 `ApplicationFolder`（改名前先把 `apply_stage=activating` 写入
-     `version.json`，作为崩溃恢复判定"改名确实发生过"的证据）
+4. **原子替换**（三步确保崩溃可恢复；未变化文件的复制已在 `download_update` 尾部物化完成，
+   走到这里版本目录必然已齐，本步骤只剩纯 rename——关进程窗口秒级）：
+   - ① 将 `ApplicationFolder` 重命名为 `ApplicationFolder_{previousVersion}`（为空时该名字退化为
+     `ApplicationFolder_`，属"无版本号备份"，见步骤 5）
+   - ② 将 `ApplicationFolder_{version}` 重命名为 `ApplicationFolder`（改名前先把 `apply_stage=activating`
+     写入 `version.json`，作为崩溃恢复判定"改名确实发生过"的证据）
    - 任一步失败则回滚并重置状态为 `downloaded`
 
 5. 更新 `version.json`：`version_status → "applied"`，并清空 `rollback_previous`/`rollback_target`/`apply_stage`；
@@ -390,7 +402,8 @@ aly-client.exe list_rollback_versions [--main-exe-path <路径>]
 
 1. 获取 `PackageFolder/` 目录下所有子目录
 2. 过滤出以 `{main_exe_folder_name}_` 为前缀的目录名
-3. 对后缀进行版本号格式验证（`X.Y.Z` 格式，至少两段，每段为纯数字）
+3. 对后缀进行版本号格式验证（纯数字 `X.Y.Z` 至少两段，或 semver 预发布/构建元数据形式
+   如 `1.0.0-beta`、`1.0.0+build`、`1.0.0.1`）
 4. 返回合法版本号列表 + 当前版本号
 
 **返回示例**：
@@ -559,12 +572,18 @@ aly-client.exe check_self_update --main-exe-path ../MyApp/MyApp.exe
 
 **单实例**：用命名互斥体保证同一会话只有一个 UI 实例；重复启动的实例立刻以 exit code 0 退出。
 
-**更新流程**（非强制更新时会弹确认框，强制更新全自动）：
+**更新流程**（询问一律走**卡片按钮**，不打断全屏主程序；强制更新 10 秒倒计时后自动重启）：
 
 ```
-check_update → 有更新 → 询问下载 → download_update（进度条）
-             → 询问应用 → apply_update → 主程序被重启
+check_update → 有更新 → [立即更新] [稍后] 按钮 → download_update（字节进度 + [暂停/继续]）
+             → [立即重启] [稍后] 按钮（强制更新：10s 倒计时 + [立即重启]）
+             → apply_update → 主程序被重启
 ```
+
+**失败处理**：任何阶段失败显示错误卡片（常见技术错误已人话化，如"文件被其他程序占用…"）
++ **[重试] [关闭]** 按钮；重试回到**失败的那个阶段**（不重跑已成功的阶段）。
+下载中可随时点**暂停**（杀掉下载子进程，`.part` 保留断点）/ **继续**（断点续传，
+已完成文件 0 重传）。
 
 **UI 与更新器自更新**：启动时比对 `<主程序目录>/aly-client-ui.exe` 与
 `<UpdateFolder>/aly-client-ui.exe`，有差异则落到 `.new` 并派生 detached 脚本
@@ -583,6 +602,68 @@ check_update → 有更新 → 询问下载 → download_update（进度条）
 
 :: 回滚界面
 ..\UpdateFolder\aly-client-ui.exe -mode rollback -lang en-US
+```
+
+---
+
+### 1.9 clean — 清理历史版本与临时文件
+
+**用途**：独立清理入口。`prune` 只在 apply/rollback 入口机会式触发，客户端不再更新时历史快照
+会永久占盘；`clean` 提供显式的磁盘回收手段。
+
+**使用场景**：长期运行的机器定期回收空间；排查问题时清掉下载残留。
+
+**用法**：
+
+```bash
+aly-client.exe clean [--keep N] [--all]
+```
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `--keep` | int | 否 | 3 | 保留最近 N 个版本快照，清理更旧的（与 prune 语义一致） |
+| `--all` | bool | 否 | — | 激进模式：只保留 MainFolder 当前版本相关的保护集，清掉其余全部快照 |
+
+**实现逻辑**：
+
+1. 复用全局更新锁（clean 会动 PackageFolder，不能与在途更新并发）
+2. `--keep N`：`pruneVersionSnapshots(fc, N)` 保留最近 N 个可回滚快照
+   `--all`：等效 `--keep 1`，仅保留最新一个快照
+   （MainFolder / Version / VersionPrevious / RollbackTarget 永不删除，不破坏当前运行与崩溃恢复）
+3. 顺带清理（两种模式都做）：
+   - 版本目录旁的 `.old` / `.old.N` 旁移残留
+   - 孤儿无版本号备份目录（`{MainFolder}_`）
+   - 所有版本目录与 MainFolder 内的 `.part` / `.tmp` 下载残留
+   - 超过 30 天的 `update_*.log` / `update_*_fail.log`
+
+**返回示例**：
+
+```json
+// --keep 模式
+{"isSuccess":true,"data":{"mode":"keep","keep":3}}
+
+// --all 模式
+{"isSuccess":true,"data":{"mode":"all"}}
+```
+
+**示例 1：默认清理（保留最近 3 个快照）**
+
+```bash
+aly-client.exe clean
+```
+
+**示例 2：只保留最近 1 个快照**
+
+```bash
+aly-client.exe clean --keep 1
+```
+
+**示例 3：激进清理（只保留当前版本保护集）**
+
+```bash
+aly-client.exe clean --all
 ```
 
 ---
@@ -1232,8 +1313,17 @@ aly-publish push --version <版本号> --message <变更说明> [--dry-run] [--f
 1. 加载暂存区文件列表
 2. （非 `--force` 模式）调用 `staging.Verify()`：重新计算暂存区文件的 MD5，若与 add 时记录的不一致 → 提示"文件已修改，请重新 add"
 3. 逐文件通过 `POST /api/file/upload_file`（multipart 上传）上传到服务端
-4. 调用 `POST /api/project/publish_version` 创建版本变更日志记录
+4. 调用 `POST /api/project/publish_version` 创建版本变更日志记录；
+   **服务端防倒退校验**：新版本号必须**严格大于**该项目已发布的最新版本号，否则拒绝
+   （防手滑倒退——重发旧版本号会让已更新的客户端"卡"在旧内容上；确需回退内容，
+   请发布更高的版本号。无例外口子）
 5. 成功后清空暂存区
+
+**返回示例（防倒退拒绝）**：
+
+```json
+{"isSuccess":false,"errorMsg":"版本 1.0.0 不大于已发布的最新版本 1.0.1（防倒退保护；如需回退内容，请发布更高的版本号）"}
+```
 
 **示例 1：正常推送**
 
@@ -1340,6 +1430,10 @@ aly-client.exe apply_update
 # 步骤 5：如果需要回滚
 aly-client.exe list_rollback_versions
 aly-client.exe rollback --version 1.0.0
+
+# 步骤 6（可选）：磁盘吃紧时清理历史快照与临时文件
+aly-client.exe clean            # 保留最近 3 个快照
+aly-client.exe clean --all      # 只保留当前版本
 ```
 
 #### 发布工作流

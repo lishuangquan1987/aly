@@ -147,13 +147,16 @@ State guards (a write never happens on an inconsistent state):
 
 ### Atomic Replace
 
-`apply_update` performs:
-1. Copy all files from current `ApplicationFolder` into `ApplicationFolder_{new_version}` (excluding ignored paths) so the new version directory is complete.
+`apply_update` performs pure directory renames (crash-safe, seconds-level even for GB-scale folders):
+
+1. During `download_update` (after all files are downloaded and verified), unchanged files are **materialized** into the new version directory by copying them from the current `ApplicationFolder` (excluding ignored paths) while your app is still running — read-only copies don't lock the directory rename that follows.
 2. Rename `ApplicationFolder` → `ApplicationFolder_{previous_version}` (backup; the nameless
    `ApplicationFolder_` when there is no previous version).
 3. Rename `ApplicationFolder_{new_version}` → `ApplicationFolder` (after writing `apply_stage=activating`).
 4. If any rename fails, revert `version_status` to `downloaded` so it can be retried (and clear the
    transient `rollback_previous`/`rollback_target`/`apply_stage` fields).
+
+With materialization done at download time, `apply_update` closes your app only for the three renames — the "app is down" window drops from minutes (full copy) to seconds.
 
 ### Client API Overview
 
@@ -161,11 +164,24 @@ State guards (a write never happens on an inconsistent state):
 |---------|-------------|
 | `check_update` | Compare local version vs. server latest |
 | `check_diff` | List files that differ (MD5+SHA256 comparison) |
-| `download_update` | Download changed files, verify SHA-256 |
-| `apply_update` | Atomic replace + restart your app |
+| `download_update` | Download changed files (byte-level progress), verify MD5+SHA256, materialize unchanged files into the version directory |
+| `apply_update` | Atomic rename replace + restart your app |
 | `list_rollback_versions` | List available previous versions |
 | `rollback --version X` | Rollback to a previous version snapshot |
+| `clean [--keep N] [--all]` | Prune old version snapshots, temp files (`.part`/`.tmp`/`.old*`), stale logs |
 | `check_self_update` | Check if the updater exe itself needs updating |
+
+Notes:
+
+- **Single-file failures don't abort the download**: files that fail after 3 retries are collected in a
+  `failed_files` list on the final result line; a retry re-downloads only the failed files (already
+  verified files are skipped).
+- **Version comparison is semver-aware**: `1.0.0-beta` sorts before `1.0.0` (pre-release < release);
+  plain numeric versions keep the old behavior.
+- **Server-side downgrade guard**: `publish_version` rejects a version that is not strictly greater
+  than the project's latest published version (prevents accidental re-publishing of an old version
+  number, which would leave updated clients "stuck" on stale content). To roll content back, publish
+  a higher version number.
 
 ## Building from Source
 
