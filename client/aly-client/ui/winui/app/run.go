@@ -491,13 +491,21 @@ type downloadResult struct {
 // updateDownloadUI 把进度快照刷到卡片（字节级优先，旧版 aly-client 回退文件计数）。
 // 在 UI 线程执行。
 func updateDownloadUI(w *view.Window, newer string, pi bridge.ProgressInfo) {
-	w.SetProgress(pi.Index, pi.Total)
 	if pi.TotalBytes > 0 {
-		// 字节级进度（精简计划条目 4）："已下载 156MB / 230MB · 2.4MB/s"
+		// 字节级进度（精简计划条目 4）：进度条按字节百分比 + "已下载 156MB / 230MB · 2.4MB/s"。
+		// 注意 386 平台 int 是 32 位：字节原值直接进 SetProgress 会在
+		// ProgressFillWidth 的 w*cur 乘法中溢出（340px * 2GB > int32），
+		// 故换算为千分比（int64 乘法无溢出风险）。
+		permille := int(pi.DownloadedBytes * 1000 / pi.TotalBytes)
+		if permille < 0 {
+			permille = 0
+		}
+		w.SetProgress(permille, 1000)
 		w.SetContent(title, versionLabel(newer), i18n.Fmt(i18n.KeySpeedFmt,
 			formatBytes(pi.DownloadedBytes), formatBytes(pi.TotalBytes), formatBytes(pi.SpeedBps)))
 	} else {
-		// 旧版 aly-client（无字节字段）回退为文件名 + 计数。
+		// 旧版 aly-client（无字节字段）回退为文件计数进度 + 文件名文案。
+		w.SetProgress(pi.Index, pi.Total)
 		w.SetContent(title, versionLabel(newer),
 			i18n.Fmt(i18n.KeyDownloading, pi.File, pi.Index, pi.Total))
 	}

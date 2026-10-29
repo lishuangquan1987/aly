@@ -196,3 +196,25 @@ func TestFormatBytes(t *testing.T) {
 	}
 }
 
+// TestByteProgressPermille 验证字节进度换算为千分比（精简计划条目 4：
+// 进度条按字节百分比）。386 平台 int 为 32 位，字节原值直接进
+// SetProgress 会在 ProgressFillWidth 的 w*cur 乘法中溢出，必须走
+// int64 换算。用 2GB 级别的大值验证不溢出、比例正确。
+func TestByteProgressPermille(t *testing.T) {
+	cases := []struct {
+		downloaded, total int64
+		wantPermille      int
+	}{
+		{0, 230 * 1024 * 1024, 0},
+		{115 * 1024 * 1024, 230 * 1024 * 1024, 500},
+		{2 * 1024 * 1024 * 1024, 2 * 1024 * 1024 * 1024, 1000}, // 2GB：32 位 int 必溢出，int64 不
+		{1, 3, 333},
+	}
+	for _, c := range cases {
+		permille := int(c.downloaded * 1000 / c.total)
+		if permille != c.wantPermille {
+			t.Errorf("permille(%d, %d)=%d want %d", c.downloaded, c.total, permille, c.wantPermille)
+		}
+	}
+}
+

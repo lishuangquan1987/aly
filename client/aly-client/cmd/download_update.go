@@ -245,7 +245,10 @@ func DownloadUpdate() {
 		relPath := normalizePath(dl.serverFile.FileRelativePath)
 		localPath := filepath.Join(targetDir, filepathFromSlash(relPath))
 
-		printProgress(dl.idx, total, relPath, "START", dl.serverFile.FileSize, "")
+		// START 行也带字节字段（downloaded/total_bytes/speed）：否则 UI 在
+		// 字节百分比与文件计数两种进度模式间来回切换，进度条视觉抖动。
+		printProgressBytes(dl.idx, total, relPath, "START", dl.serverFile.FileSize,
+			downloadedBytes, totalBytes, speedBps(), "")
 
 		// Download with retry up to 3 times
 		fileOK := false
