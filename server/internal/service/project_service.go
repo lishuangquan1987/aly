@@ -10,6 +10,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/utils-go/ngo/datetime"
@@ -171,6 +173,28 @@ func PublishVersion(ctx context.Context, projectName string, version string, log
 		if err != nil {
 			return err
 		}
+		// 防倒退校验（精简计划条目 8b）：新版本必须严格大于该项目已发布的
+		// 最新版本号，否则拒绝（防手滑倒退——重发旧版本号会让已更新的客户端
+		// "卡"在旧内容上：check 的 needUpdate 只认"严格更高"）。
+		// 用户决策（计划文档 §五.2）：不留 --allow-downgrade 例外口子，
+		// 确需回退内容时走"发布更高版本号"的正路。
+		allLogs, lErr := tx.ProjectChangeLog.Query().
+			Where(projectchangelog.ProjectID(p.ID), projectchangelog.IsDeletedEQ(false)).
+			All(ctx)
+		if lErr != nil {
+			return lErr
+		}
+		if len(allLogs) > 0 {
+			latest := allLogs[0].Version
+			for _, l := range allLogs[1:] {
+				if CompareVersion(l.Version, latest) > 0 {
+					latest = l.Version
+				}
+			}
+			if CompareVersion(version, latest) <= 0 {
+				return fmt.Errorf("版本 %s 不大于已发布的最新版本 %s（防倒退保护；如需回退内容，请发布更高的版本号）", version, latest)
+			}
+		}
 		// 更新项目版本号
 		_, err = tx.Project.Update().
 			Where(project.NameEQ(projectName), project.IsDeletedEQ(false)).
@@ -196,6 +220,118 @@ func PublishVersion(ctx context.Context, projectName string, version string, log
 	}
 
 	return models.OKWithData(changelog)
+}
+
+// CompareVersion 语义化版本比较（与 client 端 cmd/common.go 口径一致）：
+// v1 > v2 返回 1，v1 < v2 返回 -1，相等返回 0。
+// 支持 v 前缀、预发布（1.0.0-beta < 1.0.0）、构建元数据忽略、非数字段按 0。
+func CompareVersion(v1, v2 string) int {
+	v1 = strings.TrimPrefix(strings.TrimPrefix(v1, "V"), "v")
+	v2 = strings.TrimPrefix(strings.TrimPrefix(v2, "V"), "v")
+	p1, pre1 := splitSemverParts(v1)
+	p2, pre2 := splitSemverParts(v2)
+
+	maxLen := len(p1)
+	if len(p2) > maxLen {
+		maxLen = len(p2)
+	}
+	for i := 0; i < maxLen; i++ {
+		var n1, n2 int
+		if i < len(p1) {
+			n1, _ = strconv.Atoi(p1[i])
+		}
+		if i < len(p2) {
+			n2, _ = strconv.Atoi(p2[i])
+		}
+		if n1 > n2 {
+			return 1
+		}
+		if n1 < n2 {
+			return -1
+		}
+	}
+	if pre1 == "" && pre2 == "" {
+		return 0
+	}
+	if pre1 == "" {
+		return 1
+	}
+	if pre2 == "" {
+		return -1
+	}
+	return comparePrereleaseParts(pre1, pre2)
+}
+
+// splitSemverParts 拆 "1.2.3-beta.1+build" 为 (["1","2","3"], "beta.1")。
+func splitSemverParts(v string) ([]string, string) {
+	if i := strings.IndexByte(v, '+'); i >= 0 {
+		v = v[:i]
+	}
+	core, pre := v, ""
+	if i := strings.IndexByte(v, '-'); i >= 0 {
+		core, pre = v[:i], v[i+1:]
+	}
+	if core == "" {
+		return nil, pre
+	}
+	return strings.Split(core, "."), pre
+}
+
+// comparePrereleaseParts 比较预发布段：数字段按数值且 < 字母段；字典序；段数多者大。
+func comparePrereleaseParts(a, b string) int {
+	as := strings.Split(a, ".")
+	bs := strings.Split(b, ".")
+	maxLen := len(as)
+	if len(bs) > maxLen {
+		maxLen = len(bs)
+	}
+	for i := 0; i < maxLen; i++ {
+		if i >= len(as) {
+			return -1
+		}
+		if i >= len(bs) {
+			return 1
+		}
+		ai, bi := as[i], bs[i]
+		aNum, bNum := isNumericPart(ai), isNumericPart(bi)
+		if aNum && bNum {
+			an, _ := strconv.Atoi(ai)
+			bn, _ := strconv.Atoi(bi)
+			if an > bn {
+				return 1
+			}
+			if an < bn {
+				return -1
+			}
+			continue
+		}
+		if aNum != bNum {
+			if aNum {
+				return -1
+			}
+			return 1
+		}
+		if ai > bi {
+			return 1
+		}
+		if ai < bi {
+			return -1
+		}
+	}
+	return 0
+}
+
+// isNumericPart 判断 semver 标识符是否纯数字。
+func isNumericPart(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func DeleteProject(ctx context.Context, projectName string) models.CommonResponse {
