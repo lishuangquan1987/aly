@@ -159,3 +159,40 @@ func TestVersionLabel(t *testing.T) {
 	}
 }
 
+// TestFailText 验证"结果行失败但无原因"时的兜底文案（bridge 契约：
+// Parsed.Success=false 时 ErrMsg 可能为空，直接展示会让用户看到空详情）。
+func TestFailText(t *testing.T) {
+	cases := []struct {
+		cmd, errMsg, want string
+	}{
+		{"download_update", "下载完成但有 2 个文件失败: a.dll, b.dll", "下载完成但有 2 个文件失败: a.dll, b.dll"},
+		{"download_update", "", "download_update failed (no error message)"},
+		{"download_update", "   ", "download_update failed (no error message)"},
+		{"apply_update", "", "apply_update failed (no error message)"},
+	}
+	for _, c := range cases {
+		if got := failText(c.cmd, c.errMsg); got != c.want {
+			t.Errorf("failText(%q, %q)=%q want %q", c.cmd, c.errMsg, got, c.want)
+		}
+	}
+}
+
+// TestFormatBytes 验证字节人类可读格式（1024 进制一位小数；零值 "0B"）。
+func TestFormatBytes(t *testing.T) {
+	cases := map[int64]string{
+		0:          "0B",
+		512:        "512B",
+		1024:       "1.0KB",
+		1536:       "1.5KB",
+		1024 * 1024:       "1.0MB",
+		2 * 1024 * 1024:   "2.0MB",
+		1024 * 1024 * 1024: "1.0GB",
+		-1:         "0B",
+	}
+	for in, want := range cases {
+		if got := formatBytes(in); got != want {
+			t.Errorf("formatBytes(%d)=%q want %q", in, got, want)
+		}
+	}
+}
+

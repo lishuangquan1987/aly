@@ -274,6 +274,13 @@ func runFlowOnce(w *view.Window, interactive bool, cl *bridge.Client, ctx contex
 
 	newer := carried.newer
 
+	// 阶段化重跑（retryDownload/retryApply）：失败态把发布内容清空过，
+	// 这里用 carried 缓存恢复"本次更新了什么"——否则重试后用户看到的
+	// 卡片不再有变更日志（SetNotes(nil) 无害：空内容回落默认高度）。
+	if stage != retryCheck {
+		w.Synchronize(func() { w.SetNotes(carried.notes) })
+	}
+
 	show := func(status string) {
 		w.Synchronize(func() {
 			w.SetContent(title, versionLabel(newer), status)
@@ -357,8 +364,17 @@ func runFlowOnce(w *view.Window, interactive bool, cl *bridge.Client, ctx contex
 
 	show(i18n.T(i18n.KeyApplying))
 
-	if _, apErr := cl.ApplyUpdate(ctx); apErr != nil {
-		failRetryable(w, interactive, newer, i18n.T(i18n.KeyErrorGeneric), apErr.Error(), func() {})
+	if ap, apErr := cl.ApplyUpdate(ctx); apErr != nil || !ap.Success {
+		// bridge 契约同上：apply 失败兜底（含三段 rename 失败的恢复路径）
+		// 输出 isSuccess:false 结果行且正常退出，必须查 Success。
+		// 此前窗口必然已显示（倒计时/询问/重试），不能因 auto 模式静默消失。
+		msg := ""
+		if apErr != nil {
+			msg = apErr.Error()
+		} else {
+			msg = failText("apply_update", ap.ErrMsg)
+		}
+		failRetryable(w, true, newer, i18n.T(i18n.KeyErrorGeneric), msg, func() {})
 		return flowOutcome{retry: retryApply, newer: newer, ask: carried.ask, notes: carried.notes}
 	}
 
@@ -402,9 +418,15 @@ func runDownload(w *view.Window, cl *bridge.Client, ctx context.Context, newer s
 		cancelCur = dlCancel
 		g := gen
 		go func() {
-			_, err := cl.DownloadUpdate(dlCtx, func(pi bridge.ProgressInfo) {
+			p, err := cl.DownloadUpdate(dlCtx, func(pi bridge.ProgressInfo) {
 				w.Synchronize(func() { updateDownloadUI(w, newer, pi) })
 			})
+			// bridge 契约：stdout 有结果行时 err==nil，成败看 Parsed.Success
+			//（如"下载完成但有 N 个文件失败"是 isSuccess:false 的结果行且
+			// 进程正常退出）。不查 Success 会把业务失败当成功继续 apply。
+			if err == nil && !p.Success {
+				err = fmt.Errorf("%s", failText("download_update", p.ErrMsg))
+			}
 			done <- downloadResult{gen: g, err: err}
 		}()
 	}
@@ -545,8 +567,15 @@ func runRollback(w *view.Window, exePath string, findErr error) {
 		w.SetError(false)
 	})
 
-	if _, rbErr := cl.Rollback(ctx, v); rbErr != nil {
-		failRetryable(w, true, versionLabel(v), i18n.T(i18n.KeyErrorGeneric), rbErr.Error(), nil)
+	if rb, rbErr := cl.Rollback(ctx, v); rbErr != nil || !rb.Success {
+		// bridge 契约：回滚失败也是 isSuccess:false 结果行，必须查 Success。
+		msg := ""
+		if rbErr != nil {
+			msg = rbErr.Error()
+		} else {
+			msg = failText("rollback", rb.ErrMsg)
+		}
+		failRetryable(w, true, versionLabel(v), i18n.T(i18n.KeyErrorGeneric), msg, nil)
 		return
 	}
 
@@ -619,6 +648,16 @@ func versionLabel(v string) string {
 		return v
 	}
 	return "v" + v
+}
+
+// failText 是"结果行说失败但没给原因"时的兜底文案（bridge 契约要求
+// 调用方检查 Parsed.Success；此时 ErrMsg 可能为空，直接展示会让用户
+// 看到"（空）"的详情行）。带上命令名便于定位问题。
+func failText(cmd, errMsg string) string {
+	if msg := strings.TrimSpace(errMsg); msg != "" {
+		return msg
+	}
+	return cmd + " failed (no error message)"
 }
 
 // failRetryable 展示失败态 + [重试] [关闭] 按钮（精简计划条目 2）。
