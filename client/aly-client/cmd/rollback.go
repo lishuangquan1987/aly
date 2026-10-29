@@ -190,8 +190,8 @@ func Rollback() {
 	st := newRenameProbeState()
 
 	// Rollback target version dir already has complete files from when it was active.
-	// Unlike apply_update (which needs CopyDirWithExclude to fill in unchanged files
-	// from the current folder), rollback only needs atomic rename.
+	// Unlike download_update (which materializes unchanged files into the pending
+	// version dir), rollback only needs atomic rename.
 
 	// Compute paths for atomic rename
 	prevVersionDir, err := fc.ExeCfg.AppVersionDir(oldVersion)

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	apiclient "aly/client/aly-client/client"
 	"aly/client/aly-client/config"
@@ -202,6 +204,43 @@ func DownloadUpdate() {
 	}
 
 	total := len(downloadList)
+
+	// 字节级进度（计划条目 4）：BEGIN 预告行携带 total_bytes（差异文件大小之和），
+	// 每文件 DONE 行累计 downloaded_bytes 并携带 3 秒滑动窗口均值速度。
+	var totalBytes int64
+	for _, dl := range downloadList {
+		totalBytes += dl.serverFile.FileSize
+	}
+	printProgressBytes(0, total, "", "BEGIN", 0, 0, totalBytes, 0, "")
+
+	type speedSample struct {
+		at    time.Time
+		bytes int64
+	}
+	var speedWindow []speedSample
+	var downloadedBytes int64
+	speedBps := func() int64 {
+		cutoff := time.Now().Add(-3 * time.Second)
+		kept := speedWindow[:0]
+		var sum int64
+		for _, s := range speedWindow {
+			if s.at.After(cutoff) {
+				kept = append(kept, s)
+				sum += s.bytes
+			}
+		}
+		speedWindow = kept
+		if len(speedWindow) == 0 {
+			return 0
+		}
+		return sum / 3 // 窗口 3 秒
+	}
+
+	// 单文件失败不整体失败（计划条目 6）：记录失败清单，全部跑完统一输出。
+	// 下一轮 download 的断点续传语义天然支持"只重失败文件"（已成功的会被
+	// "目标目录已有正确文件"分支跳过）。
+	var failedFiles []string
+
 	for _, dl := range downloadList {
 		relPath := normalizePath(dl.serverFile.FileRelativePath)
 		localPath := filepath.Join(targetDir, filepathFromSlash(relPath))
@@ -209,17 +248,11 @@ func DownloadUpdate() {
 		printProgress(dl.idx, total, relPath, "START", dl.serverFile.FileSize, "")
 
 		// Download with retry up to 3 times
+		fileOK := false
 		var lastErr string
 		for retry := 0; retry < 3; retry++ {
 			if err := apiclient.DownloadFileWithResume(fc.Shared.ServerURL, dl.serverFile.FileAbsolutePath, localPath, dl.serverFile.FileSize, largeFileThreshold); err != nil {
 				lastErr = fmt.Sprintf("download error: %v", err)
-				if retry == 2 {
-					exeDir, _ := config.ExeDir()
-					util.AppendToLog(exeDir, fmt.Sprintf("update_%s_fail.log", newVersion),
-						fmt.Sprintf("%s %s", dl.serverFile.FileRelativePath, lastErr))
-					printProgressFail(dl.idx, total, relPath, dl.serverFile.FileSize, lastErr)
-					return
-				}
 				continue
 			}
 
@@ -229,34 +262,67 @@ func DownloadUpdate() {
 
 			if md5Err != nil || shaErr != nil {
 				lastErr = "hash compute error"
-				if retry == 2 {
-					exeDir, _ := config.ExeDir()
-					util.AppendToLog(exeDir, fmt.Sprintf("update_%s_fail.log", newVersion),
-						fmt.Sprintf("%s %s", dl.serverFile.FileRelativePath, lastErr))
-					printProgressFail(dl.idx, total, relPath, dl.serverFile.FileSize, lastErr)
-					return
-				}
 				os.Remove(localPath)
 				continue
 			}
 
 			if localMD5 == dl.serverFile.MD5 && localSHA256 == dl.serverFile.SHA256 {
+				fileOK = true
 				break
 			}
 
 			lastErr = "checksum mismatch"
-			if retry == 2 {
-				exeDir, _ := config.ExeDir()
-				util.AppendToLog(exeDir, fmt.Sprintf("update_%s_fail.log", newVersion),
-					fmt.Sprintf("%s %s (server_md5=%s local_md5=%s)", dl.serverFile.FileRelativePath, lastErr, dl.serverFile.MD5, localMD5))
-				printProgressFail(dl.idx, total, relPath, dl.serverFile.FileSize, lastErr)
-				return
-			}
 			os.Remove(localPath)
 		}
 
-		printProgress(dl.idx, total, relPath, "DONE", dl.serverFile.FileSize, "")
+		if !fileOK {
+			// 重试 3 次仍失败：记录并继续下一个文件（不再整体 return）
+			exeDir, _ := config.ExeDir()
+			util.AppendToLog(exeDir, fmt.Sprintf("update_%s_fail.log", newVersion),
+				fmt.Sprintf("%s %s (server_md5=%s local_md5见前文)", relPath, lastErr, dl.serverFile.MD5))
+			printProgressFail(dl.idx, total, relPath, dl.serverFile.FileSize, lastErr)
+			failedFiles = append(failedFiles, relPath)
+			continue
+		}
+
+		downloadedBytes += dl.serverFile.FileSize
+		speedWindow = append(speedWindow, speedSample{at: time.Now(), bytes: dl.serverFile.FileSize})
+		printProgressBytes(dl.idx, total, relPath, "DONE", dl.serverFile.FileSize,
+			downloadedBytes, totalBytes, speedBps(), "")
 	}
+
+	// 有失败文件：整体视为失败（不写 version.json 的待应用状态，避免半成品被
+	// apply 激活——与既有不变量"下载未完成不写状态"一致），失败清单随结果
+	// 下发，宿主重试时已成功文件全部跳过（断点续传），等效"只重失败文件"。
+	if len(failedFiles) > 0 {
+		printOutput(false,
+			fmt.Sprintf("下载完成但有 %d 个文件失败: %s", len(failedFiles), strings.Join(failedFiles, ", ")),
+			&model.DownloadUpdateData{Version: newVersion, FailedFiles: failedFiles})
+		return
+	}
+
+	// 物化收尾（计划条目 5）：把 MainFolder 中未变化的文件拷进版本目录，
+	// 让 apply 只剩纯 rename（关进程窗口从分钟级降到秒级）。
+	// 时机在主程序仍在运行时——只读复制对运行中应用无害（读文件不锁目录改名）。
+	// 用户决策（计划文档 §五.3）：apply 侧的复制逻辑已删除，物化是唯一的补齐
+	// 途径，因此失败必须让整轮下载失败（重试时已下载文件断点续传跳过，
+	// 已物化文件因 CopyFile 跳过语义同样空转，重试成本很低）。
+	// 排除规则与原 apply 侧一致：un_copy_folders / un_copy_files 不随迁。
+	if err := util.CopyDirWithExclude(fc.MainFolder, targetDir,
+		func(relPath string) bool {
+			return config.ShouldSkipFile(relPath, fc.Shared.UnCopyFiles)
+		},
+		func(relPath string) bool {
+			return config.ShouldSkipFolder(relPath, fc.Shared.UnCopyFolders)
+		}); err != nil {
+		util.AppendToLog(logDir(), "download.log",
+			fmt.Sprintf("materialize unchanged files %s -> %s failed: %v", fc.MainFolder, targetDir, err))
+		printProgressFail(total, total, "materialize", 0,
+			fmt.Sprintf("materialize unchanged files failed: %v", err))
+		return
+	}
+	util.AppendToLog(logDir(), "download.log",
+		fmt.Sprintf("materialized unchanged files %s -> %s (apply will only rename)", fc.MainFolder, targetDir))
 
 	// Update version.json
 	// VersionPrevious 语义 = "MainFolder 当前真实内容版本"，仅在可确定时更新（修复 Bug#2）：

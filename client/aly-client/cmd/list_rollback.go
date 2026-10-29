@@ -87,12 +87,24 @@ func ListRollbackVersions() {
 	})
 }
 
-// isLikelyVersion checks if a string looks like a version number (e.g., "1.0.0")
+// isLikelyVersion checks if a string looks like a version number.
+// 支持纯数字版本（1.0.0）与 semver 预发布/构建元数据（1.0.0-beta、1.0.0+build、1.0.0.1）。
 func isLikelyVersion(s string) bool {
 	if len(s) == 0 || len(s) > 50 {
 		return false
 	}
-	parts := strings.Split(s, ".")
+	// 去掉构建元数据与预发布后缀，检查主版本号部分
+	core := s
+	if i := strings.IndexByte(core, '+'); i >= 0 {
+		core = core[:i]
+	}
+	if i := strings.IndexByte(core, '-'); i >= 0 {
+		core = core[:i]
+	}
+	if core == "" {
+		return false
+	}
+	parts := strings.Split(core, ".")
 	if len(parts) < 2 {
 		return false
 	}

@@ -99,7 +99,7 @@ func ApplyUpdate() {
 			//      新版本已就位，只差写 applied 状态。此时绝不能再跑替换流程——
 			//      重跑会把"上一版本"备份（prevVersionDir）连同旧备份一起删掉，
 			//      回滚永久失效。
-			//   2. versionDir 仍存在：崩溃发生在复制/重命名之前，mainFolder 还是旧版本，
+			//   2. versionDir 仍存在：崩溃发生在重命名之前，mainFolder 还是旧版本，
 			//      走正常替换流程（fall through）。
 			versionDir, verDirErr := fc.ExeCfg.AppVersionDir(versionInfo.Version)
 			if verDirErr != nil {
@@ -291,42 +291,24 @@ func ApplyUpdate() {
 	printOutput(true, "", nil)
 }
 
-// applyReplacement 执行一次原子替换：按名关闭业务进程 → 复制 → 备份改名 → 替换改名。
+// applyReplacement 执行一次原子替换：按名关闭业务进程 → 备份改名 → 替换改名。
 // 任何一步失败都会尝试回滚恢复 mainFolder，并返回错误（由调用方决定是否重试）。
 //
-// 乐观重命名（问题 3）：不再在复制前无条件全目录扫描占用者，而是先直接重命名，
+// 乐观重命名（问题 3）：不再在替换前无条件全目录扫描占用者，而是先直接重命名，
 // 只在 rename 真正失败时才由 renameDirWithKillState 内部探测/击杀占用者——无占用场景
 // 零扫描，最大限度节省时间；st 为本次 apply 内共享的探测状态（跨 3 次 rename 复用）。
 func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDir string, closeTimeout time.Duration, st *renameProbeState) error {
-	// 关闭 must_close_process_name 指定的进程（业务必需：复制前关闭主程序，
-	// 否则 CopyDirWithExclude 读文件可能失败）。
+	// 关闭 must_close_process_name 指定的进程（业务必需：rename 前关闭主程序，
+	// 否则目录被占用导致重命名失败）。
 	if len(fc.ExeCfg.MustCloseProcessName) > 0 {
 		closeProcessesForApply(fc.ExeCfg.MustCloseProcessName)
 	}
 	// 不再调用 closeProcessesHoldingFolder 无条件全目录扫描——改成"先重命名，失败再查杀"，
 	// 与 rollback 路径行为对齐（#2 / 问题 3）。
 
-	// 从 versionDir 读取 shared.json，获取 un_copy_folders / un_copy_files
-	// 这些字段指定不应从当前 ApplicationFolder 复制到新版本目录的文件/文件夹
-	var unCopyFolders []string
-	var unCopyFiles []string
-	if versionShared, verErr := config.LoadSharedConfig(versionDir); verErr == nil {
-		unCopyFolders = versionShared.UnCopyFolders
-		unCopyFiles = versionShared.UnCopyFiles
-	}
-
-	// Copy current mainFolder content to versionDir.
-	// 只排除 un_copy_folders / un_copy_files（仅用于 apply-update 时的复制控制）。
-	// ignore_folders / ignore_files 用于服务端文件列表过滤和 publish-cli 文件采集，不在此处使用。
-	shouldSkipFile := func(relPath string) bool {
-		return config.ShouldSkipFile(relPath, unCopyFiles)
-	}
-	shouldSkipFolder := func(relPath string) bool {
-		return config.ShouldSkipFolder(relPath, unCopyFolders)
-	}
-	if err := util.CopyDirWithExclude(fc.MainFolder, versionDir, shouldSkipFile, shouldSkipFolder); err != nil {
-		return fmt.Errorf("copy to version dir: %v", err)
-	}
+	// 未变化文件的复制已前移到 download_update 尾部（精简计划条目 5，用户决策：
+	// apply 侧复制逻辑删除，物化失败会让下载整体失败，走到这里的版本目录必然已齐）。
+	// 本函数只剩：旁移旧备份 → 备份主目录 → 激活新版本，三段 rename。
 
 	// Compute paths for atomic rename
 	prevVersionDir, err := fc.ExeCfg.AppVersionDir(versionInfo.VersionPrevious)

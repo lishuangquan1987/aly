@@ -87,6 +87,9 @@ type CheckDiffData struct {
 // DownloadUpdateData 是 download_update 命令 data 字段
 type DownloadUpdateData struct {
 	Version string `json:"version"`
+	// FailedFiles 是"单文件失败不整体失败"策略下最终失败的文件清单
+	//（omitempty：全部成功时不下发，旧 SDK 无感）。
+	FailedFiles []string `json:"failed_files,omitempty"`
 }
 
 // DownloadProgress 是 download_update 命令的过程进度输出（每行一个 JSON）
@@ -94,9 +97,15 @@ type DownloadProgress struct {
 	Index    int    `json:"index"`
 	Total    int    `json:"total"`
 	File     string `json:"file"`
-	Status   string `json:"status"`   // START / DONE / SKIP / FAIL
+	Status   string `json:"status"` // START / DONE / SKIP / FAIL / BEGIN
 	FileSize int64  `json:"file_size"`
 	Error    string `json:"error,omitempty"`
+	// 字节级进度（omitempty：旧 UI/SDK 不受影响）。
+	// BEGIN 行携带 total_bytes 预告；每文件 DONE 行累计 downloaded_bytes；
+	// speed_bps 为最近窗口的均值吞吐。
+	DownloadedBytes int64 `json:"downloaded_bytes,omitempty"`
+	TotalBytes      int64 `json:"total_bytes,omitempty"`
+	SpeedBps        int64 `json:"speed_bps,omitempty"`
 }
 
 // RollbackListData 是 list_rollback_versions 命令 data 字段
@@ -113,4 +122,10 @@ type RollbackData struct {
 // CheckSelfUpdateData 是 check_self_update 命令 data 字段
 type CheckSelfUpdateData struct {
 	NeedUpdate bool `json:"need_update"`
+}
+
+// CleanData 是 clean 命令 data 字段
+type CleanData struct {
+	Mode string `json:"mode"` // "keep" | "all"
+	Keep int    `json:"keep,omitempty"`
 }

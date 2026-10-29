@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -255,10 +256,27 @@ func cleanupOrphanBackupIfUnreferenced(fc *FullConfig, vi *config.VersionInfo) {
 	}
 }
 
+// printMu 保护 stdout 的多 goroutine 互斥输出（并发下载下必需）。
+// go1.10 的 os.Stdout 写非原子，交错打印会让宿主逐行 JSON 解析失败。
+var printMu sync.Mutex
+
+// emitLine 在锁内输出一行 JSON（printProgress 系列共用）。
+func emitLine(out *model.Output) {
+	printMu.Lock()
+	defer printMu.Unlock()
+	bytes, err := json.Marshal(out)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "JSON marshal error: %v\n", err)
+		return
+	}
+	fmt.Println(string(bytes))
+}
+
 // printProgress 输出下载进度到 stdout，每行统一用 {isSuccess, errorMsg, data} 包裹的 JSON。
-// data 中包含 index/total/file/status/file_size/error 字段。
+// data 中包含 index/total/file/status/file_size/error 及可选的 downloaded_bytes/
+// total_bytes/speed_bps 字节级进度字段。
 func printProgress(index, total int, file, status string, fileSize int64, errMsg string) {
-	out := model.Output{
+	emitLine(&model.Output{
 		IsSuccess: true,
 		ErrMsg:    "",
 		Data: model.DownloadProgress{
@@ -269,18 +287,32 @@ func printProgress(index, total int, file, status string, fileSize int64, errMsg
 			FileSize: fileSize,
 			Error:    errMsg,
 		},
-	}
-	bytes, err := json.Marshal(out)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "JSON marshal error: %v\n", err)
-		return
-	}
-	fmt.Println(string(bytes))
+	})
+}
+
+// printProgressBytes 输出带字节级进度的进度行（BEGIN 预告行与 DONE 累计行）。
+func printProgressBytes(index, total int, file, status string, fileSize int64,
+	downloaded, totalBytes, speedBps int64, errMsg string) {
+	emitLine(&model.Output{
+		IsSuccess: true,
+		ErrMsg:    "",
+		Data: model.DownloadProgress{
+			Index:           index,
+			Total:           total,
+			File:            file,
+			Status:          status,
+			FileSize:        fileSize,
+			DownloadedBytes: downloaded,
+			TotalBytes:      totalBytes,
+			SpeedBps:        speedBps,
+			Error:           errMsg,
+		},
+	})
 }
 
 // printProgressFail 输出失败的进度行（isSuccess: false），后跟最终结果。
 func printProgressFail(index, total int, file string, fileSize int64, errMsg string) {
-	out := model.Output{
+	emitLine(&model.Output{
 		IsSuccess: false,
 		ErrMsg:    fmt.Sprintf("%s: %s", file, errMsg),
 		Data: model.DownloadProgress{
@@ -291,28 +323,16 @@ func printProgressFail(index, total int, file string, fileSize int64, errMsg str
 			FileSize: fileSize,
 			Error:    errMsg,
 		},
-	}
-	bytes, err := json.Marshal(out)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "JSON marshal error: %v\n", err)
-		return
-	}
-	fmt.Println(string(bytes))
+	})
 }
 
 // printProgressDone 输出最终完成行（isSuccess: true, data: null）。
 func printProgressDone() {
-	out := model.Output{
+	emitLine(&model.Output{
 		IsSuccess: true,
 		ErrMsg:    "",
 		Data:      nil,
-	}
-	bytes, err := json.Marshal(out)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "JSON marshal error: %v\n", err)
-		return
-	}
-	fmt.Println(string(bytes))
+	})
 }
 
 // stripVPrefix 去除版本号前导的 V/v
@@ -323,22 +343,30 @@ func stripVPrefix(v string) string {
 	return v
 }
 
-// compareVersion 按 . 分割逐段数值比较：v1 > v2 返回 1，v1 < v2 返回 -1，相等返回 0
-// 非数字字段按 0 处理（如 "V1.0" 中 "V1" 的 "V" 前缀）
+// compareVersion 按语义化版本（semver）比较：v1 > v2 返回 1，v1 < v2 返回 -1，相等返回 0。
+//
+// 支持格式：v?主.次.修订(-预发布)?(+构建元数据)?，如 1.2.3 / v1.2.3 / 1.2.3-beta.1+build5。
+// 规则（semver 2.0 摘要）：
+//   - 主.次.修订 逐段数值比较；段数不足按 0 补齐（1.2 与 1.2.0 相等）；
+//   - 预发布版本 < 同号正式版本（1.0.0-beta < 1.0.0）；
+//   - 预发布标识符逐段比较：纯数字段按数值，否则按 ASCII 字典序（数字段 < 字母段）；
+//   - 构建元数据（+后缀）忽略，不参与比较；
+//   - 非数字旧格式（如 "1.0"）行为与旧实现一致：非数字段按 0 处理。
 func compareVersion(v1, v2 string) int {
-	parts1 := strings.Split(v1, ".")
-	parts2 := strings.Split(v2, ".")
-	maxLen := len(parts1)
-	if len(parts2) > maxLen {
-		maxLen = len(parts2)
+	p1, pre1 := splitSemver(stripVPrefix(v1))
+	p2, pre2 := splitSemver(stripVPrefix(v2))
+
+	maxLen := len(p1)
+	if len(p2) > maxLen {
+		maxLen = len(p2)
 	}
 	for i := 0; i < maxLen; i++ {
 		var n1, n2 int
-		if i < len(parts1) {
-			n1, _ = strconv.Atoi(parts1[i])
+		if i < len(p1) {
+			n1, _ = strconv.Atoi(p1[i])
 		}
-		if i < len(parts2) {
-			n2, _ = strconv.Atoi(parts2[i])
+		if i < len(p2) {
+			n2, _ = strconv.Atoi(p2[i])
 		}
 		if n1 > n2 {
 			return 1
@@ -347,7 +375,101 @@ func compareVersion(v1, v2 string) int {
 			return -1
 		}
 	}
+	// 主版本号相等：无预发布 > 有预发布
+	if pre1 == "" && pre2 == "" {
+		return 0
+	}
+	if pre1 == "" {
+		return 1
+	}
+	if pre2 == "" {
+		return -1
+	}
+	return comparePrerelease(pre1, pre2)
+}
+
+// splitSemver 把 "1.2.3-beta.1+build" 拆成 (["1","2","3"], "beta.1")。
+// 构建元数据（+ 后）忽略。无预发布时第二个返回值为空串。
+func splitSemver(v string) ([]string, string) {
+	if i := strings.IndexByte(v, '+'); i >= 0 {
+		v = v[:i]
+	}
+	core, pre := v, ""
+	if i := strings.IndexByte(v, '-'); i >= 0 {
+		core, pre = v[:i], v[i+1:]
+	}
+	if core == "" {
+		return nil, pre
+	}
+	return strings.Split(core, "."), pre
+}
+
+// comparePrerelease 比较两个预发布段（"beta.1" vs "alpha.2"）。
+// 逐标识符比较：都是数字按数值（数值标识符小于字母标识符）；
+// 否则按 ASCII 字典序。段数多者大（beta > beta.1 的反向：beta.1 > beta）。
+func comparePrerelease(a, b string) int {
+	as := strings.Split(a, ".")
+	bs := strings.Split(b, ".")
+	maxLen := len(as)
+	if len(bs) > maxLen {
+		maxLen = len(bs)
+	}
+	for i := 0; i < maxLen; i++ {
+		var ai, bi string
+		var aNum, bNum bool
+		if i < len(as) {
+			ai = as[i]
+			aNum = isNumericIdentifier(ai)
+		}
+		if i < len(bs) {
+			bi = bs[i]
+			bNum = isNumericIdentifier(bi)
+		}
+		// 段数少的一侧按空串：空串 < 任何标识符（1.0.0-beta < 1.0.0-beta.1）
+		if i >= len(as) {
+			return -1
+		}
+		if i >= len(bs) {
+			return 1
+		}
+		if aNum && bNum {
+			an, _ := strconv.Atoi(ai)
+			bn, _ := strconv.Atoi(bi)
+			if an > bn {
+				return 1
+			}
+			if an < bn {
+				return -1
+			}
+			continue
+		}
+		if aNum != bNum {
+			if aNum {
+				return -1 // 数字标识符 < 字母标识符
+			}
+			return 1
+		}
+		if ai > bi {
+			return 1
+		}
+		if ai < bi {
+			return -1
+		}
+	}
 	return 0
+}
+
+// isNumericIdentifier 判断 semver 标识符是否为纯数字。
+func isNumericIdentifier(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // closeProcessesGracefully 优雅关闭进程：先 WM_CLOSE，超时后强杀
