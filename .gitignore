@@ -46,3 +46,5 @@ client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/bin/
 client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/bin/
 client/aly-client/.idea/
 client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/obj/
+client/aly-client/aly-client-ui.exe
+client/aly-client/aly-client.exe
