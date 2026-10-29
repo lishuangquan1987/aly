@@ -28,4 +28,18 @@ var zhCN = map[string]string{
 	KeyUpdateAvailable: "有可用更新",
 	KeyRollback:        "回滚",
 	KeyVersionList:     "可回滚版本",
+
+	// 精简计划条目 1/2/3 新增。
+	KeyCountdown:   "将在 %d 秒后自动重启…",
+	KeyPause:       "暂停",
+	KeyResume:      "继续",
+	KeyPaused:      "已暂停",
+	KeyUpdateNow:   "立即更新",
+	KeyRetryLater:  "稍后再说",
+	KeySpeedFmt:    "已下载 %s / %s · %s/s",
+	KeyRetrying:    "正在重试…",
+	KeyWillRestart: "点「立即重启」可跳过等待",
+	KeyRestartNow:  "立即重启",
+	// KeyDownloadingSimple：下载启动瞬间（尚无任何进度行）的占位文案。
+	KeyDownloadingSimple: "正在下载…",
 }

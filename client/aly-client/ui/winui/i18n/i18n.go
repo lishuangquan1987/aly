@@ -48,6 +48,23 @@ const (
 	KeyUpdateAvailable = "update_available"
 	KeyRollback        = "rollback"
 	KeyVersionList     = "version_list"
+
+	// 精简计划条目 1/2/3 新增：按钮卡片 / 倒计时 / 暂停。
+	KeyCountdown   = "countdown"    // "将在 %d 秒后自动重启…"
+	KeyPause       = "pause"        // 暂停下载
+	KeyResume      = "resume"       // 继续下载
+	KeyPaused      = "paused"       // 已暂停（状态行）
+	KeyUpdateNow   = "update_now"   // 立即更新（卡片主按钮）
+	KeyRetryLater  = "retry_later"  // 稍后再说（失败态的次要按钮）
+	KeySpeedFmt    = "speed_fmt"    // "已下载 %s / %s · %s/s"
+	KeyRetrying    = "retrying"     // 正在重试…
+	KeyWillRestart = "will_restart" // "点［立即重启］可跳过等待"
+	KeyRestartNow  = "restart_now"  // 立即重启（强制更新倒计时期间的主按钮）
+
+	// 精简计划条目 4 新增：字节级进度。
+	// KeyDownloadingSimple：下载启动瞬间（尚无进度行）的占位文案，
+	// 避免 KeyDownloading 的 %s/%d 占位符裸露。
+	KeyDownloadingSimple = "downloading_simple" // "正在下载…"
 )
 
 var current = ZH

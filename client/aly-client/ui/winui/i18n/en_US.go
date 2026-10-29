@@ -28,4 +28,19 @@ var enUS = map[string]string{
 	KeyUpdateAvailable: "Update available",
 	KeyRollback:        "Rollback",
 	KeyVersionList:     "Available versions",
+
+	// Streamlined plan items 1/2/3 (buttons card / countdown / pause).
+	KeyCountdown:   "Restarting in %d seconds…",
+	KeyPause:       "Pause",
+	KeyResume:      "Resume",
+	KeyPaused:      "Paused",
+	KeyUpdateNow:   "Update now",
+	KeyRetryLater:  "Later",
+	KeySpeedFmt:    "Downloaded %s / %s · %s/s",
+	KeyRetrying:    "Retrying…",
+	KeyWillRestart: "Click \"Restart now\" to skip the wait",
+	KeyRestartNow:  "Restart now",
+
+	// Streamlined plan item 4 (byte-level progress).
+	KeyDownloadingSimple: "Downloading…",
 }

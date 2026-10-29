@@ -24,8 +24,10 @@ const (
 type Window struct {
 	mw   *walk.MainWindow
 	card *Card
-	// h 是当前窗口的逻辑高度：默认 defaultH，展示发布内容时由 SetNotes 增加。
+	// h 是当前窗口的逻辑高度：默认 defaultH，展示发布内容/按钮时由 Relayout 增加。
 	h int
+	// onButton 是按钮点击回调（在 UI 线程执行；由 app 层注入，转发到后台 goroutine）。
+	onButton func(ButtonID)
 }
 
 // New 创建窗口：定位到所在显示器工作区右下角，设为 topmost + 工具窗口，
@@ -73,9 +75,36 @@ func New() (*Window, error) {
 	}
 	w.card = card
 
+	// 按钮点击：MouseDown 的坐标是**物理像素**（窗口客户区），
+	// Card.HitTest 需要 96-DPI 逻辑坐标 → 用 IntTo96DPI 换算。
+	// 点击命中后转发给 onButton（已由 SetOnButton 注入）。
+	card.cw.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
+		if button != walk.LeftButton {
+			return
+		}
+		d := dpiOf(mw.Handle())
+		lx := walk.IntTo96DPI(x, d)
+		ly := walk.IntTo96DPI(y, d)
+		id := card.HitTest(lx, ly)
+		if id == BtnNone {
+			return
+		}
+		// 交互即取消自动关闭（如「无更新 5 秒后关窗」期间用户点了重试）。
+		if w.onButton != nil {
+			cb := w.onButton
+			cb(id)
+		}
+	})
+
 	w.positionBottomRight()
 	w.setTopMost()
 	return w, nil
+}
+
+// SetOnButton 注入按钮点击回调。回调在 **UI 线程**执行，
+// 需要切回后台 goroutine 的逻辑请用 channel / Synchronize 自行调度。
+func (w *Window) SetOnButton(cb func(ButtonID)) {
+	w.onButton = cb
 }
 
 // SetContent 更新卡片文案。
@@ -106,6 +135,39 @@ func (w *Window) SetError(v bool) {
 	}
 }
 
+// SetButtons 显示卡片按钮排（ids 为空隐藏）。按钮区会改变卡片高度需求，
+// 因此紧接着应调用 Relayout 调整窗口高度并重新贴角。
+func (w *Window) SetButtons(ids ...ButtonID) {
+	if w.card != nil {
+		w.card.SetButtons(ids...)
+	}
+}
+
+// SetPaused 切换下载暂停状态（影响 PauseResume 按钮文案与状态行展示，由 app 层组合）。
+func (w *Window) SetPaused(v bool) {
+	if w.card != nil {
+		w.card.SetPaused(v)
+	}
+}
+
+// Relayout 依据发布内容与按钮区重新计算窗口高度并重新贴右下角。
+// 高度公式：defaultH + notesHeight + buttonsHeight，上限 maxH。
+// 每次卡片高度需求变化（SetNotes / SetButtons）后调用一次。
+func (w *Window) Relayout() {
+	if w.card == nil {
+		return
+	}
+	h := defaultH + w.card.NotesHeight() + w.card.ButtonsHeight()
+	if h > maxH {
+		h = maxH
+	}
+	if h == w.h {
+		return
+	}
+	w.h = h
+	w.positionBottomRight()
+}
+
 // SetNotes 设置新版本的发布内容（变更日志）。
 //
 // 有内容时窗口自动加高并在右下角重新定位（向上生长），无内容时回落默认高度。
@@ -115,17 +177,7 @@ func (w *Window) SetNotes(notes []string) {
 		return
 	}
 	w.card.SetNotes(notes)
-
-	h := defaultH + w.card.NotesHeight()
-	if h > maxH {
-		h = maxH
-	}
-	if h == w.h {
-		return
-	}
-	w.h = h
-	// 高度变化后重新贴右下角（positionBottomRight 使用 w.h）
-	w.positionBottomRight()
+	w.Relayout()
 }
 
 // positionBottomRight 取窗口所在显示器的工作区（已扣除任务栏）并贴右下角。
@@ -235,4 +287,50 @@ func (w *Window) AutoCloseAfter(d time.Duration) *AutoClose {
 			_ = w.mw.Close()
 		})
 	})
+}
+
+// WaitButton 阻塞等待用户点击任一按钮，返回其 ID。
+//
+// 与 AskYesNo 的区别（精简计划条目 1）：不打断全屏主程序——按钮画在卡片上，
+// 用户想点才点；没有系统模态框抢焦点。必须在**非 UI 线程**（后台 goroutine）
+// 调用：内部用 channel 等待 UI 线程的 MouseDown 回调投递结果。
+//
+// timeout <= 0 表示无限等待；>0 时到期返回 BtnNone（调用方按"未选择"处理，
+// 如强制更新倒计时到期自动继续）。
+func (w *Window) WaitButton(timeout time.Duration) ButtonID {
+	ch := make(chan ButtonID, 1)
+	w.SetOnButton(func(id ButtonID) {
+		select {
+		case ch <- id:
+		default: // 已有人等/已有结果：丢弃后续点击（幂等）
+		}
+	})
+	defer w.SetOnButton(nil)
+
+	if timeout <= 0 {
+		return <-ch
+	}
+	select {
+	case id := <-ch:
+		return id
+	case <-time.After(timeout):
+		return BtnNone
+	}
+}
+
+// ButtonClicks 返回一个只发一次的按钮点击通道（用于"下载中暂停"这类
+// 需要边跑边听点击的场景；调用方从后台 goroutine select 它）。
+//
+// 返回的通道在窗口销毁前不会被关闭——调用方应配合 ctx/超时使用，
+// 或在拿到结果后调用 StopButtonClicks 拆除监听。
+func (w *Window) ButtonClicks() (<-chan ButtonID, func()) {
+	ch := make(chan ButtonID, 4)
+	stop := func() { w.SetOnButton(nil) }
+	w.SetOnButton(func(id ButtonID) {
+		select {
+		case ch <- id:
+		default: // 通道满：丢弃（不阻塞 UI 线程）
+		}
+	})
+	return ch, stop
 }

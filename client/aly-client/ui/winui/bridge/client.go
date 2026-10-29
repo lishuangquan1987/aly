@@ -32,6 +32,10 @@ type ProgressInfo struct {
 	Total  int
 	File   string
 	Status string
+	// 字节级进度（精简计划条目 4）：新版 aly-client 下发，旧版为 0（UI 回退文件计数展示）。
+	DownloadedBytes int64
+	TotalBytes      int64
+	SpeedBps        int64
 }
 
 // Client 以子进程方式调用 aly-client.exe。
@@ -134,10 +138,13 @@ func (c *Client) Run(ctx context.Context, args []string, opt Options, onProgress
 		case KindProgress:
 			if onProgress != nil && p.Progress != nil {
 				onProgress(ProgressInfo{
-					Index:  p.Progress.Index,
-					Total:  p.Progress.Total,
-					File:   p.Progress.File,
-					Status: p.Progress.Status,
+					Index:           p.Progress.Index,
+					Total:           p.Progress.Total,
+					File:            p.Progress.File,
+					Status:          p.Progress.Status,
+					DownloadedBytes: p.Progress.DownloadedBytes,
+					TotalBytes:      p.Progress.TotalBytes,
+					SpeedBps:        p.Progress.SpeedBps,
 				})
 			}
 		case KindDone, KindResult, KindFail:

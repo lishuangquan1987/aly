@@ -8,7 +8,72 @@ import (
 	"aly/client/aly-client/ui/winui/view/theme"
 )
 
-// Card 是自绘的扁平卡片：白底 + 1px 描边 + 标题 / 版本 / 状态 / 进度条。
+// ButtonID 标识卡片上的一个按钮。
+type ButtonID int
+
+const (
+	// BtnNone 未命中任何按钮。
+	BtnNone ButtonID = iota
+	// BtnUpdate 「立即更新」主按钮（发现新版本）。
+	BtnUpdate
+	// BtnLater 「稍后」次要按钮（发现新版本）。
+	BtnLater
+	// BtnRetry 「重试」主按钮（失败态）。
+	BtnRetry
+	// BtnClose 「关闭」次要按钮（失败态）。
+	BtnClose
+	// BtnRestartNow 「立即重启」（强制更新倒计时期间）。
+	BtnRestartNow
+	// BtnPauseResume 「暂停/继续」（下载中切换）。
+	BtnPauseResume
+)
+
+// ButtonLabel 返回按钮文案（跟随 i18n；PauseResume 由调用方按暂停状态切换）。
+func (b ButtonID) Label() string {
+	switch b {
+	case BtnUpdate:
+		return buttonLabelUpdate
+	case BtnLater:
+		return buttonLabelLater
+	case BtnRetry:
+		return buttonLabelRetry
+	case BtnClose:
+		return buttonLabelClose
+	case BtnRestartNow:
+		return buttonLabelRestart
+	case BtnPauseResume:
+		return buttonLabelPause
+	}
+	return ""
+}
+
+// 按钮文案变量：由 Window.setButtonLabels 从 i18n 注入（避免 view 依赖 i18n
+// 造成包环——theme 与 geometry 均为独立小包，view 保持零 i18n 依赖）。
+var (
+	buttonLabelUpdate  = "Update now"
+	buttonLabelLater   = "Later"
+	buttonLabelRetry   = "Retry"
+	buttonLabelClose   = "Close"
+	buttonLabelRestart = "Restart now"
+	buttonLabelPause   = "Pause"
+	buttonLabelResume  = "Resume"
+)
+
+// SetButtonLabels 由 app 层启动时注入 i18n 文案。
+func SetButtonLabels(update, later, retry, close, restart, pause, resume string) {
+	buttonLabelUpdate, buttonLabelLater = update, later
+	buttonLabelRetry, buttonLabelClose = retry, close
+	buttonLabelRestart, buttonLabelPause, buttonLabelResume = restart, pause, resume
+}
+
+// cardButton 是一个逻辑按钮：ID + 矩形热区（96-DPI 逻辑坐标）+ 是否主按钮。
+type cardButton struct {
+	id    ButtonID
+	rect  walk.Rectangle
+	primary bool
+}
+
+// Card 是自绘的扁平卡片：白底 + 1px 描边 + 标题 / 版本 / 状态 / 进度条 / 按钮排。
 //
 // 用 walk.NewCustomWidget 实现（walk 官方自绘入口），而不是给 WidgetBase
 // 套 InitWidget —— 后者需要自己指定窗口类名，容易出 TTM_ADDTOOL 一类的错。
@@ -28,6 +93,12 @@ type Card struct {
 	notes    []string
 	cur, max int
 	isError  bool
+	// buttons 是当前显示的按钮集合（nil = 不显示按钮区）。
+	buttons []cardButton
+	// buttonsHeight 缓存按钮区占用的高度（含上方留白），0 = 无按钮区。
+	buttonsHeight int
+	// paused 由 app 层维护（下载暂停状态切换按钮文案）。
+	paused bool
 }
 
 // 发布内容（变更日志）区域的排版常量（96-DPI 逻辑像素）。
@@ -38,6 +109,20 @@ const (
 	notesMaxLines = 5
 	// notesGap 状态/详情与发布内容之间的留白，也计入卡片增高量。
 	notesGap = 12
+)
+
+// 按钮区排版常量（96-DPI 逻辑像素）。
+const (
+	// btnH 按钮高度。
+	btnH = 28
+	// btnGap 按钮之间的水平间距。
+	btnGap = 10
+	// btnMinW 按钮最小宽度（短文案如「暂停」）。
+	btnMinW = 72
+	// btnPrimaryW 主按钮宽度（文案更长）。
+	btnPrimaryW = 104
+	// btnAreaGap 按钮区与上方内容（进度条/详情）之间的留白。
+	btnAreaGap = 14
 )
 
 // NewCard 创建自绘卡片。
@@ -135,10 +220,154 @@ func (c *Card) SetProgress(cur, max int) {
 	c.invalidate()
 }
 
+// SetButtons 设置要显示的按钮集合（nil/空 = 隐藏按钮区）。
+// ids 为空时按钮区高度归零。返回是否发生高度变化（调用方据此重定位窗口）。
+func (c *Card) SetButtons(ids ...ButtonID) {
+	if c == nil {
+		return
+	}
+	if len(ids) == 0 {
+		c.buttons = nil
+		if c.buttonsHeight != 0 {
+			c.buttonsHeight = 0
+			c.invalidate()
+		}
+		return
+	}
+	// 稳定顺序：主按钮（靠左）在前，次要按钮在后，与 ids 传入顺序无关。
+	// 注意不做值排序——按值排会把 BtnLater(2) 排到 BtnRestartNow(5) 左边，
+	// 造成"下载询问主按钮在左、应用询问主按钮在右"的视觉不一致。
+	primary := make([]ButtonID, 0, len(ids))
+	secondary := make([]ButtonID, 0, len(ids))
+	for _, id := range ids {
+		switch id {
+		case BtnUpdate, BtnRetry, BtnRestartNow:
+			primary = append(primary, id)
+		default:
+			secondary = append(secondary, id)
+		}
+	}
+	order := append(primary, secondary...)
+
+	c.buttons = make([]cardButton, 0, len(order))
+	for _, id := range order {
+		c.buttons = append(c.buttons, cardButton{id: id})
+	}
+	// 高度不变（按钮行固定一排），只重绘
+	c.buttonsHeight = btnAreaGap + btnH
+	c.layoutButtons()
+	c.invalidate()
+}
+
+// SetPaused 切换暂停状态（影响 PauseResume 按钮文案）。
+func (c *Card) SetPaused(v bool) {
+	if c == nil || c.paused == v {
+		return
+	}
+	c.paused = v
+	c.invalidate()
+}
+
+// Paused 返回当前暂停状态。
+func (c *Card) Paused() bool {
+	return c != nil && c.paused
+}
+
+// ButtonsHeight 返回按钮区占用的额外高度（含上方留白）；0 = 无按钮。
+func (c *Card) ButtonsHeight() int {
+	if c == nil {
+		return 0
+	}
+	return c.buttonsHeight
+}
+
+// HitTest 给定卡片内逻辑坐标，返回命中按钮的 ID（未命中返回 BtnNone）。
+func (c *Card) HitTest(x, y int) ButtonID {
+	if c == nil {
+		return BtnNone
+	}
+	for _, b := range c.buttons {
+		if x >= b.rect.X && x < b.rect.X+b.rect.Width &&
+			y >= b.rect.Y && y < b.rect.Y+b.rect.Height {
+			return b.id
+		}
+	}
+	return BtnNone
+}
+
+// HasButtons 报告当前是否有按钮显示。
+func (c *Card) HasButtons() bool {
+	return c != nil && len(c.buttons) > 0
+}
+
 func (c *Card) invalidate() {
 	if c.cw != nil {
 		c.cw.Invalidate()
 	}
+}
+
+// layoutButtons 计算每个按钮的热区矩形（96-DPI 逻辑坐标）。
+// 一行排布：左起为主按钮，随后次要按钮，整体靠左；宽度不足时压缩次要按钮。
+func (c *Card) layoutButtons() {
+	if c.cw == nil || len(c.buttons) == 0 {
+		return
+	}
+	b := c.cw.ClientBounds()
+	if b.Width <= 2*theme.Pad {
+		return
+	}
+	x := b.X + theme.Pad
+	y := b.Y + b.Height - theme.Pad - btnH + 1
+	contentW := b.Width - 2*theme.Pad
+	// 先按期望宽度排，超出则从最后一个次要按钮开始压缩到 btnMinW。
+	widths := make([]int, len(c.buttons))
+	total := 0
+	for i, btn := range c.buttons {
+		w := btnMinW
+		if btn.primaryWidth() {
+			w = btnPrimaryW
+		}
+		widths[i] = w
+		total += w
+	}
+	total += btnGap * (len(c.buttons) - 1)
+	if total > contentW {
+		// 等比压缩，下限 btnMinW。
+		scale := float64(contentW) / float64(total)
+		total = 0
+		for i, w := range widths {
+			nw := int(float64(w) * scale)
+			if nw < btnMinW {
+				nw = btnMinW
+			}
+			widths[i] = nw
+			total += nw
+		}
+		total += btnGap * (len(c.buttons) - 1)
+		// 仍超（极窄卡片）：丢掉间距压缩，直接截断最后一个按钮宽度。
+		if total > contentW {
+			over := total - contentW
+			widths[len(widths)-1] -= over
+			if widths[len(widths)-1] < 40 {
+				widths[len(widths)-1] = 40
+			}
+			total = contentW
+		}
+	}
+	_ = total
+	for i := range c.buttons {
+		c.buttons[i].rect = walk.Rectangle{X: x, Y: y, Width: widths[i], Height: btnH}
+		x += widths[i] + btnGap
+	}
+}
+
+// primaryWidth 报告按钮是否用主按钮宽度。
+func (b cardButton) primaryWidth() bool {
+	switch b.id {
+	case BtnUpdate, BtnRetry, BtnRestartNow:
+		return true
+	}
+	return false
 }
 
 // paint 绘制整张卡片。全部使用 96-DPI 逻辑坐标（见类型注释）。
@@ -147,6 +376,9 @@ func (c *Card) paint(canvas *walk.Canvas) error {
 		return nil
 	}
 	b := c.cw.ClientBounds()
+
+	// 布局在绘制时同步一次（窗口尺寸可能在 SetButtons 之后变化）。
+	c.layoutButtons()
 
 	// 白底
 	bg, err := walk.NewSolidColorBrush(theme.Background)
@@ -180,10 +412,12 @@ func (c *Card) paint(canvas *walk.Canvas) error {
 		contentW = 20
 	}
 
-	// 进度条（贴卡片底部）。仅在真正有进度时才画：
-	// 空闲/无更新时留白，避免露出空底槽显得像坏掉的控件。
+	// 进度条（贴卡片底部；有按钮区时让位按钮，位于其上方）。
 	if c.cur > 0 {
 		barY := b.Y + b.Height - pad - theme.ProgressH
+		if c.buttonsHeight > 0 {
+			barY -= c.buttonsHeight
+		}
 		if err := c.paintProgress(canvas, left, barY, contentW, theme.ProgressH); err != nil {
 			return err
 		}
@@ -235,7 +469,58 @@ func (c *Card) paint(canvas *walk.Canvas) error {
 				walk.TextLeft|walk.TextVCenter|walk.TextSingleLine|walk.TextEndEllipsis)
 		}
 	}
+
+	// 按钮排（底部）
+	if err := c.paintButtons(canvas); err != nil {
+		return err
+	}
 	return nil
+}
+
+// paintButtons 绘制按钮排：主按钮 = 强调色底白字；次要按钮 = 白底灰边灰字。
+func (c *Card) paintButtons(canvas *walk.Canvas) error {
+	for _, b := range c.buttons {
+		var fillErr, textErr, borderErr error
+		if b.primaryWidth() {
+			fill, err := walk.NewSolidColorBrush(theme.Accent)
+			if err != nil {
+				return err
+			}
+			fillErr = canvas.FillRectangle(fill, b.rect)
+			fill.Dispose()
+			if fillErr != nil {
+				return fillErr
+			}
+			textErr = drawText(canvas, c.buttonLabel(b.id), theme.BodyFont(), theme.Background,
+				b.rect.X, b.rect.Y, b.rect.Width, b.rect.Height,
+				walk.TextCenter|walk.TextVCenter|walk.TextSingleLine|walk.TextEndEllipsis)
+		} else {
+			pen, err := walk.NewCosmeticPen(walk.PenSolid, theme.Border)
+			if err != nil {
+				return err
+			}
+			borderErr = canvas.DrawRectangle(pen, walk.Rectangle{
+				X: b.rect.X, Y: b.rect.Y, Width: b.rect.Width - 1, Height: b.rect.Height - 1,
+			})
+			pen.Dispose()
+			if borderErr != nil {
+				return borderErr
+			}
+			textErr = drawText(canvas, c.buttonLabel(b.id), theme.BodyFont(), theme.TextPrimary,
+				b.rect.X, b.rect.Y, b.rect.Width, b.rect.Height,
+				walk.TextCenter|walk.TextVCenter|walk.TextSingleLine|walk.TextEndEllipsis)
+		}
+		_ = textErr // 绘制文本失败不致命：其余元素继续画
+	}
+	return nil
+}
+
+// buttonLabel 返回按钮当前文案（PauseResume 按暂停状态切换）。
+func (c *Card) buttonLabel(id ButtonID) string {
+	if id == BtnPauseResume && c.paused {
+		return buttonLabelResume
+	}
+	return id.Label()
 }
 
 // paintProgress 画底槽 + 填充（逻辑坐标）。
