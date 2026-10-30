@@ -345,3 +345,37 @@ func containsStr(s, sub string) bool {
 	}
 	return false
 }
+
+func TestCheckRequestEventRoundTrip(t *testing.T) {
+	// 无监听者时通知应失败（事件不存在）
+	if NotifyCheckRequested() {
+		t.Fatal("无监听者时 NotifyCheckRequested 应返回 false")
+	}
+
+	// 起监听者：命名事件是会话级全局的，测试期间独占
+	ch, stop := ListenCheckRequested()
+	defer stop()
+
+	// 有监听者时通知应成功
+	if !NotifyCheckRequested() {
+		t.Fatal("有监听者时 NotifyCheckRequested 应返回 true")
+	}
+
+	select {
+	case <-ch:
+		// 收到信号：通道投递正常
+	case <-time.After(2 * time.Second):
+		t.Fatal("2 秒内未收到转发信号")
+	}
+}
+
+func TestCheckRequestEventStop(t *testing.T) {
+	ch, stop := ListenCheckRequested()
+	stop()
+	select {
+	case <-ch:
+		// stop 关闭通道：正常退出
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("stop 后通道应在短时间內关闭")
+	}
+}

@@ -93,7 +93,9 @@ ui.LaunchSilent();     // same as auto: quiet unless an update is confirmed
 Notes:
 
 - `aly-client-ui.exe` is a single-instance app. Calling `Launch` while the previous window is
-  still alive returns a failed `AlyResponse` (`already running`) instead of silently doing nothing.
+  still alive is fine: the new process forwards a "manual check requested" signal to the existing
+  instance (named event) and exits with code 0; the existing instance then shows its window and
+  handles the request interactively. `Launch` returns success either way.
 - After `apply_update` the UI relaunches your main executable (see `client.json`
   `main_exe_relative_path` / `must_close_process_name`), so the host does not need to restart itself.
 - Deployed next to `aly-client.exe` by the NuGet targets; set `AlyIncludeClientUi=false` to skip it.

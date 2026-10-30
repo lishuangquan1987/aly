@@ -51,8 +51,10 @@ namespace AlyClient.CSharpSDK
     /// （设置 <c>AlyIncludeClientUi=false</c> 可跳过 UI 下载）。
     ///
     /// <para>
-    /// 说明：aly-client-ui 是单实例程序，重复拉起时后启动的进程会立即以退出码 0 结束，
-    /// 因此 <see cref="Launch"/> 在上一次进程未退出时直接返回失败，避免宿主误以为已弹出窗口。
+    /// 说明：aly-client-ui 是单实例程序。重复拉起时后启动的进程会通过命名事件把
+    /// 「手动检查请求」转发给既有实例（check/update 模式），然后以退出码 0 结束；
+    /// 既有实例收到信号后会显示窗口并按交互式语义处理。因此 <see cref="Launch"/>
+    /// 在上一次进程未退出时返回成功，宿主无需处理"窗口已在运行"的分支。
     /// </para>
     /// </summary>
     public class AlyUpdateUIClient : IDisposable
@@ -126,10 +128,12 @@ namespace AlyClient.CSharpSDK
 
             lock (_sync)
             {
-                // 上一次实例还在跑：单实例保护会让新进程直接退出，这里显式报错，
-                // 避免调用方误以为已经弹出了窗口。
+                // 上一次实例还在跑：UI 的单实例保护不会让新进程弹第二个窗口，
+                // 而是把「手动检查请求」转发给既有实例（新版 aly-client-ui 的
+                // 命名事件机制）。新进程会以退出码 0 立即结束——这是正常路径，
+                // 返回 OK；调用方不需要区分"新弹的窗口"还是"既有实例接管"。
                 if (_process != null && !SafeHasExited(_process))
-                    return AlyResponse.NG("aly-client-ui is already running.");
+                    return AlyResponse.OK();
 
                 // 上一次实例已退出：先释放旧句柄再启动，避免每次检查泄漏一个 Process
                 DisposeProcess(_process);

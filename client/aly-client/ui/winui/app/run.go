@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"aly/client/aly-client/ui/winui/bridge"
@@ -117,6 +118,14 @@ func Run(opt Options) int {
 	// 互斥体需持有到进程结束，故用 defer。
 	first, release := AcquireSingleInstance()
 	if !first {
+		// 不是首个实例：说明已有一个 UI 在跑（多半是启动时的 auto 静默检查，
+		// 网络超时期间能存活几十秒）。用户此刻点「检查更新」再拉起一个实例，
+		// 期望看到「正在检查」——把请求转发给第一实例，由它显示窗口；
+		// 转发失败（事件不存在等极端情况）也不弹窗：弹两个右下角卡片
+		// 比"稍后第一实例会出结果"更糟。
+		if mode == "check" || mode == "update" {
+			NotifyCheckRequested()
+		}
 		return 0
 	}
 	defer release()
@@ -145,6 +154,11 @@ func Run(opt Options) int {
 		return 2
 	}
 
+	// 创建「手动检查请求」事件要尽早：第二实例通过 OpenEventW 找它，
+	// 晚了会把转发请求丢掉（退化为静默退出）。
+	checkReq, stopCheckReq := ListenCheckRequested()
+	defer stopCheckReq()
+
 	// check 模式：立即显示「正在检查」，让用户知道点了按钮有反应。
 	// auto/silent：保持隐藏，只有确认有更新才显示（§4.1）。
 	if mode == "check" {
@@ -153,15 +167,65 @@ func Run(opt Options) int {
 	}
 
 	exePath, findErr := FindAlyClient(self)
-	interactive := mode == "check"
+
+	// interactiveGate：交互标志可在运行中升级。auto/silent 实例收到
+	// 第二实例转发来的「手动检查请求」后升级——此后失败/无更新走
+	// 用户可见路径，不再静默退出（修复：静默检查存活期间用户点
+	// 「检查更新」什么都看不到）。
+	inter := &interactiveGate{v: mode == "check"}
+
+	if mode != "check" {
+		// 转发请求监听者（check 模式本来就可见，无需监听）。
+		go func() {
+			for range checkReq {
+				if !inter.upgrade() {
+					continue // 已是交互式：信号无额外动作（连点合并）
+				}
+				// 升级瞬间补一张「正在检查」卡片，但只在窗口尚未显示时——
+				// 下载/询问进行中覆盖内容反而干扰。
+				w.Synchronize(func() {
+					if !w.IsVisible() {
+						w.SetContent(title, "", i18n.T(i18n.KeyChecking))
+						w.Show()
+					}
+				})
+			}
+		}()
+	}
 
 	if mode == "rollback" {
 		go runRollback(w, exePath, findErr)
 	} else {
-		go runFlow(w, interactive, exePath, findErr)
+		go runFlow(w, inter, exePath, findErr)
 	}
 
 	return w.Run()
+}
+
+// interactiveGate 是可升级的交互标志。
+// runFlow 在阶段边界读它决定静默退出还是可见提示；转发来的手动检查
+// 请求把它从 auto/silent 的 false 升级为 true。读多写少且跨 goroutine，
+// 用 RWMutex 保护（Go 1.10 无 atomic.Bool）。
+type interactiveGate struct {
+	mu sync.RWMutex
+	v  bool
+}
+
+func (g *interactiveGate) get() bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.v
+}
+
+// upgrade 置 true；返回是否发生了 false→true 翻转（幂等，连点只生效一次）。
+func (g *interactiveGate) upgrade() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.v {
+		return false
+	}
+	g.v = true
+	return true
 }
 
 // retryStage 表示重试应回到的阶段（精简计划条目 2 验收：重试=重跑当前阶段）。
@@ -192,10 +256,10 @@ type flowOutcome struct {
 // 精简计划条目 1/2/3：更新询问全部走卡片按钮（无模态框、不抢焦点）；
 // 失败态给 [重试] [关闭]，重试回到**失败的那个阶段**；强制更新给
 // 10s 倒计时 + [立即重启]；下载中给 [暂停/继续]。
-func runFlow(w *view.Window, interactive bool, exePath string, findErr error) {
+func runFlow(w *view.Window, inter *interactiveGate, exePath string, findErr error) {
 	// ① 定位 aly-client.exe 失败
 	if findErr != nil {
-		failRetryable(w, interactive, "", i18n.T(i18n.KeyOffline), findErr.Error(), nil)
+		failRetryable(w, inter.get(), "", i18n.T(i18n.KeyOffline), findErr.Error(), nil)
 		return
 	}
 
@@ -207,7 +271,7 @@ func runFlow(w *view.Window, interactive bool, exePath string, findErr error) {
 	var carried flowOutcome // 承接上一轮的 check 结果（阶段化重跑用）
 
 	for {
-		carried = runFlowOnce(w, interactive, cl, ctx, stage, carried)
+		carried = runFlowOnce(w, inter, cl, ctx, stage, carried)
 		switch carried.retry {
 		case retryNone:
 			return
@@ -224,7 +288,9 @@ func runFlow(w *view.Window, interactive bool, exePath string, findErr error) {
 
 // runFlowOnce 跑一轮流程（从 stage 指定的阶段开始）。
 // carried 携带上一轮的 check 结果；从 retryCheck 重跑时会重新 check 并覆盖。
-func runFlowOnce(w *view.Window, interactive bool, cl *bridge.Client, ctx context.Context, stage retryStage, carried flowOutcome) flowOutcome {
+// inter 是可升级的交互门：auto/silent 实例收到转发来的手动检查请求后
+// 静默路径会变成用户可见路径。
+func runFlowOnce(w *view.Window, inter *interactiveGate, cl *bridge.Client, ctx context.Context, stage retryStage, carried flowOutcome) flowOutcome {
 	needDownload := false
 
 	// ② 检查更新（stage=retryCheck 时执行；其他阶段沿用 carried 结果）
@@ -232,7 +298,8 @@ func runFlowOnce(w *view.Window, interactive bool, cl *bridge.Client, ctx contex
 		res := checkUpdate(cl, ctx)
 		if res.problem != "" {
 			// check（用户主动）：可见 + 可重试；auto（启动时自动）：静默退出。
-			if !interactive {
+			// 升级过的 auto（用户点了「检查更新」）同 check 处理。
+			if !inter.get() {
 				quit(w)
 				return flowOutcome{}
 			}
@@ -242,7 +309,7 @@ func runFlowOnce(w *view.Window, interactive bool, cl *bridge.Client, ctx contex
 
 		// ③ 无更新
 		if res.decision.Action == flow.ActionNone {
-			if !interactive {
+			if !inter.get() {
 				quit(w)
 				return flowOutcome{}
 			}
@@ -253,6 +320,7 @@ func runFlowOnce(w *view.Window, interactive bool, cl *bridge.Client, ctx contex
 				w.SetDetail("")
 				w.SetError(false)
 				w.Relayout()
+				w.Show() // auto 升级路径：check 结果出来时窗口可能还隐藏着
 			})
 			// 用户主动检查且服务端没有更新：弹框明确告知"没有可用的更新"。
 			w.ShowInfo(title, i18n.T(i18n.KeyNoUpdateBox))

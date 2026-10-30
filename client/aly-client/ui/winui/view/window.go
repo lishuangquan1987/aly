@@ -222,6 +222,12 @@ func (w *Window) Show() {
 	w.mw.SetVisible(true)
 }
 
+// IsVisible 报告窗口当前是否可见（后台 goroutine 判断"要不要补一张
+// 正在检查卡片"时用；必须在 UI 线程经 Synchronize 调用）。
+func (w *Window) IsVisible() bool {
+	return w.mw.Visible()
+}
+
 // Hide 隐藏窗口（不退出进程）。
 func (w *Window) Hide() {
 	w.mw.SetVisible(false)

@@ -218,3 +218,29 @@ func TestByteProgressPermille(t *testing.T) {
 	}
 }
 
+
+func TestInteractiveGateUpgrade(t *testing.T) {
+	g := &interactiveGate{v: false}
+	if g.get() {
+		t.Fatal("初始应非交互")
+	}
+	if !g.upgrade() {
+		t.Fatal("首次升级应返回 true")
+	}
+	if !g.get() {
+		t.Fatal("升级后应为交互")
+	}
+	if g.upgrade() {
+		t.Fatal("重复升级应返回 false（幂等）")
+	}
+}
+
+func TestInteractiveGateBornInteractive(t *testing.T) {
+	g := &interactiveGate{v: true}
+	if !g.get() {
+		t.Fatal("check 模式出生即交互")
+	}
+	if g.upgrade() {
+		t.Fatal("已交互再升级应返回 false")
+	}
+}
