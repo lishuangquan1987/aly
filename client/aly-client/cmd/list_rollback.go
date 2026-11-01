@@ -52,14 +52,17 @@ func ListRollbackVersions() {
 	currentVersion := ""
 	pendingVersion := ""
 	if versionInfo != nil {
-		currentVersion = versionInfo.Version
+		// #12 口径统一：version.json 可能带 v 前缀（服务端允许），列表输出
+		// 与目录名解析出的版本（无前缀）保持同一口径。
+		currentVersion = stripVPrefix(versionInfo.Version)
 		if versionInfo.VersionStatus == config.VersionStatusDownloaded {
 			// downloaded 状态：主程序仍是 VersionPrevious 的内容，Version 是待应用版本
 			if versionInfo.VersionPrevious != "" {
-				currentVersion = versionInfo.VersionPrevious
+				currentVersion = stripVPrefix(versionInfo.VersionPrevious)
 			}
 			// 待应用版本目录是下载产物，不可作为回滚目标，列表需排除
-			pendingVersion = versionInfo.Version
+			// （目录名解析出的 version 无前缀，此处同样 strip 后比较）
+			pendingVersion = stripVPrefix(versionInfo.Version)
 		}
 	}
 
@@ -105,7 +108,11 @@ func isLikelyVersion(s string) bool {
 		return false
 	}
 	parts := strings.Split(core, ".")
-	if len(parts) < 2 {
+	// #12 口径统一：单段版本（如 "2"）与多段（"1.0.0"）同为合法——
+	// 服务端 PublishVersion 现按 ^v?\d+(\.\d+)*… 校验，允许单段；
+	// 此处若仍要求 len(parts) >= 2，单段版本发布会生成快照目录但
+	// 永远进不了回滚列表（isLikelyVersion 拒绝）。
+	if len(parts) < 1 {
 		return false
 	}
 	for _, part := range parts {

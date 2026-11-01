@@ -73,9 +73,16 @@ func CreateProject(ctx *gin.Context) {
 	}
 
 	//判断项目名称是否存在
+	// #13：用 ent.IsNotFound 精确区分"不存在"与"查询出错"——
+	// 旧代码 err != nil 一律当"不存在"继续插入：DB 故障/网络抖动时
+	// 唯一性校验被吞掉，插入层才报错（错误信息难定位）。
 	_, err = db.Client.Project.Query().Where(project.NameEQ(createProjectDto.Name)).First(ctx)
 	if err == nil {
 		ctx.JSON(200, models.NG(fmt.Sprintf("项目名称:%s已存在", createProjectDto.Name)))
+		return
+	}
+	if !ent.IsNotFound(err) {
+		ctx.JSON(200, models.NGWithError(err))
 		return
 	}
 

@@ -69,14 +69,17 @@ func TestCompareVersionSemver(t *testing.T) {
 }
 
 // TestIsLikelyVersionSemver 校验目录名版本识别的放开。
+// #12 口径统一：单段版本（"2"）合法——服务端 PublishVersion 现按
+// ^v?\d+(\.\d+)*… 校验允许单段，客户端目录名解析须同步放行，
+// 否则单段版本发布会生成快照目录但永远进不了回滚列表。
 func TestIsLikelyVersionSemver(t *testing.T) {
-	valid := []string{"1.0.0", "1.0", "10.20.30", "1.0.0.1", "1.0.0-beta", "1.0.0-beta.1", "1.0.0+build", "1.0.0-beta.1+build.5"}
+	valid := []string{"1.0.0", "1.0", "10.20.30", "1.0.0.1", "1.0.0-beta", "1.0.0-beta.1", "1.0.0+build", "1.0.0-beta.1+build.5", "2", "0"}
 	for _, s := range valid {
 		if !isLikelyVersion(s) {
 			t.Errorf("isLikelyVersion(%q) = false, want true", s)
 		}
 	}
-	invalid := []string{"", "abc", "beta", "a.b.c", "v", "1", ".", "..", "-1.0"}
+	invalid := []string{"", "abc", "beta", "a.b.c", "v", ".", "..", "-1.0"}
 	for _, s := range invalid {
 		if isLikelyVersion(s) {
 			t.Errorf("isLikelyVersion(%q) = true, want false", s)
