@@ -30,6 +30,25 @@ namespace AlyClient.CSharpSDK
         /// <summary>下载差异文件到本地</summary>
         public static Task<AlyResponse> DownloadUpdateAsync(string alyExePath, Action<string, double> progress)
         {
+            return DownloadUpdateAsync(alyExePath, progress, DefaultDownloadStallTimeoutSeconds);
+        }
+
+        /// <summary>
+        /// 下载停流看门狗默认超时（秒）。客户端现在对单文件大下载每 3 秒输出一行
+        /// PROGRESS（见 download_update.go），因此"超过该时长无任何输出"即为真停流
+        /// （网络挂起/磁盘卡死/进程僵死），而不是"大文件正常下载中"。
+        /// 默认 1800s 给慢网络留足余量——真正的活性由 PROGRESS 行保证，不靠缩短超时。
+        /// </summary>
+        public const int DefaultDownloadStallTimeoutSeconds = 1800;
+
+        /// <summary>
+        /// 下载差异文件到本地（带停流看门狗）。
+        /// stallTimeoutSeconds：无输出超时（秒）；超过即杀进程并返回失败。
+        /// 旧版 ReadLine 无限阻塞：客户端真停流（非大文件正常下载）时 SDK 永久挂起、
+        /// 宿主无法感知；配合客户端 3 秒 PROGRESS 行，该看门狗可以放心用长超时。
+        /// </summary>
+        public static Task<AlyResponse> DownloadUpdateAsync(string alyExePath, Action<string, double> progress, int stallTimeoutSeconds)
+        {
             return Task.Factory.StartNew(() =>
             {
                 try
@@ -55,36 +74,57 @@ namespace AlyClient.CSharpSDK
                         process.Exited += (s, e) => cts.Cancel();
                         process.Start();
 
-                        while (!cts.IsCancellationRequested)
+                        // 停流看门狗：距上一行输出超过 stallTimeout 即杀进程。
+                        // Kill 后管道 EOF，ReadLine 返回 null，主循环走 EOF 分支收尾。
+                        var lastLineAt = DateTime.UtcNow;
+                        var stalled = false;
+                        var watchdog = new System.Threading.Timer(_ =>
                         {
-                            var stdoutTask = process.StandardOutput.ReadLine();
-                            if (stdoutTask == null)
+                            if ((DateTime.UtcNow - lastLineAt).TotalSeconds > stallTimeoutSeconds)
                             {
-                                // EOF：client 进程已退出但未输出 data:null 完成行
-                                //（崩溃/被杀/输出了 SDK 不识别的成功行）。必须终止循环，
-                                // 否则 ReadLine 持续返回 null 导致 100% CPU 空转 + 永久挂起（#1a）。
-                                return AlyResponse.NG("download interrupted (aly-client exited before finish line)");
+                                stalled = true;
+                                try { process.Kill(); } catch { }
                             }
-                            if (stdoutTask.Length == 0)
+                        }, null, 5000, 5000);
+                        using (watchdog)
+                        {
+                            while (!cts.IsCancellationRequested)
                             {
-                                continue; // 空行跳过
-                            }
+                                var stdoutTask = process.StandardOutput.ReadLine();
+                                if (stdoutTask == null)
+                                {
+                                    // EOF：client 进程已退出但未输出 data:null 完成行
+                                    //（崩溃/被杀/输出了 SDK 不识别的成功行）。必须终止循环，
+                                    // 否则 ReadLine 持续返回 null 导致 100% CPU 空转 + 永久挂起（#1a）。
+                                    if (stalled)
+                                    {
+                                        return AlyResponse.NG("download stalled: no output for " + stallTimeoutSeconds + "s, process killed");
+                                    }
+                                    return AlyResponse.NG("download interrupted (aly-client exited before finish line)");
+                                }
+                                lastLineAt = DateTime.UtcNow;
+                                if (stdoutTask.Length == 0)
+                                {
+                                    continue; // 空行跳过
+                                }
 
-                            var result = JsonConvert.DeserializeObject<AlyResponse<DownloadProgressData>>(stdoutTask);
-                            if (!result.IsSuccess)
-                            {
-                                return AlyResponse.NG(result.ErrorMsg);
-                            }
+                                var result = JsonConvert.DeserializeObject<AlyResponse<DownloadProgressData>>(stdoutTask);
+                                if (!result.IsSuccess)
+                                {
+                                    return AlyResponse.NG(result.ErrorMsg);
+                                }
 
-                            if (result.Data == null)// finish
-                            {
-                                return AlyResponse.OK();
-                            }
-                            // 只统计 DONE（客户端已不再输出 SKIP），百分比 = 已完成序号/总数，
-                            // 避免把未下载的文件算进进度导致界面统计失误
-                            if (result.Data.Status == "DONE" && result.Data.Total > 0)
-                            {
-                                progress?.Invoke(result.Data.File, result.Data.Index / (double)result.Data.Total);
+                                if (result.Data == null)// finish
+                                {
+                                    return AlyResponse.OK();
+                                }
+                                // 只统计 DONE（客户端已不再输出 SKIP），百分比 = 已完成序号/总数，
+                                // 避免把未下载的文件算进进度导致界面统计失误
+                                if (result.Data.Status == "DONE" && result.Data.Total > 0)
+                                {
+                                    try { progress?.Invoke(result.Data.File, result.Data.Index / (double)result.Data.Total); }
+                                    catch { } // 进度回调异常不得打断下载（事件隔离）
+                                }
                             }
                         }
                     }
@@ -117,7 +157,14 @@ namespace AlyClient.CSharpSDK
         public static Task<AlyResponse<ListRollbackData>> ListRollbackVersionsAsync(string alyExePath)
             => RunAsync<ListRollbackData>("list_rollback_versions", alyExePath);
 
-        /// <summary>回滚到指定版本</summary>
+        /// <summary>
+        /// 回滚命令默认超时（秒）。回滚要做目录改名 + 关闭/等待主进程退出 +
+        /// 崩溃恢复分支（可能多次 rename 重试），30 秒不够——超时被 Kill 会把
+        /// 回滚留在中间态（由崩溃恢复机制兜底，但用户体验差）。
+        /// </summary>
+        public const int RollbackTimeoutSeconds = 600;
+
+        /// <summary>回滚到指定版本（超时 600s，见 RollbackTimeoutSeconds）</summary>
         public static Task<AlyResponse<RollbackData>> RollbackAsync(
             string alyExePath,
             string version,
@@ -130,13 +177,20 @@ namespace AlyClient.CSharpSDK
             if (closeTimeoutSeconds != 30)
                 args += $" --close-timeout {closeTimeoutSeconds}";
 
-            return RunAsync<RollbackData>(args, alyExePath);
+            return RunAsync<RollbackData>(args, alyExePath, RollbackTimeoutSeconds);
         }
 
         // ══════════════════════════════════════════════════
         //  内部
         // ══════════════════════════════════════════════════
+
+        /// <summary>短命令默认超时（秒）：check/list 等只读命令</summary>
+        private const int DefaultRunTimeoutSeconds = 30;
+
         private static Task<AlyResponse<T>> RunAsync<T>(string arguments, string alyExePath)
+            => RunAsync<T>(arguments, alyExePath, DefaultRunTimeoutSeconds);
+
+        private static Task<AlyResponse<T>> RunAsync<T>(string arguments, string alyExePath, int timeoutSeconds)
         {
             return Task.Factory.StartNew(() =>
             {
@@ -169,12 +223,12 @@ namespace AlyClient.CSharpSDK
 
                         if (!process.HasExited)
                         {
-                            if (!process.WaitForExit(30000))
+                            if (!process.WaitForExit(timeoutSeconds * 1000))
                             {
                                 // 超时后进程仍存活：直接判失败返回，不访问 ExitCode
                                 //（未退出进程访问 ExitCode 会抛 InvalidOperationException，#8）。
                                 try { process.Kill(); } catch { }
-                                return AlyResponse<T>.NG("aly-client.exe timed out after 30s (no exit)");
+                                return AlyResponse<T>.NG("aly-client.exe timed out after " + timeoutSeconds + "s (no exit)");
                             }
                         }
 

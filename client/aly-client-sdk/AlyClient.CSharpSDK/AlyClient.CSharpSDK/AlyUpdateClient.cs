@@ -20,6 +20,9 @@ namespace AlyClient.CSharpSDK
         private bool _isError;
         private string _lastErrorMsg;
 
+        /// <summary>后台主循环任务：Dispose 时等待其退出（最长 5 秒）</summary>
+        private Task _mainLoopTask;
+
         /// <summary>Thread-safe current status</summary>
         public AlyClientStatus Status
         {
@@ -60,16 +63,37 @@ namespace AlyClient.CSharpSDK
         public int IdlePollIntervalSeconds { get; set; }
 
         private static readonly Random IdleJitter = new Random();
+        private static readonly object IdleJitterLock = new object();
 
         /// <summary>
         /// 计算本轮空闲睡眠时长（毫秒）：IdlePollIntervalSeconds（默认 300）
         /// + 0-60 秒抖动，避免客户端群同时打服务器。下限 60 秒。
+        /// Random 非线程安全：抖动取值在专用锁内完成（多实例/多线程场景）。
         /// </summary>
         private int IdleSleepMs()
         {
             int seconds = IdlePollIntervalSeconds > 0 ? IdlePollIntervalSeconds : 300;
             if (seconds < 60) seconds = 60;
-            return (seconds + IdleJitter.Next(0, 60)) * 1000;
+            lock (IdleJitterLock)
+            {
+                return (seconds + IdleJitter.Next(0, 60)) * 1000;
+            }
+        }
+
+        /// <summary>
+        /// 可中断睡眠（毫秒）：Cancel() 后最多 1 秒内退出，而非睡满全程。
+        /// 旧版 Thread.Sleep：Cancel/Dispose 后循环最长再挂 6 分钟（300s+60s 抖动），
+        /// 宿主关闭被后台线程拖住。
+        /// </summary>
+        private static void InterruptibleSleep(int milliseconds, CancellationToken token)
+        {
+            var remaining = milliseconds;
+            while (remaining > 0 && !token.IsCancellationRequested)
+            {
+                var chunk = remaining > 1000 ? 1000 : remaining;
+                Thread.Sleep(chunk);
+                remaining -= chunk;
+            }
         }
 
         /// <param name="updatorExePath">Defaults to ../UpdateFolder/aly-client.exe relative to BaseDirectory</param>
@@ -80,12 +104,21 @@ namespace AlyClient.CSharpSDK
             _cts = new CancellationTokenSource();
             IsRunning = true;
 
-            Task.Factory.StartNew(() =>
+            _mainLoopTask = Task.Factory.StartNew(() =>
             {
-                var selfCheckUpdateResult = AlyApi.CheckSelfUpdateAsync(UpdatorExePath).Result;
-                if (selfCheckUpdateResult.IsSuccess && selfCheckUpdateResult.Data.NeedUpdate)
+                // 宿主事件处理器异常不得炸掉循环（事件隔离）：
+                // CheckSelfUpdateAsync 内部已捕获自身异常，这里再兜一层。
+                try
                 {
-                    UpdateSelf();
+                    var selfCheckUpdateResult = AlyApi.CheckSelfUpdateAsync(UpdatorExePath).Result;
+                    if (selfCheckUpdateResult.IsSuccess && selfCheckUpdateResult.Data.NeedUpdate)
+                    {
+                        UpdateSelf();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogError("self check-update failed: " + ex.Message);
                 }
                 MainLoop(_cts.Token);
             });
@@ -95,6 +128,24 @@ namespace AlyClient.CSharpSDK
         public void Cancel()
         {
             try { _cts?.Cancel(); } catch (ObjectDisposedException) { }
+        }
+
+        /// <summary>
+        /// Cancel and release resources. 等待主循环退出（最长 5 秒）：
+        /// 旧版 Cancel 后立即 Dispose 掉 _cts，循环可能在下一次 token 检查前
+        /// 拿到已释放的 token（ObjectDisposedException 吞在 catch 里，但循环
+        /// 仍要睡满当前 IdleSleep 才退）。现在睡眠是可中断的，等待让"关闭即停"成立。
+        /// </summary>
+        public void Dispose()
+        {
+            Cancel();
+            var task = _mainLoopTask;
+            if (task != null)
+            {
+                try { task.Wait(5000); } catch { }
+            }
+            try { _cts?.Dispose(); } catch (ObjectDisposedException) { }
+            _cts = null;
         }
 
         /// <summary>
@@ -181,13 +232,7 @@ namespace AlyClient.CSharpSDK
             catch { }
         }
 
-        /// <summary>Cancel and release resources.</summary>
-        public void Dispose()
-        {
-            Cancel();
-            try { _cts?.Dispose(); } catch (ObjectDisposedException) { }
-            _cts = null;
-        }
+        /// <summary>Cancel and release resources. 见上（已前移至 Cancel 旁，等待主循环退出）。</summary>
 
         private void MainLoop(CancellationToken token)
         {
@@ -201,7 +246,7 @@ namespace AlyClient.CSharpSDK
                         if (!status.IsSuccess)
                         {
                             OnError(status.ErrorMsg ?? "check_update failed");
-                            Thread.Sleep(5000);
+                            InterruptibleSleep(5000, token);
                             continue;
                         }
 
@@ -222,7 +267,7 @@ namespace AlyClient.CSharpSDK
                             // #7：空闲轮询间隔（默认 300s + 抖动）。
                             // 旧版每秒一次：每秒一个 aly-client.exe 进程 + 1-2 次 HTTP，
                             // XP 上进程创建成本高，且 N 客户端 = N req/s 打 DB。
-                            Thread.Sleep(IdleSleepMs());
+                            InterruptibleSleep(IdleSleepMs(), token);
                             continue;
                         }
 
@@ -233,7 +278,10 @@ namespace AlyClient.CSharpSDK
 
                             if (!status.Data.ForceUpdate)
                             {
-                                RequestDownloadUpdate?.Invoke(status.Data.NewVersion);
+                                // 事件隔离：宿主在确认回调里抛异常，不应让异常跳过本轮下载
+                                // （否则进 catch 分支 5 秒重查、下载永远不开始）。
+                                try { RequestDownloadUpdate?.Invoke(status.Data.NewVersion); }
+                                catch (Exception ex) { LogError("RequestDownloadUpdate handler threw: " + ex.Message); }
                             }
 
                             Status = AlyClientStatus.DownloadingUpdate;
@@ -258,7 +306,7 @@ namespace AlyClient.CSharpSDK
                                     Status = AlyClientStatus.None;
                                     OnStatusChanged(Status, "No update needed");
                                     // "已是最新"= 无更新稳态：走空闲间隔（#7），不再 1 秒后立刻重查
-                                    Thread.Sleep(IdleSleepMs());
+                                    InterruptibleSleep(IdleSleepMs(), token);
                                     continue;
                                 }
                                 Thread.Sleep(1000);
@@ -271,21 +319,32 @@ namespace AlyClient.CSharpSDK
 
                         if (!status.Data.ForceUpdate)
                         {
-                            RequestApplyUpdate?.Invoke(status.Data.NewVersion);
+                            // 事件隔离（同 RequestDownloadUpdate）
+                            try { RequestApplyUpdate?.Invoke(status.Data.NewVersion); }
+                            catch (Exception ex) { LogError("RequestApplyUpdate handler threw: " + ex.Message); }
                         }
 
                         Status = AlyClientStatus.ApplyUpdate;
                         OnStatusChanged(Status, "Applying update...");
 
-                        AlyApi.ApplyUpdateAsync(UpdatorExePath, MustCloseProcessNames);
+                        // apply spawn 失败上报：旧版丢弃返回值，更新器根本没拉起时
+                        // 宿主只在 5 秒后看到"无更新"轮询，误以为更新完成了。
+                        var applyResult = AlyApi.ApplyUpdateAsync(UpdatorExePath, MustCloseProcessNames);
+                        if (applyResult != null && !applyResult.IsSuccess)
+                        {
+                            OnError("apply spawn failed: " + (applyResult.ErrorMsg ?? "unknown"));
+                        }
                         // 不 break：apply_update 成功后宿主程序会被重启；
                         // 如果失败或用户取消则继续轮询后续更新。
-                        Thread.Sleep(5000);
+                        // 30 秒（消 churn）：apply_update 是独立进程（RunAsyncAlone 不等待），
+                        // 旧版 5 秒后继续 spawn check_update——锁会被 apply 拒绝，但每 5 秒
+                        // 拉起一个进程白跑（XP 进程创建贵，日志也会刷屏）。
+                        InterruptibleSleep(30000, token);
                     }
                     catch (Exception ex)
                     {
                         OnError("update exception: " + ex.Message);
-                        Thread.Sleep(5000);
+                        InterruptibleSleep(5000, token);
                     }
                 }
             }
@@ -316,8 +375,14 @@ namespace AlyClient.CSharpSDK
 
         private void OnStatusChanged(AlyClientStatus s, string msg)
         {
+            // 事件隔离：宿主事件处理器抛异常不得炸掉主循环（循环一挂更新就停了）。
+            // Status 属性本身已先行设置，丢一次事件不影响状态正确性。
             var handler = StatusChanged;
-            if (handler != null) handler(s, msg);
+            if (handler != null)
+            {
+                try { handler(s, msg); }
+                catch (Exception ex) { LogError("StatusChanged handler threw: " + ex.Message); }
+            }
         }
 
         private void OnError(string msg)
@@ -339,20 +404,28 @@ namespace AlyClient.CSharpSDK
                 }
             }
             var handler = ErrorStatusChanged;
-            if (handler != null) handler(msg);
+            if (handler != null)
+            {
+                try { handler(msg); }
+                catch (Exception ex) { LogError("ErrorStatusChanged handler threw: " + ex.Message); }
+            }
         }
 
         private void ClearError()
         {
+            Action<string> handler;
             lock (_errorLock)
             {
-                if (_isError)
-                {
-                    _isError = false;
-                    _lastErrorMsg = null;
-                    var handler = ErrorStatusChanged;
-                    if (handler != null) handler(null); // null = error cleared
-                }
+                if (!_isError) return;
+                _isError = false;
+                _lastErrorMsg = null;
+                handler = ErrorStatusChanged;
+            }
+            // 事件在锁外触发（旧实现锁内触发，处理器重入/慢会拖住所有 OnError 调用方）
+            if (handler != null)
+            {
+                try { handler(null); } // null = error cleared
+                catch (Exception ex) { LogError("ErrorStatusChanged handler threw: " + ex.Message); }
             }
         }
 

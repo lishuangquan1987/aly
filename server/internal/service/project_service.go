@@ -171,12 +171,15 @@ func PublishVersion(ctx context.Context, projectName string, version string, log
 		}
 	}
 	var changelog *ent.ProjectChangeLog
+	// 项目 ignore 规则提出来供事务提交后的清单固化使用（与 get_all_files 同口径过滤）
+	var manifestIgnoreFolders, manifestIgnoreFiles []string
 	err := db.WithTx(ctx, func(tx *ent.Tx) error {
 		// 获取项目实体（用于关联变更日志，仅未软删除的项目）
 		p, err := tx.Project.Query().Where(project.NameEQ(projectName), project.IsDeletedEQ(false)).First(ctx)
 		if err != nil {
 			return err
 		}
+		manifestIgnoreFolders, manifestIgnoreFiles = p.IgnoreFolders, p.IgnoreFiles
 		// 防倒退校验（精简计划条目 8b）：新版本必须严格大于该项目已发布的
 		// 最新版本号，否则拒绝（防手滑倒退——重发旧版本号会让已更新的客户端
 		// "卡"在旧内容上：check 的 needUpdate 只认"严格更高"）。
@@ -226,7 +229,7 @@ func PublishVersion(ctx context.Context, projectName string, version string, log
 	// #4 删除同步：发布成功后把当前项目文件清单固化到数据目录（.updator_manifest.json），
 	// 客户端 download_update 依此清单删除版本目录中"发布端已删除"的文件。
 	// 写失败不阻断发布（返回成功）：清单缺失时客户端跳过删除（与旧行为兼容，仅退化为不删）。
-	if mErr := writeReleaseManifest(projectName); mErr != nil {
+	if mErr := writeReleaseManifest(projectName, manifestIgnoreFolders, manifestIgnoreFiles); mErr != nil {
 		// 服务端日志留痕（不引入新依赖，沿用标准 log）
 		log.Printf("[manifest] publish version %s for project %s: write manifest failed: %v",
 			version, projectName, mErr)
@@ -243,7 +246,11 @@ const ManifestFileName = ".updator_manifest.json"
 
 // writeReleaseManifest 把项目当前文件清单（相对路径集合，与 get_all_files 同过滤口径）
 // 写入 data/{project}/.updator_manifest.json。原子写：临时文件 + rename。
-func writeReleaseManifest(projectName string) error {
+// 过滤口径对齐（审查修复）：复用 collectFileStamps —— 跳过上传中间态（.chunks/.merging）、
+// 应用项目 ignore 规则、排除清单自身；此前版本只排除了清单自身，注释声称的"同口径"
+// 并未真正实现（方向上清单只多不少、不会造成客户端误删，但属语义债，且清单内
+// 出现 .merging 等中间态路径会让客户端把"下轮消失的中间态"误判为"服务端删除"）。
+func writeReleaseManifest(projectName string, ignoreFolders, ignoreFiles []string) error {
 	workDir, err := GetProjectWorkPath(projectName)
 	if err != nil {
 		return err
@@ -252,32 +259,15 @@ func writeReleaseManifest(projectName string) error {
 		return nil // 项目目录不存在（刚创建未上传）：空清单无意义，跳过
 	}
 
-	// 复用 get_all_files 的收集逻辑（含 ignore 规则与上传中间态跳过）。
-	// 这里只需相对路径，不需要哈希 → 用 collectFileStamps 的轻量版本。
-	var relPaths []string
-	err = filepath.Walk(workDir, func(absPath string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, relErr := filepath.Rel(workDir, absPath)
-		if relErr != nil {
-			return relErr
-		}
-		rel = filepath.ToSlash(rel)
-		if info.IsDir() {
-			return nil
-		}
-		if rel == ManifestFileName {
-			return nil // 清单自身不入清单
-		}
-		relPaths = append(relPaths, rel)
-		return nil
-	})
+	// 复用 get_all_files 的收集逻辑（collectFileStamps）：
+	// 完整过滤口径（中间态 + ignore 规则 + 清单自排除），只需相对路径、不算哈希。
+	stamps, err := collectFileStamps(workDir, ignoreFolders, ignoreFiles)
 	if err != nil {
-		return fmt.Errorf("walk project dir: %w", err)
+		return fmt.Errorf("collect file stamps for manifest: %w", err)
 	}
-	if relPaths == nil {
-		relPaths = []string{}
+	relPaths := make([]string, 0, len(stamps))
+	for _, s := range stamps {
+		relPaths = append(relPaths, s.relPath)
 	}
 
 	data, mErr := json.MarshalIndent(struct {
