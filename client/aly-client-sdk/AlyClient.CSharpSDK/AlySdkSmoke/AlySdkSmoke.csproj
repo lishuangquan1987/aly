@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net40</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <AssemblyName>AlySdkSmoke</AssemblyName>
+    <RootNamespace>AlySdkSmoke</RootNamespace>
+    <!-- Esafenet 加密残留曾污染 obj/bin（第四批修复踩坑）：输出指向独立目录 -->
+    <BaseIntermediateOutputPath>obj\</BaseIntermediateOutputPath>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AlyClient.CSharpSDK\AlyClient.CSharpSDK.csproj" />
+  </ItemGroup>
+
+</Project>
