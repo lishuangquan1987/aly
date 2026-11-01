@@ -48,3 +48,15 @@ client/aly-client/.idea/
 client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/obj/
 client/aly-client/aly-client-ui.exe
 client/aly-client/aly-client.exe
+
+# 集成测试产物（test/tc 的构建产物与回归日志）
+test/tc/_regress_full.log
+test/tc/_*.log
+dist-test/
+
+# 本地工具/助手工作目录（记忆、缓存，不是项目内容）
+.workbuddy/
+
+# C# 冒烟测试工程构建产物
+client/aly-client-sdk/AlyClient.CSharpSDK/AlySdkSmoke/bin/
+client/aly-client-sdk/AlyClient.CSharpSDK/AlySdkSmoke/obj/
