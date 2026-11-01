@@ -41,12 +41,28 @@ func updateLockPath() string {
 
 // AcquireUpdateLock 获取全局更新锁。成功返回释放函数（调用方 defer 调用）；
 // 失败返回 error（锁被另一存活的更新进程持有）。
+// 成功后启动 touch 协程：持有期间每 lockTouchInterval 重写时间戳（原子落盘），
+// 保证"慢网络大更新拖过 TTL"时 TTL 不会误判陈旧（#9）。
 func AcquireUpdateLock(cmdName string) (func(), error) {
 	path := updateLockPath()
 	for attempt := 0; attempt < 2; attempt++ {
 		release, err := tryAcquireLock(path, cmdName)
 		if err == nil {
-			return release, nil
+			// touch 协程：周期刷新锁时间戳（write-tmp + rename 原子落盘）。
+			// 释放函数先等待协程退出再删锁，避免 touch 与 release 并发
+			//（协程在 release 删锁后把锁文件写回，造成锁泄漏）。
+			stop := make(chan struct{})
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				touchLockLoop(path, cmdName, stop)
+			}()
+			inner := release
+			return func() {
+				close(stop)
+				<-done
+				inner()
+			}, nil
 		}
 		// 锁被占用：若持有者已退出（崩溃残留）或超时（陈旧）则清理并重试一次
 		if !cleanStaleLock(path) {
@@ -56,23 +72,95 @@ func AcquireUpdateLock(cmdName string) (func(), error) {
 	return nil, fmt.Errorf("另一更新正在进行中，请稍后重试")
 }
 
-// tryAcquireLock 尝试独占创建锁文件
-func tryAcquireLock(path, cmdName string) (func(), error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, err
+// lockTouchInterval 锁心跳周期（#9）：远小于 lockTTL，保证 TTL 判定基于
+// "最后一次 touch" 而非"获取时刻"——持有者活着且在工作就不被抢占。
+const lockTouchInterval = 5 * time.Minute
+
+// touchLockLoop 周期性重写锁时间戳（仅当锁仍归本持有者时）。
+// 用 write-tmp + rename 原子落盘：读取方要么看到旧完整内容、要么看到新完整内容，
+// 不会读到写了一半的 JSON。
+func touchLockLoop(path, cmdName string, stop <-chan struct{}) {
+	ticker := time.NewTicker(lockTouchInterval)
+	defer ticker.Stop()
+	token := lockTokenOf(path, cmdName)
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			// 锁已被他人抢占（TTL 判定或崩溃清理）：停止 touch（token 不匹配写不进去，
+			// 但显式退出更干净）。
+			if !isLockHeldBy(path, token) {
+				return
+			}
+			writeLockFile(path, cmdName, token)
+		}
 	}
-	token := fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
+}
+
+// lockTokenOf 生成持有者 token（与 tryAcquireLock 一致格式）。
+// 注意：touch 用独立 token 而非重新生成——同一持有者跨多次写入需保持 token 不变，
+// 否则 releaseLock 的 token 匹配删除会失效。token 从锁文件读回（见 tryAcquireLock 的返回）。
+func lockTokenOf(path, cmdName string) string {
+	// 从当前锁文件读回本持有者 token（tryAcquireLock 已写入）。
+	if data, err := ioutil.ReadFile(path); err == nil {
+		var info updateLockInfo
+		if json.Unmarshal(data, &info) == nil && info.Token != "" {
+			return info.Token
+		}
+	}
+	return "" // 读不回（异常）：touchLoop 侧靠 isLockHeldBy("") 判 false 退出
+}
+
+// isLockHeldBy 判断锁文件当前持有者 token 是否匹配。
+func isLockHeldBy(path, token string) bool {
+	if token == "" {
+		return false
+	}
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var info updateLockInfo
+	if json.Unmarshal(data, &info) != nil {
+		return false
+	}
+	return info.Token == token
+}
+
+// writeLockFile 原子写入锁内容（write-tmp + rename，#9 竞态修复）。
+func writeLockFile(path, cmdName, token string) {
 	info := updateLockInfo{
 		PID:   os.Getpid(),
 		TS:    strconv.FormatInt(time.Now().Unix(), 10),
 		Cmd:   cmdName,
 		Token: token,
 	}
-	if data, mErr := json.Marshal(info); mErr == nil {
-		f.Write(data)
+	data, err := json.Marshal(info)
+	if err != nil {
+		return
 	}
-	f.Close()
+	tmp := path + ".tmp"
+	if wErr := ioutil.WriteFile(tmp, data, 0644); wErr != nil {
+		return
+	}
+	if rErr := os.Rename(tmp, path); rErr != nil {
+		os.Remove(tmp)
+	}
+}
+
+// tryAcquireLock 尝试独占创建锁文件。
+// 写入采用 write-tmp + rename 原子落盘（#9）：旧实现 O_EXCL 创建后直接写锁文件，
+// "创建成功到写入完成"之间有空窗——另一等待者读到空/不完整内容会按"残留"删掉
+// 刚创建的新锁，导致双实例并发更新。
+func tryAcquireLock(path, cmdName string) (func(), error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, err
+	}
+	f.Close() // 立即关闭：占位已由 O_EXCL 建立，内容走原子写入
+	token := fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
+	writeLockFile(path, cmdName, token)
 	return func() {
 		releaseLock(path, token)
 	}, nil
@@ -101,9 +189,12 @@ func releaseLock(path, token string) {
 }
 
 // cleanStaleLock 判断锁是否陈旧并清理：
-//   - 读取/解析失败：视为残留，删除后返回 true；
-//   - 持有超过 lockTTL（30 分钟）：无条件删除抢占（覆盖 PID 复用场景）；
+//   - 读取/解析失败：结合 mtime 二次确认（#9）——1 分钟内的空/坏锁视为"在途写入"
+//     （O_EXCL 占位与原子写入之间的正常窗口），不删；超过 1 分钟才按残留清理；
 //   - 持有者进程已退出：删除；
+//   - 持有超过 lockTTL 且最后 touch 无进展：删除（真正的陈旧锁——
+//     touch 机制上线后，存活持有者的 TS 会持续刷新，只有"持有者活着但卡死/无 touch"
+//     才会超 TTL。注意 PID 复用场景：TTL 抢占作为最后手段保留）；
 //   - 持有者仍存活且在 TTL 内：返回 false（锁有效，不应抢占）。
 func cleanStaleLock(path string) bool {
 	data, err := ioutil.ReadFile(path)
@@ -114,7 +205,12 @@ func cleanStaleLock(path string) bool {
 	}
 	var info updateLockInfo
 	if err := json.Unmarshal(data, &info); err != nil {
-		// 内容损坏：视为残留
+		// 内容空/损坏：区分"在途写入"与"真残留"（#9）。
+		// 原子写入（write-tmp + rename）下窗口极短，但防御 O_EXCL 占位刚建立、
+		// rename 尚未发生的瞬间。
+		if fi, statErr := os.Stat(path); statErr == nil && time.Since(fi.ModTime()) < time.Minute {
+			return false // 可能是刚创建的在途锁：不删，稍后重试
+		}
 		os.Remove(path)
 		return true
 	}
@@ -124,8 +220,15 @@ func cleanStaleLock(path string) bool {
 		os.Remove(path)
 		return true
 	}
-	// TTL 抢占：锁持有超过 lockTTL 无条件删除
+	// TTL 抢占：持有超过 lockTTL 无 touch 进展（touchLoop 每 5 分钟刷新 TS，
+	// 存活且工作的持有者不会触发本分支）。
 	if time.Now().Unix()-ts > int64(lockTTL/time.Second) {
+		// 存活二次确认（#9）：持有者活着时不抢占——接受"锁泄漏"风险
+		//（极端场景：进程卡死不退出也不释放），clean 命令可手工清理。
+		// PID 复用导致的"锁永久有效"由下方"超 TTL 且进程不存活"兜住。
+		if util.IsProcessAlive(uint32(info.PID)) {
+			return false
+		}
 		os.Remove(path)
 		return true
 	}

@@ -51,6 +51,27 @@ namespace AlyClient.CSharpSDK
         /// </summary>
         public string MustCloseProcessNames { get; set; }
 
+        /// <summary>
+        /// 空闲（无更新）时的轮询间隔（秒，#7）。默认 300 秒 + 0-60 秒随机抖动；
+        /// 小于 60 时按 60 处理（兜底下限）。失败重试不受此值影响（保持 5 秒快速重试）。
+        /// 旧版每秒轮询一次（每秒拉起一个 aly-client.exe 进程 + 1-2 次 HTTP），
+        /// N 台客户端即 N req/s 纯轮询负载。
+        /// </summary>
+        public int IdlePollIntervalSeconds { get; set; }
+
+        private static readonly Random IdleJitter = new Random();
+
+        /// <summary>
+        /// 计算本轮空闲睡眠时长（毫秒）：IdlePollIntervalSeconds（默认 300）
+        /// + 0-60 秒抖动，避免客户端群同时打服务器。下限 60 秒。
+        /// </summary>
+        private int IdleSleepMs()
+        {
+            int seconds = IdlePollIntervalSeconds > 0 ? IdlePollIntervalSeconds : 300;
+            if (seconds < 60) seconds = 60;
+            return (seconds + IdleJitter.Next(0, 60)) * 1000;
+        }
+
         /// <param name="updatorExePath">Defaults to ../UpdateFolder/aly-client.exe relative to BaseDirectory</param>
         public AlyUpdateClient(string updatorExePath = null)
         {
@@ -198,7 +219,10 @@ namespace AlyClient.CSharpSDK
                             {
                                 OnStatusChanged(AlyClientStatus.None, "Update status cleared");
                             }
-                            Thread.Sleep(1000);
+                            // #7：空闲轮询间隔（默认 300s + 抖动）。
+                            // 旧版每秒一次：每秒一个 aly-client.exe 进程 + 1-2 次 HTTP，
+                            // XP 上进程创建成本高，且 N 客户端 = N req/s 打 DB。
+                            Thread.Sleep(IdleSleepMs());
                             continue;
                         }
 
@@ -233,6 +257,9 @@ namespace AlyClient.CSharpSDK
                                     // 状态复位，避免宿主 UI 停留在 "Downloading..."（#6 审查发现）
                                     Status = AlyClientStatus.None;
                                     OnStatusChanged(Status, "No update needed");
+                                    // "已是最新"= 无更新稳态：走空闲间隔（#7），不再 1 秒后立刻重查
+                                    Thread.Sleep(IdleSleepMs());
+                                    continue;
                                 }
                                 Thread.Sleep(1000);
                                 continue;

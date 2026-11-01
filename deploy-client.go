@@ -17,8 +17,20 @@ import (
 const (
 	wslGo     = "/usr/local/go/bin/go"
 	wslGoroot = "/usr/local/go"
-	wslGopath = "/home/test/go"
+	// wslGopath 不再硬编码个人路径（#6）：默认 WSL 内标准 GOPATH（~/go），
+	// 可用环境变量 ALY_WSL_GOPATH 覆盖（如 /home/test/go）。
 )
+
+// envOrDefault 读环境变量，空则返回默认值（#6：清除硬编码个人路径）。
+func envOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// wslGopathResolved 解析后的 WSL GOPATH（$ALY_WSL_GOPATH 或 ~/go）。
+var wslGopathResolved string
 
 var (
 	scriptDir string
@@ -50,8 +62,13 @@ func mustInit() {
 	}
 	scriptDir, _ = filepath.Abs(scriptDir)
 
-	wslSrc = wslGopath + "/src/aly/client/aly-client"
-	linuxSrc = "/mnt/e/Project2026/aly/client/aly-client"
+	// GOPATH 与源码挂载路径不再硬编码（#6）：
+	//   ALY_WSL_GOPATH：WSL 内 GOPATH（默认 ~/go，即 /root/go 或 /home/<user>/go）
+	//   linuxSrc：由本脚本所在目录推导（脚本位于仓库根，client 在其下），
+	//             兜底支持 ALY_LINUX_SRC 覆盖（仓库不在 /mnt 盘符下时）。
+	wslGopathResolved = envOrDefault("ALY_WSL_GOPATH", "~/go")
+	wslSrc = wslGopathResolved + "/src/aly/client/aly-client"
+	linuxSrc = envOrDefault("ALY_LINUX_SRC", winToWsl(filepath.Join(scriptDir, "client", "aly-client")))
 }
 
 func wsl(cmd string) error {
@@ -134,7 +151,7 @@ func main() {
 	if err := wsl("rm -rf " + wslSrc); err != nil {
 		fmt.Printf("  [WARN] rm failed: %v\n", err)
 	}
-	if err := wsl("mkdir -p " + wslGopath + "/src/aly/client"); err != nil {
+	if err := wsl("mkdir -p " + wslGopathResolved + "/src/aly/client"); err != nil {
 		fmt.Printf("  [ERROR] mkdir failed: %v\n", err)
 		os.Exit(1)
 	}
@@ -148,7 +165,7 @@ func main() {
 	fmt.Println("  [2/4] Building aly-client.exe (GOARCH=386) ...")
 	buildCmd := fmt.Sprintf(
 		"cd %s && GOROOT=%s GOPATH=%s GOOS=windows GOARCH=386 %s build -ldflags=\"-s -w\" -o aly-client.exe .",
-		wslSrc, wslGoroot, wslGopath, wslGo,
+		wslSrc, wslGoroot, wslGopathResolved, wslGo,
 	)
 	if err := wsl(buildCmd); err != nil {
 		fmt.Printf("  [ERROR] Build failed: %v\n", err)
@@ -160,7 +177,7 @@ func main() {
 	fmt.Println("  [2b/4] Building aly-client-ui.exe (GOARCH=386) ...")
 	buildUICmd := fmt.Sprintf(
 		"cd %s && GOROOT=%s GOPATH=%s GOOS=windows GOARCH=386 CGO_ENABLED=0 %s build -ldflags=\"-s -w -H=windowsgui\" -o aly-client-ui.exe aly/client/aly-client/ui/winui",
-		wslSrc, wslGoroot, wslGopath, wslGo,
+		wslSrc, wslGoroot, wslGopathResolved, wslGo,
 	)
 	if err := wsl(buildUICmd); err != nil {
 		fmt.Printf("  [ERROR] UI build failed: %v\n", err)

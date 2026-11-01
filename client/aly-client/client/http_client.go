@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -24,6 +25,25 @@ var httpClient = &http.Client{
 		MaxIdleConns:        10,
 		IdleConnTimeout:     90 * time.Second,
 		DisableCompression:  false,
+	},
+}
+
+// downloadHTTPClient 下载专用 client（#5）：
+// 不设整体 Timeout——Go 的 http.Client.Timeout 覆盖含读取 body 的整个请求周期，
+// 单文件传输超过 300 秒（如 500MB @ 1.5MB/s）会被中途掐断并删除 .part 使续传失效，
+// 慢网络下大文件永远下载不下来。改为连接级超时（拨号/TLS/响应头），
+// body 传输不设硬上限，完整性由大小校验 + MD5/SHA256 双哈希兜底。
+var downloadHTTPClient = &http.Client{
+	// net.Dialer{Timeout} 是 Go 1.0 就有的 API（DialContext 的闭包写法兼容 Go 1.10）。
+	// XP 兼容性：DisableKeepAlives 与主 client 保持一致。
+	Transport: &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout:   30 * time.Second, // 拨号
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 60 * time.Second, // 含服务端生成首字节的时间
+		DisableKeepAlives:     true,             // 与主 client 同款 XP 兼容策略
 	},
 }
 
@@ -205,7 +225,7 @@ func DownloadFile(serverURL string, serverFilePath string, localPath string) err
 		return err
 	}
 
-	resp, err := httpClient.Get(u)
+	resp, err := downloadHTTPClient.Get(u) // 下载走连接级超时（#5），body 不设整体上限
 	if err != nil {
 		return fmt.Errorf("下载请求失败: %v", err)
 	}
@@ -284,19 +304,28 @@ func DownloadFileWithResume(serverURL string, serverFilePath string, localPath s
 			}
 			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", partInfo.Size()))
 
-			resp, err := httpClient.Do(req)
-			if err != nil {
-				f.Close()
-				return fmt.Errorf("resume request failed: %v", err)
-			}
+		resp, err := downloadHTTPClient.Do(req) // 下载走连接级超时（#5）
+		if err != nil {
+			f.Close()
+			return fmt.Errorf("resume request failed: %v", err)
+		}
 
-			if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
-				resp.Body.Close()
-				f.Close()
-				// Server doesn't support resume, remove .part and start over
-				os.Remove(partPath)
-				return DownloadFile(serverURL, serverFilePath, localPath)
-			}
+		if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			f.Close()
+			// Server doesn't support resume, remove .part and start over
+			os.Remove(partPath)
+			return DownloadFile(serverURL, serverFilePath, localPath)
+		}
+		if resp.StatusCode == http.StatusOK {
+			// 200（非 206）：中间代理剥离了 Range 头，返回的是完整文件。
+			// 旧实现把完整文件追加到半截 .part 后（大小超预期兜底重下，浪费带宽）。
+			// 正确语义（#10）：删掉 .part，走整文件重下。
+			resp.Body.Close()
+			f.Close()
+			os.Remove(partPath)
+			return DownloadFile(serverURL, serverFilePath, localPath)
+		}
 
 			_, copyErr := io.Copy(f, resp.Body)
 			resp.Body.Close()
@@ -327,7 +356,7 @@ func DownloadFileWithResume(serverURL string, serverFilePath string, localPath s
 		return fmt.Errorf("create file failed: %v", err)
 	}
 
-	resp, err := httpClient.Get(requestURL)
+	resp, err := downloadHTTPClient.Get(requestURL) // 下载走连接级超时（#5）
 	if err != nil {
 		f.Close()
 		os.Remove(partPath)
