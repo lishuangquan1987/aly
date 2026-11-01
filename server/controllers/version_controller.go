@@ -12,8 +12,12 @@ import (
 
 // validVersion 版本号格式校验（#12）：数字段（至少 1 段，如 "2" 也合法——
 // 与客户端 isLikelyVersion 口径对齐）+ 可选预发布/构建元数据后缀。
-// 兼容 v 前缀由服务端 CompareVersion 剥离，正则统一允许。
-var validVersion = regexp.MustCompile(`^v?\d+(\.\d+)*(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$`)
+//
+// 前缀必须同时允许 v 与 V：service.CompareVersion 用
+// `TrimPrefix(TrimPrefix(v, "V"), "v")` 两种都剥离，且 create_project 的
+// 初始版本就是 DefaultVersion = "V1.0.0"（大写）——只放行小写 v 会导致
+// "系统自己写进去的格式，用户手动发布时反而被拒"。
+var validVersion = regexp.MustCompile(`^[vV]?\d+(\.\d+)*(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$`)
 
 // PublishVersion 发布新版本
 func PublishVersion(ctx *gin.Context) {
