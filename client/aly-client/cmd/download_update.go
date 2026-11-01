@@ -71,7 +71,9 @@ func DownloadUpdate() {
 	// （修复 Bug#3：download 不得把 applying 降级成 downloaded、不得覆盖 VersionPrevious/RollbackPrevious）。
 	if versionInfo.VersionStatus == config.VersionStatusApplying {
 		util.AppendToLog(logDir(), "download.log", "applying 进行中，跳过 download（由 apply_update 恢复）")
-		printOutput(true, "", &model.DownloadUpdateData{Version: currentVersion})
+		// 用标准完成行（data:null）收尾：SDK 只认 data:null 为完成信号，
+		// 输出 data 非 null 的成功行会让 SDK 无法识别完成、进程退出后 EOF 空转挂死（#1c）。
+		printProgressDone()
 		return
 	}
 
@@ -106,17 +108,18 @@ func DownloadUpdate() {
 		if dErr != nil {
 			reDownload = true // 连目标路径都算不出来：交给下面的正常流程报错
 		} else {
-			pendingCount, countErr := countRegularFiles(targetDir)
-			switch {
-			case countErr == nil && pendingCount > 0:
-				printOutput(true, "", &model.DownloadUpdateData{Version: newVersion})
-				return
-			case countErr != nil && !os.IsNotExist(countErr):
-				// A2：目录存在但读不到（ACL/杀软锁/慢盘）：不当成"丢失"而触发全量重下
-				util.AppendToLog(logDir(), "download.log",
-					fmt.Sprintf("downloaded 状态但待应用版本目录不可读（%s: %v），跳过重下", targetDir, countErr))
-				printOutput(true, "", &model.DownloadUpdateData{Version: newVersion})
-				return
+		pendingCount, countErr := countRegularFiles(targetDir)
+		switch {
+		case countErr == nil && pendingCount > 0:
+			// 产物完好：用标准完成行（data:null）收尾（#1c，SDK 只认 data:null 为完成）。
+			printProgressDone()
+			return
+		case countErr != nil && !os.IsNotExist(countErr):
+			// A2：目录存在但读不到（ACL/杀软锁/慢盘）：不当成"丢失"而触发全量重下
+			util.AppendToLog(logDir(), "download.log",
+				fmt.Sprintf("downloaded 状态但待应用版本目录不可读（%s: %v），跳过重下", targetDir, countErr))
+			printProgressDone()
+			return
 			default:
 				util.AppendToLog(logDir(), "download.log",
 					fmt.Sprintf("downloaded 状态但待应用版本目录缺失或为空（%s），重新下载补齐", targetDir))
@@ -327,6 +330,31 @@ func DownloadUpdate() {
 	util.AppendToLog(logDir(), "download.log",
 		fmt.Sprintf("materialized unchanged files %s -> %s (apply will only rename)", fc.MainFolder, targetDir))
 
+	// #4 删除同步：按服务端发布清单删除"发布端已删除"的文件。
+	// 时序在 materialize 之后——materialize 会把 MainFolder 的未变文件拷进版本目录，
+	// 其中可能包含"上上版本有、本版已删"的文件；此刻按清单清理，apply 上线后即为干净内容。
+	// 清单缺失（老服务器无接口 / 拉取失败）→ 保守跳过删除（与旧行为兼容，仅退化为不删）。
+	if manifest, mErr := apiclient.GetReleaseManifest(fc.Shared.ServerURL, fc.Shared.ProjectName); mErr != nil {
+		util.AppendToLog(logDir(), "download.log",
+			fmt.Sprintf("get release manifest skipped (delete-sync disabled): %v", mErr))
+	} else if len(manifest.Files) == 0 {
+		// 服务器从未发布过（或清单为空）：无依据，跳过
+		util.AppendToLog(logDir(), "download.log", "release manifest empty, skip delete-sync")
+	} else {
+		manifestSet := make(map[string]bool, len(manifest.Files))
+		for _, rel := range manifest.Files {
+			manifestSet[normalizePath(rel)] = true
+		}
+		if removed, dErr := util.RemoveFilesNotInManifest(targetDir, manifestSet); dErr != nil {
+			util.AppendToLog(logDir(), "download.log",
+				fmt.Sprintf("delete-sync walk failed: %v", dErr))
+		} else if len(removed) > 0 {
+			util.AppendToLog(logDir(), "download.log",
+				fmt.Sprintf("delete-sync removed %d file(s) not in release manifest: %s",
+					len(removed), strings.Join(removed, ", ")))
+		}
+	}
+
 	// Update version.json
 	// VersionPrevious 语义 = "MainFolder 当前真实内容版本"，仅在可确定时更新（修复 Bug#2）：
 	//   - downloaded：MainFolder 仍是 VersionPrevious 的内容 → 保持不变（"待应用期间发布新版"
@@ -338,6 +366,7 @@ func DownloadUpdate() {
 	}
 	versionInfo.Version = newVersion
 	versionInfo.VersionStatus = config.VersionStatusDownloaded
+	versionInfo.ApplyFailCount = 0 // #2 熔断：新一轮下载成功，复位失败计数
 	// 新的待应用现场：清掉上一轮回滚/apply 留下的过渡字段（RollbackPrevious/RollbackTarget/ApplyStage，F7/F5）
 	clearUpdateTransientState(versionInfo)
 	versionInfo.AfterApplyUpdateScript = latestLog.AfterApplyUpdateScript

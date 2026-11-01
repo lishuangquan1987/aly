@@ -229,6 +229,20 @@ func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVe
 			return
 		}
 		// 服务器版本不高于本地待应用版本：继续 apply 已下载版本。
+		// #2 熔断：同一版本连续 apply 失败达阈值后不再上报，终止"check→apply→失败→杀主程序→
+		// 拉起→再 check"的 5 秒循环。用户侧表现：宿主显示无更新（不再反复闪断）；
+		// 服务器发布更高版本走上方"重新下载"分支（download 成功时复位计数），
+		// 或现场手工清理占用后重跑 download_update 也可复位。
+		if versionInfo.ApplyFailCount >= MaxApplyFailCount {
+			fmt.Fprintf(os.Stderr,
+				"check_update: apply circuit broken (fail_count=%d >= %d), not reporting pending update %s\n",
+				versionInfo.ApplyFailCount, MaxApplyFailCount, versionInfo.Version)
+			printOutput(true, "", &model.CheckUpdateData{
+				HasUpdate:      false,
+				CurrentVersion: stripVPrefix(versionInfo.VersionPrevious),
+			})
+			return
+		}
 		// current_version 用"MainFolder 真实内容版本"（VersionPrevious）：为空即未知（首次部署），
 		// 不再回退成待应用的 Version 造成 current == new 自相矛盾（与断网分支口径统一，F10）。
 		printOutput(true, "", &model.CheckUpdateData{

@@ -41,6 +41,12 @@ type VersionInfo struct {
 	// 供"回滚中断"后的崩溃恢复使用（apply_update 委托 resumeRollback 时据此重建回滚意图，
 	// 避免被当成升级处理，Bug#1/#5）。恢复完成后清空。
 	RollbackTarget string `json:"rollback_target,omitempty"`
+	// ApplyFailCount 记录同一待应用版本的连续 apply 失败次数（#2 熔断）。
+	// apply_update 失败兜底（回退 downloaded）时递增；熔断后 check_update 不再上报
+	// "继续 apply"，避免"每 5 秒杀一次主程序再拉起"的死循环。
+	// 复位条件：apply 成功、download_update 成功写入新待应用版本、服务器发布更高版本
+	// （check 上报 NeedDownloadUpdate=true 触发重下）。老文件无该字段（omitempty，视为 0）。
+	ApplyFailCount int `json:"apply_fail_count,omitempty"`
 }
 
 func versionPath() (string, error) {

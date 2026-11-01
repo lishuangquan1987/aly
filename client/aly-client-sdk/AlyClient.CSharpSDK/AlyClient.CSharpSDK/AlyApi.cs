@@ -48,32 +48,43 @@ namespace AlyClient.CSharpSDK
                     };
 
                     using (var cts = new CancellationTokenSource())
-                    using (var process = new Process { StartInfo = psi })
+                    using (var process = new Process { StartInfo = psi, EnableRaisingEvents = true })
                     {
-                        process.Start();
+                        // Exited 事件依赖 EnableRaisingEvents（构造时已设），且必须在 Start 前订阅，
+                        // 否则进程先退出时事件丢失（#1b）。
                         process.Exited += (s, e) => cts.Cancel();
+                        process.Start();
 
                         while (!cts.IsCancellationRequested)
                         {
                             var stdoutTask = process.StandardOutput.ReadLine();
-                            if (!string.IsNullOrEmpty(stdoutTask))
+                            if (stdoutTask == null)
                             {
-                                var result = JsonConvert.DeserializeObject<AlyResponse<DownloadProgressData>>(stdoutTask);
-                                if (!result.IsSuccess)
-                                {
-                                    return AlyResponse.NG(result.ErrorMsg);
-                                }
+                                // EOF：client 进程已退出但未输出 data:null 完成行
+                                //（崩溃/被杀/输出了 SDK 不识别的成功行）。必须终止循环，
+                                // 否则 ReadLine 持续返回 null 导致 100% CPU 空转 + 永久挂起（#1a）。
+                                return AlyResponse.NG("download interrupted (aly-client exited before finish line)");
+                            }
+                            if (stdoutTask.Length == 0)
+                            {
+                                continue; // 空行跳过
+                            }
 
-                                if (result.Data == null)// finish
-                                {
-                                    return AlyResponse.OK();
-                                }
-                                // 只统计 DONE（客户端已不再输出 SKIP），百分比 = 已完成序号/总数，
-                                // 避免把未下载的文件算进进度导致界面统计失误
-                                if (result.Data.Status == "DONE" && result.Data.Total > 0)
-                                {
-                                    progress?.Invoke(result.Data.File, result.Data.Index / (double)result.Data.Total);
-                                }
+                            var result = JsonConvert.DeserializeObject<AlyResponse<DownloadProgressData>>(stdoutTask);
+                            if (!result.IsSuccess)
+                            {
+                                return AlyResponse.NG(result.ErrorMsg);
+                            }
+
+                            if (result.Data == null)// finish
+                            {
+                                return AlyResponse.OK();
+                            }
+                            // 只统计 DONE（客户端已不再输出 SKIP），百分比 = 已完成序号/总数，
+                            // 避免把未下载的文件算进进度导致界面统计失误
+                            if (result.Data.Status == "DONE" && result.Data.Total > 0)
+                            {
+                                progress?.Invoke(result.Data.File, result.Data.Index / (double)result.Data.Total);
                             }
                         }
                     }
@@ -158,7 +169,13 @@ namespace AlyClient.CSharpSDK
 
                         if (!process.HasExited)
                         {
-                            process.WaitForExit(30000);
+                            if (!process.WaitForExit(30000))
+                            {
+                                // 超时后进程仍存活：直接判失败返回，不访问 ExitCode
+                                //（未退出进程访问 ExitCode 会抛 InvalidOperationException，#8）。
+                                try { process.Kill(); } catch { }
+                                return AlyResponse<T>.NG("aly-client.exe timed out after 30s (no exit)");
+                            }
                         }
 
                         if (process.ExitCode != 0 && string.IsNullOrWhiteSpace(stdout))

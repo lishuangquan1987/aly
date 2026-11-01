@@ -167,6 +167,37 @@ func GetAllFiles(serverURL string, projectName string) ([]model.FileInfo, error)
 	return files, nil
 }
 
+// ReleaseManifest 服务端发布清单（PublishVersion 时固化）。
+// 客户端用它执行"删除同步"：清单外（发布端已删除）的文件在物化后被清理。
+type ReleaseManifest struct {
+	Files []string `json:"files"`
+}
+
+// GetReleaseManifest 获取项目当前发布清单（#4 删除同步）。
+// 老服务器（无该接口）返回 404 时按"无清单"处理，调用方跳过删除——不报错。
+func GetReleaseManifest(serverURL string, projectName string) (*ReleaseManifest, error) {
+	pn := urlEncodePath(projectName)
+	u, err := buildAPIURL(serverURL, "api/file/get_release_manifest/"+pn)
+	if err != nil {
+		return nil, err
+	}
+	data, err := doGet(u)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := parseResponse(data)
+	if err != nil {
+		return nil, err
+	}
+
+	var manifest ReleaseManifest
+	if err := json.Unmarshal(resp.Data, &manifest); err != nil {
+		return nil, fmt.Errorf("解析发布清单失败: %v", err)
+	}
+	return &manifest, nil
+}
+
 // DownloadFile 从服务端下载文件并保存到本地
 func DownloadFile(serverURL string, serverFilePath string, localPath string) error {
 	u, err := buildAPIURL(serverURL, "api/file/download_file?path="+urlEncodePath(serverFilePath))

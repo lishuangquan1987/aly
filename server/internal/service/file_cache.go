@@ -136,6 +136,12 @@ func collectFileStamps(workDir string, ignoreFolders, ignoreFiles []string) ([]f
 			return nil
 		}
 
+		// 跳过发布清单自身（#4）：.updator_manifest.json 是更新器协议文件，
+		// 不是项目内容，不得下发给客户端、也不参与指纹。
+		if relPath == ManifestFileName {
+			return nil
+		}
+
 		if info.IsDir() {
 			return nil
 		}

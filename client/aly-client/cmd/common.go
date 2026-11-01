@@ -18,6 +18,11 @@ import (
 	"aly/client/aly-client/util"
 )
 
+// MaxApplyFailCount apply 熔断阈值（#2）：同一待应用版本连续失败达到该次数后，
+// check_update 不再上报"继续 apply"（避免主程序被反复杀/拉），
+// 直到服务器发布更高版本或重新下载成功复位计数。
+const MaxApplyFailCount = 3
+
 // printOutput 按 isSuccess/errorMsg/data 格式输出 JSON 到 stdout
 func printOutput(success bool, errMsg string, data interface{}) {
 	out := model.Output{
@@ -976,6 +981,15 @@ func applyFailureFallback(fc *FullConfig, versionInfo *config.VersionInfo, failE
 		// 失败兜底回到 downloaded：清空本次 apply/回滚留下的过渡字段（F7/F5）。
 		clearUpdateTransientState(versionInfo)
 		versionInfo.VersionStatus = config.VersionStatusDownloaded
+		// #2 熔断：同一待应用版本连续失败计数。超过 MaxApplyFailCount 后
+		// check_update 不再上报"继续 apply"，终止"每 5 秒杀一次主程序再拉起"循环；
+		// 服务器发布更高版本触发重下时在 download_update 复位。
+		versionInfo.ApplyFailCount++
+		if versionInfo.ApplyFailCount >= MaxApplyFailCount {
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("apply failed %d times (>= %d), circuit broken: will not auto-apply until server publishes a newer version or re-download",
+					versionInfo.ApplyFailCount, MaxApplyFailCount))
+		}
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
 			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback after apply fail: write version failed: %v", wErr))
 		}

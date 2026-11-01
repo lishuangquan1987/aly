@@ -44,6 +44,58 @@ func FileSHA256(path string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
+// RemoveFilesNotInManifest 删除 dir 中不在 manifest（相对路径集合，正斜杠分隔）内的文件，
+// 并清理因此变空的子目录（#4 删除同步：发布端删除的文件随更新同步删除）。
+//
+// 安全边界：只在版本目录（下载产物目录）上调用，绝不用于 MainFolder——
+// 版本目录内容由 download/materialize 生成，删除范围天然受限。
+// keep 集合为 nil 时不做任何删除（清单缺失/拉取失败时调用方传 nil，保守跳过）。
+// 返回被删除的相对路径清单（供日志留痕），遍历失败返回 error。
+func RemoveFilesNotInManifest(dir string, manifest map[string]bool) ([]string, error) {
+	if manifest == nil {
+		return nil, nil
+	}
+
+	var removed []string
+	// 收集空目录候选（删除文件后自底向上清理）
+	var emptyCandidates []string
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			if path != dir {
+				emptyCandidates = append(emptyCandidates, path)
+			}
+			return nil
+		}
+		rel, relErr := filepath.Rel(dir, path)
+		if relErr != nil {
+			return relErr
+		}
+		relSlash := filepath.ToSlash(rel)
+		if manifest[relSlash] {
+			return nil
+		}
+		if rmErr := os.Remove(path); rmErr != nil {
+			// 文件被占用等：跳过该文件继续（删除同步是尽力而为，不阻断更新）
+			return nil
+		}
+		removed = append(removed, relSlash)
+		return nil
+	})
+	if err != nil {
+		return removed, err
+	}
+
+	// 自底向上清理空目录（Walk 是先序遍历，候选顺序是父在前，倒序即子在前）
+	for i := len(emptyCandidates) - 1; i >= 0; i-- {
+		os.Remove(emptyCandidates[i]) // 非空时失败，忽略
+	}
+	return removed, nil
+}
+
 // CopyFile copies a single file. overwrite controls whether to overwrite the target file.
 func CopyFile(src, dst string, overwrite bool) error {
 	if !overwrite {
