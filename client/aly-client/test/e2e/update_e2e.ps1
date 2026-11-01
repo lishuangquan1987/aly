@@ -55,6 +55,20 @@ $Pass = 0
 $Fail = 0
 $ServerProc = $null
 
+# ── 环境自愈：清除大小写重复的代理变量（见 e2e_v2_batch4.ps1 头注释）──
+foreach ($k in @("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy")) {
+    Remove-Item "Env:$k" -ErrorAction SilentlyContinue
+}
+
+# ── 工具链选择 ──────────────────────────────────────────────
+# PATH 里的 go 可能是 1.26（amd64），仅用于 server（go.mod 口径）。
+# aly-client / fake_main 必须用 go1.10.8 + GOARCH=386（XP 兼容）。
+$script:Go126 = "D:\Install\go\bin\go.exe"
+$script:Go1108 = "C:\Users\5001494\sdk\go1.10.8\bin\go.exe"
+foreach ($g in @($script:Go126, $script:Go1108)) {
+    if (-not (Test-Path $g)) { throw "Go 工具链缺失: $g" }
+}
+
 function Log($msg) { Write-Host "[e2e] $msg" -ForegroundColor Cyan }
 function Ok($msg)   { Write-Host "  PASS: $msg" -ForegroundColor Green; $script:Pass++ }
 function Bad($msg)  { Write-Host "  FAIL: $msg" -ForegroundColor Red; $script:Fail++ }
@@ -70,19 +84,21 @@ function New-TempWork() {
 function Build-All() {
     Log "构建 server..."
     Push-Location "$Root\server"
-    go build -o "$Work\server.exe" . | Out-Null
+    & $script:Go126 build -o "$Work\server.exe" . | Out-Null
     Pop-Location
 
-    Log "构建 aly-client (GOARCH=386, GOPATH 模式)..."
+    Log "构建 aly-client (go1.10.8, GOARCH=386, GOPATH 模式，XP 兼容口径)..."
     Copy-Item -Recurse -Force "$Root\client\aly-client" "$Work\gopath\src\aly\client\aly-client"
     $env:GOPATH = "$Work\gopath"
     $env:GO111MODULE = "off"
     $env:GOOS = "windows"
     $env:GOARCH = "386"
+    $env:CGO_ENABLED = "0"
     Push-Location "$Work\gopath\src\aly\client\aly-client"
-    go build -o "$Work\client\aly-client.exe" aly/client/aly-client | Out-Null
+    # 必须 go1.10.8：PATH 的 go1.26 产出不保证 XP 兼容
+    & $script:Go1108 build -o "$Work\client\aly-client.exe" aly/client/aly-client | Out-Null
     Pop-Location
-    Remove-Item Env:GOPATH, Env:GO111MODULE, Env:GOOS, Env:GOARCH -ErrorAction SilentlyContinue
+    Remove-Item Env:GOPATH, Env:GO111MODULE, Env:GOOS, Env:GOARCH, Env:CGO_ENABLED -ErrorAction SilentlyContinue
 
     Log "构建 fake_main（GOPATH 模式，避免仓库根无 go.mod 的模块报错）..."
     # 复制 fake_main 到临时 GOPATH 下用 import path 构建（与 aly-client 一致）
@@ -92,10 +108,11 @@ function Build-All() {
     $env:GO111MODULE = "off"
     $env:GOOS = "windows"
     $env:GOARCH = "386"
+    $env:CGO_ENABLED = "0"
     Push-Location "$Work\gopath\src\aly\e2e\fake_main"
-    go build -o "$Work\fake_main.exe" aly/e2e/fake_main | Out-Null
+    & $script:Go1108 build -o "$Work\fake_main.exe" aly/e2e/fake_main | Out-Null
     Pop-Location
-    Remove-Item Env:GOPATH, Env:GO111MODULE, Env:GOOS, Env:GOARCH -ErrorAction SilentlyContinue
+    Remove-Item Env:GOPATH, Env:GO111MODULE, Env:GOOS, Env:GOARCH, Env:CGO_ENABLED -ErrorAction SilentlyContinue
 
     foreach ($f in @("$Work\server.exe", "$Work\client\aly-client.exe", "$Work\fake_main.exe")) {
         if (-not (Test-Path $f)) { throw "构建产物缺失: $f" }
@@ -248,8 +265,10 @@ function Publish-Version($version, $mainContent, $extraFile) {
         Set-Content -Path "$Work\fake-extra.txt" -Value $extraFile -Encoding UTF8
         Assert (Api-Upload "e2e-app" "data\config.ini" "$Work\fake-extra.txt") "发布 $version : 上传 config.ini"
     }
+    # 字段名必须是 time（服务端 PublishVersion 的 json tag = `time`）；写成 timeStr 会被
+    # gin 静默忽略，服务端 time 落空串（虽不影响主流程，但会让时间校验永不触发）。
     $r = Api-Post "/api/project/publish_version" @{
-        projectName = "e2e-app"; version = $version; logs = @("v$version"); timeStr = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+        projectName = "e2e-app"; version = $version; logs = @("v$version"); time = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
     }
     Assert $r.isSuccess "发布 $version : publish_version"
 }
