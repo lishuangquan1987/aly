@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	apiclient "aly/client/aly-client/client"
@@ -108,18 +109,18 @@ func DownloadUpdate() {
 		if dErr != nil {
 			reDownload = true // 连目标路径都算不出来：交给下面的正常流程报错
 		} else {
-		pendingCount, countErr := countRegularFiles(targetDir)
-		switch {
-		case countErr == nil && pendingCount > 0:
-			// 产物完好：用标准完成行（data:null）收尾（#1c，SDK 只认 data:null 为完成）。
-			printProgressDone()
-			return
-		case countErr != nil && !os.IsNotExist(countErr):
-			// A2：目录存在但读不到（ACL/杀软锁/慢盘）：不当成"丢失"而触发全量重下
-			util.AppendToLog(logDir(), "download.log",
-				fmt.Sprintf("downloaded 状态但待应用版本目录不可读（%s: %v），跳过重下", targetDir, countErr))
-			printProgressDone()
-			return
+			pendingCount, countErr := countRegularFiles(targetDir)
+			switch {
+			case countErr == nil && pendingCount > 0:
+				// 产物完好：用标准完成行（data:null）收尾（#1c，SDK 只认 data:null 为完成）。
+				printProgressDone()
+				return
+			case countErr != nil && !os.IsNotExist(countErr):
+				// A2：目录存在但读不到（ACL/杀软锁/慢盘）：不当成"丢失"而触发全量重下
+				util.AppendToLog(logDir(), "download.log",
+					fmt.Sprintf("downloaded 状态但待应用版本目录不可读（%s: %v），跳过重下", targetDir, countErr))
+				printProgressDone()
+				return
 			default:
 				util.AppendToLog(logDir(), "download.log",
 					fmt.Sprintf("downloaded 状态但待应用版本目录缺失或为空（%s），重新下载补齐", targetDir))
@@ -222,7 +223,11 @@ func DownloadUpdate() {
 	}
 	var speedWindow []speedSample
 	var downloadedBytes int64
-	speedBps := func() int64 {
+	var speedMu sync.Mutex
+	// speedBpsLocked 计算窗口速度，调用方必须已持 speedMu。
+	// 窗口语义（与旧版一致）：3 秒滑动窗口内**文件完成时**的采样之和 / 3。
+	// 注意：文件中途撤销（3 秒节流）不补 done 采样，属可接受的近似。
+	speedBpsLocked := func() int64 {
 		cutoff := time.Now().Add(-3 * time.Second)
 		kept := speedWindow[:0]
 		var sum int64
@@ -239,6 +244,20 @@ func DownloadUpdate() {
 		return sum / 3 // 窗口 3 秒
 	}
 
+	// sampleRate 计算两采样点间的瞬时速率（字节差/时间差），无效（首样本/时间差过小）
+	// 时回退窗口速度 windowBps。供单文件 PROGRESS 行使用（3 秒节流采样）。
+	sampleRate := func(prevAt time.Time, prevBytes int64, now time.Time, curBytes int64, windowBps int64) int64 {
+		dt := now.Sub(prevAt)
+		if prevAt.IsZero() || dt < 500*time.Millisecond {
+			return windowBps
+		}
+		rate := (curBytes - prevBytes) * int64(time.Second) / int64(dt)
+		if rate < 0 {
+			return windowBps
+		}
+		return rate
+	}
+
 	// 单文件失败不整体失败（计划条目 6）：记录失败清单，全部跑完统一输出。
 	// 下一轮 download 的断点续传语义天然支持"只重失败文件"（已成功的会被
 	// "目标目录已有正确文件"分支跳过）。
@@ -250,14 +269,40 @@ func DownloadUpdate() {
 
 		// START 行也带字节字段（downloaded/total_bytes/speed）：否则 UI 在
 		// 字节百分比与文件计数两种进度模式间来回切换，进度条视觉抖动。
+		speedMu.Lock()
+		startSpeed := speedBpsLocked()
+		speedMu.Unlock()
 		printProgressBytes(dl.idx, total, relPath, "START", dl.serverFile.FileSize,
-			downloadedBytes, totalBytes, speedBps(), "")
+			downloadedBytes, totalBytes, startSpeed, "")
 
 		// Download with retry up to 3 times
 		fileOK := false
 		var lastErr string
 		for retry := 0; retry < 3; retry++ {
-			if err := apiclient.DownloadFileWithResume(fc.Shared.ServerURL, dl.serverFile.FileAbsolutePath, localPath, dl.serverFile.FileSize, largeFileThreshold); err != nil {
+			// 单文件周期进度行（PROGRESS）：大文件下载期间也要有输出——
+			// UI 的 90s idle 超时（bridge/commands.go）与 SDK 的看门狗都依赖
+			// "stdout 有活动"判活；旧版只在 START/DONE 输出，单文件 >90s 无输出
+			// 会被误判卡死杀进程（#5 修复后 300s 超时没了，90s 成了新瓶颈）。
+			// 节流 3s 一行：读回调给出该文件累计字节数，直接换算速度（样本间差值/时间差）。
+			startBytes := downloadedBytes
+			var lastEmit time.Time
+			var lastEmitBytes int64
+			onBytes := func(written int64) {
+				totalFileBytes := startBytes + written
+				speedMu.Lock()
+				curBps := speedBpsLocked()
+				speedMu.Unlock()
+				now := time.Now()
+				if now.Sub(lastEmit) < 3*time.Second {
+					return
+				}
+				curBps = sampleRate(lastEmit, lastEmitBytes, now, totalFileBytes, curBps)
+				lastEmit = now
+				lastEmitBytes = totalFileBytes
+				printProgressBytes(dl.idx, total, relPath, "PROGRESS", dl.serverFile.FileSize,
+					totalFileBytes, totalBytes, curBps, "")
+			}
+			if err := apiclient.DownloadFileWithResume(fc.Shared.ServerURL, dl.serverFile.FileAbsolutePath, localPath, dl.serverFile.FileSize, largeFileThreshold, onBytes); err != nil {
 				lastErr = fmt.Sprintf("download error: %v", err)
 				continue
 			}
@@ -291,10 +336,13 @@ func DownloadUpdate() {
 			continue
 		}
 
+		speedMu.Lock()
 		downloadedBytes += dl.serverFile.FileSize
 		speedWindow = append(speedWindow, speedSample{at: time.Now(), bytes: dl.serverFile.FileSize})
+		doneSpeed := speedBpsLocked()
+		speedMu.Unlock()
 		printProgressBytes(dl.idx, total, relPath, "DONE", dl.serverFile.FileSize,
-			downloadedBytes, totalBytes, speedBps(), "")
+			downloadedBytes, totalBytes, doneSpeed, "")
 	}
 
 	// 有失败文件：整体视为失败（不写 version.json 的待应用状态，避免半成品被
@@ -330,10 +378,14 @@ func DownloadUpdate() {
 	util.AppendToLog(logDir(), "download.log",
 		fmt.Sprintf("materialized unchanged files %s -> %s (apply will only rename)", fc.MainFolder, targetDir))
 
-	// #4 删除同步：按服务端发布清单删除"发布端已删除"的文件。
+	// #4 删除同步（差量版）：删除集 = 上次清单 ∖ 本次清单 = 服务端确认删除的文件。
 	// 时序在 materialize 之后——materialize 会把 MainFolder 的未变文件拷进版本目录，
-	// 其中可能包含"上上版本有、本版已删"的文件；此刻按清单清理，apply 上线后即为干净内容。
-	// 清单缺失（老服务器无接口 / 拉取失败）→ 保守跳过删除（与旧行为兼容，仅退化为不删）。
+	// 其中可能包含"上上版本有、本版已删"的文件；此刻按差量清理，apply 上线后即为干净内容。
+	// 为什么必须差量而不是"版本目录内不在新清单即删"：materialize 拷入的 MainFolder
+	// 运行时生成文件（应用自写配置/数据，从不在服务端清单里）会被全量差集误删，
+	// apply 后应用运行时数据丢失。
+	// 清单缺失（老服务器无接口 / 拉取失败 / 本地无缓存）→ 保守跳过删除
+	// （与旧行为兼容，仅退化为不删）。
 	if manifest, mErr := apiclient.GetReleaseManifest(fc.Shared.ServerURL, fc.Shared.ProjectName); mErr != nil {
 		util.AppendToLog(logDir(), "download.log",
 			fmt.Sprintf("get release manifest skipped (delete-sync disabled): %v", mErr))
@@ -342,16 +394,51 @@ func DownloadUpdate() {
 		util.AppendToLog(logDir(), "download.log", "release manifest empty, skip delete-sync")
 	} else {
 		manifestSet := make(map[string]bool, len(manifest.Files))
+		normalized := make([]string, 0, len(manifest.Files))
 		for _, rel := range manifest.Files {
-			manifestSet[normalizePath(rel)] = true
+			n := normalizePath(rel)
+			if !manifestSet[n] {
+				manifestSet[n] = true
+				normalized = append(normalized, n)
+			}
 		}
-		if removed, dErr := util.RemoveFilesNotInManifest(targetDir, manifestSet); dErr != nil {
+		// 差量依据 = 本地缓存的上次发布清单；首个正常发布周期里老客户端升级
+		// 到本版时缓存尚不存在 → 本轮不删（下一轮起差量生效）。
+		cached, cErr := util.ReadCachedManifest(logDir())
+		if cErr != nil {
+			// 缓存损坏：按"无依据"处理而非报错中断（删除同步是尽力而为的收敛手段）
 			util.AppendToLog(logDir(), "download.log",
-				fmt.Sprintf("delete-sync walk failed: %v", dErr))
-		} else if len(removed) > 0 {
+				fmt.Sprintf("read cached manifest failed (delete-sync disabled): %v", cErr))
+			cached = nil
+		} else if cached == nil {
+			util.AppendToLog(logDir(), "download.log", "no cached manifest (first cycle), skip delete-sync")
+		}
+		if cached != nil {
+			var deleteSet []string
+			for rel := range cached {
+				if !manifestSet[rel] {
+					deleteSet = append(deleteSet, rel)
+				}
+			}
+			if len(deleteSet) > 0 {
+				deleteSetMap := make(map[string]bool, len(deleteSet))
+				for _, rel := range deleteSet {
+					deleteSetMap[rel] = true
+				}
+				if removed, dErr := util.RemoveFilesByRelPaths(targetDir, deleteSetMap); dErr != nil {
+					util.AppendToLog(logDir(), "download.log",
+						fmt.Sprintf("delete-sync walk failed: %v", dErr))
+				} else if len(removed) > 0 {
+					util.AppendToLog(logDir(), "download.log",
+						fmt.Sprintf("delete-sync removed %d file(s) deleted by server: %s",
+							len(removed), strings.Join(removed, ", ")))
+				}
+			}
+		}
+		// 固化本次清单为下轮差量依据（即便本轮没做删除也要写：标志"客户端已同步到该清单口径"）。
+		if wErr := util.WriteCachedManifest(logDir(), normalized); wErr != nil {
 			util.AppendToLog(logDir(), "download.log",
-				fmt.Sprintf("delete-sync removed %d file(s) not in release manifest: %s",
-					len(removed), strings.Join(removed, ", ")))
+				fmt.Sprintf("cache release manifest failed (next delete-sync degraded): %v", wErr))
 		}
 	}
 

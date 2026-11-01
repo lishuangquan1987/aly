@@ -218,8 +218,10 @@ func GetReleaseManifest(serverURL string, projectName string) (*ReleaseManifest,
 	return &manifest, nil
 }
 
-// DownloadFile 从服务端下载文件并保存到本地
-func DownloadFile(serverURL string, serverFilePath string, localPath string) error {
+// DownloadFile 从服务端下载文件并保存到本地。
+// onBytes 非空时在写入过程中周期回调累计字节数（用于单文件大下载期间
+// 的进度行输出，防止 UI/SDK 因长时间无输出而误判卡死；见 download_update）。
+func DownloadFile(serverURL string, serverFilePath string, localPath string, onBytes func(written int64)) error {
 	u, err := buildAPIURL(serverURL, "api/file/download_file?path="+urlEncodePath(serverFilePath))
 	if err != nil {
 		return err
@@ -248,7 +250,7 @@ func DownloadFile(serverURL string, serverFilePath string, localPath string) err
 		return fmt.Errorf("创建文件失败: %v", err)
 	}
 
-	_, err = io.Copy(f, resp.Body)
+	_, err = io.Copy(f, newProgressReader(resp.Body, onBytes))
 	closeErr := f.Close()
 	if err != nil {
 		os.Remove(partPath)
@@ -269,7 +271,8 @@ func DownloadFile(serverURL string, serverFilePath string, localPath string) err
 
 // DownloadFileWithResume downloads a file, resuming from partial download if a .part file exists.
 // largeFileThreshold is the size in bytes above which resume is attempted (e.g., 100*1024*1024 for 100MB).
-func DownloadFileWithResume(serverURL string, serverFilePath string, localPath string, serverFileSize int64, largeFileThreshold int64) error {
+// onBytes 非空时回调累计已写字节数（含续传的既有部分），语义同 DownloadFile。
+func DownloadFileWithResume(serverURL string, serverFilePath string, localPath string, serverFileSize int64, largeFileThreshold int64, onBytes func(written int64)) error {
 	requestURL, err := buildAPIURL(serverURL, "api/file/download_file?path="+urlEncodePath(serverFilePath))
 	if err != nil {
 		return err
@@ -315,7 +318,7 @@ func DownloadFileWithResume(serverURL string, serverFilePath string, localPath s
 			f.Close()
 			// Server doesn't support resume, remove .part and start over
 			os.Remove(partPath)
-			return DownloadFile(serverURL, serverFilePath, localPath)
+			return DownloadFile(serverURL, serverFilePath, localPath, onBytes)
 		}
 		if resp.StatusCode == http.StatusOK {
 			// 200（非 206）：中间代理剥离了 Range 头，返回的是完整文件。
@@ -324,12 +327,13 @@ func DownloadFileWithResume(serverURL string, serverFilePath string, localPath s
 			resp.Body.Close()
 			f.Close()
 			os.Remove(partPath)
-			return DownloadFile(serverURL, serverFilePath, localPath)
+			return DownloadFile(serverURL, serverFilePath, localPath, onBytes)
 		}
 
-			_, copyErr := io.Copy(f, resp.Body)
-			resp.Body.Close()
-			f.Close()
+		// 续传回调从既有 .part 大小起算（语义=该文件累计已写字节数）
+		_, copyErr := io.Copy(f, newProgressReader(resp.Body, offsetCallback(onBytes, partInfo.Size())))
+		resp.Body.Close()
+		f.Close()
 
 			if copyErr != nil {
 				return fmt.Errorf("resume write failed: %v", copyErr)
@@ -370,7 +374,7 @@ func DownloadFileWithResume(serverURL string, serverFilePath string, localPath s
 		return fmt.Errorf("download failed, status: %d", resp.StatusCode)
 	}
 
-	_, copyErr := io.Copy(f, resp.Body)
+	_, copyErr := io.Copy(f, newProgressReader(resp.Body, onBytes))
 	resp.Body.Close()
 	closeErr := f.Close()
 
@@ -414,4 +418,37 @@ func urlEncodePath(s string) string {
 		parts[i] = url.PathEscape(parts[i])
 	}
 	return strings.Join(parts, "/")
+}
+
+// newProgressReader 包装 r，把累计读取字节数透传给 onBytes（可为 nil，此时原样返回 r）。
+// 回调频率由底层 io.Copy 的缓冲粒度决定（4KB-32KB 一次），调用方自行做节流。
+func newProgressReader(r io.Reader, onBytes func(written int64)) io.Reader {
+	if onBytes == nil {
+		return r
+	}
+	return &progressReader{r: r, onBytes: onBytes}
+}
+
+type progressReader struct {
+	r       io.Reader
+	written int64
+	onBytes func(written int64)
+}
+
+func (p *progressReader) Read(buf []byte) (int, error) {
+	n, err := p.r.Read(buf)
+	if n > 0 {
+		p.written += int64(n)
+		p.onBytes(p.written)
+	}
+	return n, err
+}
+
+// offsetCallback 把"本次写入字节数"回调转换为"文件累计字节数"回调
+// （续传场景：.part 已有 base 字节，本次 Range 从 0 重新计数）。
+func offsetCallback(onBytes func(written int64), base int64) func(int64) {
+	if onBytes == nil {
+		return nil
+	}
+	return func(n int64) { onBytes(base + n) }
 }
