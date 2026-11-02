@@ -1,21 +1,25 @@
 package service
 
 import (
-	"fmt"
-	"aly/server/ent"
-	"aly/server/ent/project"
-	"aly/server/ent/projectchangelog"
-	"aly/server/internal/db"
-	"aly/server/models"
 	"context"
+	"encoding/json"
+	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"aly/server/ent"
+	"aly/server/ent/project"
+	"aly/server/ent/projectchangelog"
+	"aly/server/internal/db"
+	"aly/server/models"
+
 	"github.com/utils-go/ngo/datetime"
 	"github.com/utils-go/ngo/io/path"
+	"io/ioutil"
 )
 
 const (
@@ -167,12 +171,15 @@ func PublishVersion(ctx context.Context, projectName string, version string, log
 		}
 	}
 	var changelog *ent.ProjectChangeLog
+	// 项目 ignore 规则提出来供事务提交后的清单固化使用（与 get_all_files 同口径过滤）
+	var manifestIgnoreFolders, manifestIgnoreFiles []string
 	err := db.WithTx(ctx, func(tx *ent.Tx) error {
 		// 获取项目实体（用于关联变更日志，仅未软删除的项目）
 		p, err := tx.Project.Query().Where(project.NameEQ(projectName), project.IsDeletedEQ(false)).First(ctx)
 		if err != nil {
 			return err
 		}
+		manifestIgnoreFolders, manifestIgnoreFiles = p.IgnoreFolders, p.IgnoreFiles
 		// 防倒退校验（精简计划条目 8b）：新版本必须严格大于该项目已发布的
 		// 最新版本号，否则拒绝（防手滑倒退——重发旧版本号会让已更新的客户端
 		// "卡"在旧内容上：check 的 needUpdate 只认"严格更高"）。
@@ -219,7 +226,67 @@ func PublishVersion(ctx context.Context, projectName string, version string, log
 		return models.NGWithError(err)
 	}
 
+	// #4 删除同步：发布成功后把当前项目文件清单固化到数据目录（.updator_manifest.json），
+	// 客户端 download_update 依此清单删除版本目录中"发布端已删除"的文件。
+	// 写失败不阻断发布（返回成功）：清单缺失时客户端跳过删除（与旧行为兼容，仅退化为不删）。
+	if mErr := writeReleaseManifest(projectName, manifestIgnoreFolders, manifestIgnoreFiles); mErr != nil {
+		// 服务端日志留痕（不引入新依赖，沿用标准 log）
+		log.Printf("[manifest] publish version %s for project %s: write manifest failed: %v",
+			version, projectName, mErr)
+	}
+
 	return models.OKWithData(changelog)
+}
+
+// ManifestFileName 发布清单文件名（位于项目数据目录根部）。
+// 名称带 .updator_ 前缀：与上传中间态（.chunks/.merging）区分，
+// 且不在项目 ignore 规则默认覆盖范围内，walk 时由 IsUploadTempPath 之外的
+// manifest 专用跳过逻辑排除（见 collectFileStamps 调用方）。
+const ManifestFileName = ".updator_manifest.json"
+
+// writeReleaseManifest 把项目当前文件清单（相对路径集合，与 get_all_files 同过滤口径）
+// 写入 data/{project}/.updator_manifest.json。原子写：临时文件 + rename。
+// 过滤口径对齐（审查修复）：复用 collectFileStamps —— 跳过上传中间态（.chunks/.merging）、
+// 应用项目 ignore 规则、排除清单自身；此前版本只排除了清单自身，注释声称的"同口径"
+// 并未真正实现（方向上清单只多不少、不会造成客户端误删，但属语义债，且清单内
+// 出现 .merging 等中间态路径会让客户端把"下轮消失的中间态"误判为"服务端删除"）。
+func writeReleaseManifest(projectName string, ignoreFolders, ignoreFiles []string) error {
+	workDir, err := GetProjectWorkPath(projectName)
+	if err != nil {
+		return err
+	}
+	if _, statErr := os.Stat(workDir); os.IsNotExist(statErr) {
+		return nil // 项目目录不存在（刚创建未上传）：空清单无意义，跳过
+	}
+
+	// 复用 get_all_files 的收集逻辑（collectFileStamps）：
+	// 完整过滤口径（中间态 + ignore 规则 + 清单自排除），只需相对路径、不算哈希。
+	stamps, err := collectFileStamps(workDir, ignoreFolders, ignoreFiles)
+	if err != nil {
+		return fmt.Errorf("collect file stamps for manifest: %w", err)
+	}
+	relPaths := make([]string, 0, len(stamps))
+	for _, s := range stamps {
+		relPaths = append(relPaths, s.relPath)
+	}
+
+	data, mErr := json.MarshalIndent(struct {
+		Files []string `json:"files"`
+	}{Files: relPaths}, "", "  ")
+	if mErr != nil {
+		return mErr
+	}
+
+	manifestPath := filepath.Join(workDir, ManifestFileName)
+	tmpPath := manifestPath + ".tmp"
+	if wErr := ioutil.WriteFile(tmpPath, data, 0644); wErr != nil {
+		return wErr
+	}
+	if rErr := os.Rename(tmpPath, manifestPath); rErr != nil {
+		os.Remove(tmpPath)
+		return rErr
+	}
+	return nil
 }
 
 // CompareVersion 语义化版本比较（与 client 端 cmd/common.go 口径一致）：

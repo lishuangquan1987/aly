@@ -272,6 +272,7 @@ func ApplyUpdate() {
 	// Update version.json
 	clearUpdateTransientState(versionInfo)
 	versionInfo.VersionStatus = config.VersionStatusApplied
+	versionInfo.ApplyFailCount = 0 // #2 熔断：成功即复位
 	if err := config.WriteVersion(versionInfo); err != nil {
 		printOutput(false, fmt.Sprintf("write version: %v", err), nil)
 		return

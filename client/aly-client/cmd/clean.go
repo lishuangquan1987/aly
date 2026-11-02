@@ -78,7 +78,7 @@ func cleanAll(fc *FullConfig) {
 // cleanTempFiles 清理 UpdateFolder 与 PackageFolder 下的临时产物：
 //   - 版本目录旁的 .old / .old.N（removeAsideVariants 的入口式调用）；
 //   - 孤儿无版本号备份目录（{MainFolder}_，同 prune 内部触发的 removeOrphanBackupDir）；
-//   - 所有版本目录与 MainFolder 内的 .part / .tmp 下载残留；
+//   - 版本快照目录与 .updator 内的 .part / .tmp 下载残留（#11：不递归 MainFolder）；
 //   - 超过 30 天的 update_*.log / update_*_fail.log。
 func cleanTempFiles(fc *FullConfig) error {
 	pkgDir, err := config.PackageDir()
@@ -110,19 +110,32 @@ func cleanTempFiles(fc *FullConfig) error {
 		removeOrphanBackupDir(fc)
 	}
 
-	// 3) .part/.tmp：版本目录 + MainFolder 内（.updator 内运行时文件不动）
-	dirs := []string{fc.MainFolder, pkgDir}
-	if entries, rErr := readDirNames(pkgDir); rErr == nil {
-		for _, name := range entries {
-			full := filepath.Join(pkgDir, name)
-			if info, sErr := os.Stat(full); sErr == nil && info.IsDir() {
-				dirs = append(dirs, full)
+	// 3) .part/.tmp 下载残留（#11 收窄）：只清两处——
+	//   a. 版本快照目录（ApplicationFolder_{version}，下载目标目录，可递归）；
+	//   b. .updator 内的运行时临时文件（version.json 原子写 .tmp 等，不递归子目录）；
+	//   c. pkgDir 顶层非递归清一遍（孤儿 .part 兜底）。
+	// 不再对 MainFolder 递归：业务程序（尤其老 Win32/办公软件）会持久持有
+	// .tmp 数据文件，全量递归会无差别误删；MainFolder 内若有下载中断残留，
+	// 由 download 流程自清理（重下前计数/续传逻辑）。
+	folderName, fnErr := fc.ExeCfg.MainExeFolderName()
+	if fnErr == nil {
+		prefix := folderName + "_"
+		if entries, rErr := readDirNames(pkgDir); rErr == nil {
+			for _, name := range entries {
+				if !strings.HasPrefix(name, prefix) {
+					continue
+				}
+				full := filepath.Join(pkgDir, name)
+				if info, sErr := os.Stat(full); sErr == nil && info.IsDir() {
+					removeTempSuffixFiles(full)
+				}
 			}
 		}
 	}
-	for _, dir := range dirs {
-		removeTempSuffixFiles(dir)
+	if updatorDir := config.UpdatorDir(fc.MainFolder); updatorDir != "" {
+		removeTempFilesNonRecursive(updatorDir)
 	}
+	removeTempFilesNonRecursive(pkgDir)
 
 	// 4) 30 天前的更新失败日志（update_*.log 只保留近期排障价值）
 	cutoff := time.Now().AddDate(0, 0, -30)
@@ -142,7 +155,30 @@ func cleanTempFiles(fc *FullConfig) error {
 	return nil
 }
 
+// removeTempFilesNonRecursive 仅删除 dir 顶层的 .part/.tmp 文件（不进入子目录）。
+// 用于 .updator / pkgDir 顶层等只需要浅清理的位置（#11）。
+func removeTempFilesNonRecursive(dir string) {
+	entries, err := readDirNames(dir)
+	if err != nil {
+		return // 尽力而为
+	}
+	for _, name := range entries {
+		if !strings.HasSuffix(name, ".part") && !strings.HasSuffix(name, ".tmp") {
+			continue
+		}
+		full := filepath.Join(dir, name)
+		if info, sErr := os.Stat(full); sErr != nil || info.IsDir() {
+			continue
+		}
+		if rmErr := os.Remove(full); rmErr == nil {
+			exeDir, _ := config.ExeDir()
+			util.AppendToLog(exeDir, "update.log", fmt.Sprintf("clean: removed temp file %s", full))
+		}
+	}
+}
+
 // removeTempSuffixFiles 递归删除 dir 下所有 .part/.tmp 文件（下载残留）。
+// 只用于版本快照目录；MainFolder 等业务目录禁止调用（#11）。
 // 遍历失败静默跳过（清理是尽力而为，不因单个目录 ACL 失败整体报错）。
 func removeTempSuffixFiles(dir string) {
 	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {

@@ -58,6 +58,45 @@ func TestAcquireUpdateLock(t *testing.T) {
 	release2()
 }
 
+// TestCleanStaleLockInFlightEmpty 验证 #9 写入竞态修复：
+// 空内容锁（O_EXCL 占位刚建立、原子 rename 尚未发生）且 mtime 在 1 分钟内
+// → 不当残留删除（旧实现会删掉刚创建的新锁导致双实例并发）。
+func TestCleanStaleLockInFlightEmpty(t *testing.T) {
+	update := setupLockTemp(t)
+	lockPath := filepath.Join(update, ".aly.lock") // updateLockPath() 即此文件
+	if err := ioutil.WriteFile(lockPath, []byte(""), 0644); err != nil {
+		t.Fatalf("写空锁失败: %v", err)
+	}
+
+	if cleanStaleLock(lockPath) {
+		t.Fatal("1 分钟内的空锁应视为在途写入，不应清理")
+	}
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Errorf("在途空锁不应被删除: %v", err)
+	}
+}
+
+// TestCleanStaleLockStaleEmpty 验证：空/坏内容锁且超过 1 分钟 → 按残留清理。
+func TestCleanStaleLockStaleEmpty(t *testing.T) {
+	update := setupLockTemp(t)
+	lockPath := filepath.Join(update, ".aly.lock")
+	if err := ioutil.WriteFile(lockPath, []byte("not-json"), 0644); err != nil {
+		t.Fatalf("写坏锁失败: %v", err)
+	}
+	// mtime 回拨到 5 分钟前
+	old := time.Now().Add(-5 * time.Minute)
+	if err := os.Chtimes(lockPath, old, old); err != nil {
+		t.Fatalf("回拨 mtime 失败: %v", err)
+	}
+
+	if !cleanStaleLock(lockPath) {
+		t.Fatal("超过 1 分钟的坏锁应视为残留清理")
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Errorf("残留坏锁应被删除")
+	}
+}
+
 // TestAcquireUpdateLockStale 验证崩溃残留锁（持有者 PID 已不存在）自动清理后可获取。
 func TestAcquireUpdateLockStale(t *testing.T) {
 	update := setupLockTemp(t)
@@ -88,9 +127,10 @@ func TestAcquireUpdateLockHeldByAlive(t *testing.T) {
 	}
 }
 
-// TestAcquireUpdateLockTTLTakeover 验证锁持有超过 lockTTL 时无条件抢占：
-// 即使持有者 PID 仍存活（如 PID 被复用/长时间无响应），超时后也应能获取锁。
-func TestAcquireUpdateLockTTLTakeover(t *testing.T) {
+// TestAcquireUpdateLockTTLAliveKept 验证 #9 新语义：锁持有超过 lockTTL 但
+// 持有者 PID 仍存活（正在工作/卡死未退出）→ 不抢占（touch 机制下存活持有者的
+// TS 会持续刷新；真正超 TTL 无 touch 且存活的属于锁泄漏，用 clean 手工清理）。
+func TestAcquireUpdateLockTTLAliveKept(t *testing.T) {
 	setupLockTemp(t)
 	staleTS := time.Now().Add(-lockTTL - time.Minute).Unix()
 	alive := fmt.Sprintf(`{"pid":%d,"ts":%q,"cmd":"download_update","token":"t1"}`,
@@ -99,9 +139,25 @@ func TestAcquireUpdateLockTTLTakeover(t *testing.T) {
 		t.Fatalf("写锁失败: %v", err)
 	}
 
+	if _, err := AcquireUpdateLock("download_update"); err == nil {
+		t.Fatal("超 TTL 但持有者存活时不应抢占（#9：存活不抢占）")
+	}
+}
+
+// TestAcquireUpdateLockTTLTakeover 验证 #9 新语义：超 TTL 且持有者进程已不存在
+// （崩溃 + PID 未复用）→ 抢占成功。
+func TestAcquireUpdateLockTTLTakeover(t *testing.T) {
+	setupLockTemp(t)
+	staleTS := time.Now().Add(-lockTTL - time.Minute).Unix()
+	dead := fmt.Sprintf(`{"pid":99999999,"ts":%q,"cmd":"download_update","token":"t1"}`,
+		strconv.FormatInt(staleTS, 10))
+	if err := ioutil.WriteFile(filepath.Join(updateLockPath()), []byte(dead), 0644); err != nil {
+		t.Fatalf("写锁失败: %v", err)
+	}
+
 	release, err := AcquireUpdateLock("download_update")
 	if err != nil {
-		t.Fatalf("持有超过 TTL 的锁应被抢占: %v", err)
+		t.Fatalf("超 TTL 且持有者已死时应被抢占: %v", err)
 	}
 	release()
 }

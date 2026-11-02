@@ -192,7 +192,7 @@ func (c *Client) GetAllFiles(projectName string) ([]models.FileInfo, error) {
 
 // ─── 分片上传常量 ──────────────────────────────────────────────────────
 
-const chunkSize = 1024 * 1024 // 50 KiB（跨子网防火墙通常允许 <64KB 的 POST body）
+const chunkSize = 1024 * 1024 // 1 MiB（#14 注释修正：旧注释"50 KiB"与实际值不符）
 
 // ─── 分片上传逻辑 ──────────────────────────────────────────────────────
 

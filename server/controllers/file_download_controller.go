@@ -4,6 +4,7 @@ import (
 	"aly/server/ent"
 	"aly/server/internal/service"
 	"aly/server/models"
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -45,6 +46,57 @@ func GetAllFilesByProjectName(ctx *gin.Context) {
 	}
 
 	ctx.JSON(200, models.OKWithData(fileInfos))
+}
+
+// GetReleaseManifest 返回项目当前发布清单（#4 删除同步）。
+// 清单由 PublishVersion 成功时写入 data/{project}/.updator_manifest.json；
+// 项目从未发布过（无清单）时返回空清单（客户端跳过删除，兼容老服务器/老项目）。
+func GetReleaseManifest(ctx *gin.Context) {
+	var projectNameDto struct {
+		ProjectName string `uri:"projectName" json:"projectName"`
+	}
+	if err := ctx.BindUri(&projectNameDto); err != nil {
+		ctx.JSON(200, models.NGWithError(err))
+		return
+	}
+
+	if err := validateProjectName(projectNameDto.ProjectName); err != nil {
+		ctx.JSON(200, models.NG(err.Error()))
+		return
+	}
+
+	workDir, err := service.GetProjectWorkPath(projectNameDto.ProjectName)
+	if err != nil {
+		ctx.JSON(200, models.NGWithError(err))
+		return
+	}
+
+	manifestPath := filepath.Join(workDir, service.ManifestFileName)
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// 从未发布过：空清单（客户端据此跳过删除）
+			ctx.JSON(200, models.OKWithData(struct {
+				Files []string `json:"files"`
+			}{Files: []string{}}))
+			return
+		}
+		ctx.JSON(200, models.NGWithError(err))
+		return
+	}
+
+	var manifest struct {
+		Files []string `json:"files"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		ctx.JSON(200, models.NGWithError(err))
+		return
+	}
+	if manifest.Files == nil {
+		manifest.Files = []string{}
+	}
+
+	ctx.JSON(200, models.OKWithData(manifest))
 }
 
 func DownloadFile(ctx *gin.Context) {

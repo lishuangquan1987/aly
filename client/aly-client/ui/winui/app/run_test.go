@@ -177,17 +177,17 @@ func TestFailText(t *testing.T) {
 	}
 }
 
-// TestFormatBytes 验证字节人类可读格式（1024 进制一位小数；零值 "0B"）。
+// TestFormatBytes 验证字节人类可读格式（1024 进制一位小数，KiB/MiB/GiB 标签；零值 "0B"）。
 func TestFormatBytes(t *testing.T) {
 	cases := map[int64]string{
-		0:          "0B",
-		512:        "512B",
-		1024:       "1.0KB",
-		1536:       "1.5KB",
-		1024 * 1024:       "1.0MB",
-		2 * 1024 * 1024:   "2.0MB",
-		1024 * 1024 * 1024: "1.0GB",
-		-1:         "0B",
+		0:                  "0B",
+		512:                "512B",
+		1024:               "1.0KiB",
+		1536:               "1.5KiB",
+		1024 * 1024:        "1.0MiB",
+		2 * 1024 * 1024:    "2.0MiB",
+		1024 * 1024 * 1024: "1.0GiB",
+		-1:                 "0B",
 	}
 	for in, want := range cases {
 		if got := formatBytes(in); got != want {

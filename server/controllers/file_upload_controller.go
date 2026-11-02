@@ -96,8 +96,18 @@ func UploadFile(ctx *gin.Context) {
 		}
 	}
 
-	if err = ctx.SaveUploadedFile(f, absFileName); err != nil {
+	// 原子落盘（#3）：先保存到 .merging 临时文件，再 rename 切换 ——
+	// 与分片上传路径（UploadChunkComplete）同款保护。旧实现直接写最终路径，
+	// 上传进行中并发 get_all_files 会把半截文件当正式文件立刻缓存下发（撕裂读）。
+	// .merging 属上传中间态，file_cache 的 IsUploadTempPath 会跳过。
+	mergePath := absFileName + ".merging"
+	if err = ctx.SaveUploadedFile(f, mergePath); err != nil {
 		ctx.JSON(200, models.NG(fmt.Sprintf("save upload file error:%v", err)))
+		return
+	}
+	if err = os.Rename(mergePath, absFileName); err != nil {
+		os.Remove(mergePath)
+		ctx.JSON(200, models.NG(fmt.Sprintf("atomic rename upload file error:%v", err)))
 		return
 	}
 

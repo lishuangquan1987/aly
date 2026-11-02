@@ -274,6 +274,9 @@ func Rollback() {
 		printOutput(false, fmt.Sprintf("write version: %v", err), nil)
 		return
 	}
+	// 回滚后 MainFolder 内容 = 旧版本，与"上次发布清单缓存"不再对应：
+	// 清除差量删除依据，下一轮下载无依据即保守不删（等新清单重新固化）。
+	util.ClearCachedManifest(logDir())
 	// F2：目标版本激活后，"无版本号备份目录"在 Previous 为空时已不再被引用 → 清理垃圾备份
 	cleanupOrphanBackupIfUnreferenced(fc, versionInfo)
 
@@ -412,6 +415,8 @@ func finishRollbackRecovery(fc *FullConfig, vi *config.VersionInfo) error {
 		util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback crash recovery: write version failed: %v", err))
 		return fmt.Errorf("write version: %v", err)
 	}
+	// 回滚成功：清除差量删除清单缓存（MainFolder 内容已回退，旧缓存不再可信）
+	util.ClearCachedManifest(logDir())
 	// F2：无版本号备份目录在 Previous 为空时不再被引用 → 清理
 	cleanupOrphanBackupIfUnreferenced(fc, vi)
 	runPostApplyScript(fc, vi.AfterApplyUpdateScript, vi.Version)

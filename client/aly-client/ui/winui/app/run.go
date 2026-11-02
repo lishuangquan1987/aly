@@ -588,12 +588,14 @@ func formatBytes(n int64) string {
 	switch {
 	case n < 1024:
 		return fmt.Sprintf("%dB", n)
+	// 标签用 KiB/MiB/GiB：换算是 1024 进制（除数全是 1024），
+	// 写 KB/MB/GB（SI 十进制口径）会系统性偏小 ~2.4%-7%。
 	case n < 1024*1024:
-		return fmt.Sprintf("%.1fKB", float64(n)/1024)
+		return fmt.Sprintf("%.1fKiB", float64(n)/1024)
 	case n < 1024*1024*1024:
-		return fmt.Sprintf("%.1fMB", float64(n)/1024/1024)
+		return fmt.Sprintf("%.1fMiB", float64(n)/1024/1024)
 	default:
-		return fmt.Sprintf("%.1fGB", float64(n)/1024/1024/1024)
+		return fmt.Sprintf("%.1fGiB", float64(n)/1024/1024/1024)
 	}
 }
 
