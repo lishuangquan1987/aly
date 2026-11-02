@@ -14,7 +14,7 @@ func main() {
 	mode := flag.String("mode", "auto", "auto|check|update|rollback|silent")
 	lang := flag.String("lang", "zh-CN", "zh-CN|en-US")
 	serverURL := flag.String("url", "", "server url override (currently unused; aly-client reads client.json)")
-	project := flag.String("project-name", "", "project name override (currently unused)")
+	project := flag.String("project-name", "", "window title override (default: .updator/shared.json project_name)")
 	flag.Parse()
 
 	os.Exit(app.Run(app.Options{

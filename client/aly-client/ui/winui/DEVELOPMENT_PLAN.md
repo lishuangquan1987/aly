@@ -155,13 +155,13 @@ aly-client-ui.exe [-url <服务器>] [-project-name <项目>] [-lang zh-CN|en-US
 | 参数 | 说明 | 默认 |
 |------|------|------|
 | `-url` | 覆盖服务器地址（透传给 aly-client） | **不传**（由 aly-client 读 `client.json`/`shared.json`） |
-| `-project-name` | 覆盖项目名 | **不传**（同上） |
+| `-project-name` | 覆盖窗口/卡片标题（项目名） | **不传**（UI 读 `<MainFolder>/.updator/shared.json` 的 `project_name`，读不到回退 `aly-client-ui`） |
 | `-lang` | 界面语言：`zh-CN` / `en-US`，**由主程序传入** | `zh-CN` |
 | `-mode` | `auto`=**启动模式**（默认）：静默检查，**有更新才在右下角显示，无更新不显示**；`check`=**手动检查模式**：右下角弹窗，**无更新显示"已是最新版本"并 5s 后自动关闭**，有更新则显示更新界面（不自动关闭）；`update`=检查并更新；`rollback`=历史版本回滚界面；`silent`=同 `auto` 但不轮询 | `auto` |
 
 > UI 自身不硬编码服务器地址（遵守 AGENTS.md 规则 2）。
-> **设计决策**：`-url`/`-project-name` 默认不传，由 `aly-client.exe` 自行读配置 —— UI 无需解析配置，也无需共享 `config/` 包。
-> 唯一例外见 §6.2（UI 为定位主程序目录需读 `client.json` 的单个字段）。
+> **设计决策**：`-url`/`-project-name` 默认不传，由 `aly-client.exe` 自行读配置 —— 更新流程的配置 UI 不解析，也不共享 `config/` 包。
+> UI 只读两个字段：标题用的 `shared.json:project_name`（§3.1）与定位主程序目录用的 `client.json:main_exe_relative_path`（§6.2），均在 `app/` 内自行实现单字段读取。
 
 ### 3.2 子进程调用（UI → aly-client）
 

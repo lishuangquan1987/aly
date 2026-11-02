@@ -68,6 +68,77 @@ func TestReadMainExeRelativePathBadJSON(t *testing.T) {
 	}
 }
 
+// writeTempSharedJSON 在 <dir>/.updator/shared.json 写内容并返回目录。
+func writeTempSharedJSON(t *testing.T, content string) string {
+	dir, err := ioutil.TempDir("", "alyui")
+	if err != nil {
+		t.Fatalf("TempDir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".updator"), 0755); err != nil {
+		os.RemoveAll(dir)
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := ioutil.WriteFile(filepath.Join(dir, ".updator", "shared.json"), []byte(content), 0644); err != nil {
+		os.RemoveAll(dir)
+		t.Fatalf("WriteFile: %v", err)
+	}
+	return dir
+}
+
+func TestReadProjectName(t *testing.T) {
+	dir := writeTempSharedJSON(t, `{
+  "server_url": "http://127.0.0.1:2000",
+  "project_name": "OTDR3001",
+  "ignore_folders": ["logs"]
+}`)
+	defer os.RemoveAll(dir)
+
+	got, err := ReadProjectName(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "OTDR3001" {
+		t.Fatalf("got %q want %q", got, "OTDR3001")
+	}
+}
+
+func TestReadProjectNameMissingFile(t *testing.T) {
+	dir, err := ioutil.TempDir("", "alyui")
+	if err != nil {
+		t.Fatalf("TempDir: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	if _, err := ReadProjectName(dir); err == nil {
+		t.Fatal("expected error when shared.json is missing")
+	}
+}
+
+func TestReadProjectNameEmptyField(t *testing.T) {
+	dir := writeTempSharedJSON(t, `{"server_url":"http://127.0.0.1:2000","project_name":""}`)
+	defer os.RemoveAll(dir)
+
+	if _, err := ReadProjectName(dir); err == nil {
+		t.Fatal("expected error when project_name is empty")
+	}
+}
+
+func TestReadProjectNameBadJSON(t *testing.T) {
+	dir := writeTempSharedJSON(t, `{not json`)
+	defer os.RemoveAll(dir)
+
+	if _, err := ReadProjectName(dir); err == nil {
+		t.Fatal("expected error on invalid JSON")
+	}
+}
+
+func TestReadProjectNameEmptyMainFolder(t *testing.T) {
+	// mainFolder 为空时不得退化成当前目录读盘
+	if _, err := ReadProjectName(""); err == nil {
+		t.Fatal("expected error for empty mainFolder")
+	}
+}
+
 func TestMainFolderFromUpdateFolder(t *testing.T) {
 	// UpdateFolder 与 win-x64 同级
 	update := filepath.Join("C:", "app", "UpdateFolder")

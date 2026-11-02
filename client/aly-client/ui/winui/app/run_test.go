@@ -218,6 +218,56 @@ func TestByteProgressPermille(t *testing.T) {
 	}
 }
 
+// TestResolveTitle 验证标题优先级：-project-name > shared.json 的
+// project_name > 兜底 defaultTitle。
+func TestResolveTitle(t *testing.T) {
+	withShared := writeTempSharedJSON(t, `{"project_name":"OTDR3001"}`)
+	defer os.RemoveAll(withShared)
+
+	noShared, err := ioutil.TempDir("", "alyui")
+	if err != nil {
+		t.Fatalf("TempDir: %v", err)
+	}
+	defer os.RemoveAll(noShared)
+
+	cases := []struct {
+		name       string
+		override   string
+		mainFolder string
+		want       string
+	}{
+		{"参数覆盖优先", "OverrideApp", withShared, "OverrideApp"},
+		{"参数覆盖去除空白", "  OverrideApp  ", noShared, "OverrideApp"},
+		{"读 shared.json", "", withShared, "OTDR3001"},
+		{"shared.json 缺失回退", "", noShared, defaultTitle},
+		{"主程序目录未知回退", "", "", defaultTitle},
+	}
+	for _, c := range cases {
+		if got := resolveTitle(c.override, c.mainFolder); got != c.want {
+			t.Errorf("%s: resolveTitle(%q, %q)=%q want %q", c.name, c.override, c.mainFolder, got, c.want)
+		}
+	}
+}
+
+func TestResolveTitleFallbackOnBadJSON(t *testing.T) {
+	dir := writeTempSharedJSON(t, `{not json`)
+	defer os.RemoveAll(dir)
+
+	if got := resolveTitle("", dir); got != defaultTitle {
+		t.Fatalf("got %q want %q", got, defaultTitle)
+	}
+}
+
+// TestResolveTitleTrimsProjectName 验证 shared.json 里带空白的项目名
+// 不会原样进标题（空白会被裁掉）。
+func TestResolveTitleTrimsProjectName(t *testing.T) {
+	dir := writeTempSharedJSON(t, `{"project_name":"  OTDR3001  "}`)
+	defer os.RemoveAll(dir)
+
+	if got := resolveTitle("", dir); got != "OTDR3001" {
+		t.Fatalf("got %q want %q", got, "OTDR3001")
+	}
+}
 
 func TestInteractiveGateUpgrade(t *testing.T) {
 	g := &interactiveGate{v: false}

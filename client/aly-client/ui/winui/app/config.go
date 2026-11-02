@@ -38,6 +38,36 @@ func ReadMainExeRelativePath(updateFolder string) (string, error) {
 	return c.MainExeRelativePath, nil
 }
 
+// sharedConfig 只声明 UI 需要的字段。
+//
+// 同 clientConfig：不 import aly/client/aly-client/config，只取 project_name。
+type sharedConfig struct {
+	ProjectName string `json:"project_name"`
+}
+
+// ReadProjectName 读取 <MainFolder>/.updator/shared.json 的 project_name。
+//
+// UI 用它作为窗口/卡片的标题（README 部署布局：shared.json 随主程序目录下发）。
+// 只读这一个字段，不做任何写操作。
+func ReadProjectName(mainFolder string) (string, error) {
+	if mainFolder == "" {
+		return "", fmt.Errorf("mainFolder is empty")
+	}
+	path := filepath.Join(mainFolder, ".updator", "shared.json")
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %v", path, err)
+	}
+	var c sharedConfig
+	if err := json.Unmarshal(data, &c); err != nil {
+		return "", fmt.Errorf("parse %s: %v", path, err)
+	}
+	if c.ProjectName == "" {
+		return "", fmt.Errorf("%s: project_name is empty", path)
+	}
+	return c.ProjectName, nil
+}
+
 // MainFolder 由 UpdateFolder 与 main_exe_relative_path 推导主程序目录。
 //
 // main_exe_relative_path 是相对 UpdateFolder 的路径，例如

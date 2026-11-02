@@ -24,8 +24,36 @@ const autoCloseDelay = 5 * time.Second
 // forceCountdown 是强制更新自动重启的倒计时时长（精简计划条目 3 + 用户决策 §五.1）。
 const forceCountdown = 10 * time.Second
 
-// title 是卡片标题（不随语言变化，产品名）。
-const title = "aly-client-ui"
+// defaultTitle 是读不到项目名时的兜底标题（产品名，不随语言变化）。
+const defaultTitle = "aly-client-ui"
+
+// title 是本实例的窗口/卡片标题。
+//
+// 由 -project-name 或 <MainFolder>/.updator/shared.json 的 project_name 决定
+//（README 部署布局：shared.json 随主程序目录下发），在窗口创建前写入，
+// 之后只读——与 i18n 的语言状态一样是启动期一次性注入。
+var title = defaultTitle
+
+// resolveTitle 决定标题：命令行 -project-name 优先，其次
+// <MainFolder>/.updator/shared.json 的 project_name，都拿不到时回退 defaultTitle。
+//
+// mainFolder 为空（未找到 client.json / 主程序目录）时不读盘直接回退。
+func resolveTitle(override, mainFolder string) string {
+	if t := strings.TrimSpace(override); t != "" {
+		return t
+	}
+	if mainFolder == "" {
+		return defaultTitle
+	}
+	name, err := ReadProjectName(mainFolder)
+	if err != nil {
+		return defaultTitle
+	}
+	if t := strings.TrimSpace(name); t != "" {
+		return t
+	}
+	return defaultTitle
+}
 
 // Options 是启动参数。
 type Options struct {
@@ -33,9 +61,10 @@ type Options struct {
 	Mode string
 	// Lang 为 zh-CN|en-US。
 	Lang string
-	// ServerURL / ProjectName 目前不下发：aly-client 自己读 client.json
-	// （DEVELOPMENT_PLAN §3.4），保留字段供后续按需覆盖。
-	ServerURL   string
+	// ServerURL 目前不下发：aly-client 自己读 client.json（DEVELOPMENT_PLAN §3.4），
+	// 保留字段供后续按需覆盖。
+	ServerURL string
+	// ProjectName 只用作窗口/卡片标题；不传给 aly-client（它自己读 shared.json）。
 	ProjectName string
 }
 
@@ -136,9 +165,14 @@ func Run(opt Options) int {
 		return 2
 	}
 
+	// 标题（窗口 + 卡片）取项目名：-project-name > shared.json 的 project_name。
+	// 必须在任何 SetContent / Show 之前解析完。
+	mf, mfErr := mainFolderOf(self)
+	title = resolveTitle(opt.ProjectName, mf)
+
 	// 启动时自更新（对齐 SDK 构造函数顺序：在首次 check 之前）。
 	// 两者都是「有差异才动」，失败不阻断启动。
-	if mf, mfErr := mainFolderOf(self); mfErr == nil {
+	if mfErr == nil {
 		_ = UpdateUpdater(self, mf)
 		// 重启时透传原参数，保证自更新后仍按同一模式运行
 		//（否则手动「检查更新」重启后会变成静默的 auto 模式）
@@ -148,7 +182,7 @@ func Run(opt Options) int {
 		}
 	}
 
-	w, err := view.New()
+	w, err := view.New(title)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create window failed: %v\n", err)
 		return 2

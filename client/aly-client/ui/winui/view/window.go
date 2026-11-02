@@ -32,14 +32,17 @@ type Window struct {
 
 // New 创建窗口：定位到所在显示器工作区右下角，设为 topmost + 工具窗口，
 // 但保持隐藏。调用方需自行调用 Show()。
-func New() (*Window, error) {
+//
+// title 是窗口标题（项目名，由 app 层从 shared.json 的 project_name 解析后注入）；
+// 无边框 + 工具窗口下标题不可见，但保留正确值便于诊断（如任务管理器/窗口枚举）。
+func New(title string) (*Window, error) {
 	mw, err := walk.NewMainWindow()
 	if err != nil {
 		return nil, err
 	}
 	w := &Window{mw: mw, h: defaultH}
 
-	if err := mw.SetTitle("aly-client-ui"); err != nil {
+	if err := mw.SetTitle(title); err != nil {
 		return nil, err
 	}
 
