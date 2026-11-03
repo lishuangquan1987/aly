@@ -206,9 +206,13 @@ public class CliService
         {
             try
             {
-                // 用 JObject 检查 data 是否包含 "status" 字段来区分进度行和最终结果
+                // 用 JObject 检查 data 是否包含 "status" 字段来区分进度行和最终结果。
+                // data 为 JSON null 时（失败结果行/progressDone 哨兵行），jObj["data"]
+                // 是 JValue 而非 JObject，直接 jObj["data"]?["status"] 会在 JValue 上
+                // 取子值抛 InvalidOperationException——历史 bug：失败结果行被异常吞掉，
+                // failResult 无法记录，界面误显示"CLI 未返回有效结果"而非真实错误。
                 var jObj = JObject.Parse(line);
-                var hasStatus = jObj["data"]?["status"] != null;
+                var hasStatus = jObj["data"] is JObject && jObj["data"]!["status"] != null;
 
                 if (hasStatus)
                 {
