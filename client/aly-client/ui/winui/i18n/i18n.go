@@ -58,8 +58,11 @@ const (
 	KeyRetryLater  = "retry_later"  // 稍后再说（失败态的次要按钮）
 	KeySpeedFmt    = "speed_fmt"    // "已下载 %s / %s · %s/s"
 	KeyRetrying    = "retrying"     // 正在重试…
-	KeyWillRestart = "will_restart" // "点［立即重启］可跳过等待"
-	KeyRestartNow  = "restart_now"  // 立即重启（强制更新倒计时期间的主按钮）
+	// KeyWillRestart / KeyRestartNow：已下载待应用时的主按钮（也用于强制更新的倒计时期间）。
+	// 文案是「重启完成更新」而不是「立即重启」——用户在这一步要判断"点下去会发生什么"，
+	// 只写"重启"体现不出"重启是为了让已下载的新版本生效"（键名保持历史值，不重命名）。
+	KeyWillRestart = "will_restart" // "点［重启完成更新］可跳过等待"
+	KeyRestartNow  = "restart_now"  // 重启完成更新（已下载待应用 / 强制更新倒计时期间的主按钮）
 
 	// 精简计划条目 4 新增：字节级进度。
 	// KeyDownloadingSimple：下载启动瞬间（尚无进度行）的占位文案，

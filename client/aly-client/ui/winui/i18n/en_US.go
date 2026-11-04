@@ -21,7 +21,7 @@ var enUS = map[string]string{
 	KeyClose:           "Close",
 	KeyCurrentVersion:  "Current version v%s",
 	KeyAskDownload:     "Download new version v%s?",
-	KeyAskApply:        "Restart now to apply v%s?",
+	KeyAskApply:        "Restart to apply the update (v%s)?",
 	KeyOffline:         "Unable to check for updates",
 	KeyErrorGeneric:    "Something went wrong during the update",
 	KeyDetail:          "Details",
@@ -38,8 +38,11 @@ var enUS = map[string]string{
 	KeyRetryLater:  "Later",
 	KeySpeedFmt:    "Downloaded %s / %s · %s/s",
 	KeyRetrying:    "Retrying…",
-	KeyWillRestart: "Click \"Restart now\" to skip the wait",
-	KeyRestartNow:  "Restart now",
+	// 按钮文案受卡片主按钮宽度限制（btnPrimaryW = 104 逻辑像素，BodyPt = 9）：
+	// 过长会被 walk 以省略号截断，故英文用 "Restart to apply"（≈88px），
+	// 而不是 "Restart to finish update"（≈145px，会被截成 "Restart to fini…"）。
+	KeyWillRestart: "Click \"Restart to apply\" to skip the wait",
+	KeyRestartNow:  "Restart to apply",
 
 	// Streamlined plan item 4 (byte-level progress).
 	KeyDownloadingSimple: "Downloading…",

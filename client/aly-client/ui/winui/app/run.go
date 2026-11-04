@@ -289,7 +289,7 @@ type flowOutcome struct {
 //
 // 精简计划条目 1/2/3：更新询问全部走卡片按钮（无模态框、不抢焦点）；
 // 失败态给 [重试] [关闭]，重试回到**失败的那个阶段**；强制更新给
-// 10s 倒计时 + [立即重启]；下载中给 [暂停/继续]。
+// 10s 倒计时 + [重启完成更新]；下载中给 [暂停/继续]。
 func runFlow(w *view.Window, inter *interactiveGate, exePath string, findErr error) {
 	// ① 定位 aly-client.exe 失败
 	if findErr != nil {
@@ -441,7 +441,7 @@ func runFlowOnce(w *view.Window, inter *interactiveGate, cl *bridge.Client, ctx 
 			w.SetDetail(i18n.T(i18n.KeyWillRestart))
 			w.Relayout()
 		})
-		// 逐秒倒计时：状态行每秒刷新（10…9…8…），点「立即重启」随时提前。
+		// 逐秒倒计时：状态行每秒刷新（10…9…8…），点「重启完成更新」随时提前。
 		clicks, stopClicks := w.ButtonClicks()
 		left := int(forceCountdown / time.Second)
 	restartLoop:
@@ -450,7 +450,7 @@ func runFlowOnce(w *view.Window, inter *interactiveGate, cl *bridge.Client, ctx 
 				w.SetContent(title, versionLabel(newer), i18n.Fmt(i18n.KeyCountdown, left))
 			})
 			select {
-			case <-clicks: // 用户点了「立即重启」
+			case <-clicks: // 用户点了「重启完成更新」
 				break restartLoop
 			case <-time.After(time.Second):
 				left--

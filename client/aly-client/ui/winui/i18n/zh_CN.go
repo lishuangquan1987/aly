@@ -21,7 +21,7 @@ var zhCN = map[string]string{
 	KeyClose:           "关闭",
 	KeyCurrentVersion:  "当前版本 v%s",
 	KeyAskDownload:     "是否下载新版本 v%s？",
-	KeyAskApply:        "是否立即重启以应用 v%s？",
+	KeyAskApply:        "是否重启以完成更新（v%s）？",
 	KeyOffline:         "暂时无法检查更新",
 	KeyErrorGeneric:    "更新过程中出现问题",
 	KeyDetail:          "详细信息",
@@ -38,8 +38,8 @@ var zhCN = map[string]string{
 	KeyRetryLater:  "稍后再说",
 	KeySpeedFmt:    "已下载 %s / %s · %s/s",
 	KeyRetrying:    "正在重试…",
-	KeyWillRestart: "点「立即重启」可跳过等待",
-	KeyRestartNow:  "立即重启",
+	KeyWillRestart: "点「重启完成更新」可跳过等待",
+	KeyRestartNow:  "重启完成更新",
 	// KeyDownloadingSimple：下载启动瞬间（尚无任何进度行）的占位文案。
 	KeyDownloadingSimple: "正在下载…",
 }

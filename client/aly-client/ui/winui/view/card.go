@@ -22,7 +22,7 @@ const (
 	BtnRetry
 	// BtnClose 「关闭」次要按钮（失败态）。
 	BtnClose
-	// BtnRestartNow 「立即重启」（强制更新倒计时期间）。
+	// BtnRestartNow 「重启完成更新」（已下载待应用 / 强制更新倒计时期间的主按钮）。
 	BtnRestartNow
 	// BtnPauseResume 「暂停/继续」（下载中切换）。
 	BtnPauseResume
@@ -54,7 +54,7 @@ var (
 	buttonLabelLater   = "Later"
 	buttonLabelRetry   = "Retry"
 	buttonLabelClose   = "Close"
-	buttonLabelRestart = "Restart now"
+	buttonLabelRestart = "Restart to apply"
 	buttonLabelPause   = "Pause"
 	buttonLabelResume  = "Resume"
 )

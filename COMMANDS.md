@@ -576,7 +576,7 @@ aly-client.exe check_self_update --main-exe-path ../MyApp/MyApp.exe
 
 ```
 check_update → 有更新 → [立即更新] [稍后] 按钮 → download_update（字节进度 + [暂停/继续]）
-             → [立即重启] [稍后] 按钮（强制更新：10s 倒计时 + [立即重启]）
+             → [重启完成更新] [稍后] 按钮（强制更新：10s 倒计时 + [重启完成更新]）
              → apply_update → 主程序被重启
 ```
 
