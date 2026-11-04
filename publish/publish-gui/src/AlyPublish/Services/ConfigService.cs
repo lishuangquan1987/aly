@@ -120,7 +120,15 @@ public class ConfigService
     // ── UpdateFolder ─────────────────────────────────────
 
     /// <summary>
-    /// 在 projectPath 的父目录下创建 UpdateFolder，复制 aly-client.exe 并写入 client.json。
+    /// 在 projectPath（主程序目录，内含 .updator/）的**同级**创建 UpdateFolder，
+    /// 复制 aly-client.exe / aly-client-ui.exe 并写入 client.json。
+    ///
+    /// 目录布局必须与 aly-client 的口径一致（README / DEVELOMENT_PLAN §3.0）：
+    /// <c>PackageFolder/{ApplicationFolder, UpdateFolder}</c> —— 更新器目录是主程序目录的
+    /// **兄弟目录**（"..\UpdateFolder\"），不是主程序目录的子目录。放错层级有两个硬后果：
+    ///   ① aly-client 由 client.json 的 main_exe_relative_path 推导 MainFolder，
+    ///      UpdateFolder 在主程序目录内会把整个主程序目录当更新目标；
+    ///   ② apply / rollback 要给主程序目录改名，更新器自身（与 .updator/）会被一起搬走。
     /// </summary>
     public void CreateUpdateFolder(string projectPath, string mainExePath, string closeProcessName)
     {
@@ -130,47 +138,40 @@ public class ConfigService
             return;
         }
 
-        var parentDir = Path.GetDirectoryName(Path.GetFullPath(projectPath));
+        // 归一化后再取上级目录：Path.GetDirectoryName 对**带结尾分隔符**的路径会回退成
+        // "目录自身"。浏览对话框返回的路径正是带结尾 '\' 的形状（实测
+        // "…\net8.0-windows\"），历史 bug：UpdateFolder 因此被创建在主程序目录内部，
+        // 而不是它的兄弟目录。
+        var projectDir = NormalizeDirectoryPath(projectPath);
+        var parentDir = Path.GetDirectoryName(projectDir);
         if (parentDir == null)
         {
-            Log.Warning("CreateUpdateFolder: 无法获取 projectPath 的父目录: {Path}", projectPath);
+            Log.Warning("CreateUpdateFolder: 无法获取主程序目录的上级目录: {Path}", projectPath);
             return;
         }
 
         var updateFolder = Path.Combine(parentDir, "UpdateFolder");
         Directory.CreateDirectory(updateFolder);
-        Log.Information("创建 UpdateFolder: {Path}", updateFolder);
+        Log.Information("创建 UpdateFolder: {Path}（主程序目录={Dir}）", updateFolder, projectDir);
 
-        // 复制 aly-client.exe
-        var clientExeName = OperatingSystem.IsWindows() ? "aly-client.exe" : "aly-client";
-        var clientExeSource = FindAlyClientExe(clientExeName);
-        if (clientExeSource != null)
-        {
-            var destPath = Path.Combine(updateFolder, clientExeName);
-            try
-            {
-                File.Copy(clientExeSource, destPath, overwrite: true);
-                Log.Information("复制 aly-client.exe: {Source} -> {Dest}", clientExeSource, destPath);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "复制 aly-client.exe 失败: {Source} -> {Dest}", clientExeSource, destPath);
-            }
-        }
-        else
-        {
-            Log.Warning("未找到 aly-client.exe，跳过复制。用户可手动放置到 {Path}", updateFolder);
-        }
+        // 更新器 + 图形前端：两者都必须与 client.json 同在 UpdateFolder
+        CopyClientExecutable(updateFolder, projectDir, "aly-client");
+        CopyClientExecutable(updateFolder, projectDir, "aly-client-ui");
 
         // 写入 client.json
-        var relativePath = GetRelativePath(updateFolder, Path.GetFullPath(mainExePath));
+        var mainExeFullPath = Path.GetFullPath(mainExePath);
+        var relativePath = GetRelativePath(updateFolder, mainExeFullPath);
+        // 关进程名缺省时从主程序名推导：更新前必须把主程序关掉，否则 apply 无法替换主目录
+        var processName = string.IsNullOrWhiteSpace(closeProcessName)
+            ? Path.GetFileNameWithoutExtension(mainExeFullPath)
+            : closeProcessName;
         Log.Information("计算 main_exe_relative_path: UpdateFolder={Folder}, MainExe={Exe}, Relative={Rel}",
-            updateFolder, mainExePath, relativePath);
+            updateFolder, mainExeFullPath, relativePath);
 
         var config = new UpdateClientConfig
         {
             MainExeRelativePath = relativePath,
-            MustCloseProcessName = new List<string> { closeProcessName }
+            MustCloseProcessName = new List<string> { processName }
         };
 
         var clientJsonPath = Path.Combine(updateFolder, "client.json");
@@ -187,40 +188,113 @@ public class ConfigService
     }
 
     /// <summary>
-    /// 原子写文件：先写 .tmp 再替换目标，崩溃/断电不会留下半截 JSON。
+    /// 原子写文件：先写 .tmp 再原子替换目标，崩溃/断电不会留下半截 JSON。
     /// 旧实现 File.WriteAllText 直接截断目标，写入中途进程退出会损坏配置。
+    ///
+    /// **目标不存在时必须改名（File.Move），不能 File.Replace**：System.IO 的 ReplaceFile
+    /// 要求目标文件已存在，否则抛 FileNotFoundException（实测："写入 client.json 失败"
+    /// + UpdateFolder 里只剩 client.json.tmp）。这正是"初始化后 client.json 被命名为
+    /// client.json.tmp"的根因——不是文件名拼错，而是首次写必然失败、.tmp 成了唯一残留。
     /// </summary>
     private static void WriteAllTextAtomic(string path, string content)
     {
-        string tmpPath = path + ".tmp";
+        var tmpPath = path + ".tmp";
         File.WriteAllText(tmpPath, content);
-        File.Replace(tmpPath, path, null);
+
+        if (!File.Exists(path))
+        {
+            // 首次写：目标尚不存在，ReplaceFile 必失败 → 直接改名
+            File.Move(tmpPath, path);
+            return;
+        }
+
+        try
+        {
+            File.Replace(tmpPath, path, null);
+        }
+        catch (PlatformNotSupportedException)
+        {
+            // 非 Windows 平台（netstandard2.0/Mono 等）不支持原子替换：删除目标 + 改名
+            // 回退（与 SDK 自更新 UpdateSelf 同口径）
+            File.Delete(path);
+            File.Move(tmpPath, path);
+        }
+        catch (Exception)
+        {
+            // 替换失败（目标被别的进程占用等）：不留 .tmp 残迹，失败原因交给调用方上报
+            try { File.Delete(tmpPath); } catch { }
+            throw;
+        }
     }
 
-    /// <summary>查找 aly-client.exe 源文件</summary>
-    private static string? FindAlyClientExe(string exeName)
+    /// <summary>归一化路径：绝对化 + 去掉结尾分隔符（上级目录推导与相对路径基准都要求无尾分隔符）</summary>
+    private static string NormalizeDirectoryPath(string path)
+        => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+    /// <summary>复制更新器可执行文件到 UpdateFolder（源找不到时留痕，不中断 client.json 的写入）</summary>
+    private static void CopyClientExecutable(string updateFolder, string projectDir, string baseName)
+    {
+        var exeName = OperatingSystem.IsWindows() ? baseName + ".exe" : baseName;
+        var source = FindClientExecutable(projectDir, exeName);
+        if (source == null)
+        {
+            Log.Warning("未找到 {Exe}，跳过复制。用户可手动放置到 {Path}", exeName, updateFolder);
+            return;
+        }
+
+        var destPath = Path.Combine(updateFolder, exeName);
+        try
+        {
+            File.Copy(source, destPath, overwrite: true);
+            Log.Information("复制 {Exe}: {Source} -> {Dest}", exeName, source, destPath);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "复制 {Exe} 失败: {Source} -> {Dest}", exeName, source, destPath);
+        }
+    }
+
+    /// <summary>
+    /// 查找更新器可执行文件，按可靠性依次回退：
+    ///   ① GUI 同目录（GUI 与更新器一起分发，工具自带的副本）；
+    ///   ② 主程序目录（发布包携带的副本，与主程序同版本分发）；
+    ///   ③ 仓库开发路径 client/aly-client/（开发态）。
+    /// 都找不到时返回 null：调用方只留痕，不清空 UpdateFolder 里已有的副本。
+    /// </summary>
+    private static string? FindClientExecutable(string projectDir, string exeName)
     {
         var exeDir = AppDomain.CurrentDomain.BaseDirectory;
-        Log.Debug("查找 aly-client.exe: BaseDirectory={Dir}", exeDir);
+        Log.Debug("查找 {Exe}: BaseDirectory={Dir}", exeName, exeDir);
 
-        // 1. 同目录
+        // 1. GUI 同目录（GUI 与更新器一起分发时）
         var same = Path.Combine(exeDir, exeName);
         if (File.Exists(same))
         {
-            Log.Debug("找到 aly-client.exe (同目录): {Path}", same);
+            Log.Debug("找到 {Exe} (GUI 同目录): {Path}", exeName, same);
             return same;
         }
 
-        // 2. 开发路径：从 bin/Debug/net8.0/ 往上 7 层到项目根，再进入 client/aly-client/
+        // 2. 主程序目录：发布包携带的副本（README：随发布包下发，作为自更新的比对源）
+        if (!string.IsNullOrWhiteSpace(projectDir))
+        {
+            var shipped = Path.Combine(projectDir, exeName);
+            if (File.Exists(shipped))
+            {
+                Log.Debug("找到 {Exe} (主程序目录): {Path}", exeName, shipped);
+                return shipped;
+            }
+        }
+
+        // 3. 开发路径：从 bin/Debug/net8.0/ 往上 7 层到仓库根，再进入 client/aly-client/
         var dev = Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "..", "..", "..", "..",
             "client", "aly-client", exeName));
         if (File.Exists(dev))
         {
-            Log.Debug("找到 aly-client.exe (开发路径): {Path}", dev);
+            Log.Debug("找到 {Exe} (开发路径): {Path}", exeName, dev);
             return dev;
         }
 
-        Log.Warning("未找到 aly-client.exe");
+        Log.Warning("未找到 {Exe}（UpdateFolder 内已有副本将保留）", exeName);
         return null;
     }
 
