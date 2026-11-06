@@ -194,16 +194,38 @@ func (c *Client) GetAllFiles(projectName string) ([]models.FileInfo, error) {
 
 const chunkSize = 1024 * 1024 // 1 MiB（#14 注释修正：旧注释"50 KiB"与实际值不符）
 
-// ─── 分片上传逻辑 ──────────────────────────────────────────────────────
+// ─── 上传重试 ──────────────────────────────────────────────────────────
 
-// isTransientUploadError 判断是否为可重试的临时网络错误
+// maxUploadRetries 单文件直传 / 单分片上传的重试次数上限（原仅分片路径有重试）
+const maxUploadRetries = 5
+
+// uploadRetryBackoff 第 attempt（从 1 起）次重试前的退避间隔：
+// 400ms → 800ms → 1600ms → 3200ms（累计约 6s）。
+func uploadRetryBackoff(attempt int) time.Duration {
+	return time.Duration(200*(1<<attempt)) * time.Millisecond
+}
+
+// isTransientUploadError 判断是否为可重试的临时网络错误。
+//
+// 除显式的连接字样外，必须覆盖"对端直接断链"这一类：服务端读超时
+// （server/main.go ReadTimeout = 60s）或链路中断时，客户端往往只看到一个
+// 光光的 "EOF"/"wsarecv"，不含 closed pipe / reset 等字样。漏掉它会让分片
+// 在第一片就放弃——5 次重试形同虚设（2026-11-06 实测：远程 1MiB 分片撞上
+// 60s 读超时窗口被断链，报 `upload chunk 0/2: ... EOF`，却未重试）。
+// 判定统一转小写，兼容措辞大小写不一致的实现。
 func isTransientUploadError(err error) bool {
-	msg := err.Error()
+	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "closed pipe") ||
 		strings.Contains(msg, "connection reset") ||
 		strings.Contains(msg, "broken pipe") ||
 		strings.Contains(msg, "forcibly closed") ||
-		strings.Contains(msg, "timeout")
+		strings.Contains(msg, "timeout") ||
+		// 对端断链 / 读超时断链的常见观测
+		strings.Contains(msg, "eof") ||
+		strings.Contains(msg, "wsarecv") ||
+		strings.Contains(msg, "wsasend") ||
+		strings.Contains(msg, "reset by peer") ||
+		strings.Contains(msg, "connection abort")
 }
 
 // UploadFile 上传单个文件：小文件直接上传，大文件分片上传
@@ -218,14 +240,38 @@ func (c *Client) UploadFile(localPath, projectName, relativeFileName string) err
 	return c.uploadFileChunked(localPath, projectName, relativeFileName, fi.Size())
 }
 
-// uploadFileDirect 直接上传小文件（内存缓冲，无 io.Pipe）
+// uploadFileDirect 直接上传小文件（内存缓冲，无 io.Pipe；带重试）。
+//
+// 原实现一次不成即失败，与分片路径的重试口径不一——小文件同样会撞上服务端
+// 读超时断链 / 瞬时网络错误，一次失败就整文件报错。这里补齐同等重试。
+// 文件内容只读一次并复用缓冲，重试不重复读盘。
 func (c *Client) uploadFileDirect(localPath, projectName, relativeFileName string) error {
 	data, err := os.ReadFile(localPath)
 	if err != nil {
 		return fmt.Errorf("read file: %w", err)
 	}
+	name := filepath.Base(localPath)
 
-	body := multipartFormBuffer(data, filepath.Base(localPath), map[string]string{
+	var lastErr error
+	for attempt := 0; attempt < maxUploadRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(uploadRetryBackoff(attempt))
+		}
+		err := c.uploadFileOnce(data, name, projectName, relativeFileName)
+		if err == nil {
+			return nil
+		}
+		if !isTransientUploadError(err) {
+			return err
+		}
+		lastErr = err
+	}
+	return fmt.Errorf("upload file failed after %d retries: %w", maxUploadRetries, lastErr)
+}
+
+// uploadFileOnce 单次直传（内存缓冲，无 io.Pipe）
+func (c *Client) uploadFileOnce(data []byte, fileName, projectName, relativeFileName string) error {
+	body := multipartFormBuffer(data, fileName, map[string]string{
 		"projectName":      projectName,
 		"relativeFileName": relativeFileName,
 	})
@@ -294,12 +340,10 @@ func (c *Client) completeChunks(projectName, relativeFileName string, totalChunk
 
 // uploadChunkWithRetry 上传单个分片（带重试）
 func (c *Client) uploadChunkWithRetry(data []byte, projectName, relativeFileName string, chunkIndex, totalChunks int) error {
-	maxRetries := 5
 	var lastErr error
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := 0; attempt < maxUploadRetries; attempt++ {
 		if attempt > 0 {
-			backoff := time.Duration(200*(1<<attempt)) * time.Millisecond
-			time.Sleep(backoff)
+			time.Sleep(uploadRetryBackoff(attempt))
 		}
 		err := c.uploadChunkOnce(data, projectName, relativeFileName, chunkIndex, totalChunks)
 		if err == nil {
@@ -310,7 +354,7 @@ func (c *Client) uploadChunkWithRetry(data []byte, projectName, relativeFileName
 		}
 		lastErr = err
 	}
-	return fmt.Errorf("chunk %d/%d failed after %d retries: %w", chunkIndex, totalChunks, maxRetries, lastErr)
+	return fmt.Errorf("chunk %d/%d failed after %d retries: %w", chunkIndex, totalChunks, maxUploadRetries, lastErr)
 }
 
 // uploadChunkOnce 单次上传分片（内存缓冲，无 io.Pipe）
