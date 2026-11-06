@@ -379,6 +379,8 @@ func TestCase01(t *testing.T) {
 | 125 | publish-gui 初始化：UpdateFolder 位置 | publish-gui | 与主程序目录**同级**，不在其内部 |
 | 126 | publish-gui 初始化：三件套与相对路径 | publish-gui | aly-client.exe + aly-client-ui.exe + client.json；`..\<目录>\<exe>` 可被 client 消费 |
 | 127 | publish-gui 原子写：先 Move 后 Replace | publish-gui | 首次写不得只留 `client.json.tmp` |
+| 128 | 客户端真实分片上传路径 | 边界 | publish-cli 推 >1MiB 文件必须走通 `upload_chunk` → `upload_chunk_complete` |
+| 129 | 分片阈值边界 | 边界 | `chunkSize` 走直传、`chunkSize+1` 走分片，两路都逐字节落地 |
 
 ---
 
@@ -7570,6 +7572,111 @@ func TestCase127(t *testing.T) {
 
 ---
 
+### 用例 128 — 客户端真实分片上传路径：publish-cli 推大文件必须走通 `upload_chunk`
+
+> **为什么必须补这条**（2026-11-06 真机缺陷暴露的测试漏网）：
+>
+> 真机上报：GUI 发布 262MB 文件 →
+> `上传失败 [ZWCADViewer_...exe]: upload chunk 0/263: HTTP 404: 404 page not found`。
+>
+> 根因是**运行中的服务端是陈旧构建**（`server.exe` 内没有 `upload_chunk` 路由），
+> 但**测试侧有漏网，才让"部署了旧二进制"一路全绿**：
+>
+> - 服务端分片算法已被**用例 114** 覆盖（手工 `postForm` 直打 `upload_chunk` /
+>   `upload_chunk_complete`）——它护得住"服务端拼接对不对"，却护不住"路由在不在"；
+> - **客户端真实分片分支无人覆盖**：publish-cli 的 `UploadFile` 只对
+>   `> chunkSize`（1MiB）的文件走 `uploadFileChunked`；而**用例 66–77（publish-cli）
+>   全部用文本小文件**，永远走 `uploadFileDirect`；**用例 63/58 的 `BigFile`
+>   走的是测试框架的 `Env.Upload`（直打 `upload_file`）**，同样不经过客户端分片分支。
+>
+> 于是「客户端发分片 → 服务端有没有这两条路由」这个组合**从未被端到端验证**。
+> 本用例把 publish-cli 与"真实大文件"接起来，补上这道网。
+
+**前置条件**
+
+1. 服务端构建产物 `server.exe`（含 `upload_chunk` / `upload_chunk_complete` 路由）。
+2. publish-cli 构建产物 `aly-publish.exe`。
+3. 新建项目 `tc-chunk-pub`；新建 publish 工作区（`.updator/shared.json` 指向本服务端）。
+
+**步骤**
+
+1. 在工作区造一个 **3 个整分片 + 尾片**的非均匀文件（`chunckSizeBytes*3+12345` 字节，
+   `chunckSizeBytes = 1024*1024` 与客户端 `chunkSize` 逐字对应）。
+   内容用 `b[i]=(i*31+7)%251` 而**非全零**——全零文件在分片错位/丢片时 md5 未必变。
+2. `add --all` → `push --version 1.0.1`。
+3. 断言落地字节数与 md5 与源文件逐字节一致；断言无 `.chunks` / `.merging` 残留；
+   断言 `get_all_files` 可见且不含中间态。
+
+```go
+func TestCase128(t *testing.T) {
+	e := NewEnv(t, true, 0)
+	const proj = "tc-chunk-pub"
+	e.EnsureProject(t, proj, false, nil, nil)
+
+	ws := e.NewPublishWS(t, proj, "pub-chunk")
+	size := int64(chunckSizeBytes*3 + 12345)   // 3 整片 + 尾片
+	rel := "big/bigfile.bin"
+	src := filepath.Join(ws, filepath.FromSlash(rel))
+	WritePattern(t, src, size)
+
+	True(t, e.PublishCLI(t, ws, "add", "--all").IsSuccess, "add --all 失败")
+	r := e.PublishCLI(t, ws, "push", "--version", "1.0.1", "--message", "大文件分片上传")
+	True(t, r.IsSuccess, "push 大文件失败（分片通道 404/坏）: %s", r.ErrorMsg)
+
+	dst := filepath.Join(e.DataDir(proj), filepath.FromSlash(rel))
+	Eq(t, "落地字节数", SizeOf(dst), size)
+	Eq(t, "落地 md5（分片必须按 chunkIndex 顺序拼接）", MD5Of(dst), MD5Of(src))
+	e.NoResidue(t, proj, rel)
+	HasRel(t, e.GetAllFiles(t, proj), rel)
+}
+```
+
+**期望结果**
+
+- `push` `isSuccess:true`；落地文件字节数与 md5 与源文件**逐字节一致**
+- 无 `.chunks` / `.merging` 残留；`get_all_files` 能看到它
+
+**失败判定**
+
+- `push` 报 `HTTP 404: 404 page not found`（`upload chunk N/M`）→ **服务端缺 `upload_chunk`
+  路由**（部署了旧 `server.exe`），或客户端分片逻辑坏
+- 落地 md5 不一致 → 分片拼接顺序错位 / 丢片 / 重片
+- 有 `.chunks` / `.merging` 残留 → 合并收尾失败
+
+**实测结论（2026-11-06）**：含路由的 `server.exe` → **PASS**（2.20s）。
+**负向对照**：临时移除 `routers.go` 中 `upload_chunk` / `upload_chunk_complete` 两条路由后
+重构建 → **FAIL**，报错与真机逐字一致：
+`上传失败 [big/bigfile.bin]: upload chunk 0/4: HTTP 404: 404 page not found`。
+该对照证明本用例确实抓得住"服务端缺分片路由"这一类部署缺陷。
+
+---
+
+### 用例 129 — 分片阈值边界：`chunkSize` 走直传、`chunkSize+1` 走分片
+
+**前置条件**：同用例 128。
+
+**步骤**
+
+1. 造两个文件：`exact.bin`（恰好 `chunckSizeBytes` 字节）与 `over.bin`（`chunckSizeBytes+1` 字节）。
+2. `add --all` → `push`。
+3. 断言两文件 md5 均逐字节一致、均无中间态残留、均在服务端文件列表里。
+
+**期望结果**
+
+- 客户端分支配对 `fi.Size() <= chunkSize` 走直传：`exact.bin` 走 `upload_file`；
+  `over.bin`（多 1 字节）走分片 `upload_chunk`。两条路径都必须把内容逐字节落地。
+
+**失败判定**
+
+- 边界写反（如 `<`）→ 1MiB 整文件静默改走分片（或反之），本用例 md5 断言即失败。
+
+**实测结论（2026-11-06）**：`chunkSize` 与 `chunkSize+1` 两文件均 **PASS**（2.77s），
+落地 md5 逐字节一致、无中间态残留。
+
+执行结果：**PASS**（2026-11-06 新增并实测，`ALY_REUSE_BIN` 复用 dist-test 产物）
+
+---
+
 
 
 
@@ -7589,6 +7696,7 @@ func TestCase127(t *testing.T) {
 | **清单缓存写坏** | `tc.WriteText(t, filepath.Join(c.Up(),"release_manifest.json"), "not-json")` | 验证"禁用删除同步但不阻断下载" |
 | **下载产物丢失** | `os.RemoveAll(c.VerDir(v))` | downloaded 但快照不见了 |
 | **超大文件** | `tc.BigFile(t, path, 120)` | 稀疏文件（`Truncate`），不真占磁盘 |
+| **≥1MiB 的文件（触发客户端分片）** | `tc.WritePattern(t, path, chunckSizeBytes*3+12345)` | **必须用 `WritePattern` 不能用 `BigFile`**：`BigFile` 是全零稀疏文件，分片错位/丢片时 md5 未必变，会盖住要抓的缺陷。且必须经 **publish-cli**（`e.PublishCLI … push`）才会走 `uploadFileChunked`；`e.Upload` 是直打 `upload_file`，不走分片 |
 | **海量小文件** | `tc.MakeFiles(t, dir, 500, 1024)` | `f0001.txt` … 各 1KB |
 | **并发** | `e.RunConcurrent(t, []*Client{a,b}, []string{"download_update"}, ...)` | 两个独立进程同时跑 |
 | **慢下载** | 单文件 ≥500MB + `-mode update`（UI 的 90s idle 是最真实判据） | CLI 侧没有 idle 超时，必须用 UI 验 |
@@ -7765,19 +7873,21 @@ func TestCase127(t *testing.T) {
 | 125 | publish-gui：UpdateFolder 位置 | 未执行 | — | 2026-11-04 新增；纯源码契约（不建 Env） |
 | 126 | publish-gui：三件套与相对路径 | 未执行 | — | 2026-11-04 新增；源码契约 + 真实 client 消费 GUI 布局 |
 | 127 | publish-gui：原子写先 Move 后 Replace | 未执行 | — | 2026-11-04 新增；源码契约 + 只有 `client.json.tmp` 的现场不可用 |
+| 128 | 客户端真实分片上传路径 | PASS | 2.20s | 2026-11-06 新增；≥3MiB 非均匀文件走 publish-cli push，md5 逐字节一致、无 `.chunks`/`.merging` 残留。**负向对照实测**：移除服务端 `upload_chunk`/`upload_chunk_complete` 路由后重构建 → FAIL，报错与真机一致（`upload chunk 0/4: HTTP 404: 404 page not found`） |
+| 129 | 分片阈值边界 | PASS | 2.77s | 2026-11-06 新增；`chunkSize`（1048×1024）走直传、`chunkSize+1` 走分片，两文件 md5 均逐字节一致、无中间态残留 |
 
 **汇总**
 
 | 项 | 值 |
 |---|---|
-| 用例总数 | **127**（124 条已实测 + 125–127 未执行） |
-| PASS | 122 |
+| 用例总数 | **129**（126 条已实测 + 125–127 未执行） |
+| PASS | 124 |
 | FAIL | 1（用例 42，偶发；单独复跑 3/3 PASS） |
 | SKIP | 1（用例 37） |
 | 未执行 | **3**（125–127，2026-11-04 新增） |
 | 全量耗时 | **2470.71s**（124 条全量，`go test -count=1 -timeout 3600s -v .`） |
-| 本轮新增 | 106–115（10 条 + 30 子测试，~850 行）+ 116–124（9 条，~985 行）；2026-11-04 追加 125–127（3 条，~190 行，未执行） |
-| 本轮新增结果 | 116–124 **9/9 PASS**；125–127 **未执行** |
+| 本轮新增 | 106–115（10 条 + 30 子测试，~850 行）+ 116–124（9 条，~985 行）；2026-11-04 追加 125–127（3 条，~190 行，未执行）；2026-11-06 追加 128–129（2 条，~170 行） |
+| 本轮新增结果 | 116–124 **9/9 PASS**；125–127 **未执行**；128–129 **2/2 PASS**（均含负向对照：128 移路由后必 FAIL） |
 
 **已知偶发项（非本轮改动引入）**
 
