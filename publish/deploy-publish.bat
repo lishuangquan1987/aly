@@ -44,6 +44,50 @@ echo [成功] 已复制到 publish-gui 输出目录
 
 
 
+echo ===== 复制 aly-client.exe / aly-client-ui.exe 到 publish-gui 输出目录 =====
+
+REM 两个 exe 由仓库根的 deploy-client.bat（WSL + Go 1.10）编译并回拷到仓库根
+REM client\aly-client\，需先运行 deploy-client.bat。publish-gui 初始化项目时
+REM FindClientExecutable 优先从 GUI 同目录取副本，复制过去后即可直接从程序目录复制。
+
+if not exist "%SCRIPT_DIR%..\client\aly-client\aly-client.exe" (
+    echo [警告] 未找到仓库根 client\aly-client\aly-client.exe，请先运行仓库根的 deploy-client.bat
+    goto copy_client_done
+)
+
+copy /y "%SCRIPT_DIR%..\client\aly-client\aly-client.exe" "%SCRIPT_DIR%publish-gui\src\AlyPublish\bin\Debug\net8.0\" >nul
+
+if %ERRORLEVEL% neq 0 (
+
+    echo [失败] 复制 aly-client.exe 失败
+
+    exit /b %ERRORLEVEL%
+
+)
+
+echo [成功] 已复制 aly-client.exe
+
+if not exist "%SCRIPT_DIR%..\client\aly-client\aly-client-ui.exe" (
+    echo [警告] 未找到仓库根 client\aly-client\aly-client-ui.exe，请先运行仓库根的 deploy-client.bat
+    goto copy_client_done
+)
+
+copy /y "%SCRIPT_DIR%..\client\aly-client\aly-client-ui.exe" "%SCRIPT_DIR%publish-gui\src\AlyPublish\bin\Debug\net8.0\" >nul
+
+if %ERRORLEVEL% neq 0 (
+
+    echo [失败] 复制 aly-client-ui.exe 失败
+
+    exit /b %ERRORLEVEL%
+
+)
+
+echo [成功] 已复制 aly-client-ui.exe
+
+:copy_client_done
+
+
+
 echo ===== 编译 publish-gui =====
 
 cd /d "%SCRIPT_DIR%publish-gui\src\AlyPublish"
