@@ -3,11 +3,14 @@
 package app
 
 import (
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"aly/client/aly-client/model"
 )
 
 func mkTmp(t *testing.T) (string, func()) {
@@ -32,81 +35,24 @@ func readF(t *testing.T, p string) string {
 	return string(b)
 }
 
-func TestSha256OfAndSameFile(t *testing.T) {
-	dir, cleanup := mkTmp(t)
-	defer cleanup()
-
-	a := filepath.Join(dir, "a.bin")
-	b := filepath.Join(dir, "b.bin")
-	c := filepath.Join(dir, "c.bin")
-	writeF(t, a, "hello")
-	writeF(t, b, "hello")
-	writeF(t, c, "world")
-
-	same, err := sameFile(a, b)
-	if err != nil {
-		t.Fatalf("sameFile: %v", err)
-	}
-	if !same {
-		t.Fatal("identical content must compare equal")
-	}
-
-	same, err = sameFile(a, c)
-	if err != nil {
-		t.Fatalf("sameFile: %v", err)
-	}
-	if same {
-		t.Fatal("different content must not compare equal")
-	}
-
-	if _, err := sha256Of(filepath.Join(dir, "nope")); err == nil {
-		t.Fatal("sha256Of on missing file must error")
-	}
+// withSelfUpdateCmd 替换 UpdateUpdater 的命令注入点，便于单测断言“是否委派”。
+// 返回恢复函数，调用方写成 `defer withSelfUpdateCmd(t, fn)()`：
+// Go 1.10 没有 t.Cleanup（生产包按 1.10 编译，测试也保持同一工具链可跑）。
+func withSelfUpdateCmd(t *testing.T,
+	fn func(string) (model.SelfUpdateData, bool, error)) func() {
+	t.Helper()
+	orig := selfUpdateViaCmd
+	selfUpdateViaCmd = fn
+	return func() { selfUpdateViaCmd = orig }
 }
 
-func TestReplaceFromSourceReplaces(t *testing.T) {
-	dir, cleanup := mkTmp(t)
-	defer cleanup()
+// ────────────────────────────────────────────────────────────────
+// UpdateUpdater：正常路径委派 self_update；缺失/旧命令才直接复制
+// ────────────────────────────────────────────────────────────────
 
-	src := filepath.Join(dir, "src.exe")
-	dst := filepath.Join(dir, "dst.exe")
-	writeF(t, src, "NEW")
-	writeF(t, dst, "OLD")
-
-	if err := replaceFromSource(src, dst, 2, 10*time.Millisecond); err != nil {
-		t.Fatalf("replaceFromSource: %v", err)
-	}
-	if got := readF(t, dst); got != "NEW" {
-		t.Fatalf("dst should be replaced, got %q", got)
-	}
-	// 临时文件必须清理干净
-	if _, err := os.Stat(dst + ".new"); !os.IsNotExist(err) {
-		t.Fatal("dst.new should be removed after success")
-	}
-}
-
-// 关键：源文件缺失时**必须保留旧目标文件**，不能把它删掉。
-// 这正是 SDK bug #8 的语义，也是「先删后改名」写法会踩的坑。
-func TestReplaceFromSourceMissingSrcKeepsDst(t *testing.T) {
-	dir, cleanup := mkTmp(t)
-	defer cleanup()
-
-	src := filepath.Join(dir, "missing.exe")
-	dst := filepath.Join(dir, "dst.exe")
-	writeF(t, dst, "OLD")
-
-	if err := replaceFromSource(src, dst, 2, 10*time.Millisecond); err == nil {
-		t.Fatal("expected error when src is missing")
-	}
-	if _, err := os.Stat(dst); err != nil {
-		t.Fatalf("dst must be preserved, stat err=%v", err)
-	}
-	if got := readF(t, dst); got != "OLD" {
-		t.Fatalf("dst content must be untouched, got %q", got)
-	}
-}
-
-func TestUpdateUpdaterCopies(t *testing.T) {
+// TestUpdateUpdaterDelegatesToSelfUpdate 内容不同 → 必须调 self_update 命令，
+// 由命令完成替换；UI 不再自己写盘。
+func TestUpdateUpdaterDelegatesToSelfUpdate(t *testing.T) {
 	dir, cleanup := mkTmp(t)
 	defer cleanup()
 
@@ -117,19 +63,30 @@ func TestUpdateUpdaterCopies(t *testing.T) {
 			t.Fatalf("MkdirAll: %v", err)
 		}
 	}
+	dst := filepath.Join(update, "aly-client.exe")
 	writeF(t, filepath.Join(main, "aly-client.exe"), "UPDATER-V2")
-	writeF(t, filepath.Join(update, "aly-client.exe"), "UPDATER-V1")
+	writeF(t, dst, "UPDATER-V1")
+	// 预置历史失败：委派成功后应清零
+	journalFixture(t, dst, 2, time.Now().Unix(), "previous failure")
+
+	var calledWith string
+	defer withSelfUpdateCmd(t, func(exePath string) (model.SelfUpdateData, bool, error) {
+		calledWith = exePath
+		return model.SelfUpdateData{Updated: true, Reason: "replaced"}, true, nil
+	})()
 
 	if err := UpdateUpdater(update, main); err != nil {
 		t.Fatalf("UpdateUpdater: %v", err)
 	}
-	if got := readF(t, filepath.Join(update, "aly-client.exe")); got != "UPDATER-V2" {
-		t.Fatalf("updater should be updated, got %q", got)
+	if calledWith != dst {
+		t.Fatalf("self_update called with %q; want %q", calledWith, dst)
+	}
+	if j := readJournal(t, dst); j.Count != 0 || j.Pending {
+		t.Fatalf("journal must be cleared after delegated success, got %+v", j)
 	}
 }
 
-// UpdateUpdater 与 UpdateSelfUI 口径一致（见 selfupdate.go）：
-// 内容相同不重写、源缺失不算错误。
+// TestUpdateUpdaterNoChangeIsNoop 内容相同 → 不启动进程，也不重写目标。
 func TestUpdateUpdaterNoChangeIsNoop(t *testing.T) {
 	dir, cleanup := mkTmp(t)
 	defer cleanup()
@@ -151,15 +108,24 @@ func TestUpdateUpdaterNoChangeIsNoop(t *testing.T) {
 		t.Fatalf("Chtimes: %v", err)
 	}
 
+	called := false
+	defer withSelfUpdateCmd(t, func(string) (model.SelfUpdateData, bool, error) {
+		called = true
+		return model.SelfUpdateData{}, true, nil
+	})()
+
 	if err := UpdateUpdater(update, main); err != nil {
 		t.Fatalf("UpdateUpdater: %v", err)
+	}
+	if called {
+		t.Fatal("内容一致时不得启动 self_update 进程")
 	}
 	st, err := os.Stat(dst)
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
 	}
 	if !st.ModTime().Equal(old) {
-		t.Fatal("内容一致时不应改写目标文件（与 UpdateSelfUI 口径一致）")
+		t.Fatal("内容一致时不应改写目标文件")
 	}
 }
 
@@ -184,6 +150,118 @@ func TestUpdateUpdaterMissingSrcIsNotError(t *testing.T) {
 		t.Fatalf("目标应保持旧内容，实际 %q", got)
 	}
 }
+
+// TestUpdateUpdaterMissingTargetRecovers 目标缺失（崩溃/被删）时命令起不来，
+// 必须由共享 ReplaceFromFile 从主目录直接落位。
+func TestUpdateUpdaterMissingTargetRecovers(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	update := filepath.Join(dir, "UpdateFolder")
+	main := filepath.Join(dir, "win-x64")
+	for _, d := range []string{update, main} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+	}
+	writeF(t, filepath.Join(main, "aly-client.exe"), "UPDATER-V2")
+
+	called := false
+	defer withSelfUpdateCmd(t, func(string) (model.SelfUpdateData, bool, error) {
+		called = true
+		return model.SelfUpdateData{}, true, nil
+	})()
+
+	if err := UpdateUpdater(update, main); err != nil {
+		t.Fatalf("UpdateUpdater: %v", err)
+	}
+	if called {
+		t.Fatal("目标缺失时无法启动命令，不应调用 self_update")
+	}
+	dst := filepath.Join(update, "aly-client.exe")
+	if got := readF(t, dst); got != "UPDATER-V2" {
+		t.Fatalf("目标应由直接落位恢复为 V2，实际 %q", got)
+	}
+	if _, err := os.Stat(dst + ".new"); !os.IsNotExist(err) {
+		t.Fatalf(".new 不应残留 (err=%v)", err)
+	}
+	if j := readJournal(t, dst); j.Count != 0 {
+		t.Fatalf("恢复成功应清 journal, got %+v", j)
+	}
+}
+
+// TestUpdateUpdaterFallsBackWhenCommandUnavailable 旧版更新器不认识
+// self_update（进程级失败）→ 直接复制兜底，升级链不能断。
+func TestUpdateUpdaterFallsBackWhenCommandUnavailable(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	update := filepath.Join(dir, "UpdateFolder")
+	main := filepath.Join(dir, "win-x64")
+	for _, d := range []string{update, main} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+	}
+	dst := filepath.Join(update, "aly-client.exe")
+	writeF(t, filepath.Join(main, "aly-client.exe"), "UPDATER-V2")
+	writeF(t, dst, "UPDATER-V1")
+
+	defer withSelfUpdateCmd(t, func(string) (model.SelfUpdateData, bool, error) {
+		return model.SelfUpdateData{}, false, errors.New("exited with code 1: 未知命令")
+	})()
+
+	if err := UpdateUpdater(update, main); err != nil {
+		t.Fatalf("旧命令应回退直接复制成功: %v", err)
+	}
+	if got := readF(t, dst); got != "UPDATER-V2" {
+		t.Fatalf("兜底后目标应为 V2，实际 %q", got)
+	}
+	if j := readJournal(t, dst); j.Count != 0 {
+		t.Fatalf("兜底成功应清 journal, got %+v", j)
+	}
+}
+
+// TestUpdateUpdaterNoFallbackOnBusinessError 命令已执行但业务失败（锁占用）：
+// 绝不能绕过 .aly.lock 直接复制。
+func TestUpdateUpdaterNoFallbackOnBusinessError(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	update := filepath.Join(dir, "UpdateFolder")
+	main := filepath.Join(dir, "win-x64")
+	for _, d := range []string{update, main} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+	}
+	dst := filepath.Join(update, "aly-client.exe")
+	writeF(t, filepath.Join(main, "aly-client.exe"), "UPDATER-V2")
+	writeF(t, dst, "UPDATER-V1")
+
+	defer withSelfUpdateCmd(t, func(string) (model.SelfUpdateData, bool, error) {
+		return model.SelfUpdateData{}, true, errors.New("另一更新正在进行中，请稍后重试")
+	})()
+
+	err := UpdateUpdater(update, main)
+	if err == nil {
+		t.Fatal("业务失败必须返回错误")
+	}
+	if got := readF(t, dst); got != "UPDATER-V1" {
+		t.Fatalf("锁占用时不得绕过锁改写目标，实际 %q", got)
+	}
+	j := readJournal(t, dst)
+	if j.Count != 1 {
+		t.Fatalf("journal count = %d; want 1", j.Count)
+	}
+	if j.LastError == "" {
+		t.Fatal("journal last_error 必须记录失败原因")
+	}
+}
+
+// ────────────────────────────────────────────────────────────────
+// UpdateSelfUI：UI 自身仍走延迟脚本；替换/校验复用共享包
+// ────────────────────────────────────────────────────────────────
 
 // UpdateSelfUI 的 spawn 用注入桩替换，避免测试真的去 move/start 进程。
 func TestUpdateSelfUIReplacesAndSpawns(t *testing.T) {
@@ -228,6 +306,10 @@ func TestUpdateSelfUIReplacesAndSpawns(t *testing.T) {
 		if !containsStr(spawned, want) {
 			t.Fatalf("spawn cmdline %q should contain %q", spawned, want)
 		}
+	}
+	// 已交给延迟脚本：journal 必须是 pending（下一次启动据此判断收敛）
+	if j := readJournal(t, filepath.Join(update, "aly-client-ui.exe")); !j.Pending || j.Count != 0 {
+		t.Fatalf("journal should be pending with count 0, got %+v", j)
 	}
 }
 

@@ -13,7 +13,7 @@ namespace AlySdkSmoke
     ///
     /// 用法：
     ///   AlySdkSmoke.exe all  <alyClientExePath>            依次执行 SD1-SD13
-    ///   AlySdkSmoke.exe <id> <alyClientExePath>            执行单个用例（id: 1..13 或 sd1..sd13）
+    ///   AlySdkSmoke.exe <id> <alyClientExePath>            执行单个用例（id: 1..16 或 sd1..sd16）
     ///
     /// alyClientExePath 指向测试环境的 pkg\UpdateFolder\aly-client.exe
     /// （e2e 脚本已完成：启动 server、创建项目、发布版本、构造客户端目录）。
@@ -96,6 +96,8 @@ namespace AlySdkSmoke
                 // sd15 是用例 124 的驱动入口：Launch 拉 UI 的失败路径
                 // （UI 缺失 / Dispose 后 / 连续失败），不需要真实窗口，可确定性验证。
                 { "15", Sd15 }, { "sd15", Sd15 },
+                // sd16 是用例 134 的驱动入口：AlyUpdateClient 构造函数委派 self_update
+                { "16", Sd16 }, { "sd16", Sd16 },
             };
 
             if (selector == "all")
@@ -507,6 +509,65 @@ namespace AlySdkSmoke
             catch (Exception ex)
             {
                 Bad("SD15 ④ Dispose 后 Launch 抛异常: " + ex.GetType().Name + ": " + ex.Message);
+            }
+        }
+        /// <summary>
+        /// SD16 自更新委派（用例 134）：AlyUpdateClient 构造函数应调用 self_update
+        /// 命令，把 UpdateFolder 的 aly-client.exe 换成主程序目录随版本分发的副本。
+        ///
+        /// 判定主要由 e2e 侧完成（比较主目录与 UpdateFolder 的 SHA256、检查 .old
+        /// 判断走的是命令而非直接替换兜底）；smoke 在 ALY_EXPECT_UPDATER_SHA
+        /// 存在时等待收敛，避免构造函数后台任务未完成就退出造成竞态。
+        /// </summary>
+        private static void Sd16()
+        {
+            string expected = Environment.GetEnvironmentVariable("ALY_EXPECT_UPDATER_SHA");
+            using (var client = new AlyUpdateClient(_exePath))
+            {
+                if (!string.IsNullOrEmpty(expected))
+                {
+                    var deadline = DateTime.UtcNow.AddSeconds(15);
+                    while (DateTime.UtcNow < deadline)
+                    {
+                        if (string.Equals(TryComputeSha256(_exePath), expected, StringComparison.OrdinalIgnoreCase))
+                            break;
+                        Thread.Sleep(200);
+                    }
+                }
+                else
+                {
+                    Thread.Sleep(4000);
+                }
+                client.Cancel();
+            }
+
+            if (!string.IsNullOrEmpty(expected))
+            {
+                Assert(string.Equals(TryComputeSha256(_exePath), expected, StringComparison.OrdinalIgnoreCase),
+                    "SD16 构造函数已把 UpdateFolder 的 aly-client.exe 换成主目录副本",
+                    "SD16 self_update 未收敛：更新器 SHA 与主目录副本不一致");
+            }
+            else
+            {
+                Ok("SD16 AlyUpdateClient 构造完成（未提供 ALY_EXPECT_UPDATER_SHA，不做收敛断言）");
+            }
+        }
+
+        /// <summary>尽力计算文件 SHA256；文件正被替换时返回 null（调用方轮询重试）。</summary>
+        private static string TryComputeSha256(string path)
+        {
+            try
+            {
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                {
+                    byte[] hash = sha.ComputeHash(fs);
+                    return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+                }
+            }
+            catch
+            {
+                return null;
             }
         }
     }

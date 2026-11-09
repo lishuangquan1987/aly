@@ -3,11 +3,13 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"aly/client/aly-client/model"
 	"aly/client/aly-client/selfupdate"
 )
 
@@ -40,14 +42,15 @@ func TestUpdateUpdaterFailureMarksJournal(t *testing.T) {
 		}
 	}
 	writeF(t, filepath.Join(update, "aly-client.exe"), "UI-V1")
-	// src 是目录：copyFile 读目录必然失败 → replaceFromSource 重试耗尽后报错
-	if err := os.MkdirAll(filepath.Join(main, "aly-client.exe"), 0755); err != nil {
-		t.Fatalf("构造目录型源失败: %v", err)
-	}
+	writeF(t, filepath.Join(main, "aly-client.exe"), "UI-V2")
+	// 命令已执行但业务失败（磁盘满/锁占用等）：UpdateUpdater 必须留痕且不兜底。
+	defer withSelfUpdateCmd(t, func(string) (model.SelfUpdateData, bool, error) {
+		return model.SelfUpdateData{}, true, errors.New("copy failed: disk full")
+	})()
 
 	err := UpdateUpdater(update, main)
 	if err == nil {
-		t.Fatal("copy from a directory source must fail")
+		t.Fatal("命令业务失败必须返回错误")
 	}
 	j := readJournal(t, filepath.Join(update, "aly-client.exe"))
 	if j.Count != 1 {
@@ -156,6 +159,10 @@ func TestUpdateSelfUISkipExpiresAfterWindow(t *testing.T) {
 	journalFixture(t, self, maxSelfUpdateAttempts,
 		time.Now().Unix()-int64((selfUpdateRetryWindow+time.Minute)/time.Second), "disk full")
 
+	orig := spawnDetachedFn
+	spawnDetachedFn = func(string) error { return nil }
+	defer func() { spawnDetachedFn = orig }()
+
 	replaced, err := UpdateSelfUI(update, main, []string{})
 	if err != nil {
 		t.Fatalf("expired window must allow retry: %v", err)
@@ -243,6 +250,10 @@ func TestJournalSurvivalAcrossRestarts(t *testing.T) {
 		t.Fatalf("构造目录型源失败: %v", err)
 	}
 
+	orig := spawnDetachedFn
+	spawnDetachedFn = func(string) error { return nil }
+	defer func() { spawnDetachedFn = orig }()
+
 	// "重启" 1/3：失败计数 1
 	if _, err := UpdateSelfUI(update, main, []string{}); err == nil {
 		t.Fatal("attempt 1 must fail")
@@ -269,5 +280,129 @@ func TestJournalSurvivalAcrossRestarts(t *testing.T) {
 	}
 	if j := readJournal(t, self); j.Count != 0 {
 		t.Fatalf("journal must be cleared after convergence, count=%d", j.Count)
+	}
+}
+
+// TestUpdateSelfUIPendingAttemptCounted 上一次已交给延迟脚本但未收敛（Pending）：
+// 本次启动必须先补记一次失败，再继续尝试；尝试本身重新置 Pending。
+func TestUpdateSelfUIPendingAttemptCounted(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	update := filepath.Join(dir, "UpdateFolder")
+	main := filepath.Join(dir, "win-x64")
+	for _, d := range []string{update, main} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+	}
+	self := filepath.Join(update, "aly-client-ui.exe")
+	writeF(t, self, "UI-V1")
+	writeF(t, filepath.Join(main, "aly-client-ui.exe"), "UI-V2")
+	// 上一次的延迟脚本没有收敛（例如 move 失败但 start 成功）
+	selfupdate.SaveJournal(selfupdate.JournalPath(self), selfupdate.Journal{Pending: true})
+
+	spawned := false
+	orig := spawnDetachedFn
+	spawnDetachedFn = func(string) error { spawned = true; return nil }
+	defer func() { spawnDetachedFn = orig }()
+
+	replaced, err := UpdateSelfUI(update, main, []string{})
+	if err != nil {
+		t.Fatalf("pending retry must not error: %v", err)
+	}
+	if !replaced {
+		t.Fatal("pending retry should attempt replacement")
+	}
+	if !spawned {
+		t.Fatal("pending retry should spawn delayed script")
+	}
+	j := readJournal(t, self)
+	if j.Count != 1 {
+		t.Fatalf("pending non-convergence must count 1, got %+v", j)
+	}
+	if !j.Pending {
+		t.Fatal("new attempt must leave pending=true for the next startup")
+	}
+}
+
+// TestUpdateSelfUISkipsAfterPendingFailures 连续未收敛达到上限后必须跳过：
+// 不复制、不派生、不产生 .new。
+func TestUpdateSelfUISkipsAfterPendingFailures(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	update := filepath.Join(dir, "UpdateFolder")
+	main := filepath.Join(dir, "win-x64")
+	for _, d := range []string{update, main} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+	}
+	self := filepath.Join(update, "aly-client-ui.exe")
+	writeF(t, self, "UI-V1")
+	writeF(t, filepath.Join(main, "aly-client-ui.exe"), "UI-V2")
+	// 已失败 2 次，且上一次替换仍未收敛 → 本次补记后达到上限
+	selfupdate.SaveJournal(selfupdate.JournalPath(self), selfupdate.Journal{
+		Count: 2, LastTS: time.Now().Unix(), LastError: "move failed", Pending: true,
+	})
+
+	spawned := false
+	orig := spawnDetachedFn
+	spawnDetachedFn = func(string) error { spawned = true; return nil }
+	defer func() { spawnDetachedFn = orig }()
+
+	replaced, err := UpdateSelfUI(update, main, []string{})
+	if err != nil {
+		t.Fatalf("skip path must not error: %v", err)
+	}
+	if replaced {
+		t.Fatal("must skip after max non-converged attempts")
+	}
+	if spawned {
+		t.Fatal("skip path must not spawn")
+	}
+	if _, err := os.Stat(self + ".new"); !os.IsNotExist(err) {
+		t.Fatalf("skip path must not create .new (err=%v)", err)
+	}
+	j := readJournal(t, self)
+	if j.Count != maxSelfUpdateAttempts {
+		t.Fatalf("journal count = %d; want %d", j.Count, maxSelfUpdateAttempts)
+	}
+}
+
+// TestUpdateSelfUIPendingConvergenceClears 重启后内容一致：Pending 与计数一起清零。
+func TestUpdateSelfUIPendingConvergenceClears(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	update := filepath.Join(dir, "UpdateFolder")
+	main := filepath.Join(dir, "win-x64")
+	for _, d := range []string{update, main} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+	}
+	self := filepath.Join(update, "aly-client-ui.exe")
+	writeF(t, self, "SAME")
+	writeF(t, filepath.Join(main, "aly-client-ui.exe"), "SAME")
+	selfupdate.SaveJournal(selfupdate.JournalPath(self), selfupdate.Journal{
+		Count: 2, LastTS: time.Now().Unix(), LastError: "move failed", Pending: true,
+	})
+
+	orig := spawnDetachedFn
+	spawnDetachedFn = func(string) error {
+		t.Fatal("converged path must not spawn")
+		return nil
+	}
+	defer func() { spawnDetachedFn = orig }()
+
+	replaced, err := UpdateSelfUI(update, main, []string{})
+	if err != nil || replaced {
+		t.Fatalf("converged path must be (false,nil), got (%v,%v)", replaced, err)
+	}
+	j := readJournal(t, self)
+	if j.Count != 0 || j.Pending {
+		t.Fatalf("convergence must clear count/pending, got %+v", j)
 	}
 }

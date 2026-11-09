@@ -552,10 +552,13 @@ aly-client.exe check_self_update --main-exe-path ../MyApp/MyApp.exe
 
 **使用场景**：
 
-- 裸控制台部署（宿主直接 spawn `aly-client.exe`、无 SDK/UI）：检测
-  `need_update=true` 后调用本命令完成替换，副本不再漂移；
-- C# SDK / UI 内部仍走各自的替换逻辑（`UpdateSelf` / `UpdateUpdater`），
-  本命令为三方统一口径提供兜底；重复调用幂等。
+- 裸控制台部署（宿主直接 spawn `aly-client.exe`、无 SDK/UI）：在首次
+  `check_update` 之前调用本命令完成替换，副本不再漂移；
+- **正常路径统一**：C# SDK 构造函数、UI 的 `UpdateUpdater` 也调用本命令
+  更新 `aly-client.exe`，三方共用同一套 SHA 比较 / 先备后换 / 回滚 / 更新锁；
+- 兜底：SDK/UI 只有在更新器缺失/损坏、或上游更新器还是旧版（不认识
+  `self_update`）时才直接复制——否则第一次升级就会因“新程序调不动旧命令”
+  而永久卡住。重复调用幂等。
 
 **用法**：
 
@@ -567,14 +570,21 @@ aly-client.exe self_update [--main-exe-path <路径>]
 
 **实现逻辑**：
 
-1. 定位主程序目录 `aly-client.exe`（随版本包分发，完整性已由
+1. 取 `.aly.lock`（与 `download_update` / `apply_update` / `rollback` / `clean`
+   共用）；另一更新进行中 → `isSuccess=false`「另一更新正在进行中」；
+2. 定位主程序目录 `aly-client.exe`（随版本包分发，完整性已由
    `download_update` 的服务端 MD5+SHA256 校验保证）；
-2. 源缺失（首次部署）→ 跳过，不算错误；
-3. SHA256 一致 → 跳过，并顺带清理 `.new` / `.old` 历史残留；
-4. 不一致 → 替换舞步：运行中的 exe 改名到 `.old`（运行中文件允许改名）→
-   复制源到 `xxx.new` 并校验 → `os.Rename` 原子落位（Windows 下等价
-   `MoveFileEx(MOVEFILE_REPLACE_EXISTING)`）→ 落位失败回滚 `.old`，
-   保证 self 始终存在。
+3. 源缺失（首次部署）→ 跳过，不算错误；
+4. SHA256 一致 → 跳过，并顺带清理 `.new` / `.old` 历史残留；
+5. 不一致 → **先备后换**：先复制源到 `xxx.new` 并校验（此阶段 self 始终存在，
+   慢操作不暴露缺失窗口）→ 运行中的 exe 改名到 `.old`（运行中文件允许改名）→
+   `.new` 用 `os.Rename` 原子落位（Windows 下等价
+   `MoveFileEx(MOVEFILE_REPLACE_EXISTING)`）→ 落位失败回滚 `.old`；
+   复制/校验失败则 self 原样，`xxx.new` 被清理。
+
+> **崩溃窗口**：两次 rename 之间有一个极短的目标缺失窗口。若进程恰在此被杀，
+> `.old` 仍在；UI/SDK 下一次启动会从主目录重新落位，或手工把 `.old` 改回
+> `aly-client.exe`。替换成功后的 `.old` 由下一次“一致”调用清理。
 
 **返回示例**：
 
@@ -587,6 +597,9 @@ aly-client.exe self_update [--main-exe-path <路径>]
 
 // 主程序目录没有更新器（首次部署，跳过不算错误）
 {"isSuccess":true,"errorMsg":"","data":{"updated":false,"reason":"source_missing"}}
+
+// 另一更新（apply/download/rollback）持锁：宿主记录后下次启动再试，不要当启动失败
+{"isSuccess":false,"errorMsg":"另一更新正在进行中，请稍后重试","data":null}
 ```
 
 **示例**：
@@ -600,12 +613,29 @@ aly-client.exe self_update
 > **说明**：替换成功后旧副本保留在 `.old`，下次调用在"一致"路径自动清理；
 > 当前进程继续从旧 inode 运行直至退出，宿主下次拉起即是新版。
 
+#### 宿主集成（谁在什么时机触发）
+
+| 部署形态 | 宿主启动时调用 | 自更新由谁触发 |
+|---|---|---|
+| **UI 部署**（推荐） | `..\UpdateFolder\aly-client-ui.exe -mode auto -lang zh-CN`，其余不管 | UI 自己：`UpdateUpdater` 委派本命令更新 `aly-client.exe`；`UpdateSelfUI` 处理 UI 自身（`.new` → 退出 → 延迟脚本 `move` + `start`，原参数透传）。UI 换自身时当前进程立即退出 0，新 UI 由脚本拉起 |
+| **C# SDK 部署** | `new AlyUpdateClient(...)`（设置 `UpdatorExePath`、`MustCloseProcessNames`） | SDK 构造函数后台任务调本命令，在首次 `check_update` 之前完成；目标缺失/旧版更新器时直接替换兜底 |
+| **裸控制台部署** | 首次 `check_update` 前显式调用 `UpdateFolder\aly-client.exe self_update` | 宿主自己；幂等。看 stdout JSON 的 `isSuccess`，不要看退出码（逻辑失败也退出 0） |
+
+> **不要双触发**：UI 部署不要再让宿主手工调 `self_update`（UI 已经做）；
+> SDK 部署不要手工调；只有裸控制台才手工调。内容一致时虽是 noop，但会多一次
+> 进程创建和锁竞争；UI 自身的启动自更新目前不取 `.aly.lock`（已知限制）。
+>
+> **升级兼容**：新 UI/SDK 第一次启动时，UpdateFolder 里的更新器可能还是旧版
+> （不认识 `self_update`）。此时命令会进程级失败，UI/SDK 自动回退到直接复制
+> 主目录副本；锁被占用（命令返回 JSON `isSuccess=false`）时不回退，避免绕过锁。
+
 ---
 
 ### 1.9 aly-client-ui — 图形界面的启动模式
 
-`aly-client-ui.exe` 没有子命令，只有启动参数。它本身不实现更新逻辑，
-而是以子进程方式调用同目录（或主程序目录）的 `aly-client.exe` 并解析其 JSON 输出。
+`aly-client-ui.exe` 没有子命令，只有启动参数。应用更新/回滚交给同目录（或
+主程序目录）的 `aly-client.exe` 子进程完成并解析其 JSON 输出；只有
+**UI 自身 exe** 的替换/重启由 UI 用延迟脚本自己完成（`self_update` 管不到 UI）。
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
@@ -643,9 +673,17 @@ check_update → 有更新 → [立即更新] [稍后] 按钮 → download_updat
 下载中可随时点**暂停**（杀掉下载子进程，`.part` 保留断点）/ **继续**（断点续传，
 已完成文件 0 重传）。
 
-**UI 与更新器自更新**：启动时比对 `<主程序目录>/aly-client-ui.exe` 与
+**UI 与更新器自更新**：启动时先由 `UpdateUpdater` 委派
+`<UpdateFolder>/aly-client.exe self_update` 同步更新器（命令不可用/更新器缺失时
+才直接复制主目录副本）；再比对 `<主程序目录>/aly-client-ui.exe` 与
 `<UpdateFolder>/aly-client-ui.exe`，有差异则落到 `.new` 并派生 detached 脚本
-在自身退出后替换并重启；同时用同样的方式同步 `aly-client.exe`。
+在自身退出后替换并重启（原启动参数透传，避免 `-mode check` 重启后退化为 auto）。
+
+**启动自更新防循环**：UI 自身更新失败/未收敛会写入
+`<UpdateFolder>/aly-client-ui.exe.selfupdate.json`；30 分钟观察窗口内连续 3 次
+未收敛则跳过本次自更新（UI 仍正常启动和检查更新），窗口过后自动恢复。延迟脚本
+的 `move` 失败也会在下一次启动时计入（命令用 `&` 串联，`move` 失败仍会 `start`
+旧版，若不计数会无限重启）。删除该文件可立即重置。
 
 **退出码**：`0` 正常 / `2` 初始化失败（窗口创建失败、自身路径解析失败）。
 

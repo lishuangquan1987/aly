@@ -28,14 +28,15 @@ const (
 
 // Parsed 是一行的解析结果。
 type Parsed struct {
-	Kind     Kind
-	Success  bool
-	ErrMsg   string
-	Check    *model.CheckUpdateData
-	Self     *model.CheckSelfUpdateData
-	Progress *model.DownloadProgress
-	Rollback *model.RollbackData
-	Versions *model.RollbackListData
+	Kind       Kind
+	Success    bool
+	ErrMsg     string
+	Check      *model.CheckUpdateData
+	Self       *model.CheckSelfUpdateData
+	SelfUpdate *model.SelfUpdateData
+	Progress   *model.DownloadProgress
+	Rollback   *model.RollbackData
+	Versions   *model.RollbackListData
 }
 
 // envelope 先取出 data 的原始字节，再按命令类型二次解析。
@@ -57,6 +58,7 @@ type envelope struct {
 //	DownloadProgress   index (且 status 非空)
 //	CheckUpdateData    has_update
 //	CheckSelfUpdateData need_update
+//	SelfUpdateData     updated（self_update 命令，reason/old_path 可选）
 //	RollbackListData   versions
 //	RollbackData       version
 func ParseLine(line string) (Parsed, error) {
@@ -117,6 +119,15 @@ func ParseLine(line string) (Parsed, error) {
 			return Parsed{Kind: KindIgnore}, nil
 		}
 		p.Self = &self
+		p.Kind = KindResult
+		return p, nil
+
+	case hasKey(keys, "updated"):
+		var su model.SelfUpdateData
+		if err := json.Unmarshal(env.Data, &su); err != nil {
+			return Parsed{Kind: KindIgnore}, nil
+		}
+		p.SelfUpdate = &su
 		p.Kind = KindResult
 		return p, nil
 

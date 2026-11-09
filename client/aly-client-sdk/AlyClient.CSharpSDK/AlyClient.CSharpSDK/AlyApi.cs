@@ -21,6 +21,14 @@ namespace AlyClient.CSharpSDK
             => RunAsync<CheckSelfUpdateData>("check_self_update", alyExePath);
 
         /// <summary>
+        /// 执行更新器自更新（self_update）：按 SHA256 比较后，用主程序目录随版本
+        /// 分发的 aly-client.exe 替换 UpdateFolder 中正在运行的副本。幂等；源缺失/
+        /// 已是最新都返回 isSuccess=true。
+        /// </summary>
+        public static Task<AlyResponse<SelfUpdateData>> SelfUpdateAsync(string alyExePath)
+            => RunAsync<SelfUpdateData>("self_update", alyExePath);
+
+        /// <summary>
         /// 检查应用是否有新版本可更新。服务器不可达时返回 has_update=false
         /// （即使本机已有已下载的待应用版本：无法与服务器核对就不上报，联网后自动继续 apply）。
         /// </summary>
@@ -216,20 +224,26 @@ namespace AlyClient.CSharpSDK
 
                         var stdoutTask = Task.Factory.StartNew(() => process.StandardOutput.ReadToEnd());
                         var stderrTask = Task.Factory.StartNew(() => process.StandardError.ReadToEnd());
-                        Task.WaitAll(stdoutTask, stderrTask);
+
+                        // 旧实现先 WaitAll 再检查 HasExited：进程挂起时读流永远不结束，
+                        // timeoutSeconds 形同虚设（self_update 卡住会阻塞 SDK 主循环启动）。
+                        // 这里把超时放到读流上，超时即杀进程并返回失败。
+                        if (!Task.WaitAll(new Task[] { stdoutTask, stderrTask }, timeoutSeconds * 1000))
+                        {
+                            try { process.Kill(); } catch { }
+                            // 让读流任务在 dispose 之前收尾，避免后台任务访问已释放的流。
+                            try { Task.WaitAll(new Task[] { stdoutTask, stderrTask }, 2000); } catch { }
+                            return AlyResponse<T>.NG("aly-client.exe timed out after " + timeoutSeconds + "s and was killed");
+                        }
 
                         var stdout = stdoutTask.Result;
                         var stderr = stderrTask.Result;
 
-                        if (!process.HasExited)
+                        // 流已 EOF，进程通常已退出；短暂收尸，避免 ExitCode 访问未退出进程抛异常。
+                        if (!process.WaitForExit(1000))
                         {
-                            if (!process.WaitForExit(timeoutSeconds * 1000))
-                            {
-                                // 超时后进程仍存活：直接判失败返回，不访问 ExitCode
-                                //（未退出进程访问 ExitCode 会抛 InvalidOperationException，#8）。
-                                try { process.Kill(); } catch { }
-                                return AlyResponse<T>.NG("aly-client.exe timed out after " + timeoutSeconds + "s (no exit)");
-                            }
+                            try { process.Kill(); } catch { }
+                            return AlyResponse<T>.NG("aly-client.exe exited streams but process did not exit");
                         }
 
                         if (process.ExitCode != 0 && string.IsNullOrWhiteSpace(stdout))

@@ -23,13 +23,18 @@ import (
 //	              完整性已由 download_update 的服务端 MD5+SHA256 校验保证）
 //	无差异       ：SHA256 相同 → 跳过并顺带清理 .new/.old 残留（updated=false）
 //	源缺失       ：主程序目录没有更新器 → 跳过，不算错误（updated=false）
-//	替换舞步     ：运行中的 exe 先改名到 .old（两端 OS 都允许改名运行中文件），
-//	              再 .new 中转 + 校验 + os.Rename 原子落位；落位失败回滚 .old，
-//	              保证 self 始终存在（宁可失败不能消失）
+//	替换舞步     ：先复制源到 .new 并校验（此阶段 self 始终存在）→ 运行中的
+//	              exe 改名到 .old（两端 OS 都允许改名运行中文件）→ .new 原子
+//	              落位；落位失败回滚 .old。慢操作不暴露目标缺失窗口，失败也
+//	              优先保证 self 存在。
 //
 // 与 check_self_update 的关系：check 只检测（输出 need_update），self_update
 // 只执行；宿主可以 check→(need_update)→self_update 两段式调用，也可以直接调
 // self_update（内部自带一致性检查，重复调用幂等）。
+//
+// 并发：与 download_update / apply_update / rollback / clean 共用 UpdateFolder
+// 下的 .aly.lock；另一更新进行中时直接返回错误，避免边换更新器边读半换位的
+// 主目录。
 func SelfUpdate() {
 	fs := flag.NewFlagSet("self_update", flag.ExitOnError)
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
@@ -54,6 +59,14 @@ var selfExePathFn = func() (string, error) { return os.Executable() }
 
 // runSelfUpdate 自更新执行编排（从命令入口拆出，便于单测断言 data 结构）。
 func runSelfUpdate(fc *FullConfig) (*model.SelfUpdateData, error) {
+	// 与其它更新命令共用全局锁：apply/download/rollback 正在跑时拒绝，
+	// 避免"自更新读主目录"与"apply 换主目录"并发。
+	release, lockErr := AcquireUpdateLock("self_update")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer release()
+
 	srcPath, err := fc.ExeCfg.CheckUpdaterPath()
 	if err != nil {
 		return nil, err

@@ -80,6 +80,38 @@ func TestParseLineCheckSelfUpdate(t *testing.T) {
 	}
 }
 
+func TestParseLineSelfUpdateSkipped(t *testing.T) {
+	got, err := ParseLine(`{"isSuccess":true,"data":{"updated":false,"reason":"already_up_to_date"}}`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Kind != KindResult || !got.Success {
+		t.Fatalf("want result success, got %+v", got)
+	}
+	if got.SelfUpdate == nil || got.SelfUpdate.Updated {
+		t.Fatalf("want SelfUpdateData updated=false, got %+v", got.SelfUpdate)
+	}
+	if got.SelfUpdate.Reason != "already_up_to_date" {
+		t.Fatalf("bad reason %q", got.SelfUpdate.Reason)
+	}
+	if got.Check != nil || got.Self != nil {
+		t.Fatal("must NOT parse as check_update / check_self_update")
+	}
+}
+
+func TestParseLineSelfUpdateReplaced(t *testing.T) {
+	got, err := ParseLine(`{"isSuccess":true,"data":{"updated":true,"reason":"replaced","old_path":"C:\\x\\aly-client.exe.old"}}`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.SelfUpdate == nil || !got.SelfUpdate.Updated {
+		t.Fatalf("want updated=true, got %+v", got.SelfUpdate)
+	}
+	if got.SelfUpdate.OldPath != `C:\x\aly-client.exe.old` {
+		t.Fatalf("bad old_path %q", got.SelfUpdate.OldPath)
+	}
+}
+
 func TestParseLineProgress(t *testing.T) {
 	line := `{"isSuccess":true,"data":{"index":2,"total":5,"file":"a.dll","status":"DONE","file_size":1024}}`
 	got, err := ParseLine(line)

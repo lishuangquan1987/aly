@@ -1,7 +1,10 @@
 // Package selfupdate 提供 aly-client / aly-client-ui 的自更新核心编排：
 //
-//	.new 中转复制 → SHA256 校验 → os.Rename 原子替换 → 运行中 exe 改名舞步
-//	→ 残留（.new/.old）清理 → 失败计数（Journal，防止无限重启循环）。
+//	.new 中转复制 → SHA256 校验 → 运行中 exe 改名 .old → .new 原子落位
+//	→ 失败回滚 → 残留（.new/.old）清理 → 失败计数（Journal，防止无限重启循环）。
+//
+// 运行中可执行文件的替换遵循"先备后换"：慢操作（复制 + 校验）全部在 self
+// 仍然存在时完成，最后只剩两次 rename，目标缺失窗口极短。
 //
 // 设计约束（AGENTS.md）：Go 1.10 兼容（XP 轨）、仅标准库、**无平台分支**——
 //   - Windows 的 os.Rename 底层为 MoveFileEx(MOVEFILE_REPLACE_EXISTING)，
@@ -10,10 +13,10 @@
 //     是删除与写打开），因此"self 改名到 .old → 新文件落位"的舞步在两端
 //     语义一致，单一路径即可覆盖全平台。
 //
-// 版本来源约定（与 check_self_update / SDK UpdateSelf / UI UpdateUpdater 一致）：
-// 主程序目录里随版本分发的 aly-client(.exe) 是唯一可信源——其完整性已由
-// 主更新链路（download_update 的服务端 MD5+SHA256 校验）保证，本包只做
-// "复制后二次校验"，不重复实现下载侧校验。
+// 版本来源约定（与 check_self_update / self_update / UI UpdateUpdater /
+// SDK UpdateSelf 一致）：主程序目录里随版本分发的 aly-client(.exe) 是唯一
+// 可信源——其完整性已由主更新链路（download_update 的服务端 MD5+SHA256）
+// 保证，本包只做"复制后二次校验"，不重复实现下载侧校验。
 package selfupdate
 
 import (
@@ -77,6 +80,13 @@ func CopyAndVerify(src, tmp string) error {
 		return err
 	}
 	if _, err = io.Copy(out, in); err != nil {
+		out.Close()
+		os.Remove(tmp)
+		return err
+	}
+	// 落盘后再 rename：否则断电可能出现“名字已换、内容截断”的新文件。
+	// Windows 下 FlushFileBuffers、Unix 下 fsync，Go 1.10 的 File.Sync 已覆盖两端。
+	if err = out.Sync(); err != nil {
 		out.Close()
 		os.Remove(tmp)
 		return err
@@ -162,27 +172,60 @@ func ReplaceFromFile(src, dst string, opts Options) error {
 
 // ReplaceRunningSelf 用 src 替换**正在运行**的 selfPath（self_update 舞步）：
 //
-//  1. 把运行中的 self 改名到不冲突的 .old 侧路（运行中的文件允许改名，
-//     原进程从旧 inode 继续运行，不受影响）；
-//  2. ReplaceFromFile(src → 原路径)（原路径已空出，落位不需要覆盖语义）；
-//  3. 落位失败则把 .old 改名回去（回滚），保证 self 始终存在。
+//  1. **先备**：在 selfPath.new 上复制并校验源。此阶段 selfPath 始终存在，
+//     磁盘慢/杀软扫描/重试都不会暴露“目标缺失”窗口；
+//  2. **换位**：把运行中的 self 改名到不冲突的 .old 侧路（运行中的文件允许
+//     改名，原进程从旧 inode 继续运行），再把校验过的 .new 原子改名到原路径；
+//  3. **回滚**：落位失败则把 .old 改名回去；回滚也失败时保留 .old/.new 现场
+//     并以错误明确暴露（self 缺失比替换失败更严重）。
 //
-// 成功时返回 .old 路径（留给下一次 CleanArtifacts 清理），失败时返回错误
-// 且现场保持"self 原样"。
+// 与“先改名再复制”相比，缺失窗口从整个复制时长（最长 3 次重试）缩到两次
+// rename 之间。即使在这极短窗口内进程被杀，UI/SDK 的兜底落位或手工把 .old
+// 改回仍可恢复。
+//
+// 成功时返回 .old 路径（留给下一次 CleanArtifacts 清理）；失败时 self 保持
+// 原样，或（回滚也失败时）由错误信息明确指出现场异常。
 func ReplaceRunningSelf(selfPath, srcPath string, opts Options) (oldPath string, err error) {
+	o := opts.normalized()
+	tmp := selfPath + ".new"
+
+	// 1) 先备：复制 + 校验（慢操作），失败不动 self。
+	var lastErr error
+	prepared := false
+	for i := 0; i < o.Retries; i++ {
+		if copyErr := CopyAndVerify(srcPath, tmp); copyErr != nil {
+			lastErr = copyErr
+			time.Sleep(o.Delay)
+			continue
+		}
+		prepared = true
+		break
+	}
+	if !prepared {
+		return "", fmt.Errorf("prepare replace %s: %v", selfPath, lastErr)
+	}
+
+	// 2) 换位：self -> .old（原子），.new -> self（原子）。
 	oldPath = NextAsidePath(selfPath, ".old")
 	if renameErr := os.Rename(selfPath, oldPath); renameErr != nil {
+		os.Remove(tmp)
 		return "", fmt.Errorf("rename running self %s -> %s: %v", selfPath, oldPath, renameErr)
 	}
-	if err = ReplaceFromFile(srcPath, selfPath, opts); err != nil {
-		// 回滚：把 .old 改名回原路径；回滚失败时优先报回滚错误
-		//（self 缺失比替换失败更严重，必须让调用方知道现场已异常）。
-		if rbErr := os.Rename(oldPath, selfPath); rbErr != nil {
-			return oldPath, fmt.Errorf("replace failed (%v) AND rollback failed (%v): %s is missing", err, rbErr, selfPath)
+
+	var moveErr error
+	for i := 0; i < o.Retries; i++ {
+		if moveErr = o.Move(tmp, selfPath); moveErr == nil {
+			return oldPath, nil
 		}
-		return "", err
+		time.Sleep(o.Delay)
 	}
-	return oldPath, nil
+
+	// 3) 回滚：把 .old 改名回原路径；回滚失败时优先报回滚错误。
+	if rbErr := os.Rename(oldPath, selfPath); rbErr != nil {
+		return oldPath, fmt.Errorf("replace failed (%v) AND rollback failed (%v): %s is missing", moveErr, rbErr, selfPath)
+	}
+	os.Remove(tmp)
+	return "", fmt.Errorf("replace %s: %v", selfPath, moveErr)
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -229,10 +272,15 @@ const journalSuffix = ".selfupdate.json"
 
 // Journal 记录自更新连续失败次数与最近一次失败时间，用于阻断
 // "替换失败 → 重启 → 再替换失败"的无限循环（UI 自更新会自动重启进程）。
+//
+// Pending 表示"已经把替换交给延迟脚本，但尚未观测到收敛"：延迟脚本里的
+// move/start 失败无法被派生方捕获，只能在下一次启动时按 Pending 计一次
+// 未收敛失败。旧 journal 没有该字段时读出 false，向后兼容。
 type Journal struct {
 	Count     int    `json:"count"`
 	LastTS    int64  `json:"last_ts"`
 	LastError string `json:"last_error"`
+	Pending   bool   `json:"pending,omitempty"`
 }
 
 // JournalPath 返回 target 对应的 journal 文件路径。
@@ -275,10 +323,18 @@ func (j *Journal) MarkSuccess() {
 	j.Count = 0
 	j.LastTS = 0
 	j.LastError = ""
+	j.Pending = false
+}
+
+// MarkAttempt 记录"已把替换交给延迟脚本，结果未知"。它不增加失败计数，
+// 也不改 LastTS——真正的失败由下一次启动发现 Pending 仍为 true 时计入
+//（延迟脚本的 move/start 失败无法被派生方直接观测）。
+func (j *Journal) MarkAttempt() {
+	j.Pending = true
 }
 
 // MarkFailure 记一次失败：最近失败在窗口外时重置为 1（旧失败已过观察期），
-// 窗口内则累加。
+// 窗口内则累加。失败一旦被观测到，Pending 即清除。
 func (j *Journal) MarkFailure(msg string) {
 	now := time.Now().Unix()
 	if j.LastTS > 0 && now-j.LastTS >= failureWindowForReset {
@@ -287,6 +343,7 @@ func (j *Journal) MarkFailure(msg string) {
 	j.Count++
 	j.LastTS = now
 	j.LastError = msg
+	j.Pending = false
 }
 
 // ShouldSkip 判断是否应跳过本次自更新：连续失败 ≥ maxAttempts 且最近一次

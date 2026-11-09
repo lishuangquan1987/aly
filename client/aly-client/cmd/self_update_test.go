@@ -152,6 +152,37 @@ func TestRunSelfUpdateSourceMissing(t *testing.T) {
 	}
 }
 
+// TestRunSelfUpdateRefusesWhenLockHeld 另一更新（apply/download/rollback）
+// 持锁时 self_update 必须拒绝，不能读半换位的主目录。
+func TestRunSelfUpdateRefusesWhenLockHeld(t *testing.T) {
+	_, fc := newSelfUpdateTestEnv(t, "selfupdate-locked")
+	self := filepath.Clean(filepath.Join(fc.MainFolder, "..", "UpdateFolder", "aly-client.exe"))
+	withSelfPath(t, self)
+	if err := ioutil.WriteFile(filepath.Join(fc.MainFolder, "aly-client.exe"), []byte("V2"), 0755); err != nil {
+		t.Fatalf("写源: %v", err)
+	}
+	if err := ioutil.WriteFile(self, []byte("V1"), 0755); err != nil {
+		t.Fatalf("写 self: %v", err)
+	}
+
+	release, err := AcquireUpdateLock("test-holder")
+	if err != nil {
+		t.Fatalf("获取测试锁失败: %v", err)
+	}
+	defer release()
+
+	_, err = runSelfUpdate(fc)
+	if err == nil {
+		t.Fatal("锁被占用时 self_update 必须拒绝")
+	}
+	if !strings.Contains(err.Error(), "另一更新正在进行中") {
+		t.Fatalf("error = %v; want lock contention message", err)
+	}
+	if got := readFileOrFail(t, self); got != "V1" {
+		t.Fatalf("被拒绝时 self 必须原样, got %q", got)
+	}
+}
+
 // TestRunSelfUpdateSelfMissing self 缺失（异常现场）：应报错而不是静默跳过。
 func TestRunSelfUpdateSelfMissing(t *testing.T) {
 	_, fc := newSelfUpdateTestEnv(t, "selfupdate-missingself")

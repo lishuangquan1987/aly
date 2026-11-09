@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -77,13 +78,17 @@ func TestCopyAndVerifyKeepsMode(t *testing.T) {
 	if got := readF(t, tmp); got != "payload" {
 		t.Fatalf("tmp content = %q", got)
 	}
-	// Unix 下可执行位必须保留（Windows 下 Chmod 仅最小有效位，无副作用）
+	// Unix 下可执行位必须保留；Windows 的 Chmod 只映射只读位，没有可执行位，
+	// 断言只按平台形态检查（目标平台是 Windows，不能让它必红）。
 	fi, err := os.Stat(tmp)
 	if err != nil {
 		t.Fatalf("stat tmp: %v", err)
 	}
-	if fi.Mode()&0100 == 0 {
+	if runtime.GOOS != "windows" && fi.Mode()&0100 == 0 {
 		t.Fatalf("exec bit lost: %v", fi.Mode())
+	}
+	if fi.Size() != int64(len("payload")) {
+		t.Fatalf("tmp size = %d; want %d", fi.Size(), len("payload"))
 	}
 }
 
@@ -174,7 +179,7 @@ func TestReplaceFromFileFailureKeepsDst(t *testing.T) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// ReplaceRunningSelf：成功 / 失败回滚
+// ReplaceRunningSelf：成功 / 先备失败 / 失败回滚
 // ────────────────────────────────────────────────────────────────
 
 func TestReplaceRunningSelfSuccess(t *testing.T) {
@@ -248,6 +253,31 @@ func TestReplaceRunningSelfOldNameConflict(t *testing.T) {
 	}
 	if got := readF(t, filepath.Join(dir, "app.exe.old")); got != "old-junk" {
 		t.Fatalf("pre-existing .old was overwritten: %q", got)
+	}
+}
+
+// TestReplaceRunningSelfPrepareFailureKeepsSelf 验证“先备后换”：
+// 源不可读（复制阶段失败）时，self 必须原样存在，且不得留下 .old/.new。
+// 旧实现先改名再复制，此场景会先制造一次目标缺失、再回滚。
+func TestReplaceRunningSelfPrepareFailureKeepsSelf(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	self := filepath.Join(dir, "aly-client.exe")
+	src := filepath.Join(dir, "missing-source")
+	writeF(t, self, "V1")
+
+	_, err := ReplaceRunningSelf(self, src, Options{Retries: 2, Delay: time.Millisecond})
+	if err == nil {
+		t.Fatal("expected prepare failure when source is missing")
+	}
+	if got := readF(t, self); got != "V1" {
+		t.Fatalf("self must stay untouched, got %q", got)
+	}
+	for _, p := range []string{self + ".old", self + ".new"} {
+		if _, statErr := os.Stat(p); !os.IsNotExist(statErr) {
+			t.Fatalf("%s must not be created on prepare failure (err=%v)", p, statErr)
+		}
 	}
 }
 
@@ -390,5 +420,40 @@ func TestJournalRoundTrip(t *testing.T) {
 	loaded = LoadJournal(path)
 	if loaded.Count != 0 {
 		t.Fatalf("corrupt journal should load as zero value, got %+v", loaded)
+	}
+}
+
+// TestJournalPendingLifecycle 验证“延迟脚本结果未知”的状态：
+// MarkAttempt 只置 pending、不计数；下一次启动看到 pending 才计一次未收敛；
+// 失败/收敛都会清 pending。
+func TestJournalPendingLifecycle(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	path := filepath.Join(dir, "app.selfupdate.json")
+	var j Journal
+	j.MarkAttempt()
+	if !j.Pending || j.Count != 0 || j.LastTS != 0 {
+		t.Fatalf("MarkAttempt must only set pending, got %+v", j)
+	}
+	if j.ShouldSkip(1, 30*time.Minute) {
+		t.Fatal("pending alone must not trigger skip")
+	}
+
+	SaveJournal(path, j)
+	loaded := LoadJournal(path)
+	if !loaded.Pending {
+		t.Fatalf("pending must survive round trip, got %+v", loaded)
+	}
+
+	loaded.MarkFailure("previous self-update did not converge")
+	if loaded.Pending || loaded.Count != 1 {
+		t.Fatalf("MarkFailure must clear pending and count 1, got %+v", loaded)
+	}
+
+	loaded.MarkAttempt()
+	loaded.MarkSuccess()
+	if loaded.Pending || loaded.Count != 0 || loaded.LastTS != 0 {
+		t.Fatalf("MarkSuccess must clear pending and counters, got %+v", loaded)
 	}
 }

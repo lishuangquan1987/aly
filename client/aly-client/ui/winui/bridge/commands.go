@@ -21,6 +21,11 @@ const (
 	// 提到 900s：病态深扫场景（每路径 60s × 多路径 + 杀进程重试 + 哈希校验）
 	// 600s 偏紧，超时被杀会把 apply 留在中间态（虽有崩溃恢复兜底，体验差）。
 	applyTimeout = 900 * time.Second
+	// selfUpdateTimeout 用于 self_update：命令内部最多 3 次复制 + 3 次落位重试
+	//（各 1s 间隔）加两次 SHA256，正常 <10s。超时只作最后兜底——命令已改为
+	//“先备后换”，被 kill 时 self 通常完好；若恰在两连 rename 之间，则下一次
+	// 启动由 UI/SDK 的兜底落位恢复。
+	selfUpdateTimeout = 20 * time.Second
 )
 
 // 以下命令**一律不传可选参数**，由 aly-client.exe 自己读
@@ -35,6 +40,15 @@ func (c *Client) CheckUpdate(ctx context.Context) (Parsed, error) {
 // CheckSelfUpdate 调用 check_self_update（30s）。
 func (c *Client) CheckSelfUpdate(ctx context.Context) (Parsed, error) {
 	return c.Run(ctx, []string{"check_self_update"}, Options{TotalTimeout: quickTimeout}, nil)
+}
+
+// SelfUpdate 调用 self_update（20s）：用主程序目录的新版更新器替换自身。
+//
+// UI 的 UpdateUpdater 正常路径统一走本命令；若命令不可用（旧版更新器不认识
+// self_update / 进程崩溃），调用方据 err（而非 Parsed.Success）决定是否回退
+// 到直接复制。锁被占用等业务失败会以 JSON isSuccess=false 返回（err==nil）。
+func (c *Client) SelfUpdate(ctx context.Context) (Parsed, error) {
+	return c.Run(ctx, []string{"self_update"}, Options{TotalTimeout: selfUpdateTimeout}, nil)
 }
 
 // DownloadUpdate 调用 download_update：无总超时 + 90s 活性检测。

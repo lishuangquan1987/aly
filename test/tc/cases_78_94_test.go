@@ -653,7 +653,7 @@ func TestCase94(t *testing.T) {
 
 	// 无更新现场（服务端停在 V1.0.0，客户端 1.0.0）→ check 模式会弹"已是最新"
 	CopyFile(t, uiExe, uiInClient)
-	res := e.RunUIModeAuto(t, uiInClient, c, "check", "aly-client-ui", 30*time.Second, 40*time.Second)
+	res := e.RunUIModeAuto(t, uiInClient, c, "check", proj, 30*time.Second, 40*time.Second)
 	True(t, res.ExitCode != -999, "UI 在 40s 内未退出（模态框已点=%v）", res.Dismissed)
 	Eq(t, "UI 退出码应为 0", res.ExitCode, 0)
 	Eq(t, "check 是只读命令，不得产生快照", ListDirMatch(c.Pkg, "ApplicationFolder_*"), 0)

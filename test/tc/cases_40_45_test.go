@@ -115,7 +115,7 @@ func TestCase42(t *testing.T) {
 	CopyFile(t, uiExe, uiInClient)
 
 	before := ReadText(filepath.Join(c.Up(), "version.json"))
-	res := e.RunUIModeAuto(t, uiInClient, c, "check", "aly-client-ui", 30*time.Second, 40*time.Second)
+	res := e.RunUIModeAuto(t, uiInClient, c, "check", proj, 30*time.Second, 40*time.Second)
 
 	if res.ExitCode == -999 {
 		t.Fatalf("UI 在 40s 内未退出（-999）：模态框已点掉=%v，"+

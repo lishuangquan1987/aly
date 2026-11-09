@@ -104,23 +104,23 @@ namespace AlyClient.CSharpSDK
             _cts = new CancellationTokenSource();
             IsRunning = true;
 
+            // 启动任务前捕获 token：Dispose 会把 _cts 置空，任务在自更新之后
+            // 再访问 _cts.Token 会 NullReference（自更新越久越容易撞上）。
+            var token = _cts.Token;
+
             _mainLoopTask = Task.Factory.StartNew(() =>
             {
-                // 宿主事件处理器异常不得炸掉循环（事件隔离）：
-                // CheckSelfUpdateAsync 内部已捕获自身异常，这里再兜一层。
+                // 自更新：正常路径统一委派 aly-client 的 self_update 命令；
+                // 目标缺失/旧版更新器不认识该命令时由 UpdateSelf 内部回退到直接替换。
                 try
                 {
-                    var selfCheckUpdateResult = AlyApi.CheckSelfUpdateAsync(UpdatorExePath).Result;
-                    if (selfCheckUpdateResult.IsSuccess && selfCheckUpdateResult.Data.NeedUpdate)
-                    {
-                        UpdateSelf();
-                    }
+                    UpdateSelf();
                 }
                 catch (Exception ex)
                 {
-                    LogError("self check-update failed: " + ex.Message);
+                    LogError("self-update failed: " + ex.Message);
                 }
-                MainLoop(_cts.Token);
+                MainLoop(token);
             });
         }
 
@@ -149,14 +149,78 @@ namespace AlyClient.CSharpSDK
         }
 
         /// <summary>
-        /// 自更新更新器：临时文件 + SHA256 校验 + 原子替换（File.Replace / File.Move），
-        /// 目标被占用时重试 3 次（间隔 1s）。失败不静默（#8）：
-        /// 更新器损坏会破坏后续所有更新，必须留痕并保留旧更新器（不清空目标）。
+        /// 自更新更新器：正常路径统一委派 aly-client 自己的 self_update 命令
+        /// （与 UI / 裸控制台共用同一套 SHA 比较、先备后换、回滚与更新锁）。
+        ///
+        /// 仅在以下情况回退到直接替换（ReplaceUpdaterDirect）：
+        ///  - 目标缺失：命令根本起不来（崩溃/被删）；
+        ///  - 命令进程级失败且没有 .aly.lock：上游更新器还是旧版（不认识
+        ///    self_update）或进程崩溃/超时。没有这个兜底，新 SDK 撞上旧更新器
+        ///    会永久卡住升级链。
+        /// 锁被占用（另一更新进行中）时不兜底，避免绕过 .aly.lock。
         /// </summary>
         private void UpdateSelf()
         {
+            if (string.IsNullOrEmpty(UpdatorExePath))
+            {
+                LogError("self-update skipped: UpdatorExePath is empty");
+                return;
+            }
             string src = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "aly-client.exe");
-            string tmp = UpdatorExePath + ".new";
+
+            // 目标缺失：命令无法启动，直接恢复。
+            if (!File.Exists(UpdatorExePath))
+            {
+                ReplaceUpdaterDirect(src, UpdatorExePath);
+                return;
+            }
+
+            var result = AlyApi.SelfUpdateAsync(UpdatorExePath).Result;
+            if (result != null && result.IsSuccess)
+            {
+                var d = result.Data;
+                if (d != null)
+                {
+                    LogError("self-update: updated=" + d.Updated + " reason=" + d.Reason +
+                             (string.IsNullOrEmpty(d.OldPath) ? "" : " old=" + d.OldPath));
+                }
+                else
+                {
+                    LogError("self-update OK: " + UpdatorExePath);
+                }
+                return;
+            }
+
+            string msg = result != null && !string.IsNullOrEmpty(result.ErrorMsg)
+                ? result.ErrorMsg : "unknown";
+            string lockPath = Path.Combine(Path.GetDirectoryName(UpdatorExePath) ?? "", ".aly.lock");
+            if (File.Exists(lockPath))
+            {
+                LogError("self-update skipped: another update in progress (" + msg + ")");
+                return;
+            }
+
+            LogError("self_update command failed: " + msg + "; fallback to direct replace");
+            ReplaceUpdaterDirect(src, UpdatorExePath);
+        }
+
+        /// <summary>
+        /// 直接替换更新器（fallback）：临时文件 + SHA256 校验 + 原子替换
+        /// （File.Replace / File.Move），目标被占用时重试 3 次（间隔 1s）。
+        /// 只在 self_update 命令不可用或目标缺失时使用；正常路径不再走这里。
+        ///
+        /// 失败不静默（#8）：更新器损坏会破坏后续所有更新，必须留痕并保留
+        /// 旧更新器（不清空目标）。非 Windows 的 File.Replace 回退仍走
+        /// MoveWithRollback（2026-11-09 修复：不提前删 tmp；目标消失窗口）。
+        /// </summary>
+        private static void ReplaceUpdaterDirect(string src, string target)
+        {
+            if (!File.Exists(src))
+            {
+                LogError("self-update fallback: source missing: " + src);
+                return;
+            }
+            string tmp = target + ".new";
             Exception lastErr = null;
             for (int i = 0; i < 3; i++)
             {
@@ -170,17 +234,17 @@ namespace AlyClient.CSharpSDK
                     {
                         throw new IOException("self-update checksum mismatch");
                     }
-                    if (File.Exists(UpdatorExePath))
+                    if (File.Exists(target))
                     {
                         // 目标存在：原子替换（要求目标未被占用）
-                        File.Replace(tmp, UpdatorExePath, null);
+                        File.Replace(tmp, target, null);
                     }
                     else
                     {
-                        // 首次部署：目标不存在，直接改名
-                        File.Move(tmp, UpdatorExePath);
+                        // 目标缺失（首次部署/崩溃现场）：直接改名
+                        File.Move(tmp, target);
                     }
-                    LogError("self-update OK: " + UpdatorExePath);
+                    LogError("self-update OK (direct fallback): " + target);
                     return;
                 }
                 catch (Exception ex)
@@ -188,23 +252,15 @@ namespace AlyClient.CSharpSDK
                     lastErr = ex;
                     // 非 Windows 平台（netstandard2.0/Mono 等）File.Replace 抛
                     // PlatformNotSupportedException。此时 tmp 仍在，走事务式回退
-                    // MoveWithRollback（备份改名 → 落位 → 失败回滚）。
-                    //
-                    // 2026-11-09 修复两个缺陷：
-                    //   ① 旧实现在判断异常类型之前就 File.Delete(tmp)，导致回退
-                    //      分支里的 File.Move(tmp, ...) 必然失败——回退路径从未
-                    //      真正可用过；
-                    //   ② 旧回退是"删除目标 + 改名"，存在目标消失窗口：一旦删除
-                    //      后改名失败（磁盘满/占用），更新器就彻底没了，而更新器
-                    //      损坏会破坏后续所有更新（#8）。改为任何时刻目标要么是
-                    //      旧版、要么是新版。
+                    // MoveWithRollback（备份改名 → 落位 → 失败回滚）：
+                    // 任何时刻目标要么是旧版、要么是新版。
                     var pns = ex as PlatformNotSupportedException;
                     if (pns != null)
                     {
                         try
                         {
-                            MoveWithRollback(tmp, UpdatorExePath);
-                            LogError("self-update OK (move fallback): " + UpdatorExePath);
+                            MoveWithRollback(tmp, target);
+                            LogError("self-update OK (move fallback): " + target);
                             return;
                         }
                         catch (Exception ex2)
@@ -222,8 +278,7 @@ namespace AlyClient.CSharpSDK
                     Thread.Sleep(1000);
                 }
             }
-            string msg = "self-update failed: " + (lastErr != null ? lastErr.Message : "unknown");
-            LogError(msg);
+            LogError("self-update fallback failed: " + (lastErr != null ? lastErr.Message : "unknown"));
         }
 
         /// <summary>
