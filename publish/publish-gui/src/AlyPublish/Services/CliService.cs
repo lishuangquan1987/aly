@@ -1,359 +1,385 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Globalization;
+using AlyPublish.Constants;
 using AlyPublish.Models.Cli;
+using Newtonsoft.Json;
 using Serilog;
 
 namespace AlyPublish.Services;
 
-public class CliService
+/// <summary>
+/// Typed facade over <c>aly-publish</c>. Every method either returns real data or throws
+/// <see cref="CliException"/>; cancellations surface as <see cref="OperationCanceledException"/>.
+/// </summary>
+public sealed class CliService
 {
-    private readonly ProcessService _ps;
+    private const int DefaultTimeoutMilliseconds = 60_000;
+    private const int StatusTimeoutMilliseconds = 120_000;
+    private const int PushTimeoutMilliseconds = 300_000;
 
-    public string CliPath => FindCliDefault();
-    
-
-    public CliService(ProcessService ps)
+    public CliService()
     {
-        _ps = ps;
-        Log.Debug("CliService 初始化: Found={Found}, Path={Path}", Found, CliPath);
+        ExecutablePath = FindExecutable();
+        Log.Information("aly-publish: {Path}", IsAvailable ? ExecutablePath : "未找到");
     }
 
-    public bool Found => !string.IsNullOrEmpty(CliPath) && File.Exists(CliPath);
+    public string ExecutablePath { get; private set; }
 
-    private static string FindCliDefault()
+    public bool IsAvailable => !string.IsNullOrEmpty(ExecutablePath);
+
+    /// <summary>Re-runs discovery after the user installs the CLI next to the application.</summary>
+    public void RefreshAvailability()
     {
-        var exeDir = AppDomain.CurrentDomain.BaseDirectory;
-        var exeName = OperatingSystem.IsWindows() ? "aly-publish.exe" : "aly-publish";
-        Log.Debug("查找 aly-publish: BaseDirectory={Dir}", exeDir);
-
-        var same = Path.Combine(exeDir, exeName);
-        if (File.Exists(same))
-        {
-            Log.Debug("找到 aly-publish: {Path}", same);
-            return same;
-        }
-
-        var rel = Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "..", "publish-cli", exeName));
-        if (File.Exists(rel))
-        {
-            Log.Debug("找到 aly-publish (开发路径): {Path}", rel);
-            return rel;
-        }
-
-        Log.Warning("未找到 aly-publish");
-        return string.Empty;
+        ExecutablePath = FindExecutable();
     }
 
-    public string? FindCli() => Found ? CliPath : null;
+    public Task<StatusData> GetStatusAsync(string projectPath, CancellationToken cancellationToken = default)
+        => RunForDataAsync<StatusData>(["status"], projectPath, StatusTimeoutMilliseconds, cancellationToken);
 
-    // ── Generic runner ──────────────────────────────────
-
-    public async Task<CliOutput<T>?> RunAsync<T>(string args, string projectPath, int timeoutMs = 30000)
+    public async Task<List<ChangeLog>> GetLogAsync(
+        string projectPath,
+        int limit = 20,
+        CancellationToken cancellationToken = default)
     {
-        if (!Found)
-        {
-            Log.Error("aly-publish 未找到，无法执行命令: {Args}", args);
-            return Fail<T>("未找到 aly-publish");
-        }
-
-        var fullArgs = $"{args} --json";
-        var workDir = string.IsNullOrWhiteSpace(projectPath) ? null : projectPath;
-        Log.Debug("执行 CLI: {Cli} {Args} (WorkDir={WorkDir})", CliPath, fullArgs, workDir ?? "(无)");
-
-        var result = await _ps.RunAsync(CliPath, fullArgs, workDir, timeoutMs: timeoutMs);
-
-        Log.Information("CLI 执行结果: Success={Success}, ExitCode={Code}, StdOut长度={OutLen}, StdErr={Err}",
-            result.Success, result.ExitCode, result.StandardOutput?.Length ?? 0,
-            string.IsNullOrEmpty(result.StandardError) ? "(无)" : result.StandardError);
-
-        if (!result.Success)
-        {
-            var errMsg = string.IsNullOrEmpty(result.StandardError) ? "执行失败" : result.StandardError;
-            Log.Warning("CLI 命令失败: {Error}", errMsg);
-            return Fail<T>(errMsg);
-        }
-
-        if (string.IsNullOrWhiteSpace(result.StandardOutput))
-        {
-            Log.Warning("CLI 无输出");
-            return Fail<T>("aly-publish 无输出");
-        }
-
-        try
-        {
-            Log.Debug("CLI 输出 (前500字符): {Output}", result.StandardOutput.Length > 500
-                ? result.StandardOutput[..500] + "..."
-                : result.StandardOutput);
-            return JsonConvert.DeserializeObject<CliOutput<T>>(result.StandardOutput);
-        }
-        catch (JsonException ex)
-        {
-            Log.Error(ex, "JSON 解析失败: {Output}", result.StandardOutput);
-            return Fail<T>($"JSON 解析失败: {ex.Message}");
-        }
+        var output = await RunCoreAsync<List<ChangeLog>>(
+            ["log", "--limit", limit.ToString(CultureInfo.InvariantCulture)],
+            projectPath,
+            DefaultTimeoutMilliseconds,
+            cancellationToken);
+        return output.Data ?? [];
     }
 
-    /// <summary>
-    /// 使用 ArgumentList 的通用执行器：参数不拼接成字符串，由 ProcessStartInfo.ArgumentList
-    /// 按 Windows 规则自动转义，杜绝用户输入（如发布说明含双引号）注入 CLI 参数。
-    /// </summary>
-    public async Task<CliOutput<T>?> RunListAsync<T>(IReadOnlyList<string> args, string projectPath, int timeoutMs = 30000)
+    public Task AddAllAsync(string projectPath, CancellationToken cancellationToken = default)
+        => RunAsync(["add", "--all"], projectPath, DefaultTimeoutMilliseconds, cancellationToken);
+
+    public Task ResetAllAsync(string projectPath, CancellationToken cancellationToken = default)
+        => RunAsync(["reset", "--all"], projectPath, DefaultTimeoutMilliseconds, cancellationToken);
+
+    public Task AddFilesAsync(
+        string projectPath,
+        IReadOnlyList<string> files,
+        CancellationToken cancellationToken = default)
+        => RunAsync(WithFiles("add", files), projectPath, DefaultTimeoutMilliseconds, cancellationToken);
+
+    public Task ResetFilesAsync(
+        string projectPath,
+        IReadOnlyList<string> files,
+        CancellationToken cancellationToken = default)
+        => RunAsync(WithFiles("reset", files), projectPath, DefaultTimeoutMilliseconds, cancellationToken);
+
+    public async Task<List<ProjectInfo>> GetServerProjectsAsync(
+        string serverUrl,
+        CancellationToken cancellationToken = default)
     {
-        if (!Found)
-        {
-            Log.Error("aly-publish 未找到，无法执行命令: {Args}", string.Join(" ", args));
-            return Fail<T>("未找到 aly-publish");
-        }
-
-        var list = new List<string>(args) { "--json" };
-        var workDir = string.IsNullOrWhiteSpace(projectPath) ? null : projectPath;
-        Log.Debug("执行 CLI (ArgumentList): {Cli} {Args} (WorkDir={WorkDir})",
-            CliPath, string.Join(" ", list), workDir ?? "(无)");
-
-        var result = await _ps.RunAsync(CliPath, list, workDir, timeoutMs: timeoutMs);
-
-        Log.Information("CLI 执行结果: Success={Success}, ExitCode={Code}, StdOut长度={OutLen}, StdErr={Err}",
-            result.Success, result.ExitCode, result.StandardOutput?.Length ?? 0,
-            string.IsNullOrEmpty(result.StandardError) ? "(无)" : result.StandardError);
-
-        if (!result.Success)
-        {
-            var errMsg = string.IsNullOrEmpty(result.StandardError) ? "执行失败" : result.StandardError;
-            Log.Warning("CLI 命令失败: {Error}", errMsg);
-            return Fail<T>(errMsg);
-        }
-
-        if (string.IsNullOrWhiteSpace(result.StandardOutput))
-        {
-            Log.Warning("CLI 无输出");
-            return Fail<T>("aly-publish 无输出");
-        }
-
-        try
-        {
-            return JsonConvert.DeserializeObject<CliOutput<T>>(result.StandardOutput);
-        }
-        catch (JsonException ex)
-        {
-            Log.Error(ex, "JSON 解析失败: {Output}", result.StandardOutput);
-            return Fail<T>($"JSON 解析失败: {ex.Message}");
-        }
+        var output = await RunCoreAsync<List<ProjectInfo>>(
+            ["project", "list", "--server", serverUrl],
+            string.Empty,
+            DefaultTimeoutMilliseconds,
+            cancellationToken);
+        return output.Data ?? [];
     }
 
-    private static CliOutput<T> Fail<T>(string msg) => new() { IsSuccess = false, ErrorMsg = msg };
-
-    // ── Commands ─────────────────────────────────────────
-
-    public Task<CliOutput<StatusData>?> GetStatusAsync(string projectPath)
-        => RunAsync<StatusData>("status", projectPath);
-
-    public Task<CliOutput<object>?> AddFilesAsync(string projectPath, List<string> files)
+    public Task<ProjectInfo> CreateServerProjectAsync(
+        string serverUrl,
+        string name,
+        string title,
+        bool forceUpdate,
+        IReadOnlyList<string> ignoreFolders,
+        IReadOnlyList<string> ignoreFiles,
+        CancellationToken cancellationToken = default)
     {
-        var args = new List<string> { "add" };
-        args.AddRange(files);
-        return RunListAsync<object>(args, projectPath);
+        var arguments = new List<string> { "project", "create", "--server", serverUrl, "--name", name, "--title", title };
+        AddFlag(arguments, "--force-update", forceUpdate);
+        AddCsv(arguments, "--ignore-folders", ignoreFolders);
+        AddCsv(arguments, "--ignore-files", ignoreFiles);
+
+        return RunForDataAsync<ProjectInfo>(arguments, string.Empty, DefaultTimeoutMilliseconds, cancellationToken);
     }
 
-    public Task<CliOutput<object>?> AddAllAsync(string projectPath)
-        => RunAsync<object>("add --all", projectPath);
-
-    public Task<CliOutput<object>?> ResetAllAsync(string projectPath)
-        => RunAsync<object>("reset --all", projectPath);
-
-    /// <summary>只取消暂存指定文件（CLI reset &lt;file&gt;...），避免 reset --all 后重加失败丢全部暂存。</summary>
-    public Task<CliOutput<object>?> ResetFilesAsync(string projectPath, List<string> files)
+    public Task UpdateServerProjectAsync(
+        string serverUrl,
+        string name,
+        string title,
+        bool forceUpdate,
+        IReadOnlyList<string> ignoreFolders,
+        IReadOnlyList<string> ignoreFiles,
+        CancellationToken cancellationToken = default)
     {
-        var args = new List<string> { "reset" };
-        args.AddRange(files);
-        return RunListAsync<object>(args, projectPath);
+        var arguments = new List<string> { "project", "update", "--server", serverUrl, "--name", name, "--title", title };
+        AddFlag(arguments, "--force-update", forceUpdate);
+        AddCsv(arguments, "--ignore-folders", ignoreFolders);
+        AddCsv(arguments, "--ignore-files", ignoreFiles);
+
+        return RunAsync(arguments, string.Empty, DefaultTimeoutMilliseconds, cancellationToken);
     }
 
-    public Task<CliOutput<object>?> PushAsync(string projectPath, string version, string message, string afterApplyUpdateScript = "", bool setForceUpdate = false)
+    public Task InitializeProjectAsync(
+        string projectPath,
+        string serverUrl,
+        string projectName,
+        IReadOnlyList<string> ignoreFolders,
+        IReadOnlyList<string> ignoreFiles,
+        IReadOnlyList<string> unCopyFolders,
+        IReadOnlyList<string> unCopyFiles,
+        CancellationToken cancellationToken = default)
     {
-        var args = BuildPushArgsList(version, message, afterApplyUpdateScript, setForceUpdate);
-        return RunListAsync<object>(args, projectPath, 300000);
+        var arguments = new List<string> { "config", "init", "--server", serverUrl, "--project", projectName };
+        AddCsv(arguments, "--ignore-folders", ignoreFolders);
+        AddCsv(arguments, "--ignore-files", ignoreFiles);
+        AddCsv(arguments, "--un-copy-folders", unCopyFolders);
+        AddCsv(arguments, "--un-copy-files", unCopyFiles);
+
+        return RunAsync(arguments, projectPath, DefaultTimeoutMilliseconds, cancellationToken);
     }
 
-    /// <summary>
-    /// 推送并实时回调上传进度（每行 stdout 解析为 UploadProgress 后调用 onProgress）。
-    /// </summary>
-    public async Task<CliOutput<object>?> PushWithProgressAsync(
-        string projectPath, string version, string message,
-        Action<UploadProgress> onProgress,
-        string afterApplyUpdateScript = "", bool setForceUpdate = false)
+    public Task SetConfigAsync(
+        string projectPath,
+        string key,
+        string value,
+        CancellationToken cancellationToken = default)
+        => RunAsync(["config", "set", key, value], projectPath, DefaultTimeoutMilliseconds, cancellationToken);
+
+    public Task AddConfigArrayItemAsync(
+        string projectPath,
+        string key,
+        string item,
+        CancellationToken cancellationToken = default)
+        => RunAsync(
+            ["config", "set-array", key, "--add", item],
+            projectPath,
+            DefaultTimeoutMilliseconds,
+            cancellationToken);
+
+    public Task RemoveConfigArrayItemAsync(
+        string projectPath,
+        string key,
+        string item,
+        CancellationToken cancellationToken = default)
+        => RunAsync(
+            ["config", "set-array", key, "--remove", item],
+            projectPath,
+            DefaultTimeoutMilliseconds,
+            cancellationToken);
+
+    /// <summary>Pushes staged files and reports per-file progress as the CLI streams it.</summary>
+    public async Task PushAsync(
+        string projectPath,
+        string version,
+        string message,
+        string afterApplyUpdateScript,
+        bool setForceUpdate,
+        IProgress<UploadProgress> progress,
+        CancellationToken cancellationToken = default)
     {
-        if (!Found)
+        EnsureAvailable(["push"]);
+
+        var arguments = new List<string>
         {
-            Log.Error("aly-publish 未找到，无法执行推送");
-            return Fail<object>("未找到 aly-publish");
-        }
-
-        var args = BuildPushArgsList(version, message, afterApplyUpdateScript, setForceUpdate);
-        args.Add("--json");
-        var workDir = string.IsNullOrWhiteSpace(projectPath) ? null : projectPath;
-
-        CliOutput<object>? finalResult = null;
-        // isSuccess=false 的失败结果单独保存：它后面会紧跟 progressDone 哨兵行，
-        // 若直接覆盖 finalResult，失败原因会被吞掉，界面将误判为发布成功。
-        CliOutput<object>? failResult = null;
-
-        var procResult = await _ps.RunWithProgressAsync(CliPath, args, line =>
-        {
-            try
-            {
-                // 用 JObject 检查 data 是否包含 "status" 字段来区分进度行和最终结果。
-                // data 为 JSON null 时（失败结果行/progressDone 哨兵行），jObj["data"]
-                // 是 JValue 而非 JObject，直接 jObj["data"]?["status"] 会在 JValue 上
-                // 取子值抛 InvalidOperationException——历史 bug：失败结果行被异常吞掉，
-                // failResult 无法记录，界面误显示"CLI 未返回有效结果"而非真实错误。
-                var jObj = JObject.Parse(line);
-                var hasStatus = jObj["data"] is JObject && jObj["data"]!["status"] != null;
-
-                if (hasStatus)
-                {
-                    // 进度行：START / DONE / FAIL（FAIL 行的 data.error 含具体失败原因）
-                    var output = JsonConvert.DeserializeObject<CliOutput<UploadProgress>>(line);
-                    if (output?.Data != null)
-                    {
-                        onProgress(output.Data);
-                    }
-                    return;
-                }
-
-                // 非进度行：isSuccess=false 的失败结果、成功结果 (data: {"version","files"})、
-                // 或 progressDone 哨兵 (isSuccess:true, data:null)
-                var result = JsonConvert.DeserializeObject<CliOutput<object>>(line);
-                if (result == null)
-                    return;
-
-                if (!result.IsSuccess)
-                {
-                    // 失败结果：解析并保留 errorMsg 作为明确的失败原因
-                    failResult = result;
-                }
-                else if (result.Data != null)
-                {
-                    // 成功结果：data 非空（version/files）
-                    finalResult = result;
-                }
-                // isSuccess:true 且 data:null 的哨兵行：不覆盖已有结果
-            }
-            catch (JsonException ex)
-            {
-                Log.Warning(ex, "进度行 JSON 解析失败: {Line}", line);
-            }
-        }, workDir, 300000);
-
-        if (!procResult.Success)
-        {
-            // 进程级失败（启动失败/超时/非零退出）：优先用 CLI 已输出的失败原因
-            if (failResult != null && !string.IsNullOrWhiteSpace(failResult.ErrorMsg))
-                return failResult;
-
-            var stderrMsg = string.IsNullOrWhiteSpace(procResult.StandardError) ? null : procResult.StandardError;
-            Log.Warning("CLI push 失败: {Error}", stderrMsg ?? "(无 stderr)");
-            return stderrMsg != null
-                ? Fail<object>($"推送失败: {stderrMsg}")
-                : Fail<object>("推送失败：CLI 进程执行失败或超时，请查看日志");
-        }
-
-        // 有失败结果（isSuccess=false 的 errorMsg）优先返回
-        if (failResult != null)
-            return failResult;
-        if (finalResult != null)
-            return finalResult;
-
-        Log.Warning("CLI push 无有效结果输出");
-        return Fail<object>("推送失败：CLI 未返回有效结果，请查看日志");
-    }
-
-    private static List<string> BuildPushArgsList(string version, string message, string afterApplyUpdateScript, bool setForceUpdate)
-    {
-        var args = new List<string> { "push", "--version", version, "--message", message };
-        if (setForceUpdate)
-            args.Add("--set-force-update");
+            AppConstants.JsonOutputArgument,
+            "push",
+            "--version",
+            version,
+            "--message",
+            message
+        };
+        AddFlag(arguments, "--set-force-update", setForceUpdate);
         if (!string.IsNullOrWhiteSpace(afterApplyUpdateScript))
         {
-            args.Add("--after-apply-update-script");
-            args.Add(afterApplyUpdateScript);
+            arguments.Add("--after-apply-update-script");
+            arguments.Add(afterApplyUpdateScript);
         }
-        return args;
-    }
 
-    public Task<CliOutput<List<ChangeLog>>?> GetLogAsync(string projectPath, int limit = 20)
-        => RunAsync<List<ChangeLog>>($"log --limit {limit}", projectPath);
+        string? failureMessage = null;
+        var hasResult = false;
+        var processResult = await ProcessService.RunWithProgressAsync(
+            ExecutablePath,
+            arguments,
+            line =>
+            {
+                var parsed = PushResultParser.Parse(line);
+                if (parsed.Kind == PushLineKind.Progress && parsed.Progress is not null)
+                {
+                    progress.Report(parsed.Progress);
+                }
 
-    public Task<CliOutput<object>?> ConfigInitAsync(string projectPath, string serverUrl, string projectName, string ignoreFolders = "", string ignoreFiles = "")
-    {
-        var args = new List<string> { "config", "init", "--server", serverUrl, "--project", projectName };
-        if (!string.IsNullOrWhiteSpace(ignoreFolders))
+                if (parsed.ErrorMessage is not null)
+                {
+                    failureMessage = parsed.ErrorMessage;
+                }
+
+                if (parsed.Kind == PushLineKind.Success)
+                {
+                    hasResult = true;
+                }
+            },
+            string.IsNullOrWhiteSpace(projectPath) ? null : projectPath,
+            PushTimeoutMilliseconds,
+            cancellationToken);
+
+        if (processResult.Canceled)
         {
-            args.Add("--ignore-folders");
-            args.Add(ignoreFolders);
+            throw new OperationCanceledException(cancellationToken);
         }
-        if (!string.IsNullOrWhiteSpace(ignoreFiles))
+
+        if (!string.IsNullOrWhiteSpace(failureMessage))
         {
-            args.Add("--ignore-files");
-            args.Add(ignoreFiles);
+            throw new CliException(failureMessage);
         }
-        return RunListAsync<object>(args, projectPath);
+
+        if (!processResult.Success)
+        {
+            var error = string.IsNullOrWhiteSpace(processResult.StandardError)
+                ? "推送失败：aly-publish 进程异常退出"
+                : processResult.StandardError;
+            throw new CliException(error);
+        }
+
+        if (!hasResult)
+        {
+            throw new CliException("推送失败：aly-publish 未返回有效结果");
+        }
+
+        Log.Information("推送成功: {Version}", version);
     }
 
-    public Task<CliOutput<List<ProjectInfo>>?> ProjectListAsync(string serverUrl)
+    private async Task<T> RunForDataAsync<T>(
+        IReadOnlyList<string> arguments,
+        string projectPath,
+        int timeoutMilliseconds,
+        CancellationToken cancellationToken)
     {
-        Log.Information("获取服务端项目列表: ServerUrl={Url}", serverUrl);
-        return RunListAsync<List<ProjectInfo>>(
-            new List<string> { "project", "list", "--server", serverUrl }, string.Empty);
+        var output = await RunCoreAsync<T>(arguments, projectPath, timeoutMilliseconds, cancellationToken);
+        return output.Data ?? throw new CliException("aly-publish 未返回有效数据");
     }
 
-    public Task<CliOutput<ProjectInfo>?> ProjectCreateAsync(
-        string serverUrl, string name, string title, bool forceUpdate,
-        List<string>? ignoreFolders = null, List<string>? ignoreFiles = null)
+    private async Task RunAsync(
+        IReadOnlyList<string> arguments,
+        string projectPath,
+        int timeoutMilliseconds,
+        CancellationToken cancellationToken)
+        => await RunCoreAsync<object>(arguments, projectPath, timeoutMilliseconds, cancellationToken);
+
+    private async Task<CliOutput<T>> RunCoreAsync<T>(
+        IReadOnlyList<string> arguments,
+        string projectPath,
+        int timeoutMilliseconds,
+        CancellationToken cancellationToken)
     {
-        Log.Information("创建服务端项目: ServerUrl={Url}, Name={Name}, Title={Title}, ForceUpdate={Force}",
-            serverUrl, name, title, forceUpdate);
-        var args = new List<string> { "project", "create", "--server", serverUrl, "--name", name, "--title", title };
-        if (forceUpdate) args.Add("--force-update");
-        if (ignoreFolders is { Count: > 0 }) { args.Add("--ignore-folders"); args.Add(string.Join(",", ignoreFolders)); }
-        if (ignoreFiles is { Count: > 0 }) { args.Add("--ignore-files"); args.Add(string.Join(",", ignoreFiles)); }
-        return RunListAsync<ProjectInfo>(args, string.Empty);
+        EnsureAvailable(arguments);
+
+        var fullArguments = new List<string>(arguments.Count + 1) { AppConstants.JsonOutputArgument };
+        fullArguments.AddRange(arguments);
+        var workingDirectory = string.IsNullOrWhiteSpace(projectPath) ? null : projectPath;
+
+        Log.Debug("执行 CLI: {Arguments} (工作目录={WorkingDirectory})",
+            string.Join(' ', fullArguments), workingDirectory ?? "(当前目录)");
+
+        var result = await ProcessService.RunAsync(
+            ExecutablePath,
+            fullArguments,
+            workingDirectory,
+            timeoutMilliseconds,
+            cancellationToken);
+
+        if (result.Canceled)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+
+        if (!result.Success)
+        {
+            var error = string.IsNullOrWhiteSpace(result.StandardError) ? "aly-publish 执行失败" : result.StandardError;
+            throw new CliException(error);
+        }
+
+        if (string.IsNullOrWhiteSpace(result.StandardOutput))
+        {
+            throw new CliException("aly-publish 未返回输出");
+        }
+
+        CliOutput<T>? output;
+        try
+        {
+            output = JsonConvert.DeserializeObject<CliOutput<T>>(result.StandardOutput);
+        }
+        catch (JsonException ex)
+        {
+            Log.Error(ex, "解析 CLI 输出失败: {Output}", result.StandardOutput);
+            throw new CliException("aly-publish 返回了无法解析的输出", ex);
+        }
+
+        if (output is null)
+        {
+            throw new CliException("aly-publish 未返回有效结果");
+        }
+
+        if (!output.IsSuccess)
+        {
+            throw new CliException(string.IsNullOrWhiteSpace(output.ErrorMsg) ? "aly-publish 执行失败" : output.ErrorMsg);
+        }
+
+        return output;
     }
 
-    public Task<CliOutput<object>?> ProjectUpdateAsync(
-        string serverUrl, string name, string title, bool forceUpdate,
-        List<string>? ignoreFolders = null, List<string>? ignoreFiles = null)
+    private void EnsureAvailable(IReadOnlyList<string> arguments)
     {
-        Log.Information("更新服务端项目: ServerUrl={Url}, Name={Name}, IgnoreFolders={Folders}, IgnoreFiles={Files}",
-            serverUrl, name, ignoreFolders?.Count ?? 0, ignoreFiles?.Count ?? 0);
-        var args = new List<string> { "project", "update", "--server", serverUrl, "--name", name, "--title", title };
-        if (forceUpdate) args.Add("--force-update");
-        if (ignoreFolders is { Count: > 0 }) { args.Add("--ignore-folders"); args.Add(string.Join(",", ignoreFolders)); }
-        if (ignoreFiles is { Count: > 0 }) { args.Add("--ignore-files"); args.Add(string.Join(",", ignoreFiles)); }
-        return RunListAsync<object>(args, string.Empty);
+        if (IsAvailable)
+        {
+            return;
+        }
+
+        Log.Error("未找到 aly-publish，无法执行: {Arguments}", string.Join(' ', arguments));
+        throw new CliException("未找到 aly-publish.exe，请确认它与本程序位于同一目录");
     }
 
-    // ── Config management (via CLI, never directly touches .updator/) ──
-
-    public Task<CliOutput<object>?> ConfigSetAsync(string projectPath, string key, string value)
+    private static List<string> WithFiles(string command, IReadOnlyList<string> files)
     {
-        Log.Information("CLI config set: Key={Key}, Value={Value}, Path={Path}", key, value, projectPath);
-        return RunListAsync<object>(new List<string> { "config", "set", key, value }, projectPath);
+        var arguments = new List<string>(files.Count + 2) { command, "--" };
+        arguments.AddRange(files);
+        return arguments;
     }
 
-    public Task<CliOutput<object>?> ConfigSetArrayAddAsync(string projectPath, string key, string item)
+    private static void AddFlag(List<string> arguments, string flag, bool enabled)
     {
-        Log.Information("CLI config set-array add: Key={Key}, Item={Item}, Path={Path}", key, item, projectPath);
-        return RunListAsync<object>(new List<string> { "config", "set-array", key, "--add", item }, projectPath);
+        if (enabled)
+        {
+            arguments.Add(flag);
+        }
     }
 
-    public Task<CliOutput<object>?> ConfigSetArrayRemoveAsync(string projectPath, string key, string item)
+    private static void AddCsv(List<string> arguments, string flag, IReadOnlyList<string> values)
     {
-        Log.Information("CLI config set-array remove: Key={Key}, Item={Item}, Path={Path}", key, item, projectPath);
-        return RunListAsync<object>(new List<string> { "config", "set-array", key, "--remove", item }, projectPath);
+        if (values.Count == 0)
+        {
+            return;
+        }
+
+        arguments.Add(flag);
+        arguments.Add(string.Join(',', values));
+    }
+
+    private static string FindExecutable()
+    {
+        var fileName = OperatingSystem.IsWindows() ? AppConstants.CliExecutableName : "aly-publish";
+        var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+        var candidates = new[]
+        {
+            Path.Combine(baseDirectory, fileName),
+            Path.GetFullPath(Path.Combine(
+                baseDirectory, "..", "..", "..", "..", "..", "..", "publish-cli", fileName))
+        };
+
+        foreach (var candidate in candidates)
+        {
+            if (!File.Exists(candidate))
+            {
+                continue;
+            }
+
+            Log.Debug("找到 aly-publish: {Path}", candidate);
+            return candidate;
+        }
+
+        Log.Warning("未找到 aly-publish，请把它放在程序目录: {Directory}", baseDirectory);
+        return string.Empty;
     }
 }

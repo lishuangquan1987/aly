@@ -1,143 +1,154 @@
-using System;
 using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
+using AlyPublish.Helpers;
+using AlyPublish.Models.Local;
+using AlyPublish.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Newtonsoft.Json;
-using AlyPublish.Models.Local;
 using Serilog;
 
 namespace AlyPublish.ViewModels;
 
-public partial class AddLocalProjectDialogViewModel : ObservableObject
+/// <summary>Adds an already initialized folder; everything is derived from .updator/shared.json.</summary>
+public sealed partial class AddLocalProjectDialogViewModel : ViewModelBase
 {
-    /// <summary>由调用方注入，用于打开系统文件夹选择器</summary>
-    internal Func<Task<string?>>? BrowseFolderAsync { get; set; }
+    private readonly ConfigService _config;
+    private HashSet<string> _existingProjectPaths = new(StringComparer.OrdinalIgnoreCase);
 
-    [ObservableProperty] private string _displayName = string.Empty;
-    [ObservableProperty] private string _projectPath = string.Empty;
-    [ObservableProperty] private string _initStatusMessage = string.Empty;
-    [ObservableProperty] private bool _showInitStatus;
-
-    /// <summary>View 订阅此事件以关闭对话框并返回结果</summary>
-    public event Action<ProjectConfig?>? RequestClose;
-
-    public IAsyncRelayCommand BrowseCommand { get; }
-    public IAsyncRelayCommand ConfirmCommand { get; }
-    public IRelayCommand CancelCommand { get; }
-
-    private CancellationTokenSource? _pathChangedCts;
-
-    public AddLocalProjectDialogViewModel()
+    public AddLocalProjectDialogViewModel(
+        ConfigService config,
+        IDialogService dialogs,
+        INotificationService notifications)
+        : base(dialogs, notifications)
     {
-        BrowseCommand = new AsyncRelayCommand(BrowseAsync);
-        ConfirmCommand = new AsyncRelayCommand(ConfirmAsync);
-        CancelCommand = new RelayCommand(() => RequestClose?.Invoke(null));
+        _config = config;
     }
 
-    async partial void OnProjectPathChanged(string value)
-    {
-        // 取消上一次未完成的异步操作，防止竞态
-        _pathChangedCts?.Cancel();
-        _pathChangedCts = new CancellationTokenSource();
-        var ct = _pathChangedCts.Token;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
+    private string _projectPath = string.Empty;
 
-        if (string.IsNullOrWhiteSpace(value) || !Directory.Exists(value))
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
+    private string _displayName = string.Empty;
+
+    [ObservableProperty]
+    private string _initStatusMessage = string.Empty;
+
+    [ObservableProperty]
+    private bool _isReady;
+
+    [ObservableProperty]
+    private bool _hasPreview;
+
+    [ObservableProperty]
+    private string _previewServerUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _previewProjectName = string.Empty;
+
+    [ObservableProperty]
+    private int _previewIgnoreCount;
+
+    public void Initialize()
+    {
+        _existingProjectPaths = new HashSet<string>(
+            _config.LoadProjects().Select(project => NormalizeForComparison(project.ProjectPath)),
+            StringComparer.OrdinalIgnoreCase);
+
+        InitStatusMessage = "请选择已初始化的项目文件夹";
+    }
+
+    /// <summary>Called by the view when a folder is dropped onto the dialog.</summary>
+    public void SetDroppedFolder(string folderPath) => ProjectPath = folderPath;
+
+    partial void OnProjectPathChanged(string value)
+    {
+        HasPreview = false;
+        IsReady = false;
+        PreviewServerUrl = string.Empty;
+        PreviewProjectName = string.Empty;
+        PreviewIgnoreCount = 0;
+
+        var path = value.Trim();
+        if (path.Length == 0)
         {
-            ShowInitStatus = false;
+            InitStatusMessage = "请选择已初始化的项目文件夹";
             return;
         }
 
-        var sharedPath = Path.Combine(value, ".updator", "shared.json");
-        if (File.Exists(sharedPath))
+        if (!Directory.Exists(path))
         {
-            try
-            {
-                var json = await ReadFileWithRetryAsync(sharedPath, ct: ct);
-                ct.ThrowIfCancellationRequested();
-                var shared = JsonConvert.DeserializeObject<SharedConfig>(json);
-                if (shared != null)
-                {
-                    if (string.IsNullOrWhiteSpace(DisplayName))
-                        DisplayName = shared.ProjectName ?? "";
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                return; // 被新路径替换，静默退出
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "读取 .updator/shared.json 失败: {Path}", sharedPath);
-            }
-            InitStatusMessage = "✅ 已检测到 .updator/ 配置";
-            ShowInitStatus = true;
-        }
-        else
-        {
-            InitStatusMessage = "⚠ 未检测到 .updator/ 配置，无法添加";
-            ShowInitStatus = true;
-        }
-    }
-
-    private async Task BrowseAsync()
-    {
-        if (BrowseFolderAsync == null)
-        {
-            Log.Warning("BrowseFolderAsync delegate 未设置");
-            return;
-        }
-        var path = await BrowseFolderAsync();
-        if (!string.IsNullOrWhiteSpace(path))
-            ProjectPath = path;
-    }
-
-    private async Task ConfirmAsync()
-    {
-        var projectPath = ProjectPath?.Trim();
-        var displayName = DisplayName?.Trim();
-
-        if (string.IsNullOrWhiteSpace(projectPath) || !Directory.Exists(projectPath))
-        {
-            InitStatusMessage = "请选择有效的项目文件夹";
-            ShowInitStatus = true;
+            InitStatusMessage = "目录不存在";
             return;
         }
 
-        var sharedPath = Path.Combine(projectPath, ".updator", "shared.json");
-        if (!File.Exists(sharedPath))
+        if (_existingProjectPaths.Contains(NormalizeForComparison(path)))
         {
-            InitStatusMessage = "❌ 该文件夹未初始化，无法添加（缺少 .updator/shared.json）";
-            ShowInitStatus = true;
+            InitStatusMessage = "该项目已在左侧列表中";
             return;
         }
 
-        var cfg = new ProjectConfig
+        if (!ProjectInputHelper.IsInitialized(path))
         {
-            DisplayName = string.IsNullOrWhiteSpace(displayName) ? Path.GetFileName(projectPath) : displayName!,
-            ProjectPath = projectPath!
-        };
+            InitStatusMessage = "未找到 .updator/shared.json，请先初始化该项目";
+            return;
+        }
 
-        Log.Information("添加本地项目: DisplayName={Name}, Path={Path}", cfg.DisplayName, cfg.ProjectPath);
-        RequestClose?.Invoke(cfg);
+        SharedConfig? shared;
+        try
+        {
+            shared = ProjectConfigService.Load(path);
+            PreviewServerUrl = shared.ServerUrl;
+            PreviewProjectName = shared.ProjectName;
+            PreviewIgnoreCount = shared.IgnoreFolders.Count + shared.IgnoreFiles.Count;
+            HasPreview = true;
+            IsReady = true;
+            InitStatusMessage = "已检测到项目配置";
+        }
+        catch (ProjectConfigException ex)
+        {
+            InitStatusMessage = ex.Message;
+            Log.Warning(ex, "读取项目配置失败: {Path}", path);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(DisplayName))
+        {
+            DisplayName = ProjectInputHelper.SuggestDisplayName(path, shared);
+        }
     }
 
-    private static async Task<string> ReadFileWithRetryAsync(string path, int maxRetries = 3, int delayMs = 50, CancellationToken ct = default)
+    [RelayCommand(CanExecute = nameof(CanConfirm))]
+    private void Confirm()
     {
-        for (int i = 0; i < maxRetries; i++)
+        var path = ProjectPath.Trim();
+        var name = string.IsNullOrWhiteSpace(DisplayName)
+            ? Path.GetFileName(Path.TrimEndingDirectorySeparator(path))
+            : DisplayName.Trim();
+
+        Close(new ProjectConfig
         {
-            ct.ThrowIfCancellationRequested();
-            try
-            {
-                return await File.ReadAllTextAsync(path, ct);
-            }
-            catch (IOException) when (i < maxRetries - 1)
-            {
-                await Task.Delay(delayMs, ct);
-            }
+            DisplayName = name,
+            ProjectPath = path
+        });
+    }
+
+    [RelayCommand]
+    private void Cancel() => Close(null);
+
+    protected override void OnBusyChanged() => ConfirmCommand.NotifyCanExecuteChanged();
+
+    private bool CanConfirm() => !IsBusy && IsReady && !string.IsNullOrWhiteSpace(ProjectPath);
+
+    private static string NormalizeForComparison(string path)
+    {
+        try
+        {
+            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         }
-        ct.ThrowIfCancellationRequested();
-        return await File.ReadAllTextAsync(path, ct);
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return path.Trim();
+        }
     }
 }

@@ -1,105 +1,143 @@
-using System;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Avalonia.Threading;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using Ursa.Controls;
+using AlyPublish.Constants;
+using AlyPublish.Helpers;
 using AlyPublish.Models.Cli;
 using AlyPublish.Models.Local;
 using AlyPublish.Services;
-using Serilog;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace AlyPublish.ViewModels;
 
-public partial class ProjectTabViewModel : ObservableObject, IDisposable
+/// <summary>The right-hand project detail: changes, publish panel and version history.</summary>
+public sealed partial class ProjectTabViewModel : ViewModelBase
 {
     private readonly CliService _cli;
-    private CancellationTokenSource? _refreshCts;
+    private readonly Dictionary<int, int> _uploadSlots = [];
+    private bool _hasLoaded;
 
-    public void Dispose()
-    {
-        _refreshCts?.Cancel();
-        _refreshCts?.Dispose();
-        _refreshCts = null;
-    }
-
-    public ProjectConfig Project { get; }
-
-    [ObservableProperty] private ObservableCollection<FileItem> _unstagedFiles = new();
-    [ObservableProperty] private ObservableCollection<FileItem> _stagedFiles = new();
-    [ObservableProperty] private ObservableCollection<ChangeLog> _changeLogs = new();
-    [NotifyCanExecuteChangedFor(nameof(PublishCommand))]
-    [ObservableProperty] private string _newVersion = string.Empty;
-    [NotifyCanExecuteChangedFor(nameof(PublishCommand))]
-    [ObservableProperty] private string _commitMessage = string.Empty;
-    [ObservableProperty] private string _currentVersion = string.Empty;
-    [ObservableProperty] private string _statusMessage = "就绪";
-    [ObservableProperty] private bool _isBusy;
-    [ObservableProperty] private bool _isUploading;
-    [ObservableProperty] private string _afterApplyUpdateScript = string.Empty;
-    [ObservableProperty] private bool _setForceUpdate;
-
-    [ObservableProperty] private ObservableCollection<UploadProgress> _uploadProgressItems = new();
-    [ObservableProperty] private int _uploadDoneCount;
-    [ObservableProperty] private int _uploadTotalCount;
-    [ObservableProperty] private double _uploadProgressPercent;
-    [ObservableProperty] private string _uploadProgressText = string.Empty;
-    [ObservableProperty] private bool _isUploadProgressIndeterminate = true;
-
-    [ObservableProperty] private FileItem? _selectedUnStagedFile;
-    [ObservableProperty] private FileItem? _selectedStagedFile;
-
-    public IAsyncRelayCommand RefreshCommand { get; }
-    public IAsyncRelayCommand AddAllCommand { get; }
-    public IAsyncRelayCommand ResetAllCommand { get; }
-    public IAsyncRelayCommand AddSelectedCommand { get; }
-    public IAsyncRelayCommand ResetSelectedCommand { get; }
-    public IAsyncRelayCommand PublishCommand { get; }
-    public IAsyncRelayCommand EditProjectCommand { get; }
-
-    /// <summary>由 MainWindowViewModel 注入，用于打开编辑项目对话框</summary>
-    public Func<ProjectConfig, Task<ProjectConfig?>>? EditProjectAsync { get; set; }
-
-    public IRelayCommand LaunchProgramCommand { get; }
-    public IRelayCommand OpenExplorerCommand { get; }
-
-    public ProjectTabViewModel(ProjectConfig project, CliService cli)
+    public ProjectTabViewModel(
+        ProjectConfig project,
+        CliService cli,
+        IDialogService dialogs,
+        INotificationService notifications)
+        : base(dialogs, notifications)
     {
         Project = project;
         _cli = cli;
 
-        var pp = project.ProjectPath;
-        RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(pp));
-        AddAllCommand = new AsyncRelayCommand(AddAllAsync, () => !IsBusy && UnstagedFiles.Count > 0);
-        ResetAllCommand = new AsyncRelayCommand(ResetAllAsync, () => !IsBusy && StagedFiles.Count > 0);
-        AddSelectedCommand = new AsyncRelayCommand(AddSelectedAsync, () => !IsBusy && UnstagedFiles.Count > 0);
-        ResetSelectedCommand = new AsyncRelayCommand(ResetSelectedAsync, () => !IsBusy && StagedFiles.Count > 0);
-        PublishCommand = new AsyncRelayCommand(PublishAsync,
-            () => !IsBusy && StagedFiles.Count > 0 && !string.IsNullOrWhiteSpace(NewVersion) && !string.IsNullOrWhiteSpace(CommitMessage));
-        EditProjectCommand = new AsyncRelayCommand(EditProjectCmdAsync, () => !IsBusy);
-
-        LaunchProgramCommand = new RelayCommand(LaunchProgram);
-        OpenExplorerCommand = new RelayCommand(OpenExplorer);
-
-        UnstagedFiles.CollectionChanged += (_, _) =>
-        {
-            AddAllCommand.NotifyCanExecuteChanged();
-            AddSelectedCommand.NotifyCanExecuteChanged();
-        };
-        StagedFiles.CollectionChanged += (_, _) =>
-        {
-            ResetAllCommand.NotifyCanExecuteChanged();
-            ResetSelectedCommand.NotifyCanExecuteChanged();
-            PublishCommand.NotifyCanExecuteChanged();
-        };
+        UnstagedFiles.CollectionChanged += OnUnstagedFilesChanged;
+        StagedFiles.CollectionChanged += OnStagedFilesChanged;
+        ChangeLogs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasChangeLogs));
     }
 
-    partial void OnIsBusyChanged(bool value)
+    public ProjectConfig Project { get; }
+
+    public ObservableCollection<FileItem> UnstagedFiles { get; } = [];
+
+    public ObservableCollection<FileItem> StagedFiles { get; } = [];
+
+    public ObservableCollection<ChangeLog> ChangeLogs { get; } = [];
+
+    public ObservableCollection<UploadProgress> UploadProgressItems { get; } = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PublishCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SuggestVersionCommand))]
+    [NotifyPropertyChangedFor(nameof(PublishHint))]
+    [NotifyPropertyChangedFor(nameof(HasPublishHint))]
+    [NotifyPropertyChangedFor(nameof(PublishButtonText))]
+    private string _newVersion = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PublishCommand))]
+    [NotifyPropertyChangedFor(nameof(PublishHint))]
+    [NotifyPropertyChangedFor(nameof(HasPublishHint))]
+    [NotifyPropertyChangedFor(nameof(PublishButtonText))]
+    private string _commitMessage = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SuggestVersionCommand))]
+    [NotifyPropertyChangedFor(nameof(CurrentVersionText))]
+    private string _currentVersion = string.Empty;
+
+    [ObservableProperty]
+    private string _afterApplyUpdateScript = string.Empty;
+
+    [ObservableProperty]
+    private bool _setForceUpdate;
+
+    [ObservableProperty]
+    private bool _isInitialLoading;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PublishCommand))]
+    private bool _isUploading;
+
+    [ObservableProperty]
+    private int _uploadDoneCount;
+
+    [ObservableProperty]
+    private int _uploadFailedCount;
+
+    [ObservableProperty]
+    private int _uploadTotalCount;
+
+    [ObservableProperty]
+    private double _uploadProgressPercent;
+
+    [ObservableProperty]
+    private string _uploadProgressText = string.Empty;
+
+    [ObservableProperty]
+    private string _uploadSummary = string.Empty;
+
+    [ObservableProperty]
+    private bool _isUploadProgressIndeterminate = true;
+
+    public event EventHandler<ProjectConfig>? EditRequested;
+
+    public string PublishHint
+    {
+        get
+        {
+            if (StagedFiles.Count == 0)
+            {
+                return "请先在左侧勾选文件并暂存";
+            }
+
+            if (string.IsNullOrWhiteSpace(NewVersion))
+            {
+                return "请填写版本号";
+            }
+
+            return string.IsNullOrWhiteSpace(CommitMessage) ? "请填写变更说明" : string.Empty;
+        }
+    }
+
+    public string PublishButtonText => StagedFiles.Count == 0 ? "发布暂存文件" : $"发布 {StagedFiles.Count} 个文件";
+
+    public string CurrentVersionText => string.IsNullOrWhiteSpace(CurrentVersion) ? "尚无版本" : CurrentVersion;
+
+    public bool HasPublishHint => !string.IsNullOrEmpty(PublishHint);
+
+    public bool HasUnstagedFiles => UnstagedFiles.Count > 0;
+
+    public bool HasStagedFiles => StagedFiles.Count > 0;
+
+    public bool HasChangeLogs => ChangeLogs.Count > 0;
+
+    public string UnstagedSelectionText
+        => UnstagedFiles.Count > 0 && UnstagedFiles.All(file => file.IsSelected) ? "取消全选" : "全选";
+
+    public string StagedSelectionText
+        => StagedFiles.Count > 0 && StagedFiles.All(file => file.IsSelected) ? "取消全选" : "全选";
+
+    protected override void OnBusyChanged()
     {
         RefreshCommand.NotifyCanExecuteChanged();
         AddAllCommand.NotifyCanExecuteChanged();
@@ -108,424 +146,459 @@ public partial class ProjectTabViewModel : ObservableObject, IDisposable
         ResetSelectedCommand.NotifyCanExecuteChanged();
         PublishCommand.NotifyCanExecuteChanged();
         EditProjectCommand.NotifyCanExecuteChanged();
+        ToggleSelectAllUnstagedCommand.NotifyCanExecuteChanged();
+        ToggleSelectAllStagedCommand.NotifyCanExecuteChanged();
+        SuggestVersionCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(PublishHint));
+        OnPropertyChanged(nameof(HasPublishHint));
     }
 
-    // ── Refresh ──────────────────────────────────────────
-
-    // _refreshLock 保护 _refreshCts。IsBusy 仅在 UI 线程上修改。
-    private readonly object _refreshLock = new();
-
-    public async Task RefreshAsync()
+    [RelayCommand(CanExecute = nameof(CanRefresh))]
+    private async Task RefreshAsync()
     {
-        CancellationTokenSource newCts;
-        lock (_refreshLock)
-        {
-            if (IsBusy) return;
-            IsBusy = true;
-            _refreshCts?.Cancel();
-            _refreshCts?.Dispose();
-            newCts = new CancellationTokenSource();
-            _refreshCts = newCts;
-        }
-
-        await FetchDataAsync(newCts.Token);
-    }
-
-    private async Task FetchDataAsync(CancellationToken cancellationToken)
-    {
-        var projectPath = Project.ProjectPath;
-        StatusMessage = "刷新中...";
-        Log.Information("开始刷新: Project={Name}, Path={Path}", Project.DisplayName, projectPath);
+        StatusMessage = "正在读取项目状态…";
+        IsInitialLoading = !_hasLoaded;
         try
         {
-            var result = await _cli.GetStatusAsync(projectPath);
-            if (cancellationToken.IsCancellationRequested)
-                return;
-
-            if (result?.Data == null)
-            {
-                StatusMessage = $"刷新失败: {result?.ErrorMsg ?? "未知错误"}";
-                await MessageBox.ShowAsync(StatusMessage, "错误", MessageBoxIcon.Error);
-                return;
-            }
-
-            var d = result.Data;
-            UnstagedFiles.Clear();
-            StagedFiles.Clear();
-            foreach (var f in d.Unstaged ?? [])
-                if (f.Status != "deleted")
-                    UnstagedFiles.Add(FileItem.FromCliItem(f));
-            foreach (var f in d.Staged ?? []) StagedFiles.Add(FileItem.FromCliItem(f));
-
-            var logResult = await _cli.GetLogAsync(projectPath);
-            if (cancellationToken.IsCancellationRequested)
-                return;
-
-            ChangeLogs.Clear();
-            if (logResult?.Data != null)
-                foreach (var l in logResult.Data)
-                    ChangeLogs.Add(l);
-
-            if (ChangeLogs.Count > 0)
-                CurrentVersion = ChangeLogs[0].Version ?? string.Empty;
-
-            StatusMessage = $"未暂存 {UnstagedFiles.Count}, 已暂存 {StagedFiles.Count}";
-            Log.Information("刷新完成: {Status}", StatusMessage);
-        }
-        catch (Exception ex)
-        {
-            if (cancellationToken.IsCancellationRequested)
-                return;
-            await MessageBox.ShowAsync($"刷新异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-            StatusMessage = $"刷新异常: {ex.Message}";
-            Log.Error(ex, "刷新异常");
+            await RunAsync("刷新", token => FetchDataAsync(token), showErrorDialog: false);
         }
         finally
         {
-            IsBusy = false;
+            _hasLoaded = true;
+            IsInitialLoading = false;
         }
     }
 
-    // ── AddAll ───────────────────────────────────────────
-
+    [RelayCommand(CanExecute = nameof(CanAddAll))]
     private async Task AddAllAsync()
     {
-        if (IsBusy) return;
-        IsBusy = true;
-        try
+        var added = await RunAsync("暂存全部文件", async token =>
         {
-            var r = await _cli.AddAllAsync(Project.ProjectPath);
-            if (r?.IsSuccess == true)
-            {
-                StatusMessage = "已添加所有变更";
-            }
-            else
-            {
-                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
-                StatusMessage = $"添加失败: {r?.ErrorMsg ?? "未知错误"}";
-            }
-            await FetchDataAsync(CancellationToken.None);
-        }
-        catch (Exception ex)
+            await _cli.AddAllAsync(Project.ProjectPath, token);
+            await FetchDataAsync(token);
+        });
+
+        if (added)
         {
-            await MessageBox.ShowAsync($"暂存异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-            StatusMessage = $"暂存异常: {ex.Message}";
-            Log.Error(ex, "暂存异常");
+            Notify.Success("已暂存全部变更");
         }
-        finally { IsBusy = false; }
     }
 
-    // ── ResetAll ─────────────────────────────────────────
-
+    [RelayCommand(CanExecute = nameof(CanResetAll))]
     private async Task ResetAllAsync()
     {
-        if (IsBusy) return;
-        IsBusy = true;
-        try
+        var confirmed = await Dialogs.ConfirmAsync(
+            "清空暂存区",
+            "确定取消暂存所有文件吗？\n\n文件不会被删除，但需要重新勾选并暂存。");
+        if (!confirmed)
         {
-            var r = await _cli.ResetAllAsync(Project.ProjectPath);
-            if (r?.IsSuccess == true)
-            {
-                StatusMessage = "暂存区已清空";
-            }
-            else
-            {
-                await MessageBox.ShowAsync($"重置失败: {r?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
-                StatusMessage = $"重置失败: {r?.ErrorMsg ?? "未知错误"}";
-            }
-            await FetchDataAsync(CancellationToken.None);
+            return;
         }
-        catch (Exception ex)
+
+        var reset = await RunAsync("清空暂存区", async token =>
         {
-            await MessageBox.ShowAsync($"重置异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-            StatusMessage = $"重置异常: {ex.Message}";
-            Log.Error(ex, "重置异常");
+            await _cli.ResetAllAsync(Project.ProjectPath, token);
+            await FetchDataAsync(token);
+        });
+
+        if (reset)
+        {
+            Notify.Success("暂存区已清空");
         }
-        finally { IsBusy = false; }
     }
 
-    // ── AddSelected ──────────────────────────────────────
-
+    [RelayCommand(CanExecute = nameof(CanAddSelected))]
     private async Task AddSelectedAsync()
     {
-        if (IsBusy) return;
-        var files = UnstagedFiles.Where(f => f.IsSelected).Select(f => f.RelativePath).ToList();
-        if (files.Count == 0) { await MessageBox.ShowAsync("请先勾选文件", "提示", MessageBoxIcon.Warning); return; }
-        IsBusy = true;
-        try
+        var files = SelectedPaths(UnstagedFiles);
+        var added = await RunAsync("暂存所选文件", async token =>
         {
-            var r = await _cli.AddFilesAsync(Project.ProjectPath, files);
-            if (r?.IsSuccess == true)
-            {
-                StatusMessage = $"已暂存 {files.Count} 个文件";
-            }
-            else
-            {
-                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg ?? "未知错误"}", "错误", MessageBoxIcon.Error);
-                StatusMessage = $"添加失败: {r?.ErrorMsg ?? "未知错误"}";
-            }
-            await FetchDataAsync(CancellationToken.None);
-        }
-        catch (Exception ex)
+            await _cli.AddFilesAsync(Project.ProjectPath, files, token);
+            await FetchDataAsync(token);
+        });
+
+        if (added)
         {
-            await MessageBox.ShowAsync($"暂存异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-            StatusMessage = $"暂存异常: {ex.Message}";
-            Log.Error(ex, "暂存异常");
+            Notify.Success($"已暂存 {files.Count} 个文件");
         }
-        finally { IsBusy = false; }
     }
 
-    // ── ResetSelected ────────────────────────────────────
-
+    [RelayCommand(CanExecute = nameof(CanResetSelected))]
     private async Task ResetSelectedAsync()
     {
-        if (IsBusy) return;
-        var toUnstage = StagedFiles.Where(f => f.IsSelected).Select(f => f.RelativePath).ToList();
-        if (toUnstage.Count == 0) { await MessageBox.ShowAsync("请先勾选文件", "提示", MessageBoxIcon.Warning); return; }
-        IsBusy = true;
-        try
+        var files = SelectedPaths(StagedFiles);
+        var reset = await RunAsync("取消暂存所选文件", async token =>
         {
-            // 只移除勾选的文件：旧实现 reset --all 后重加剩余文件，中途失败会丢全部暂存
-            var resetResult = await _cli.ResetFilesAsync(Project.ProjectPath, toUnstage);
-            if (resetResult?.IsSuccess != true)
-            {
-                var errMsg = resetResult?.ErrorMsg ?? "未知错误";
-                await MessageBox.ShowAsync($"重置失败: {errMsg}", "错误", MessageBoxIcon.Error);
-                StatusMessage = $"取消暂存失败: {errMsg}";
-                return;
-            }
-            StatusMessage = $"已取消暂存 {toUnstage.Count} 个文件";
-        }
-        catch (Exception ex)
+            await _cli.ResetFilesAsync(Project.ProjectPath, files, token);
+            await FetchDataAsync(token);
+        });
+
+        if (reset)
         {
-            await MessageBox.ShowAsync($"取消暂存异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-            StatusMessage = $"取消暂存异常: {ex.Message}";
-            Log.Error(ex, "取消暂存异常");
+            Notify.Success($"已取消暂存 {files.Count} 个文件");
         }
-        finally { IsBusy = false; }
-        await FetchDataAsync(CancellationToken.None);
     }
 
-    // ── Publish ──────────────────────────────────────────
-
-    private async Task PublishAsync()
+    [RelayCommand(CanExecute = nameof(CanPublish), IncludeCancelCommand = true)]
+    private async Task PublishAsync(CancellationToken cancellationToken)
     {
-        if (IsBusy) return;
-        if (string.IsNullOrWhiteSpace(NewVersion)) { await MessageBox.ShowAsync("请输入版本号", "提示", MessageBoxIcon.Warning); return; }
-        if (string.IsNullOrWhiteSpace(CommitMessage)) { await MessageBox.ShowAsync("请输入变更说明", "提示", MessageBoxIcon.Warning); return; }
-        if (StagedFiles.Count == 0) { await MessageBox.ShowAsync("暂存区为空，请先暂存文件", "提示", MessageBoxIcon.Warning); return; }
+        var version = NewVersion.Trim();
+        var message = CommitMessage.Trim();
+        var stagedCount = StagedFiles.Count;
 
-        IsBusy = true;
-        IsUploading = true;
-        UploadProgressItems.Clear();
-        UploadDoneCount = 0;
-        UploadTotalCount = StagedFiles.Count;
-        UploadProgressPercent = 0;
-        IsUploadProgressIndeterminate = true;
-        UploadProgressText = $"准备上传 ({StagedFiles.Count} 个文件)...";
-        StatusMessage = "发布中...";
-
+        PrepareUpload(stagedCount);
         try
         {
-            var r = await _cli.PushWithProgressAsync(
-                Project.ProjectPath, NewVersion, CommitMessage,
-                onProgress: progress =>
+            var succeeded = await RunAsync(
+                "发布",
+                async token =>
                 {
-                    Dispatcher.UIThread.Post(() => OnUploadProgress(progress));
+                    await _cli.PushAsync(
+                        Project.ProjectPath,
+                        version,
+                        message,
+                        AfterApplyUpdateScript.Trim(),
+                        SetForceUpdate,
+                        new Progress<UploadProgress>(OnUploadProgress),
+                        token);
                 },
-                afterApplyUpdateScript: AfterApplyUpdateScript,
-                setForceUpdate: SetForceUpdate);
+                showErrorDialog: true,
+                cancellationToken: cancellationToken);
 
-            if (r?.IsSuccess == true)
+            if (!succeeded)
             {
-                var stagedCount = StagedFiles.Count;
-                var unstagedCount = UnstagedFiles.Count;
-                NewVersion = string.Empty;
-                CommitMessage = string.Empty;
-                AfterApplyUpdateScript = string.Empty;
-                StatusMessage = "发布成功，正在刷新...";
-                await MessageBox.ShowAsync($"发布成功 ({stagedCount} 暂存, {unstagedCount} 未暂存)", "成功", MessageBoxIcon.Success);
-                StatusMessage = $"发布成功 ({stagedCount} 暂存, {unstagedCount} 未暂存)";
-                await FetchDataAsync(CancellationToken.None);
+                UploadProgressText = cancellationToken.IsCancellationRequested ? "发布已取消" : "发布失败";
+                return;
             }
-            else
-            {
-                var errMsg = string.IsNullOrWhiteSpace(r?.ErrorMsg) ? "未知错误（详情见日志）" : r.ErrorMsg;
-                StatusMessage = $"发布失败: {errMsg}";
-                await MessageBox.ShowAsync($"发布失败: {errMsg}", "错误", MessageBoxIcon.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"发布异常: {ex.Message}";
-            Log.Error(ex, "发布异常");
-            await MessageBox.ShowAsync($"发布异常: {ex.Message}", "错误", MessageBoxIcon.Error);
+
+            NewVersion = string.Empty;
+            CommitMessage = string.Empty;
+            AfterApplyUpdateScript = string.Empty;
+            SetForceUpdate = false;
+            await RunAsync(
+                "刷新",
+                token => FetchDataAsync(token),
+                showErrorDialog: false,
+                cancellationToken: CancellationToken.None);
+            StatusMessage = $"发布成功（{stagedCount} 个暂存文件）";
+            Notify.Success($"发布成功：{version}");
         }
         finally
         {
             IsUploading = false;
-            IsBusy = false;
         }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanEdit))]
+    private void EditProject() => EditRequested?.Invoke(this, Project);
+
+    [RelayCommand]
+    private async Task LaunchProgramAsync()
+    {
+        var executablePath = GetMainExeFullPath();
+        if (executablePath is null)
+        {
+            Notify.Warning("请先在项目设置中选择主程序");
+            return;
+        }
+
+        if (!File.Exists(executablePath))
+        {
+            await Dialogs.ErrorAsync("启动程序失败", $"主程序不存在：{executablePath}");
+            return;
+        }
+
+        await RunAsync("启动程序", () =>
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = executablePath,
+                WorkingDirectory = Path.GetDirectoryName(executablePath) ?? Project.ProjectPath,
+                UseShellExecute = true
+            });
+            StatusMessage = $"已启动：{executablePath}";
+        });
+    }
+
+    [RelayCommand]
+    private async Task OpenExplorerAsync()
+    {
+        if (!Directory.Exists(Project.ProjectPath))
+        {
+            await Dialogs.ErrorAsync("打开项目目录失败", $"目录不存在：{Project.ProjectPath}");
+            return;
+        }
+
+        await RunAsync("打开项目目录", () =>
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = Project.ProjectPath,
+                UseShellExecute = true
+            });
+            StatusMessage = $"已打开：{Project.ProjectPath}";
+        });
+    }
+
+    [RelayCommand]
+    private async Task OpenFileLocationAsync(FileItem? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        var fullPath = Path.GetFullPath(Path.Combine(Project.ProjectPath, file.RelativePath));
+        var directory = Path.GetDirectoryName(fullPath);
+        if (directory is null || !Directory.Exists(directory))
+        {
+            await Dialogs.ErrorAsync("打开文件位置失败", $"目录不存在：{directory}");
+            return;
+        }
+
+        await RunAsync("打开文件位置", () =>
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = directory,
+                UseShellExecute = true
+            });
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanSuggestVersion))]
+    private void SuggestVersion()
+    {
+        var nextVersion = VersionHelper.SuggestNext(CurrentVersion);
+        if (nextVersion is not null)
+        {
+            NewVersion = nextVersion;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanToggleUnstagedSelection))]
+    private void ToggleSelectAllUnstaged()
+    {
+        var selectAll = !UnstagedFiles.All(file => file.IsSelected);
+        foreach (var file in UnstagedFiles)
+        {
+            file.IsSelected = selectAll;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanToggleStagedSelection))]
+    private void ToggleSelectAllStaged()
+    {
+        var selectAll = !StagedFiles.All(file => file.IsSelected);
+        foreach (var file in StagedFiles)
+        {
+            file.IsSelected = selectAll;
+        }
+    }
+
+    private bool CanRefresh() => !IsBusy && !string.IsNullOrWhiteSpace(Project.ProjectPath);
+
+    private bool CanAddAll() => !IsBusy && UnstagedFiles.Count > 0;
+
+    private bool CanResetAll() => !IsBusy && StagedFiles.Count > 0;
+
+    private bool CanAddSelected() => !IsBusy && UnstagedFiles.Any(file => file.IsSelected);
+
+    private bool CanResetSelected() => !IsBusy && StagedFiles.Any(file => file.IsSelected);
+
+    private bool CanPublish()
+        => !IsBusy
+           && !IsUploading
+           && StagedFiles.Count > 0
+           && !string.IsNullOrWhiteSpace(NewVersion)
+           && !string.IsNullOrWhiteSpace(CommitMessage);
+
+    private bool CanEdit() => !IsBusy;
+
+    private bool CanSuggestVersion() => !IsBusy && VersionHelper.SuggestNext(CurrentVersion) is not null;
+
+    private bool CanToggleUnstagedSelection() => !IsBusy && UnstagedFiles.Count > 0;
+
+    private bool CanToggleStagedSelection() => !IsBusy && StagedFiles.Count > 0;
+
+    private async Task FetchDataAsync(CancellationToken cancellationToken)
+    {
+        var status = await _cli.GetStatusAsync(Project.ProjectPath, cancellationToken);
+        var changeLogs = await _cli.GetLogAsync(Project.ProjectPath, cancellationToken: cancellationToken);
+        ApplyStatus(status, changeLogs);
+        StatusMessage = $"未暂存 {UnstagedFiles.Count}，已暂存 {StagedFiles.Count}";
+    }
+
+    private void ApplyStatus(StatusData status, IReadOnlyList<ChangeLog> changeLogs)
+    {
+        ReplaceFiles(
+            UnstagedFiles,
+            status.Unstaged
+                .Where(item => item.Status != FileStatus.Deleted)
+                .Select(FileItem.FromCliItem));
+
+        ReplaceFiles(StagedFiles, status.Staged.Select(FileItem.FromCliItem));
+
+        ChangeLogs.Clear();
+        foreach (var entry in changeLogs)
+        {
+            ChangeLogs.Add(entry);
+        }
+
+        CurrentVersion = ChangeLogs.Count > 0 ? ChangeLogs[0].Version : string.Empty;
+    }
+
+    private void ReplaceFiles(ObservableCollection<FileItem> target, IEnumerable<FileItem> items)
+    {
+        foreach (var file in target)
+        {
+            file.PropertyChanged -= OnFilePropertyChanged;
+        }
+
+        target.Clear();
+        foreach (var file in items)
+        {
+            target.Add(file);
+        }
+    }
+
+    private void PrepareUpload(int total)
+    {
+        UploadProgressItems.Clear();
+        _uploadSlots.Clear();
+        UploadDoneCount = 0;
+        UploadFailedCount = 0;
+        UploadTotalCount = total;
+        UploadProgressPercent = 0;
+        IsUploadProgressIndeterminate = total == 0;
+        UploadProgressText = total == 0 ? "准备上传…" : $"准备上传 {total} 个文件…";
+        UploadSummary = string.Empty;
+        IsUploading = true;
     }
 
     private void OnUploadProgress(UploadProgress progress)
     {
+        if (progress.Total > 0)
+        {
+            UploadTotalCount = progress.Total;
+        }
+
+        IsUploadProgressIndeterminate = UploadTotalCount <= 0;
+
         switch (progress.Status)
         {
             case "START":
-                IsUploadProgressIndeterminate = false;
-                UploadProgressItems.Add(progress);
-                UploadProgressPercent = UploadTotalCount > 0
-                    ? (double)UploadDoneCount / UploadTotalCount * 100
-                    : 0;
-                UploadProgressText = $"正在上传 {progress.File} ({UploadDoneCount}/{UploadTotalCount})...";
+                UpsertProgress(progress);
+                UploadProgressText = $"正在上传 {progress.File}（{UploadDoneCount + UploadFailedCount}/{UploadTotalCount}）";
                 break;
 
             case "DONE":
             case "FAIL":
-                // 查找并替换对应索引的项
-                for (int i = 0; i < UploadProgressItems.Count; i++)
-                {
-                    if (UploadProgressItems[i].Index == progress.Index)
-                    {
-                        UploadProgressItems[i] = progress;
-                        break;
-                    }
-                }
-                if (progress.Status == "DONE")
+                UpsertProgress(progress);
+                if (progress.IsDone)
                 {
                     UploadDoneCount++;
                 }
-                UploadProgressPercent = UploadTotalCount > 0
-                    ? (double)UploadDoneCount / UploadTotalCount * 100
-                    : 0;
-                if (progress.Status == "FAIL" && !string.IsNullOrWhiteSpace(progress.Error))
-                {
-                    UploadProgressText = $"已失败 {progress.File}: {progress.Error}";
-                }
                 else
                 {
-                    var doneText = progress.Status == "DONE" ? "完成" : "失败";
-                    UploadProgressText = $"已{doneText} {progress.File} ({UploadDoneCount}/{UploadTotalCount})";
+                    UploadFailedCount++;
                 }
+
+                UpdateUploadPercent();
+                UploadSummary = $"完成 {UploadDoneCount}，失败 {UploadFailedCount}，共 {UploadTotalCount}";
+                UploadProgressText = progress.IsDone
+                    ? $"已完成 {progress.File}（{UploadDoneCount + UploadFailedCount}/{UploadTotalCount}）"
+                    : $"上传失败 {progress.File}：{progress.Error}";
                 break;
         }
     }
 
-    // ── EditProject ───────────────────────────────────────
-
-    private async Task EditProjectCmdAsync()
+    private void UpsertProgress(UploadProgress progress)
     {
-        if (IsBusy) return;
-        var editAsync = EditProjectAsync;
-        if (editAsync == null) return;
-        IsBusy = true;
-        try
+        if (_uploadSlots.TryGetValue(progress.Index, out var slot) && slot < UploadProgressItems.Count)
         {
-            var result = await editAsync(Project);
-            if (result != null)
-            {
-                await MessageBox.ShowAsync("项目配置已更新", "成功", MessageBoxIcon.Success);
-            }
+            UploadProgressItems[slot] = progress;
+            return;
         }
-        catch (Exception ex)
-        {
-            await MessageBox.ShowAsync($"编辑项目异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-            StatusMessage = $"编辑项目异常: {ex.Message}";
-            Log.Error(ex, "编辑项目异常");
-        }
-        finally { IsBusy = false; }
+
+        _uploadSlots[progress.Index] = UploadProgressItems.Count;
+        UploadProgressItems.Add(progress);
     }
 
-    // ── Launch / Explorer ────────────────────────────────
-
-    private void LaunchProgram()
+    private void UpdateUploadPercent()
     {
-        try
+        UploadProgressPercent = UploadTotalCount > 0
+            ? (double)(UploadDoneCount + UploadFailedCount) / UploadTotalCount * 100
+            : 0;
+    }
+
+    private void OnUnstagedFilesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        AttachOrDetach(e, UnstagedFiles);
+        AddAllCommand.NotifyCanExecuteChanged();
+        AddSelectedCommand.NotifyCanExecuteChanged();
+        ToggleSelectAllUnstagedCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(UnstagedSelectionText));
+        OnPropertyChanged(nameof(HasUnstagedFiles));
+        OnPropertyChanged(nameof(PublishButtonText));
+    }
+
+    private void OnStagedFilesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        AttachOrDetach(e, StagedFiles);
+        ResetAllCommand.NotifyCanExecuteChanged();
+        ResetSelectedCommand.NotifyCanExecuteChanged();
+        PublishCommand.NotifyCanExecuteChanged();
+        ToggleSelectAllStagedCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(StagedSelectionText));
+        OnPropertyChanged(nameof(HasStagedFiles));
+        OnPropertyChanged(nameof(PublishHint));
+        OnPropertyChanged(nameof(HasPublishHint));
+        OnPropertyChanged(nameof(PublishButtonText));
+    }
+
+    private void AttachOrDetach(NotifyCollectionChangedEventArgs args, ObservableCollection<FileItem> files)
+    {
+        if (args.OldItems is not null)
         {
-            var exePath = GetMainExeFullPath();
-            if (string.IsNullOrWhiteSpace(exePath))
+            foreach (FileItem file in args.OldItems)
             {
-                Dispatcher.UIThread.Post(() =>
-                    MessageBox.ShowAsync("请先在项目设置中配置主程序路径", "提示", MessageBoxIcon.Warning));
-                return;
+                file.PropertyChanged -= OnFilePropertyChanged;
             }
-            if (!File.Exists(exePath))
-            {
-                Dispatcher.UIThread.Post(() =>
-                    MessageBox.ShowAsync($"主程序不存在: {exePath}", "错误", MessageBoxIcon.Error));
-                return;
-            }
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = exePath,
-                WorkingDirectory = Path.GetDirectoryName(exePath) ?? Project.ProjectPath,
-                UseShellExecute = true
-            });
-            StatusMessage = $"已启动: {exePath}";
-            Log.Information("启动程序: {Path}", exePath);
         }
-        catch (Exception ex)
+
+        if (args.NewItems is not null)
         {
-            Log.Error(ex, "启动程序失败: {Path}", Project.MainExePath);
-            Dispatcher.UIThread.Post(() =>
-                MessageBox.ShowAsync($"启动失败: {ex.Message}", "错误", MessageBoxIcon.Error));
+            foreach (FileItem file in args.NewItems)
+            {
+                file.PropertyChanged += OnFilePropertyChanged;
+            }
         }
     }
 
-    private void OpenExplorer()
+    private void OnFilePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        try
+        if (e.PropertyName != nameof(FileItem.IsSelected))
         {
-            var dir = Project.ProjectPath;
-            if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir))
-            {
-                Dispatcher.UIThread.Post(() =>
-                    MessageBox.ShowAsync($"项目目录不存在: {dir}", "错误", MessageBoxIcon.Error));
-                return;
-            }
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = dir,
-                UseShellExecute = true
-            });
-            StatusMessage = $"已打开: {dir}";
-            Log.Information("打开文件管理器: {Path}", dir);
+            return;
         }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "打开文件管理器失败: {Path}", Project.ProjectPath);
-            Dispatcher.UIThread.Post(() =>
-                MessageBox.ShowAsync($"打开失败: {ex.Message}", "错误", MessageBoxIcon.Error));
-        }
+
+        AddSelectedCommand.NotifyCanExecuteChanged();
+        ResetSelectedCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(UnstagedSelectionText));
+        OnPropertyChanged(nameof(StagedSelectionText));
     }
 
     private string? GetMainExeFullPath()
     {
-        var mainExePath = Project.MainExePath;
-        if (string.IsNullOrWhiteSpace(mainExePath))
-            return null;
-        // 如果是绝对路径，确保在项目目录内
-        if (Path.IsPathRooted(mainExePath))
+        if (string.IsNullOrWhiteSpace(Project.MainExePath))
         {
-            var projectPath = Project.ProjectPath;
-            if (string.IsNullOrWhiteSpace(projectPath))
-                return null;
-            var normalizedProject = Path.GetFullPath(projectPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            var normalizedExe = Path.GetFullPath(mainExePath);
-            if (!normalizedExe.StartsWith(normalizedProject + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                return null;
-            return mainExePath;
+            return null;
         }
-        // 否则相对于项目路径
-        var projPath = Project.ProjectPath;
-        if (string.IsNullOrWhiteSpace(projPath))
-            return null;
-        var fullPath = Path.GetFullPath(Path.Combine(projPath, mainExePath));
-        // 确保解析后的路径仍在项目目录内（防止 ../../ 路径穿越）
-        var normProject = Path.GetFullPath(projPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        if (!fullPath.StartsWith(normProject + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            return null;
-        return fullPath;
+
+        return ProjectInputHelper.ResolveMainExePath(Project.ProjectPath, Project.MainExePath);
     }
+
+    private static List<string> SelectedPaths(IEnumerable<FileItem> files)
+        => files.Where(file => file.IsSelected).Select(file => file.RelativePath).ToList();
 }

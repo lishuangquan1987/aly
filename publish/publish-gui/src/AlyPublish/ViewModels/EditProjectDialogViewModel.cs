@@ -1,588 +1,239 @@
-using System;
 using System.Collections.ObjectModel;
-
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Avalonia.Controls;
-using Avalonia.Platform.Storage;
-using Avalonia.Threading;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using Newtonsoft.Json;
-using Ursa.Controls;
+using AlyPublish.Helpers;
 using AlyPublish.Models.Local;
 using AlyPublish.Services;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Serilog;
 
 namespace AlyPublish.ViewModels;
 
-public partial class EditProjectDialogViewModel : ObservableObject
+/// <summary>
+/// Edits GUI fields and .updator/shared.json in one transaction. Local CLI writes must succeed
+/// before the server sync is attempted; a sync failure is only a warning.
+/// </summary>
+public sealed partial class EditProjectDialogViewModel : ViewModelBase
 {
-    private readonly CliService _cli;
+    private readonly ConfigService _config;
+    private readonly ProjectConfigService _projectConfig;
     private string _projectPath = string.Empty;
-    private string _originalProjectName = string.Empty;
 
-    [ObservableProperty] private string _displayName = string.Empty;
-    [ObservableProperty] private string _serverUrl = string.Empty;
-    [ObservableProperty] private string _projectName = string.Empty;
-    [ObservableProperty] private ObservableCollection<string> _ignoreFolders = new();
-    [ObservableProperty] private ObservableCollection<string> _ignoreFiles = new();
-    [ObservableProperty] private ObservableCollection<string> _unCopyFolders = new();
-    [ObservableProperty] private ObservableCollection<string> _unCopyFiles = new();
-    [ObservableProperty] private bool _isBusy;
-    [ObservableProperty] private string _statusMessage = string.Empty;
-    [ObservableProperty] private string _mainExePath = string.Empty;
-
-    [ObservableProperty] private bool _isEditingUrl;
-    [ObservableProperty] private string _editUrl = string.Empty;
-    [ObservableProperty] private string _newFolderItem = string.Empty;
-    [ObservableProperty] private string _newFileItem = string.Empty;
-    [ObservableProperty] private string _newUnCopyFolderItem = string.Empty;
-    [ObservableProperty] private string _newUnCopyFileItem = string.Empty;
-
-    public event Action<ProjectConfig?>? RequestClose;
-
-    public IAsyncRelayCommand SaveUrlCommand { get; }
-    public IRelayCommand StartEditUrlCommand { get; }
-    public IAsyncRelayCommand AddFolderCommand { get; }
-    public IAsyncRelayCommand RemoveFolderCommand { get; }
-    public IAsyncRelayCommand AddFileCommand { get; }
-    public IAsyncRelayCommand RemoveFileCommand { get; }
-    public IAsyncRelayCommand AddUnCopyFolderCommand { get; }
-    public IAsyncRelayCommand RemoveUnCopyFolderCommand { get; }
-    public IAsyncRelayCommand AddUnCopyFileCommand { get; }
-    public IAsyncRelayCommand RemoveUnCopyFileCommand { get; }
-    public IAsyncRelayCommand BrowseIgnoreFolderCommand { get; }
-    public IAsyncRelayCommand BrowseIgnoreFileCommand { get; }
-    public IAsyncRelayCommand BrowseUnCopyFolderCommand { get; }
-    public IAsyncRelayCommand BrowseUnCopyFileCommand { get; }
-    public IAsyncRelayCommand BrowseExeCommand { get; }
-    public IRelayCommand CancelCommand { get; }
-    public IAsyncRelayCommand SaveCommand { get; }
-
-    public EditProjectDialogViewModel(CliService cli)
+    public EditProjectDialogViewModel(
+        ConfigService config,
+        ProjectConfigService projectConfig,
+        IDialogService dialogs,
+        INotificationService notifications)
+        : base(dialogs, notifications)
     {
-        _cli = cli;
-
-        SaveUrlCommand = new AsyncRelayCommand(SaveUrlAsync);
-        AddFolderCommand = new AsyncRelayCommand<string?>(AddFolderAsync);
-        RemoveFolderCommand = new AsyncRelayCommand<string?>(RemoveFolderAsync);
-        AddFileCommand = new AsyncRelayCommand<string?>(AddFileAsync);
-        RemoveFileCommand = new AsyncRelayCommand<string?>(RemoveFileAsync);
-        AddUnCopyFolderCommand = new AsyncRelayCommand<string?>(AddUnCopyFolderAsync);
-        RemoveUnCopyFolderCommand = new AsyncRelayCommand<string?>(RemoveUnCopyFolderAsync);
-        AddUnCopyFileCommand = new AsyncRelayCommand<string?>(AddUnCopyFileAsync);
-        RemoveUnCopyFileCommand = new AsyncRelayCommand<string?>(RemoveUnCopyFileAsync);
-        BrowseIgnoreFolderCommand = new AsyncRelayCommand(() => BrowseAndAddAsync("ignore.folders"));
-        BrowseIgnoreFileCommand = new AsyncRelayCommand(() => BrowseAndAddAsync("ignore.files"));
-        BrowseUnCopyFolderCommand = new AsyncRelayCommand(() => BrowseAndAddAsync("un_copy.folders"));
-        BrowseUnCopyFileCommand = new AsyncRelayCommand(() => BrowseAndAddAsync("un_copy.files"));
-        BrowseExeCommand = new AsyncRelayCommand(BrowseExeAsync);
-        CancelCommand = new RelayCommand(() => RequestClose?.Invoke(null));
-        SaveCommand = new AsyncRelayCommand(SaveAsync);
-        StartEditUrlCommand = new RelayCommand(StartEditUrl);
+        _config = config;
+        _projectConfig = projectConfig;
     }
 
-    private void StartEditUrl()
+    public ObservableCollection<string> IgnoreFolders { get; } = [];
+
+    public ObservableCollection<string> IgnoreFiles { get; } = [];
+
+    public ObservableCollection<string> UnCopyFolders { get; } = [];
+
+    public ObservableCollection<string> UnCopyFiles { get; } = [];
+
+    public ObservableCollection<string> KnownServerUrls { get; } = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    private string _displayName = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MainExeHint))]
+    private string _mainExePath = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    private string _serverUrl = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    private string _projectName = string.Empty;
+
+    [ObservableProperty]
+    private bool _isLoaded;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLoadError))]
+    private string _loadError = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyPropertyChangedFor(nameof(HasValidationMessage))]
+    private string _validationMessage = string.Empty;
+
+    public bool HasLoadError => !string.IsNullOrEmpty(LoadError);
+
+    public bool HasValidationMessage => !string.IsNullOrEmpty(ValidationMessage);
+
+    public string MainExeHint
     {
-        EditUrl = ServerUrl;
-        IsEditingUrl = true;
+        get
+        {
+            if (string.IsNullOrWhiteSpace(MainExePath))
+            {
+                return "可选：用于“启动程序”和 UpdateFolder";
+            }
+
+            var stored = ProjectInputHelper.ToStoredMainExePath(_projectPath, MainExePath.Trim());
+            return Path.IsPathRooted(stored) ? "不在项目目录内，将保存为绝对路径" : $"将保存为：{stored}";
+        }
     }
 
-    public void LoadProject(ProjectConfig project)
+    public void Load(ProjectConfig project)
     {
-        if (project == null) throw new ArgumentNullException(nameof(project));
         _projectPath = project.ProjectPath;
         DisplayName = project.DisplayName;
-        MainExePath = project.MainExePath ?? string.Empty;
-        _ = LoadCliConfigAsync().ContinueWith(t =>
-        {
-            if (t.IsFaulted) Log.Error(t.Exception, "LoadCliConfig failed");
-        }, TaskScheduler.Default);
-    }
+        MainExePath = project.MainExePath;
 
-    private async Task LoadCliConfigAsync()
-    {
-        var sharedPath = Path.Combine(_projectPath, ".updator", "shared.json");
-        if (!File.Exists(sharedPath))
+        var existingProjects = _config.LoadProjects();
+        foreach (var url in ProjectConfigService.GetKnownServerUrls(existingProjects.Select(item => item.ProjectPath)))
         {
-            await Dispatcher.UIThread.InvokeAsync(() =>
-                MessageBox.ShowAsync(".updator/shared.json 不存在，项目可能未初始化", "错误", MessageBoxIcon.Error));
-            return;
+            AddIfMissing(KnownServerUrls, url);
         }
 
         try
         {
-            var json = File.ReadAllText(sharedPath);
-            var cfg = JsonConvert.DeserializeObject<SharedConfig>(json);
-            if (cfg != null)
-            {
-                // 在 UI 线程上设置属性，避免跨线程访问
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    ServerUrl = cfg.ServerUrl ?? "";
-                    ProjectName = cfg.ProjectName ?? "";
-                    _originalProjectName = ProjectName;
-                    IgnoreFolders = new ObservableCollection<string>(cfg.IgnoreFolders ?? []);
-                    IgnoreFiles = new ObservableCollection<string>(cfg.IgnoreFiles ?? []);
-                    UnCopyFolders = new ObservableCollection<string>(cfg.UnCopyFolders ?? []);
-                    UnCopyFiles = new ObservableCollection<string>(cfg.UnCopyFiles ?? []);
-                });
-            }
+            var shared = ProjectConfigService.Load(_projectPath);
+            ServerUrl = shared.ServerUrl;
+            ProjectName = shared.ProjectName;
+            Fill(IgnoreFolders, shared.IgnoreFolders);
+            Fill(IgnoreFiles, shared.IgnoreFiles);
+            Fill(UnCopyFolders, shared.UnCopyFolders);
+            Fill(UnCopyFiles, shared.UnCopyFiles);
+            AddIfMissing(KnownServerUrls, ServerUrl);
+            IsLoaded = true;
         }
-        catch (Exception ex)
+        catch (ProjectConfigException ex)
         {
-            Log.Error(ex, "读取 shared.json 失败");
-            await Dispatcher.UIThread.InvokeAsync(() =>
-                MessageBox.ShowAsync($"读取配置失败: {ex.Message}", "错误", MessageBoxIcon.Error));
+            LoadError = ex.Message;
+            IsLoaded = false;
+            Log.Warning(ex, "加载项目配置失败: {Path}", _projectPath);
         }
+
+        UpdateValidation();
     }
 
-    private async Task SaveUrlAsync()
-    {
-        if (string.IsNullOrWhiteSpace(EditUrl)) return;
-        IsBusy = true;
-        try
-        {
-            var r = await _cli.ConfigSetAsync(_projectPath, "server.url", EditUrl.Trim());
-            if (r?.IsSuccess == true)
-            {
-                ServerUrl = EditUrl.Trim();
-                IsEditingUrl = false;
-                await MessageBox.ShowAsync("服务端地址已更新", "成功", MessageBoxIcon.Success);
-            }
-            else
-            {
-                await MessageBox.ShowAsync($"更新失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "更新服务端地址失败: {Url}", EditUrl);
-            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-        }
-        finally { IsBusy = false; }
-    }
+    partial void OnDisplayNameChanged(string value) => UpdateValidation();
 
-    private async Task AddFolderAsync(string? item)
-    {
-        if (string.IsNullOrWhiteSpace(item)) return;
-        IsBusy = true;
-        try
-        {
-            var r = await _cli.ConfigSetArrayAddAsync(_projectPath, "ignore.folders", item.Trim());
-            if (r?.IsSuccess == true)
-            {
-                IgnoreFolders.Add(item.Trim());
-                NewFolderItem = string.Empty;
-                StatusMessage = "已添加";
-                await SyncIgnoreToServerAsync();
-            }
-            else
-            {
-                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "添加忽略文件夹失败: {Item}", item);
-            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-        }
-        finally { IsBusy = false; }
-    }
+    partial void OnServerUrlChanged(string value) => UpdateValidation();
 
-    private async Task RemoveFolderAsync(string? item)
-    {
-        if (string.IsNullOrWhiteSpace(item)) return;
-        IsBusy = true;
-        try
-        {
-            var r = await _cli.ConfigSetArrayRemoveAsync(_projectPath, "ignore.folders", item);
-            if (r?.IsSuccess == true)
-            {
-                IgnoreFolders.Remove(item);
-                StatusMessage = "已移除";
-                await SyncIgnoreToServerAsync();
-            }
-            else
-            {
-                await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "移除忽略文件夹失败: {Item}", item);
-            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-        }
-        finally { IsBusy = false; }
-    }
+    partial void OnProjectNameChanged(string value) => UpdateValidation();
 
-    private async Task AddFileAsync(string? item)
-    {
-        if (string.IsNullOrWhiteSpace(item)) return;
-        IsBusy = true;
-        try
-        {
-            var r = await _cli.ConfigSetArrayAddAsync(_projectPath, "ignore.files", item.Trim());
-            if (r?.IsSuccess == true)
-            {
-                IgnoreFiles.Add(item.Trim());
-                NewFileItem = string.Empty;
-                StatusMessage = "已添加";
-                await SyncIgnoreToServerAsync();
-            }
-            else
-            {
-                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "添加忽略文件失败: {Item}", item);
-            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-        }
-        finally { IsBusy = false; }
-    }
+    protected override void OnBusyChanged() => SaveCommand.NotifyCanExecuteChanged();
 
-    private async Task RemoveFileAsync(string? item)
-    {
-        if (string.IsNullOrWhiteSpace(item)) return;
-        IsBusy = true;
-        try
-        {
-            var r = await _cli.ConfigSetArrayRemoveAsync(_projectPath, "ignore.files", item);
-            if (r?.IsSuccess == true)
-            {
-                IgnoreFiles.Remove(item);
-                StatusMessage = "已移除";
-                await SyncIgnoreToServerAsync();
-            }
-            else
-            {
-                await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "移除忽略文件失败: {Item}", item);
-            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-        }
-        finally { IsBusy = false; }
-    }
-
-    // ── UnCopy Folders ────────────────────────────────────
-
-    private async Task AddUnCopyFolderAsync(string? item)
-    {
-        if (string.IsNullOrWhiteSpace(item)) return;
-        IsBusy = true;
-        try
-        {
-            var r = await _cli.ConfigSetArrayAddAsync(_projectPath, "un_copy.folders", item.Trim());
-            if (r?.IsSuccess == true)
-            {
-                UnCopyFolders.Add(item.Trim());
-                NewUnCopyFolderItem = string.Empty;
-                StatusMessage = "已添加（不复制文件夹）";
-            }
-            else
-            {
-                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "添加不复制文件夹失败: {Item}", item);
-            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-        }
-        finally { IsBusy = false; }
-    }
-
-    private async Task RemoveUnCopyFolderAsync(string? item)
-    {
-        if (string.IsNullOrWhiteSpace(item)) return;
-        IsBusy = true;
-        try
-        {
-            var r = await _cli.ConfigSetArrayRemoveAsync(_projectPath, "un_copy.folders", item);
-            if (r?.IsSuccess == true)
-            {
-                UnCopyFolders.Remove(item);
-                StatusMessage = "已移除（不复制文件夹）";
-            }
-            else
-            {
-                await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "移除不复制文件夹失败: {Item}", item);
-            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-        }
-        finally { IsBusy = false; }
-    }
-
-    // ── UnCopy Files ──────────────────────────────────────
-
-    private async Task AddUnCopyFileAsync(string? item)
-    {
-        if (string.IsNullOrWhiteSpace(item)) return;
-        IsBusy = true;
-        try
-        {
-            var r = await _cli.ConfigSetArrayAddAsync(_projectPath, "un_copy.files", item.Trim());
-            if (r?.IsSuccess == true)
-            {
-                UnCopyFiles.Add(item.Trim());
-                NewUnCopyFileItem = string.Empty;
-                StatusMessage = "已添加（不复制文件）";
-            }
-            else
-            {
-                await MessageBox.ShowAsync($"添加失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "添加不复制文件失败: {Item}", item);
-            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-        }
-        finally { IsBusy = false; }
-    }
-
-    private async Task RemoveUnCopyFileAsync(string? item)
-    {
-        if (string.IsNullOrWhiteSpace(item)) return;
-        IsBusy = true;
-        try
-        {
-            var r = await _cli.ConfigSetArrayRemoveAsync(_projectPath, "un_copy.files", item);
-            if (r?.IsSuccess == true)
-            {
-                UnCopyFiles.Remove(item);
-                StatusMessage = "已移除（不复制文件）";
-            }
-            else
-            {
-                await MessageBox.ShowAsync($"移除失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "移除不复制文件失败: {Item}", item);
-            await MessageBox.ShowAsync($"操作异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-        }
-        finally { IsBusy = false; }
-    }
-
-    // ── Browse MainExe ────────────────────────────────────
-
-    /// <summary>获取当前窗口的 TopLevel，供 StorageProvider 使用</summary>
-    private static TopLevel? GetTopLevel()
-    {
-        return TopLevel.GetTopLevel(Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-            ? desktop.MainWindow : null);
-    }
-
-    /// <summary>将绝对路径转换为相对于项目目录的路径（使用 / 分隔符），
-    /// 不在项目目录内时返回原始绝对路径。</summary>
-    private string ToProjectRelativePath(string fullPath)
-    {
-        if (string.IsNullOrWhiteSpace(_projectPath) || string.IsNullOrWhiteSpace(fullPath))
-            return fullPath;
-        var projectDir = Path.GetFullPath(_projectPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var full = Path.GetFullPath(fullPath);
-        if (full.StartsWith(projectDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
-            full.StartsWith(projectDir + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-        {
-            return full.Substring(projectDir.Length + 1)
-                .Replace(Path.DirectorySeparatorChar, '/')
-                .Replace(Path.AltDirectorySeparatorChar, '/');
-        }
-        return fullPath;
-    }
-
-    private async Task BrowseExeAsync()
-    {
-        try
-        {
-            var topLevel = GetTopLevel();
-            if (topLevel == null) return;
-
-            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-            {
-                Title = "选择主程序 (.exe)",
-                AllowMultiple = false,
-                FileTypeFilter = [new FilePickerFileType("可执行文件") { Patterns = ["*.exe"] }]
-            });
-
-            if (files.Count > 0)
-            {
-                var selectedPath = files[0].Path.LocalPath;
-                // 转换为相对路径（相对于 ProjectPath）
-                if (!string.IsNullOrWhiteSpace(_projectPath))
-                {
-                    var rel = ToProjectRelativePath(selectedPath);
-                    if (rel == selectedPath)
-                    {
-                        // 不在项目目录内，使用绝对路径
-                        MainExePath = selectedPath;
-                        await MessageBox.ShowAsync("所选文件不在项目目录内，将使用绝对路径", "提示", MessageBoxIcon.Warning);
-                    }
-                    else
-                    {
-                        MainExePath = rel;
-                    }
-                }
-                else
-                {
-                    MainExePath = selectedPath;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "选择主程序失败");
-            await MessageBox.ShowAsync($"选择失败: {ex.Message}", "错误", MessageBoxIcon.Error);
-        }
-    }
-
-    // ── Browse ignore / un_copy 项（打开资源管理器选择）────────────────
-
-    /// <summary>根据配置键打开资源管理器选择文件夹/文件并直接添加。
-    /// 文件夹键：ignore.folders / un_copy.folders；文件键：ignore.files / un_copy.files。</summary>
-    private async Task BrowseAndAddAsync(string configKey)
-    {
-        try
-        {
-            var topLevel = GetTopLevel();
-            if (topLevel == null) return;
-
-            var isFolder = configKey is "ignore.folders" or "un_copy.folders";
-            var title = isFolder ? "选择文件夹（忽略/不复制）" : "选择文件（忽略/不复制）";
-
-            if (isFolder)
-            {
-                var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-                {
-                    Title = title,
-                    AllowMultiple = true
-                });
-                if (folders.Count == 0) return;
-                foreach (var folder in folders)
-                {
-                    var item = ToProjectRelativePath(folder.Path.LocalPath);
-                    switch (configKey)
-                    {
-                        case "ignore.folders":
-                            await AddFolderAsync(item);
-                            break;
-                        case "un_copy.folders":
-                            await AddUnCopyFolderAsync(item);
-                            break;
-                    }
-                }
-            }
-            else
-            {
-                var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-                {
-                    Title = title,
-                    AllowMultiple = true
-                });
-                if (files.Count == 0) return;
-                foreach (var file in files)
-                {
-                    var item = ToProjectRelativePath(file.Path.LocalPath);
-                    switch (configKey)
-                    {
-                        case "ignore.files":
-                            await AddFileAsync(item);
-                            break;
-                        case "un_copy.files":
-                            await AddUnCopyFileAsync(item);
-                            break;
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "选择 {Key} 项失败", configKey);
-            await MessageBox.ShowAsync($"选择失败: {ex.Message}", "错误", MessageBoxIcon.Error);
-        }
-    }
-
-    /// <summary>将当前的 ignore 设置同步到服务端（保留服务端原有 title，不覆盖）</summary>
-    private async Task SyncIgnoreToServerAsync()
-    {
-        if (string.IsNullOrWhiteSpace(ServerUrl) || string.IsNullOrWhiteSpace(ProjectName))
-            return;
-        try
-        {
-            // 先获取服务端项目信息，避免将 title 覆盖为 projectName
-            var listResult = await _cli.ProjectListAsync(ServerUrl);
-            if (listResult?.IsSuccess != true || listResult.Data == null)
-            {
-                Log.Warning("同步 ignore 前获取项目列表失败: {Error}", listResult?.ErrorMsg);
-                StatusMessage = "本地已更新，但服务端同步失败";
-                return;
-            }
-            var serverProject = listResult.Data.FirstOrDefault(p => p.Name == ProjectName);
-            if (serverProject == null)
-            {
-                Log.Warning("服务端未找到项目: {Name}", ProjectName);
-                StatusMessage = "本地已更新，但服务端未找到该项目";
-                return;
-            }
-            var r = await _cli.ProjectUpdateAsync(ServerUrl, ProjectName, serverProject.Title,
-                false, IgnoreFolders.ToList(), IgnoreFiles.ToList());
-            if (r?.IsSuccess != true)
-            {
-                Log.Warning("同步 ignore 到服务端失败: {Error}", r?.ErrorMsg);
-                StatusMessage = "本地已更新，但服务端同步失败";
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "同步 ignore 到服务端异常");
-            StatusMessage = "本地已更新，但服务端同步异常";
-        }
-    }
-
+    [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task SaveAsync()
     {
-        // 项目名称（shared.json 的 project_name）发生变化时，先持久化再关闭
-        var newName = ProjectName?.Trim() ?? string.Empty;
-        if (!string.IsNullOrEmpty(newName) && !string.Equals(newName, _originalProjectName, StringComparison.Ordinal))
+        var draft = new ProjectConfigDraft(
+            ServerUrl.Trim(),
+            ProjectName.Trim(),
+            Clean(IgnoreFolders),
+            Clean(IgnoreFiles),
+            Clean(UnCopyFolders),
+            Clean(UnCopyFiles));
+
+        string? syncWarning = null;
+        var saved = await RunAsync("保存项目配置", async token =>
         {
-            IsBusy = true;
-            try
+            var changed = await _projectConfig.SaveAsync(_projectPath, draft, token);
+            if (changed)
             {
-                var r = await _cli.ConfigSetAsync(_projectPath, "project.name", newName);
-                if (r?.IsSuccess != true)
-                {
-                    await MessageBox.ShowAsync($"项目名称保存失败: {r?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-                    return; // 保存失败不关闭对话框
-                }
+                syncWarning = await _projectConfig.SyncToServerAsync(_projectPath, token);
             }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "保存项目名称失败: {Name}", newName);
-                await MessageBox.ShowAsync($"项目名称保存异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-                return;
-            }
-            finally { IsBusy = false; }
+        });
+
+        if (!saved)
+        {
+            return;
         }
 
-        var result = new ProjectConfig
+        if (!string.IsNullOrWhiteSpace(syncWarning))
+        {
+            Notify.Warning(syncWarning);
+        }
+
+        Close(new ProjectConfig
         {
             DisplayName = DisplayName.Trim(),
             ProjectPath = _projectPath,
-            MainExePath = MainExePath?.Trim() ?? string.Empty
-        };
-        RequestClose?.Invoke(result);
+            MainExePath = ProjectInputHelper.ToStoredMainExePath(_projectPath, MainExePath.Trim())
+        });
     }
+
+    [RelayCommand]
+    private void Cancel() => Close(null);
+
+    [RelayCommand]
+    private void UseKnownServerUrl(string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            ServerUrl = value.Trim();
+        }
+    }
+
+    [RelayCommand]
+    private void AddSuggestedIgnoreFolder(string? value) => AddIfMissing(IgnoreFolders, value);
+
+    [RelayCommand]
+    private void AddSuggestedIgnoreFile(string? value) => AddIfMissing(IgnoreFiles, value);
+
+    private bool CanSave()
+        => !IsBusy
+           && IsLoaded
+           && !string.IsNullOrWhiteSpace(DisplayName)
+           && !string.IsNullOrWhiteSpace(ServerUrl)
+           && !string.IsNullOrWhiteSpace(ProjectName)
+           && string.IsNullOrEmpty(ValidationMessage);
+
+    private void UpdateValidation()
+    {
+        ValidationMessage = string.IsNullOrWhiteSpace(ServerUrl)
+            ? "请填写服务端地址"
+            : string.IsNullOrWhiteSpace(ProjectName)
+                ? "请填写服务端项目名称"
+                : string.Empty;
+
+        SaveCommand.NotifyCanExecuteChanged();
+    }
+
+    private static void Fill(ObservableCollection<string> target, IEnumerable<string> values)
+    {
+        target.Clear();
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                target.Add(value);
+            }
+        }
+    }
+
+    private static void AddIfMissing(ObservableCollection<string> target, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        var trimmed = value.Trim();
+        if (!target.Contains(trimmed))
+        {
+            target.Add(trimmed);
+        }
+    }
+
+    private static List<string> Clean(IEnumerable<string> values)
+        => values
+            .Select(value => value.Trim())
+            .Where(value => value.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
 }

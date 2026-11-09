@@ -1,0 +1,721 @@
+<UserControl
+    x:Class="AlyPublish.Views.ProjectTabView"
+    x:DataType="vm:ProjectTabViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:cli="using:AlyPublish.Models.Cli"
+    xmlns:local="using:AlyPublish.Models.Local"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:vm="using:AlyPublish.ViewModels">
+
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*" />
+      <ColumnDefinition Width="4" />
+      <ColumnDefinition Width="380" MinWidth="260" MaxWidth="520" />
+    </Grid.ColumnDefinitions>
+
+    <!--  Changes + publish  -->
+    <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*,Auto">
+
+      <Border Padding="14,8">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
+          <TextBlock Classes="sectionTitle" Text="变更" VerticalAlignment="Center" />
+          <Border
+              Classes="pill"
+              Grid.Column="1"
+              HorizontalAlignment="Left"
+              Margin="10,0,0,0"
+              VerticalAlignment="Center">
+            <TextBlock
+                FontSize="11"
+                Foreground="{DynamicResource SemiColorText2}"
+                Text="{Binding CurrentVersionText}" />
+          </Border>
+
+          <Button
+              Grid.Column="2"
+              Command="{Binding RefreshCommand}"
+              Height="28"
+              Margin="0,0,4,0"
+              Padding="8,0"
+              ToolTip.Tip="刷新 (F5)">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <materialIcons:MaterialIcon Height="14" Kind="Refresh" Width="14" />
+              <TextBlock FontSize="12" Text="刷新" />
+            </StackPanel>
+          </Button>
+          <Button
+              Grid.Column="3"
+              Command="{Binding EditProjectCommand}"
+              Height="28"
+              Margin="0,0,4,0"
+              Padding="8,0"
+              ToolTip.Tip="项目设置 (Ctrl+E)">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <materialIcons:MaterialIcon Height="14" Kind="CogOutline" Width="14" />
+              <TextBlock FontSize="12" Text="设置" />
+            </StackPanel>
+          </Button>
+          <Button
+              Grid.Column="4"
+              Command="{Binding OpenExplorerCommand}"
+              Height="28"
+              Margin="0,0,4,0"
+              Padding="8,0"
+              ToolTip.Tip="打开项目目录">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <materialIcons:MaterialIcon Height="14" Kind="FolderOpen" Width="14" />
+              <TextBlock FontSize="12" Text="目录" />
+            </StackPanel>
+          </Button>
+          <Button
+              Grid.Column="5"
+              Command="{Binding LaunchProgramCommand}"
+              Height="28"
+              Padding="8,0"
+              ToolTip.Tip="启动设置的主程序">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <materialIcons:MaterialIcon Height="14" Kind="Play" Width="14" />
+              <TextBlock FontSize="12" Text="启动" />
+            </StackPanel>
+          </Button>
+        </Grid>
+      </Border>
+
+      <ProgressBar
+          Grid.Row="1"
+          Height="2"
+          IsIndeterminate="True"
+          IsVisible="{Binding IsBusy}" />
+
+      <Grid
+          Grid.Row="2"
+          Margin="12,4,12,0"
+          RowDefinitions="*,4,*">
+
+        <!--  Unstaged  -->
+        <Border Classes="card" Grid.Row="0">
+          <Grid RowDefinitions="Auto,*">
+            <Border
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="0,0,0,1"
+                Padding="12,6">
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                  <materialIcons:MaterialIcon
+                      Foreground="{DynamicResource SemiColorText2}"
+                      Height="14"
+                      Kind="FileDocumentOutline"
+                      Width="14" />
+                  <TextBlock FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center">
+                    <Run Text="未暂存 " />
+                    <Run Text="{Binding UnstagedFiles.Count}" />
+                  </TextBlock>
+                </StackPanel>
+                <Button
+                    Grid.Column="2"
+                    Command="{Binding ToggleSelectAllUnstagedCommand}"
+                    Content="{Binding UnstagedSelectionText}"
+                    FontSize="12"
+                    Height="26"
+                    Padding="8,0" />
+                <Button
+                    Grid.Column="3"
+                    Command="{Binding AddSelectedCommand}"
+                    Content="暂存所选"
+                    FontSize="12"
+                    Height="26"
+                    Margin="4,0,0,0"
+                    Padding="8,0" />
+                <Button
+                    Grid.Column="4"
+                    Classes="Primary"
+                    Command="{Binding AddAllCommand}"
+                    Content="全部暂存"
+                    FontSize="12"
+                    Height="26"
+                    Margin="4,0,0,0"
+                    Padding="8,0" />
+              </Grid>
+            </Border>
+
+            <Grid Grid.Row="1">
+              <TableView
+                  CanUserResizeColumns="True"
+                  HorizontalAlignment="Stretch"
+                  ItemsSource="{Binding UnstagedFiles}"
+                  SelectionMode="Single">
+                <TableView.Columns>
+                  <TableViewColumn Header="选择" Width="64">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="local:FileItem">
+                        <CheckBox
+                            HorizontalAlignment="Center"
+                            IsChecked="{Binding IsSelected}"
+                            VerticalAlignment="Center" />
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                  <TableViewColumn Header="文件" Width="*">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="local:FileItem">
+                        <TextBlock
+                            FontSize="12"
+                            Text="{Binding RelativePath}"
+                            TextTrimming="CharacterEllipsis"
+                            ToolTip.Tip="{Binding RelativePath}"
+                            VerticalAlignment="Center" />
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                  <TableViewColumn Header="状态" Width="76">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="local:FileItem">
+                        <Border
+                            Classes="statusBadge"
+                            Classes.deleted="{Binding IsDeleted}"
+                            Classes.modified="{Binding IsModified}"
+                            Classes.new="{Binding IsNew}">
+                          <TextBlock Text="{Binding StatusDisplay}" />
+                        </Border>
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                  <TableViewColumn Header="本地" Width="88">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="local:FileItem">
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{DynamicResource SemiColorText2}"
+                            HorizontalAlignment="Right"
+                            Text="{Binding LocalSizeText}"
+                            VerticalAlignment="Center" />
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                  <TableViewColumn Header="服务端" Width="88">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="local:FileItem">
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{DynamicResource SemiColorText2}"
+                            HorizontalAlignment="Right"
+                            Text="{Binding ServerSizeText}"
+                            VerticalAlignment="Center" />
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                </TableView.Columns>
+              </TableView>
+
+              <StackPanel
+                  HorizontalAlignment="Center"
+                  IsHitTestVisible="False"
+                  IsVisible="{Binding !HasUnstagedFiles}"
+                  Spacing="4"
+                  VerticalAlignment="Center">
+                <materialIcons:MaterialIcon
+                    Foreground="{DynamicResource SemiColorText3}"
+                    Height="24"
+                    HorizontalAlignment="Center"
+                    Kind="CheckCircleOutline"
+                    Width="24" />
+                <TextBlock Classes="emptyTitle" Text="没有未暂存的变更" />
+                <TextBlock Classes="emptyHint" Text="构建产物发生变化后，点击刷新即可看到差异。" />
+              </StackPanel>
+            </Grid>
+          </Grid>
+        </Border>
+
+        <GridSplitter
+            Background="{DynamicResource SemiColorBorder}"
+            Grid.Row="1"
+            ResizeDirection="Rows" />
+
+        <!--  Staged  -->
+        <Border Classes="card" Grid.Row="2">
+          <Grid RowDefinitions="Auto,*">
+            <Border
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="0,0,0,1"
+                Padding="12,6">
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                  <materialIcons:MaterialIcon
+                      Foreground="{DynamicResource SemiColorSuccess}"
+                      Height="14"
+                      Kind="FileCheckOutline"
+                      Width="14" />
+                  <TextBlock FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center">
+                    <Run Text="已暂存 " />
+                    <Run Text="{Binding StagedFiles.Count}" />
+                  </TextBlock>
+                </StackPanel>
+                <Button
+                    Grid.Column="2"
+                    Command="{Binding ToggleSelectAllStagedCommand}"
+                    Content="{Binding StagedSelectionText}"
+                    FontSize="12"
+                    Height="26"
+                    Padding="8,0" />
+                <Button
+                    Grid.Column="3"
+                    Command="{Binding ResetSelectedCommand}"
+                    Content="取消暂存"
+                    FontSize="12"
+                    Height="26"
+                    Margin="4,0,0,0"
+                    Padding="8,0" />
+                <Button
+                    Grid.Column="4"
+                    Classes="Danger"
+                    Command="{Binding ResetAllCommand}"
+                    Content="清空"
+                    FontSize="12"
+                    Height="26"
+                    Margin="4,0,0,0"
+                    Padding="8,0" />
+              </Grid>
+            </Border>
+
+            <Grid Grid.Row="1">
+              <TableView
+                  CanUserResizeColumns="True"
+                  HorizontalAlignment="Stretch"
+                  ItemsSource="{Binding StagedFiles}"
+                  SelectionMode="Single">
+                <TableView.Columns>
+                  <TableViewColumn Header="选择" Width="64">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="local:FileItem">
+                        <CheckBox
+                            HorizontalAlignment="Center"
+                            IsChecked="{Binding IsSelected}"
+                            VerticalAlignment="Center" />
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                  <TableViewColumn Header="文件" Width="*">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="local:FileItem">
+                        <TextBlock
+                            FontSize="12"
+                            Text="{Binding RelativePath}"
+                            TextTrimming="CharacterEllipsis"
+                            ToolTip.Tip="{Binding RelativePath}"
+                            VerticalAlignment="Center" />
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                  <TableViewColumn Header="状态" Width="76">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="local:FileItem">
+                        <Border
+                            Classes="statusBadge"
+                            Classes.deleted="{Binding IsDeleted}"
+                            Classes.modified="{Binding IsModified}"
+                            Classes.new="{Binding IsNew}">
+                          <TextBlock Text="{Binding StatusDisplay}" />
+                        </Border>
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                  <TableViewColumn Header="本地" Width="88">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="local:FileItem">
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{DynamicResource SemiColorText2}"
+                            HorizontalAlignment="Right"
+                            Text="{Binding LocalSizeText}"
+                            VerticalAlignment="Center" />
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                  <TableViewColumn Header="服务端" Width="88">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="local:FileItem">
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{DynamicResource SemiColorText2}"
+                            HorizontalAlignment="Right"
+                            Text="{Binding ServerSizeText}"
+                            VerticalAlignment="Center" />
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                </TableView.Columns>
+              </TableView>
+
+              <StackPanel
+                  HorizontalAlignment="Center"
+                  IsHitTestVisible="False"
+                  IsVisible="{Binding !HasStagedFiles}"
+                  Spacing="4"
+                  VerticalAlignment="Center">
+                <materialIcons:MaterialIcon
+                    Foreground="{DynamicResource SemiColorText3}"
+                    Height="24"
+                    HorizontalAlignment="Center"
+                    Kind="InboxArrowDownOutline"
+                    Width="24" />
+                <TextBlock Classes="emptyTitle" Text="暂存区为空" />
+                <TextBlock Classes="emptyHint" Text="在左侧勾选文件后点击“暂存所选”，或直接“全部暂存”。" />
+              </StackPanel>
+            </Grid>
+          </Grid>
+        </Border>
+
+        <!--  First-load skeleton  -->
+        <Border
+            Background="{DynamicResource SemiColorBg0}"
+            Grid.RowSpan="3"
+            IsVisible="{Binding IsInitialLoading}"
+            Opacity="0.9"
+            ZIndex="20">
+          <StackPanel
+              HorizontalAlignment="Center"
+              Spacing="10"
+              VerticalAlignment="Center">
+            <ProgressBar
+                Height="4"
+                IsIndeterminate="True"
+                Width="160" />
+            <TextBlock
+                Classes="caption"
+                HorizontalAlignment="Center"
+                Text="正在读取项目状态…" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!--  Publish  -->
+      <Border
+          Classes="card"
+          Grid.Row="3"
+          Margin="12,8,12,12"
+          Padding="14,10">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Classes="sectionTitle" Text="发布" VerticalAlignment="Center" />
+            <Border
+                Classes="pill"
+                Grid.Column="2"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center">
+              <TextBlock
+                  FontSize="11"
+                  Foreground="{DynamicResource SemiColorText2}"
+                  Text="{Binding CurrentVersionText}" />
+            </Border>
+          </Grid>
+
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Classes="fieldLabel" Text="版本号" VerticalAlignment="Center" />
+            <TextBox
+                Grid.Column="1"
+                Margin="10,0,0,0"
+                PlaceholderText="例如 V1.0.2"
+                Text="{Binding NewVersion}" />
+            <Button
+                Grid.Column="2"
+                Command="{Binding SuggestVersionCommand}"
+                Content="下一版本"
+                Height="32"
+                Margin="8,0,0,0"
+                Padding="10,0"
+                ToolTip.Tip="基于当前版本号自动 +1" />
+          </Grid>
+
+          <TextBox
+              AcceptsReturn="True"
+              MinHeight="48"
+              PlaceholderText="本次发布的变更说明（必填）"
+              Text="{Binding CommitMessage}"
+              TextWrapping="Wrap" />
+
+          <Expander Header="高级选项" HorizontalAlignment="Stretch">
+            <StackPanel Margin="0,8,0,0" Spacing="8">
+              <TextBlock Classes="fieldLabel" Text="更新后执行的脚本（可选，相对于应用目录）" />
+              <TextBox
+                  PlaceholderText="例如 update.bat"
+                  Text="{Binding AfterApplyUpdateScript}" />
+              <CheckBox
+                  Content="强制更新（客户端不再询问，直接更新）"
+                  FontSize="12"
+                  Foreground="{DynamicResource SemiColorWarning}"
+                  IsChecked="{Binding SetForceUpdate}" />
+            </StackPanel>
+          </Expander>
+
+          <Button
+              Classes="Primary"
+              Command="{Binding PublishCommand}"
+              Height="36"
+              HorizontalAlignment="Stretch"
+              ToolTip.Tip="{Binding PublishHint}">
+            <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
+              <materialIcons:MaterialIcon Height="18" Kind="Upload" Width="18" />
+              <TextBlock
+                  FontSize="14"
+                  FontWeight="SemiBold"
+                  Text="{Binding PublishButtonText}"
+                  VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+
+          <TextBlock
+              FontSize="11"
+              Foreground="{DynamicResource SemiColorWarning}"
+              HorizontalAlignment="Center"
+              IsVisible="{Binding HasPublishHint}"
+              Text="{Binding PublishHint}" />
+
+          <Border
+              Background="{DynamicResource SemiColorFill0}"
+              BorderBrush="{DynamicResource SemiColorBorder}"
+              BorderThickness="1"
+              CornerRadius="6"
+              IsVisible="{Binding IsUploading}"
+              Padding="10,8">
+            <StackPanel Spacing="6">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock
+                    FontSize="11"
+                    Foreground="{DynamicResource SemiColorText1}"
+                    Text="{Binding UploadProgressText}"
+                    TextTrimming="CharacterEllipsis" />
+                <Button
+                    Grid.Column="1"
+                    Command="{Binding PublishCancelCommand}"
+                    Content="取消"
+                    FontSize="11"
+                    Height="22"
+                    Padding="8,0" />
+              </Grid>
+              <ProgressBar
+                  Height="4"
+                  IsIndeterminate="{Binding IsUploadProgressIndeterminate}"
+                  Maximum="100"
+                  Value="{Binding UploadProgressPercent}" />
+              <TextBlock Classes="caption" Text="{Binding UploadSummary}" />
+              <TableView
+                  CanUserResizeColumns="False"
+                  HorizontalAlignment="Stretch"
+                  ItemsSource="{Binding UploadProgressItems}"
+                  MaxHeight="150"
+                  SelectionMode="Single">
+                <TableView.Columns>
+                  <TableViewColumn Header="文件" Width="*">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="cli:UploadProgress">
+                        <TextBlock
+                            FontSize="11"
+                            Text="{Binding File}"
+                            TextTrimming="CharacterEllipsis"
+                            ToolTip.Tip="{Binding File}" />
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                  <TableViewColumn Header="大小" Width="72">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="cli:UploadProgress">
+                        <TextBlock
+                            FontSize="11"
+                            HorizontalAlignment="Right"
+                            Text="{Binding FileSizeText}" />
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                  <TableViewColumn Header="状态" Width="140">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="cli:UploadProgress">
+                        <Border
+                            Classes="uploadBadge"
+                            Classes.done="{Binding IsDone}"
+                            Classes.failed="{Binding IsFailed}"
+                            Classes.running="{Binding IsRunning}">
+                          <TextBlock Text="{Binding StatusText}" />
+                        </Border>
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                </TableView.Columns>
+              </TableView>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <GridSplitter
+        Background="{DynamicResource SemiColorBorder}"
+        Grid.Column="1"
+        ResizeDirection="Columns" />
+
+    <!--  Version history  -->
+    <Border
+        Background="{DynamicResource SemiColorBg1}"
+        BorderBrush="{DynamicResource SemiColorBorder}"
+        BorderThickness="1,0,0,0"
+        Grid.Column="2">
+      <Grid RowDefinitions="Auto,*">
+        <Border
+            BorderBrush="{DynamicResource SemiColorBorder}"
+            BorderThickness="0,0,0,1"
+            Padding="14,8">
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+            <materialIcons:MaterialIcon
+                Foreground="{DynamicResource SemiColorText2}"
+                Height="14"
+                Kind="History"
+                VerticalAlignment="Center"
+                Width="14" />
+            <TextBlock
+                Classes="sectionTitle"
+                Grid.Column="1"
+                Margin="6,0,0,0"
+                Text="版本历史"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Classes="caption"
+                Grid.Column="2"
+                Margin="0,0,6,0"
+                Text="最近 20 条"
+                VerticalAlignment="Center" />
+            <Button
+                Grid.Column="3"
+                Command="{Binding RefreshCommand}"
+                Height="24"
+                Padding="6,0"
+                ToolTip.Tip="刷新历史">
+              <materialIcons:MaterialIcon Height="12" Kind="Refresh" Width="12" />
+            </Button>
+          </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+          <TableView
+                  ItemsSource="{Binding ChangeLogs}"
+                  HorizontalAlignment="Stretch"
+                  SelectionMode="Single">
+            <TableView.Columns>
+              <TableViewColumn Header="版本" Width="76">
+                <TableViewColumn.CellTemplate>
+                  <DataTemplate x:DataType="cli:ChangeLog">
+                    <Border Classes="pill" HorizontalAlignment="Left">
+                      <TextBlock
+                          FontSize="11"
+                          FontWeight="SemiBold"
+                          Foreground="{DynamicResource SemiColorPrimary}"
+                          Text="{Binding Version}" />
+                    </Border>
+                  </DataTemplate>
+                </TableViewColumn.CellTemplate>
+              </TableViewColumn>
+              <TableViewColumn Header="时间" Width="120">
+                <TableViewColumn.CellTemplate>
+                  <DataTemplate x:DataType="cli:ChangeLog">
+                    <TextBlock
+                        FontSize="10"
+                        Foreground="{DynamicResource SemiColorText3}"
+                        Text="{Binding Time}" />
+                  </DataTemplate>
+                </TableViewColumn.CellTemplate>
+              </TableViewColumn>
+              <TableViewColumn Header="变更说明" Width="*">
+                <TableViewColumn.CellTemplate>
+                  <DataTemplate x:DataType="cli:ChangeLog">
+                    <ItemsControl ItemsSource="{Binding Logs}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                          <TextBlock
+                              FontSize="11"
+                              Foreground="{DynamicResource SemiColorText2}"
+                              Text="{Binding}"
+                              TextWrapping="Wrap" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </DataTemplate>
+                </TableViewColumn.CellTemplate>
+              </TableViewColumn>
+            </TableView.Columns>
+          </TableView>
+
+          <StackPanel
+              HorizontalAlignment="Center"
+              IsHitTestVisible="False"
+              IsVisible="{Binding !HasChangeLogs}"
+              Spacing="4"
+              VerticalAlignment="Center">
+            <materialIcons:MaterialIcon
+                Foreground="{DynamicResource SemiColorText3}"
+                Height="28"
+                HorizontalAlignment="Center"
+                Kind="History"
+                Width="28" />
+            <TextBlock Classes="emptyTitle" Text="暂无发布记录" />
+            <TextBlock Classes="emptyHint" Text="第一次发布成功后，版本历史会显示在这里。" />
+          </StackPanel>
+        </Grid>
+      </Grid>
+    </Border>
+  </Grid>
+
+  <UserControl.Styles>
+    <Style Selector="Border.statusBadge">
+      <Setter Property="Background" Value="{DynamicResource SemiColorFill0}" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.statusBadge TextBlock">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="Foreground" Value="{DynamicResource SemiColorText2}" />
+    </Style>
+    <Style Selector="Border.statusBadge.new">
+      <Setter Property="BorderBrush" Value="{DynamicResource SemiColorSuccess}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Border.statusBadge.new TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource SemiColorSuccess}" />
+    </Style>
+    <Style Selector="Border.statusBadge.modified">
+      <Setter Property="BorderBrush" Value="{DynamicResource SemiColorWarning}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Border.statusBadge.modified TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource SemiColorWarning}" />
+    </Style>
+    <Style Selector="Border.statusBadge.deleted">
+      <Setter Property="BorderBrush" Value="{DynamicResource SemiColorDanger}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Border.statusBadge.deleted TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource SemiColorDanger}" />
+    </Style>
+
+    <Style Selector="Border.uploadBadge">
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Padding" Value="6,1" />
+    </Style>
+    <Style Selector="Border.uploadBadge TextBlock">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Foreground" Value="{DynamicResource SemiColorText2}" />
+    </Style>
+    <Style Selector="Border.uploadBadge.running">
+      <Setter Property="Background" Value="{DynamicResource SemiColorFill0}" />
+    </Style>
+    <Style Selector="Border.uploadBadge.done TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource SemiColorSuccess}" />
+    </Style>
+    <Style Selector="Border.uploadBadge.failed TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource SemiColorDanger}" />
+    </Style>
+  </UserControl.Styles>
+</UserControl>

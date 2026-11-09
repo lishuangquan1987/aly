@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 
 namespace AlyPublish.Models.Cli;
 
-public class FileStatusItem
+public sealed class FileStatusItem
 {
     [JsonProperty("relativePath")]
     public string RelativePath { get; set; } = string.Empty;

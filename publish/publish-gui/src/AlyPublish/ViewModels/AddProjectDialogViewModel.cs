@@ -1,313 +1,543 @@
-using System;
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
+using AlyPublish.Constants;
+using AlyPublish.Helpers;
 using AlyPublish.Models.Cli;
 using AlyPublish.Models.Local;
 using AlyPublish.Services;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Serilog;
-using Ursa.Controls;
 
 namespace AlyPublish.ViewModels;
 
-public partial class AddProjectDialogViewModel : ObservableObject
+public enum AddProjectStep
+{
+    Server,
+    Local
+}
+
+/// <summary>
+/// Two-step initialization wizard: pick a server project, then point at the local build folder.
+/// Everything that can be discovered or suggested is filled in automatically.
+/// </summary>
+public sealed partial class AddProjectDialogViewModel : ViewModelBase
 {
     private readonly CliService _cli;
-    private readonly ConfigService _configService;
-    internal Func<Task<string?>>? BrowseFolderAsync { get; set; }
-    internal Func<Task<string?>>? BrowseMainExeFileAsync { get; set; }
+    private readonly ConfigService _config;
+    private readonly ProjectSetupService _setup;
 
-    private bool _isInit;
-    [ObservableProperty] private string _serverUrl = string.Empty;
-    [ObservableProperty] private ObservableCollection<ProjectInfo> _serverProjects = new();
-    [ObservableProperty] private ProjectInfo? _selectedServerProject;
-    [ObservableProperty] private string _displayName = string.Empty;
-    [ObservableProperty] private string _projectPath = string.Empty;
-    [ObservableProperty] private string _statusMessage = string.Empty;
-    [ObservableProperty] private bool _isFetching;
-    [ObservableProperty] private bool _showProjectList;
-    [ObservableProperty] private bool _showCreateButton;
-    [ObservableProperty] private string _initStatusMessage = string.Empty;
-    [ObservableProperty] private bool _showInitStatus;
-    [ObservableProperty] private string _ignoreFolders = string.Empty;
-    [ObservableProperty] private string _ignoreFiles = string.Empty;
+    private List<ProjectInfo> _allServerProjects = [];
+    private HashSet<string> _existingProjectPaths = new(StringComparer.OrdinalIgnoreCase);
 
-    // ── 主程序选择 ─────────────────────────────────────
-    [ObservableProperty] private string _mainExePath = string.Empty;
-    [ObservableProperty] private string _closeProcessName = string.Empty;
-
-    /// <summary>View 订阅此事件以关闭对话框并返回结果</summary>
-    public event Action<ProjectConfig?>? RequestClose;
-
-    public IAsyncRelayCommand FetchProjectsCommand { get; }
-    public IAsyncRelayCommand BrowseCommand { get; }
-    public IAsyncRelayCommand BrowseMainExeCommand { get; }
-    public IAsyncRelayCommand ConfirmCommand { get; }
-    public IRelayCommand CancelCommand { get; }
-    public IAsyncRelayCommand CreateOnServerCommand { get; }
-
-    public AddProjectDialogViewModel(CliService cli, ConfigService configService)
+    public AddProjectDialogViewModel(
+        CliService cli,
+        ConfigService config,
+        ProjectSetupService setup,
+        IDialogService dialogs,
+        INotificationService notifications)
+        : base(dialogs, notifications)
     {
         _cli = cli;
-        _configService = configService;
-
-        FetchProjectsCommand = new AsyncRelayCommand(FetchProjectsAsync, () => !IsFetching);
-        BrowseCommand = new AsyncRelayCommand(BrowseAsync);
-        BrowseMainExeCommand = new AsyncRelayCommand(BrowseMainExeAsync);
-        ConfirmCommand = new AsyncRelayCommand(ConfirmAsync);
-        CancelCommand = new RelayCommand(() => RequestClose?.Invoke(null));
-        CreateOnServerCommand = new AsyncRelayCommand(CreateOnServerAsync);
+        _config = config;
+        _setup = setup;
     }
 
-    partial void OnIsFetchingChanged(bool value)
+    public ObservableCollection<string> KnownServerUrls { get; } = [];
+
+    public ObservableCollection<ProjectInfo> ServerProjects { get; } = [];
+
+    public ObservableCollection<string> MainExeCandidates { get; } = [];
+
+    public ObservableCollection<string> IgnoreFolders { get; } = [];
+
+    public ObservableCollection<string> IgnoreFiles { get; } = [];
+
+    public ObservableCollection<string> UnCopyFolders { get; } = [];
+
+    public ObservableCollection<string> UnCopyFiles { get; } = [];
+
+    public IReadOnlyList<string> IgnoreFolderSuggestions { get; } = AppConstants.IgnoreFolderSuggestions;
+
+    public IReadOnlyList<string> IgnoreFileSuggestions { get; } = AppConstants.IgnoreFileSuggestions;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsServerStep))]
+    [NotifyPropertyChangedFor(nameof(IsLocalStep))]
+    [NotifyCanExecuteChangedFor(nameof(NextStepCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PreviousStepCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
+    private AddProjectStep _step = AddProjectStep.Server;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsServerSelectionValid))]
+    [NotifyCanExecuteChangedFor(nameof(FetchProjectsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CreateServerProjectCommand))]
+    [NotifyCanExecuteChangedFor(nameof(NextStepCommand))]
+    private string _serverUrl = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(FetchProjectsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CreateServerProjectCommand))]
+    [NotifyPropertyChangedFor(nameof(ShowServerEmptyState))]
+    private bool _isFetching;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFetchError))]
+    [NotifyPropertyChangedFor(nameof(ShowServerEmptyState))]
+    private string _fetchError = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(NextStepCommand))]
+    [NotifyPropertyChangedFor(nameof(SelectedProjectVersionText))]
+    private ProjectInfo? _selectedServerProject;
+
+    [ObservableProperty]
+    private string _filterText = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
+    private string _displayName = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
+    private string _projectPath = string.Empty;
+
+    [ObservableProperty]
+    private bool _isPathUsable;
+
+    [ObservableProperty]
+    private string _pathState = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
+    [NotifyPropertyChangedFor(nameof(HasValidationMessage))]
+    private string _validationMessage = string.Empty;
+
+    [ObservableProperty]
+    private string _mainExePath = string.Empty;
+
+    [ObservableProperty]
+    private string _closeProcessName = string.Empty;
+
+    [ObservableProperty]
+    private string? _selectedMainExeCandidate;
+
+    public bool IsServerStep => Step == AddProjectStep.Server;
+
+    public bool IsLocalStep => Step == AddProjectStep.Local;
+
+    public bool HasServerProjects => ServerProjects.Count > 0;
+
+    public bool HasFetchError => !string.IsNullOrEmpty(FetchError);
+
+    public bool ShowServerEmptyState => !HasServerProjects && !HasFetchError && !IsFetching;
+
+    public bool HasValidationMessage => !string.IsNullOrEmpty(ValidationMessage);
+
+    public bool IsServerSelectionValid => SelectedServerProject is not null && !string.IsNullOrWhiteSpace(ServerUrl);
+
+    /// <summary>Called by the view when a folder is dropped onto the dialog.</summary>
+    public void SetDroppedFolder(string folderPath)
     {
-        FetchProjectsCommand.NotifyCanExecuteChanged();
+        ProjectPath = folderPath;
+        if (IsServerSelectionValid)
+        {
+            Step = AddProjectStep.Local;
+        }
+    }
+
+    public string SelectedProjectVersionText
+        => string.IsNullOrWhiteSpace(SelectedServerProject?.Version) ? "未发布" : SelectedServerProject.Version;
+
+    public void Initialize()
+    {
+        var projects = _config.LoadProjects();
+        _existingProjectPaths = new HashSet<string>(
+            projects.Select(project => NormalizeForComparison(project.ProjectPath)),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var serverUrl in ProjectConfigService.GetKnownServerUrls(projects.Select(project => project.ProjectPath)))
+        {
+            KnownServerUrls.Add(serverUrl);
+        }
+
+        if (KnownServerUrls.Count > 0)
+        {
+            ServerUrl = KnownServerUrls[0];
+        }
+    }
+
+    partial void OnStepChanged(AddProjectStep value)
+    {
+        if (value == AddProjectStep.Local)
+        {
+            RefreshPathState();
+            UpdateMainExeCandidates();
+        }
+
+        UpdateValidation();
+    }
+
+    partial void OnServerUrlChanged(string value)
+    {
+        ClearServerSelection();
+        UpdateValidation();
     }
 
     partial void OnSelectedServerProjectChanged(ProjectInfo? value)
     {
-        if (value == null) return;
-        if (string.IsNullOrWhiteSpace(DisplayName))
+        if (value is not null)
+        {
             DisplayName = value.Name;
-        Log.Information("选择了服务端项目: Name={Name}, Id={Id}", value.Name, value.Id);
+        }
+
+        UpdateValidation();
     }
 
-    async partial void OnProjectPathChanged(string value)
+    partial void OnFilterTextChanged(string value) => ApplyServerFilter();
+
+    partial void OnDisplayNameChanged(string value) => UpdateValidation();
+
+    partial void OnProjectPathChanged(string value)
     {
-        if (string.IsNullOrWhiteSpace(value) || !Directory.Exists(value))
+        RefreshPathState();
+        UpdateMainExeCandidates();
+
+        if (string.IsNullOrWhiteSpace(DisplayName) && !string.IsNullOrWhiteSpace(value))
         {
-            _isInit = false;
-            ShowInitStatus = false;
-            return;
+            DisplayName = Path.GetFileName(Path.TrimEndingDirectorySeparator(value.Trim()));
         }
 
-        var sharedPath = Path.Combine(value, ".updator", "shared.json");
-        if (File.Exists(sharedPath))
-        {
-            _isInit = true;
-            InitStatusMessage = "❌ 该文件夹已初始化，请使用「添加本地项目」功能";
-            ShowInitStatus = true;
-        }
-        else
-        {
-            _isInit = false;
-            InitStatusMessage = "";
-            ShowInitStatus = false;
-
-            // 自动扫描路径下第一个 exe 文件作为主程序
-            TryAutoDetectMainExe(value);
-        }
+        UpdateValidation();
     }
 
-    /// <summary>自动扫描项目目录下第一个 .exe 文件</summary>
-    private void TryAutoDetectMainExe(string projectPath)
+    partial void OnSelectedMainExeCandidateChanged(string? value)
     {
-        try
+        if (!string.IsNullOrWhiteSpace(value))
         {
-            var firstExe = Directory.EnumerateFiles(projectPath, "*.exe", SearchOption.TopDirectoryOnly)
-                .FirstOrDefault();
-            if (firstExe != null)
-            {
-                MainExePath = firstExe;
-                CloseProcessName = Path.GetFileNameWithoutExtension(firstExe);
-                Log.Information("自动检测主程序: {Path}, 进程名: {Name}", firstExe, CloseProcessName);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "扫描主程序 exe 失败: {Path}", projectPath);
+            MainExePath = value;
         }
     }
 
-    /// <summary>浏览选择主程序 exe 文件</summary>
-    private async Task BrowseMainExeAsync()
+    partial void OnMainExePathChanged(string value)
     {
-        var browseMainExeFileAsync = BrowseMainExeFileAsync;
-        if (browseMainExeFileAsync == null)
+        if (!string.IsNullOrWhiteSpace(value))
         {
-            Log.Warning("BrowseMainExeFileAsync delegate is not set; browse action unavailable");
-            return;
-        }
-        var path = await browseMainExeFileAsync();
-        if (!string.IsNullOrWhiteSpace(path))
-        {
-            MainExePath = path;
-            CloseProcessName = Path.GetFileNameWithoutExtension(path);
-            Log.Information("用户选择主程序: {Path}, 进程名: {Name}", path, CloseProcessName);
+            CloseProcessName = Path.GetFileNameWithoutExtension(value.Trim());
         }
     }
 
-    private async Task BrowseAsync()
+    protected override void OnBusyChanged()
     {
-        var browseFolderAsync = BrowseFolderAsync;
-        if (browseFolderAsync == null)
-        {
-            Log.Warning("BrowseFolderAsync delegate is not set; browse action unavailable");
-            return;
-        }
-        var path = await browseFolderAsync();
-        if (!string.IsNullOrWhiteSpace(path))
-            ProjectPath = path;
+        FetchProjectsCommand.NotifyCanExecuteChanged();
+        CreateServerProjectCommand.NotifyCanExecuteChanged();
+        NextStepCommand.NotifyCanExecuteChanged();
+        PreviousStepCommand.NotifyCanExecuteChanged();
+        ConfirmCommand.NotifyCanExecuteChanged();
     }
 
+    [RelayCommand(CanExecute = nameof(CanFetchProjects))]
     private async Task FetchProjectsAsync()
     {
-        var serverUrl = ServerUrl?.Trim();
-        if (string.IsNullOrEmpty(serverUrl))
+        if (IsFetching)
         {
-            await MessageBox.ShowAsync("请先填写服务端地址", "提示", MessageBoxIcon.Warning);
             return;
         }
 
         IsFetching = true;
-        StatusMessage = "正在获取项目列表...";
-        Log.Information("获取服务端项目列表: {ServerUrl}", serverUrl);
-
+        FetchError = string.Empty;
         try
         {
-            var result = await _cli.ProjectListAsync(serverUrl);
-            Log.Information("获取项目结果: IsSuccess={IsSuccess}, ErrorMsg={ErrorMsg}, Data={Data}",
-                result?.IsSuccess, result?.ErrorMsg,
-                result?.Data != null ? $"{result.Data.Count} projects" : "null");
-
-            if (result == null)
-            {
-                await MessageBox.ShowAsync("未收到服务端响应，请检查地址是否正确", "错误", MessageBoxIcon.Error);
-                ShowCreateButton = true;
-                ShowProjectList = false;
-                return;
-            }
-
-            if (!result.IsSuccess)
-            {
-                await MessageBox.ShowAsync($"获取失败: {result.ErrorMsg}", "错误", MessageBoxIcon.Error);
-                ShowCreateButton = true;
-                ShowProjectList = false;
-                return;
-            }
-
-            var projects = result.Data ?? new();
-            ServerProjects = new ObservableCollection<ProjectInfo>(projects);
-            ShowProjectList = projects.Count > 0;
-            ShowCreateButton = true;
-            if (projects.Count == 0)
-                StatusMessage = "服务端暂无项目，可点击下方按钮创建";
-            else
-                StatusMessage = string.Empty;
-            Log.Information("获取到 {Count} 个项目", projects.Count);
+            var projects = await _cli.GetServerProjectsAsync(ServerUrl.Trim());
+            _allServerProjects = projects;
+            ApplyServerFilter();
+            FetchError = projects.Count == 0 ? "服务端暂无项目，可以点击“新建服务端项目”。" : string.Empty;
+            Log.Information("获取服务端项目: {Count} 个", projects.Count);
         }
-        catch (Exception ex)
+        catch (CliException ex)
         {
-            Log.Error(ex, "获取服务端项目异常: {ServerUrl}", serverUrl);
-            await MessageBox.ShowAsync($"获取异常: {ex.Message}", "错误", MessageBoxIcon.Error);
-            ShowCreateButton = true;
-            ShowProjectList = false;
+            _allServerProjects = [];
+            ApplyServerFilter();
+            FetchError = $"获取项目列表失败：{ex.Message}";
+            Log.Warning(ex, "获取服务端项目失败");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _allServerProjects = [];
+            ApplyServerFilter();
+            FetchError = $"获取项目列表失败：{ex.Message}";
+            Log.Error(ex, "获取服务端项目发生未预期异常");
         }
         finally
         {
             IsFetching = false;
+            UpdateValidation();
         }
     }
 
-    private async Task CreateOnServerAsync()
+    [RelayCommand(CanExecute = nameof(CanCreateServerProject))]
+    private async Task CreateServerProjectAsync()
     {
-        var serverUrl = ServerUrl?.Trim();
-        if (string.IsNullOrEmpty(serverUrl))
+        var request = new CreateServerProjectRequest(
+            ServerUrl.Trim(),
+            _allServerProjects.Select(project => project.Name).ToList(),
+            Clean(IgnoreFolders),
+            Clean(IgnoreFiles));
+
+        var created = await Dialogs.ShowCreateProjectAsync(request);
+        if (created is null)
         {
-            await MessageBox.ShowAsync("请先填写服务端地址", "提示", MessageBoxIcon.Warning);
             return;
         }
 
-        Log.Information("请求创建服务端项目: ServerUrl={ServerUrl}", serverUrl);
-        if (ShowCreateProjectDialogAsync == null)
-        {
-            await MessageBox.ShowAsync("无法打开创建项目对话框", "错误", MessageBoxIcon.Error);
-            return;
-        }
-
-        var newProject = await ShowCreateProjectDialogAsync.Invoke(serverUrl,
-            IgnoreFolders?.Trim() ?? "", IgnoreFiles?.Trim() ?? "");
-
-        if (newProject != null)
-        {
-            DisplayName = newProject.Name;
-            await MessageBox.ShowAsync($"项目 \"{newProject.Name}\" 创建成功", "成功", MessageBoxIcon.Success);
-            Log.Information("创建项目完成，自动填充: Name={Name}, Id={Id}", newProject.Name, newProject.Id);
-            await FetchProjectsAsync();
-            // 自动选中刚创建的项目
-            var created = ServerProjects.FirstOrDefault(p => p.Name == newProject.Name);
-            if (created != null)
-                SelectedServerProject = created;
-        }
+        await FetchProjectsAsync();
+        SelectedServerProject = ServerProjects.FirstOrDefault(project =>
+            string.Equals(project.Name, created.Name, StringComparison.OrdinalIgnoreCase));
+        DisplayName = created.Name;
     }
 
-    /// <summary>由调用方注入，用于打开创建项目子对话框</summary>
-    public Func<string, string, string, Task<ProjectInfo?>>? ShowCreateProjectDialogAsync { get; set; }
+    [RelayCommand(CanExecute = nameof(CanGoNext))]
+    private void NextStep() => Step = AddProjectStep.Local;
 
+    [RelayCommand(CanExecute = nameof(CanGoBack))]
+    private void PreviousStep() => Step = AddProjectStep.Server;
+
+    [RelayCommand(CanExecute = nameof(CanFinish))]
     private async Task ConfirmAsync()
     {
-        var displayName = DisplayName?.Trim();
-        var projectPath = ProjectPath?.Trim();
-
-        if (string.IsNullOrWhiteSpace(displayName) ||
-            string.IsNullOrWhiteSpace(projectPath))
+        var selectedProject = SelectedServerProject;
+        if (selectedProject is null)
         {
-            await MessageBox.ShowAsync("请填写显示名称和本地路径", "提示", MessageBoxIcon.Warning);
             return;
         }
 
-        if (!Directory.Exists(projectPath))
+        var projectPath = ProjectPath.Trim();
+        var request = new ProjectInitializationRequest(
+            ServerUrl.Trim(),
+            selectedProject.Name,
+            projectPath,
+            string.IsNullOrWhiteSpace(DisplayName)
+                ? Path.GetFileName(Path.TrimEndingDirectorySeparator(projectPath))
+                : DisplayName.Trim(),
+            MainExePath.Trim(),
+            CloseProcessName.Trim(),
+            Clean(IgnoreFolders),
+            Clean(IgnoreFiles),
+            Clean(UnCopyFolders),
+            Clean(UnCopyFiles));
+
+        ProjectSetupResult? result = null;
+        var completed = await RunAsync(
+            "初始化项目",
+            async token => result = await _setup.InitializeAsync(request, token));
+
+        if (!completed || result is null)
         {
-            await MessageBox.ShowAsync("指定的路径不存在", "提示", MessageBoxIcon.Warning);
             return;
         }
 
-        if (_isInit)
+        foreach (var warning in result.Warnings)
         {
-            await MessageBox.ShowAsync("该文件夹已初始化，请使用「添加本地项目」功能", "提示", MessageBoxIcon.Warning);
+            Notify.Warning(warning);
+        }
+
+        Close(result.Config);
+    }
+
+    [RelayCommand]
+    private void AddSuggestedIgnoreFolder(string? value) => AddIfMissing(IgnoreFolders, value);
+
+    [RelayCommand]
+    private void AddSuggestedIgnoreFile(string? value) => AddIfMissing(IgnoreFiles, value);
+
+    [RelayCommand]
+    private void UseServerUrl(string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            ServerUrl = value.Trim();
+        }
+    }
+
+    [RelayCommand]
+    private void Cancel() => Close(null);
+
+    private bool CanFetchProjects()
+        => !IsBusy && !IsFetching && !string.IsNullOrWhiteSpace(ServerUrl);
+
+    private bool CanCreateServerProject()
+        => !IsBusy && !IsFetching && !string.IsNullOrWhiteSpace(ServerUrl);
+
+    private bool CanGoNext() => !IsBusy && IsServerStep && IsServerSelectionValid;
+
+    private bool CanGoBack() => !IsBusy && IsLocalStep;
+
+    private bool CanFinish()
+        => !IsBusy
+           && IsLocalStep
+           && IsPathUsable
+           && IsServerSelectionValid
+           && !string.IsNullOrWhiteSpace(DisplayName)
+           && string.IsNullOrEmpty(ValidationMessage);
+
+    private void ClearServerSelection()
+    {
+        _allServerProjects = [];
+        ServerProjects.Clear();
+        SelectedServerProject = null;
+        FetchError = string.Empty;
+        OnPropertyChanged(nameof(HasServerProjects));
+        OnPropertyChanged(nameof(ShowServerEmptyState));
+    }
+
+    private void ApplyServerFilter()
+    {
+        var selectedName = SelectedServerProject?.Name;
+        ServerProjects.Clear();
+
+        foreach (var project in _allServerProjects.Where(MatchesFilter))
+        {
+            ServerProjects.Add(project);
+        }
+
+        OnPropertyChanged(nameof(HasServerProjects));
+        OnPropertyChanged(nameof(ShowServerEmptyState));
+
+        if (!string.IsNullOrWhiteSpace(selectedName))
+        {
+            SelectedServerProject = ServerProjects.FirstOrDefault(project =>
+                string.Equals(project.Name, selectedName, StringComparison.OrdinalIgnoreCase));
+        }
+        else if (ServerProjects.Count == 1)
+        {
+            SelectedServerProject = ServerProjects[0];
+        }
+    }
+
+    private bool MatchesFilter(ProjectInfo project)
+    {
+        if (string.IsNullOrWhiteSpace(FilterText))
+        {
+            return true;
+        }
+
+        var filter = FilterText.Trim();
+        return project.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)
+               || project.Title.Contains(filter, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void RefreshPathState()
+    {
+        var path = ProjectPath.Trim();
+        IsPathUsable = false;
+
+        if (path.Length == 0)
+        {
+            PathState = "请选择项目目录";
             return;
         }
 
-        var serverUrl = ServerUrl?.Trim();
-        if (string.IsNullOrWhiteSpace(serverUrl) || SelectedServerProject == null || string.IsNullOrWhiteSpace(SelectedServerProject.Name))
+        if (!Directory.Exists(path))
         {
-            await MessageBox.ShowAsync("请填写服务端地址并选择/创建服务端项目", "提示", MessageBoxIcon.Warning);
+            PathState = "目录不存在";
             return;
         }
 
-        Log.Information("执行 config init: Server={Server}, Project={Name}, Path={Path}",
-            serverUrl, SelectedServerProject.Name, projectPath);
-        var initResult = await _cli.ConfigInitAsync(projectPath, serverUrl, SelectedServerProject.Name,
-            IgnoreFolders?.Trim() ?? "", IgnoreFiles?.Trim() ?? "");
-        if (initResult?.IsSuccess != true)
+        if (ProjectInputHelper.IsInitialized(path))
         {
-            await MessageBox.ShowAsync($"初始化 .updator/ 失败: {initResult?.ErrorMsg}", "错误", MessageBoxIcon.Error);
+            PathState = "该目录已初始化，请使用“添加本地项目”";
             return;
         }
 
-        var cfg = new ProjectConfig
+        if (_existingProjectPaths.Contains(NormalizeForComparison(path)))
         {
-            DisplayName = displayName!,
-            ProjectPath = projectPath,
-            MainExePath = MainExePath
-        };
+            PathState = "该项目已在左侧列表中";
+            return;
+        }
 
-        Log.Information("项目初始化完成: DisplayName={Name}, Path={Path}, Server={Server}, Project={Proj}",
-            cfg.DisplayName, cfg.ProjectPath, serverUrl, SelectedServerProject.Name);
+        IsPathUsable = true;
+        PathState = "将初始化 .updator/shared.json";
+    }
 
-        // 创建 UpdateFolder/client.json 并复制 aly-client.exe
-        if (!string.IsNullOrWhiteSpace(MainExePath) && File.Exists(MainExePath))
+    private void UpdateMainExeCandidates()
+    {
+        var previous = SelectedMainExeCandidate;
+        var candidates = ProjectInputHelper.FindMainExeCandidates(ProjectPath.Trim());
+
+        MainExeCandidates.Clear();
+        foreach (var candidate in candidates)
         {
-            _configService.CreateUpdateFolder(projectPath, MainExePath, CloseProcessName);
+            MainExeCandidates.Add(candidate);
+        }
+
+        if (previous is not null && MainExeCandidates.Contains(previous))
+        {
+            SelectedMainExeCandidate = previous;
+        }
+        else if (MainExeCandidates.Count == 1)
+        {
+            SelectedMainExeCandidate = MainExeCandidates[0];
         }
         else
         {
-            Log.Warning("未选择主程序，跳过 UpdateFolder 创建");
+            SelectedMainExeCandidate = null;
+        }
+    }
+
+    private void UpdateValidation()
+    {
+        ValidationMessage = BuildValidationMessage();
+        NextStepCommand.NotifyCanExecuteChanged();
+        PreviousStepCommand.NotifyCanExecuteChanged();
+        ConfirmCommand.NotifyCanExecuteChanged();
+    }
+
+    private string BuildValidationMessage()
+    {
+        if (IsServerStep)
+        {
+            return IsServerSelectionValid ? string.Empty : "请先获取并选择一个服务端项目";
         }
 
-        RequestClose?.Invoke(cfg);
+        if (!IsPathUsable)
+        {
+            return string.IsNullOrWhiteSpace(PathState) ? "请选择本地项目目录" : PathState;
+        }
+
+        return string.IsNullOrWhiteSpace(DisplayName) ? "请填写显示名称" : string.Empty;
+    }
+
+    private static void AddIfMissing(ObservableCollection<string> target, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        var trimmed = value.Trim();
+        if (!target.Contains(trimmed))
+        {
+            target.Add(trimmed);
+        }
+    }
+
+    private static List<string> Clean(IEnumerable<string> values)
+        => values
+            .Select(value => value.Trim())
+            .Where(value => value.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+    private static string NormalizeForComparison(string path)
+    {
+        try
+        {
+            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return path.Trim();
+        }
     }
 }

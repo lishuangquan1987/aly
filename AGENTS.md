@@ -96,8 +96,8 @@
 
 ## 七、文档参考
 
-- **Avalonia 11.3**: https://docs.avaloniaui.net/docs/welcome
-- **Semi.Avalonia 11.3**: https://github.com/irihi/Semi.Avalonia
-- **Ursa.Avalonia**: https://github.com/irihi/Ursa
+- **Avalonia 12.1**: https://docs.avaloniaui.net/docs/welcome
+- **Semi.Avalonia 12.1**: https://github.com/irihi/Semi.Avalonia
+- **Ursa.Avalonia 2.2**: https://github.com/irihi/Ursa
 
-> **版本**: 2.0 | **适用范围**: publish/publish-gui/（.NET 8 + Avalonia 11.3 + CommunityToolkit.Mvvm + Semi.Avalonia 11.3 + Ursa.Avalonia）
+> **版本**: 2.1 | **适用范围**: publish/publish-gui/（.NET 8 + Avalonia 12.1 + CommunityToolkit.Mvvm 8.4 + Semi.Avalonia 12.1 + Ursa.Avalonia 2.2）

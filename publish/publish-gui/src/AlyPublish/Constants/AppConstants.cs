@@ -1,8 +1,5 @@
-﻿namespace AlyPublish.Constants;
+namespace AlyPublish.Constants;
 
-/// <summary>
-/// 文件状态常量
-/// </summary>
 public static class FileStatus
 {
     public const string New = "new";
@@ -10,9 +7,6 @@ public static class FileStatus
     public const string Deleted = "deleted";
     public const string Unchanged = "unchanged";
 
-    /// <summary>
-    /// 获取状态的中文显示文本
-    /// </summary>
     public static string GetDisplayText(string status) => status switch
     {
         New => "新增",
@@ -23,9 +17,6 @@ public static class FileStatus
     };
 }
 
-/// <summary>
-/// 应用程序常量
-/// </summary>
 public static class AppConstants
 {
     public const string AppName = "AlyPublish";
@@ -35,13 +26,11 @@ public static class AppConstants
     public const string LogDirectoryName = "logs";
     public const string LogFileName = "log.log";
     public const string CliExecutableName = "aly-publish.exe";
-    public const string DefaultServerUrl = "http://localhost:2000";
-    public const string JsonOutputArg = "--json";
-    public const string PathArgPrefix = "--path";
-    public const string ServerArgPrefix = "--server";
-    public const string ProjectArgPrefix = "--project";
-    public const string IdArgPrefix = "--id";
-    public const string VersionArgPrefix = "--version";
-    public const string MessageArgPrefix = "--message";
-}
+    public const string JsonOutputArgument = "--json";
 
+    public static IReadOnlyList<string> IgnoreFolderSuggestions { get; } =
+        ["node_modules", ".git", ".vs", "bin", "obj", "dist", "logs"];
+
+    public static IReadOnlyList<string> IgnoreFileSuggestions { get; } =
+        ["*.log", "*.tmp", "*.pdb", "Thumbs.db", ".DS_Store"];
+}

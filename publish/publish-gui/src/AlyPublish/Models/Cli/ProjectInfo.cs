@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 
 namespace AlyPublish.Models.Cli;
 
-public class ProjectInfo
+public sealed class ProjectInfo
 {
     [JsonProperty("id")]
     public int Id { get; set; }

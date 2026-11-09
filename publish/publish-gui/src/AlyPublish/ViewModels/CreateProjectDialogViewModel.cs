@@ -1,115 +1,170 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Collections.ObjectModel;
+using AlyPublish.Constants;
+using AlyPublish.Models.Cli;
+using AlyPublish.Models.Local;
+using AlyPublish.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Ursa.Controls;
-using AlyPublish.Models.Cli;
-using AlyPublish.Services;
-using Serilog;
 
 namespace AlyPublish.ViewModels;
 
-public partial class CreateProjectDialogViewModel : ObservableObject
+/// <summary>Creates a server-side project. The identifier follows the title until the user edits it.</summary>
+public sealed partial class CreateProjectDialogViewModel : ViewModelBase
 {
     private readonly CliService _cli;
+    private bool _syncingName;
+    private bool _nameEdited;
+    private IReadOnlyList<string> _existingProjectNames = [];
 
-    [ObservableProperty] private string _serverUrl = string.Empty;
-    [ObservableProperty] private string _projectName = string.Empty;
-    [ObservableProperty] private string _projectTitle = string.Empty;
-    [ObservableProperty] private bool _forceUpdate;
-    [ObservableProperty] private string _ignoreFolders = string.Empty;
-    [ObservableProperty] private string _ignoreFiles = string.Empty;
-    [ObservableProperty] private string _statusMessage = string.Empty;
-    [ObservableProperty] private bool _isCreating;
-
-    /// <summary>View 订阅此事件以关闭对话框并返回结果</summary>
-    public event Action<ProjectInfo?>? RequestClose;
-
-    public IAsyncRelayCommand CreateCommand { get; }
-    public IRelayCommand CancelCommand { get; }
-
-    public CreateProjectDialogViewModel(CliService cli)
+    public CreateProjectDialogViewModel(
+        CliService cli,
+        IDialogService dialogs,
+        INotificationService notifications)
+        : base(dialogs, notifications)
     {
         _cli = cli;
-
-        CreateCommand = new AsyncRelayCommand(CreateAsync, () => !IsCreating);
-        CancelCommand = new RelayCommand(() => RequestClose?.Invoke(null));
     }
 
-    partial void OnIsCreatingChanged(bool value)
+    public ObservableCollection<string> IgnoreFolders { get; } = [];
+
+    public ObservableCollection<string> IgnoreFiles { get; } = [];
+
+    public IReadOnlyList<string> IgnoreFolderSuggestions { get; } = AppConstants.IgnoreFolderSuggestions;
+
+    public IReadOnlyList<string> IgnoreFileSuggestions { get; } = AppConstants.IgnoreFileSuggestions;
+
+    [ObservableProperty]
+    private string _serverUrl = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CreateCommand))]
+    private string _projectTitle = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CreateCommand))]
+    private string _projectName = string.Empty;
+
+    [ObservableProperty]
+    private bool _forceUpdate;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CreateCommand))]
+    [NotifyPropertyChangedFor(nameof(HasValidationMessage))]
+    private string _validationMessage = string.Empty;
+
+    public bool HasValidationMessage => !string.IsNullOrEmpty(ValidationMessage);
+
+    public void Apply(CreateServerProjectRequest request)
     {
+        ServerUrl = request.ServerUrl;
+        _existingProjectNames = request.ExistingProjectNames;
+
+        foreach (var folder in request.SuggestedIgnoreFolders)
+        {
+            AddIfMissing(IgnoreFolders, folder);
+        }
+
+        foreach (var file in request.SuggestedIgnoreFiles)
+        {
+            AddIfMissing(IgnoreFiles, file);
+        }
+
+        UpdateValidation();
+    }
+
+    partial void OnProjectTitleChanged(string value)
+    {
+        if (!_nameEdited)
+        {
+            _syncingName = true;
+            ProjectName = value.Trim();
+            _syncingName = false;
+        }
+
+        UpdateValidation();
+    }
+
+    partial void OnProjectNameChanged(string value)
+    {
+        if (!_syncingName)
+        {
+            _nameEdited = true;
+        }
+
+        UpdateValidation();
+    }
+
+    protected override void OnBusyChanged() => CreateCommand.NotifyCanExecuteChanged();
+
+    [RelayCommand(CanExecute = nameof(CanCreate))]
+    private async Task CreateAsync()
+    {
+        var name = ProjectName.Trim();
+        var title = ProjectTitle.Trim();
+        ProjectInfo? created = null;
+
+        var saved = await RunAsync("创建服务端项目", async token =>
+        {
+            created = await _cli.CreateServerProjectAsync(
+                ServerUrl,
+                name,
+                title,
+                ForceUpdate,
+                Clean(IgnoreFolders),
+                Clean(IgnoreFiles),
+                token);
+        });
+
+        if (saved && created is not null)
+        {
+            Close(created);
+        }
+    }
+
+    [RelayCommand]
+    private void AddSuggestedIgnoreFolder(string? value) => AddIfMissing(IgnoreFolders, value);
+
+    [RelayCommand]
+    private void AddSuggestedIgnoreFile(string? value) => AddIfMissing(IgnoreFiles, value);
+
+    [RelayCommand]
+    private void Cancel() => Close(null);
+
+    private bool CanCreate()
+        => !IsBusy
+           && !string.IsNullOrWhiteSpace(ProjectTitle)
+           && !string.IsNullOrWhiteSpace(ProjectName)
+           && string.IsNullOrEmpty(ValidationMessage);
+
+    private void UpdateValidation()
+    {
+        var name = ProjectName.Trim();
+        ValidationMessage = name.Length > 0 && _existingProjectNames.Any(existing =>
+            string.Equals(existing, name, StringComparison.OrdinalIgnoreCase))
+            ? "服务端已存在同名项目"
+            : string.Empty;
+
         CreateCommand.NotifyCanExecuteChanged();
     }
 
-    private async Task CreateAsync()
+    private static void AddIfMissing(ObservableCollection<string> target, string? value)
     {
-        var name = ProjectName?.Trim();
-        var title = ProjectTitle?.Trim();
-
-        if (string.IsNullOrEmpty(name))
+        if (string.IsNullOrWhiteSpace(value))
         {
-            await MessageBox.ShowAsync("请填写项目名称", "提示", MessageBoxIcon.Warning);
-            return;
-        }
-        if (string.IsNullOrEmpty(title))
-        {
-            await MessageBox.ShowAsync("请填写项目标题", "提示", MessageBoxIcon.Warning);
             return;
         }
 
-        // 防止 CLI 参数注入
-        if (name.Contains('"') || title.Contains('"'))
+        var trimmed = value.Trim();
+        if (!target.Contains(trimmed))
         {
-            await MessageBox.ShowAsync("项目名称和标题不能包含双引号", "提示", MessageBoxIcon.Warning);
-            return;
-        }
-
-        var ignoreFolders = ParseCsv(IgnoreFolders);
-        var ignoreFiles = ParseCsv(IgnoreFiles);
-
-        IsCreating = true;
-        StatusMessage = "正在创建项目...";
-        Log.Information("创建项目: Server={Server}, Name={Name}, Title={Title}, Force={Force}, IgnoreFolders={Folders}, IgnoreFiles={Files}",
-            ServerUrl, name, title, ForceUpdate,
-            string.Join(",", ignoreFolders), string.Join(",", ignoreFiles));
-
-        try
-        {
-            var result = await _cli.ProjectCreateAsync(
-                ServerUrl, name, title, ForceUpdate, ignoreFolders, ignoreFiles);
-
-            Log.Information("创建结果: IsSuccess={Ok}, ErrorMsg={Err}", result?.IsSuccess, result?.ErrorMsg);
-
-            if (result?.IsSuccess == true && result.Data != null)
-            {
-                Log.Information("项目创建成功: Id={Id}", result.Data.Id);
-                RequestClose?.Invoke(result.Data);
-            }
-            else
-            {
-                StatusMessage = string.Empty;
-                await MessageBox.ShowAsync($"创建失败: {result?.ErrorMsg}", "错误", MessageBoxIcon.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "创建项目异常");
-            StatusMessage = string.Empty;
-            await MessageBox.ShowAsync("创建项目时发生异常，请重试或联系管理员", "错误", MessageBoxIcon.Error);
-        }
-        finally
-        {
-            IsCreating = false;
+            target.Add(trimmed);
         }
     }
 
-    private static List<string> ParseCsv(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return new();
-        return text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(s => !string.IsNullOrEmpty(s))
+    private static List<string> Clean(IEnumerable<string> values)
+        => values
+            .Select(value => value.Trim())
+            .Where(value => value.Length > 0)
+            .Distinct(StringComparer.Ordinal)
             .ToList();
-    }
 }

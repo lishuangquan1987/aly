@@ -1,39 +1,111 @@
-using System;
 using System.Diagnostics;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using Serilog;
 
 namespace AlyPublish.Services;
 
-public class ProcessResult
+public sealed record ProcessResult(
+    bool Success,
+    bool Canceled,
+    int ExitCode,
+    string StandardOutput,
+    string StandardError);
+
+/// <summary>Runs external processes with UTF-8 output, a timeout and full process-tree cleanup.</summary>
+public static class ProcessService
 {
-    public bool Success { get; set; }
-    public string StandardOutput { get; set; } = string.Empty;
-    public string StandardError { get; set; } = string.Empty;
-    public int ExitCode { get; set; }
-}
+    private const int KillWaitMilliseconds = 5_000;
+    private const int DefaultTimeoutMilliseconds = 60_000;
 
-public class ProcessService
-{
-    public async Task<ProcessResult> RunAsync(
-        string fileName, string arguments, string? workingDir = null, int timeoutMs = 30000)
-        => await RunCoreAsync(fileName, arguments, null, workingDir, timeoutMs);
+    public static Task<ProcessResult> RunAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string? workingDirectory = null,
+        int timeoutMs = DefaultTimeoutMilliseconds,
+        CancellationToken cancellationToken = default)
+        => RunCoreAsync(fileName, arguments, null, workingDirectory, timeoutMs, cancellationToken);
 
-    /// <summary>
-    /// 使用 ArgumentList 启动进程：参数数组由 .NET 按 Windows 规则自动转义，
-    /// 杜绝手工拼接引号导致的参数注入。
-    /// </summary>
-    public async Task<ProcessResult> RunAsync(
-        string fileName, IReadOnlyList<string> argumentList, string? workingDir = null, int timeoutMs = 30000)
-        => await RunCoreAsync(fileName, null, argumentList, workingDir, timeoutMs);
+    public static Task<ProcessResult> RunWithProgressAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        Action<string> onLine,
+        string? workingDirectory = null,
+        int timeoutMs = DefaultTimeoutMilliseconds,
+        CancellationToken cancellationToken = default)
+        => RunCoreAsync(fileName, arguments, onLine, workingDirectory, timeoutMs, cancellationToken);
 
-    private async Task<ProcessResult> RunCoreAsync(
-        string fileName, string? arguments, IReadOnlyList<string>? argumentList,
-        string? workingDir, int timeoutMs)
+    private static async Task<ProcessResult> RunCoreAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        Action<string>? onLine,
+        string? workingDirectory,
+        int timeoutMs,
+        CancellationToken cancellationToken)
     {
-        var psi = new ProcessStartInfo
+        var startInfo = CreateStartInfo(fileName, arguments, workingDirectory);
+        Log.Debug("启动进程: {File} {Arguments} (超时={Timeout}ms)", fileName, string.Join(' ', arguments), timeoutMs);
+
+        using var process = new Process { StartInfo = startInfo };
+        try
+        {
+            process.Start();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "进程启动失败: {File}", fileName);
+            return new ProcessResult(false, false, -1, string.Empty, ex.Message);
+        }
+
+        var output = new StringBuilder();
+        var outputTask = onLine is null
+            ? ReadAllAsync(process.StandardOutput, output)
+            : ReadLinesAsync(process.StandardOutput, output, onLine);
+        var errorTask = process.StandardError.ReadToEndAsync(CancellationToken.None);
+
+        using var timeoutSource = new CancellationTokenSource(timeoutMs);
+        using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(timeoutSource.Token, cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(linkedSource.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            var canceledByCaller = cancellationToken.IsCancellationRequested && !timeoutSource.IsCancellationRequested;
+            await TerminateAsync(process, fileName);
+            await DrainOutputAsync(outputTask, errorTask);
+            if (canceledByCaller)
+            {
+                Log.Information("进程已取消: {File}", fileName);
+                return new ProcessResult(false, true, -1, output.ToString().Trim(), "操作已取消");
+            }
+
+            Log.Warning("进程超时: {File} ({Timeout}ms)", fileName, timeoutMs);
+            return new ProcessResult(false, false, -1, output.ToString().Trim(), "进程执行超时");
+        }
+
+        await outputTask;
+        var standardError = (await errorTask).Trim();
+        var exitCode = process.ExitCode;
+        var result = new ProcessResult(exitCode == 0, false, exitCode, output.ToString().Trim(), standardError);
+
+        if (!result.Success)
+        {
+            Log.Warning("进程非零退出: ExitCode={ExitCode}, StdErr={Error}", exitCode, standardError);
+        }
+        else
+        {
+            Log.Debug("进程完成: ExitCode={ExitCode}, StdOut={Length}", exitCode, result.StandardOutput.Length);
+        }
+
+        return result;
+    }
+
+    private static ProcessStartInfo CreateStartInfo(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string? workingDirectory)
+    {
+        var startInfo = new ProcessStartInfo
         {
             FileName = fileName,
             UseShellExecute = false,
@@ -43,225 +115,72 @@ public class ProcessService
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8
         };
-        if (argumentList is not null)
+
+        foreach (var argument in arguments)
         {
-            foreach (var arg in argumentList)
-                psi.ArgumentList.Add(arg);
-        }
-        else
-        {
-            psi.Arguments = arguments ?? string.Empty;
-        }
-        if (!string.IsNullOrWhiteSpace(workingDir))
-        {
-            psi.WorkingDirectory = workingDir;
-            Log.Debug("工作目录: {WorkDir}", workingDir);
+            startInfo.ArgumentList.Add(argument);
         }
 
-        Log.Debug("启动进程: {File} {Args} (超时={Timeout}ms)", fileName, arguments, timeoutMs);
-
-        using var proc = new Process { StartInfo = psi };
-
-        try
+        if (!string.IsNullOrWhiteSpace(workingDirectory))
         {
-            proc.Start();
+            startInfo.WorkingDirectory = workingDirectory;
+        }
 
-            // 并发读取 stdout/stderr，防止管道缓冲区满导致子进程死锁
-            var stdoutTask = proc.StandardOutput.ReadToEndAsync();
-            var stderrTask = proc.StandardError.ReadToEndAsync();
+        return startInfo;
+    }
 
-            using var cts = new CancellationTokenSource(timeoutMs);
+    private static async Task ReadAllAsync(StreamReader reader, StringBuilder output)
+    {
+        output.Append(await reader.ReadToEndAsync(CancellationToken.None));
+    }
+
+    private static async Task ReadLinesAsync(StreamReader reader, StringBuilder output, Action<string> onLine)
+    {
+        while (await reader.ReadLineAsync(CancellationToken.None) is { } line)
+        {
+            output.AppendLine(line);
             try
             {
-                await proc.WaitForExitAsync(cts.Token);
+                onLine(line);
             }
-            catch (OperationCanceledException)
+            catch (Exception ex)
             {
-                // Kill(true)：同时结束 CLI 子进程树，避免孤儿进程占用文件/锁
-                proc.Kill(true);
-                try
-                {
-                    // 等待进程退出，加 5 秒超时防止无限挂起
-                    using var killCts = new CancellationTokenSource(5000);
-                    await proc.WaitForExitAsync(killCts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    Log.Warning("进程 Kill 后未在 5s 内退出: {File} {Args}", fileName, arguments);
-                }
-                // 等待 stdout/stderr 读取任务完成，避免未观察异常和丢失错误信息
-                try
-                {
-                    await Task.WhenAll(stdoutTask, stderrTask);
-                }
-                catch (Exception readEx)
-                {
-                    Log.Warning(readEx, "超时后读取 stdout/stderr 异常: {File} {Args}", fileName, arguments);
-                }
-                Log.Warning("进程超时: {File} {Args}", fileName, arguments);
-                return new ProcessResult { Success = false, StandardError = "进程执行超时" };
+                Log.Warning(ex, "进度回调异常: {Line}", line);
             }
-
-            var stdout = (await stdoutTask).Trim();
-            var stderr = (await stderrTask).Trim();
-
-            var result = new ProcessResult
-            {
-                Success = proc.ExitCode == 0,
-                StandardOutput = stdout.Trim(),
-                StandardError = stderr.Trim(),
-                ExitCode = proc.ExitCode
-            };
-
-            Log.Debug("进程完成: ExitCode={Code}, StdOut={OutLen}, StdErr={ErrLen}",
-                result.ExitCode, result.StandardOutput.Length, result.StandardError.Length);
-
-            if (!result.Success)
-            {
-                Log.Warning("进程非零退出: ExitCode={Code}, StdErr={Err}",
-                    result.ExitCode, result.StandardError);
-            }
-
-            return result;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "进程执行异常: {File} {Args}", fileName, arguments);
-            return new ProcessResult { Success = false, StandardError = ex.Message };
         }
     }
 
-    /// <summary>
-    /// 运行进程并逐行回调 stdout 输出（用于实时进度显示）。
-    /// 每收到一行 stdout 即调用 onLine，无需等待进程结束。
-    /// </summary>
-    public async Task<ProcessResult> RunWithProgressAsync(
-        string fileName, string arguments, Action<string> onLine,
-        string? workingDir = null, int timeoutMs = 30000)
-        => await RunWithProgressCoreAsync(fileName, arguments, null, onLine, workingDir, timeoutMs);
-
-    /// <summary>使用 ArgumentList 的进度版本（防参数注入）。</summary>
-    public async Task<ProcessResult> RunWithProgressAsync(
-        string fileName, IReadOnlyList<string> argumentList, Action<string> onLine,
-        string? workingDir = null, int timeoutMs = 30000)
-        => await RunWithProgressCoreAsync(fileName, null, argumentList, onLine, workingDir, timeoutMs);
-
-    private async Task<ProcessResult> RunWithProgressCoreAsync(
-        string fileName, string? arguments, IReadOnlyList<string>? argumentList,
-        Action<string> onLine, string? workingDir, int timeoutMs)
+    private static async Task TerminateAsync(Process process, string fileName)
     {
-        var psi = new ProcessStartInfo
+        try
         {
-            FileName = fileName,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
-        };
-        if (argumentList is not null)
-        {
-            foreach (var arg in argumentList)
-                psi.ArgumentList.Add(arg);
+            process.Kill(entireProcessTree: true);
         }
-        else
+        catch (InvalidOperationException)
         {
-            psi.Arguments = arguments ?? string.Empty;
+            return;
         }
-        if (!string.IsNullOrWhiteSpace(workingDir))
-        {
-            psi.WorkingDirectory = workingDir;
-            Log.Debug("工作目录 (流式): {WorkDir}", workingDir);
-        }
-
-        Log.Debug("启动进程 (流式): {File} {Args} (超时={Timeout}ms)", fileName, arguments, timeoutMs);
-
-        using var proc = new Process { StartInfo = psi };
 
         try
         {
-            proc.Start();
+            using var killSource = new CancellationTokenSource(KillWaitMilliseconds);
+            await process.WaitForExitAsync(killSource.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            Log.Warning("进程 Kill 后未在 {Timeout}ms 内退出: {File}", KillWaitMilliseconds, fileName);
+        }
+    }
 
-            // 在后台线程逐行读取 stdout，每行调用 onLine 回调
-            var stdoutAll = new StringBuilder();
-            var stdoutTask = Task.Run(async () =>
-            {
-                while (true)
-                {
-                    var line = await proc.StandardOutput.ReadLineAsync();
-                    if (line == null) break;
-                    stdoutAll.AppendLine(line);
-                    try
-                    {
-                        onLine(line);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Warning(ex, "onLine 回调异常: {Line}", line);
-                    }
-                }
-            });
-
-            // stderr 仍然一次性读取
-            var stderrTask = proc.StandardError.ReadToEndAsync();
-
-            using var cts = new CancellationTokenSource(timeoutMs);
-            try
-            {
-                await proc.WaitForExitAsync(cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                proc.Kill(true);
-                try
-                {
-                    using var killCts = new CancellationTokenSource(5000);
-                    await proc.WaitForExitAsync(killCts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    Log.Warning("进程 Kill 后未在 5s 内退出 (流式): {File} {Args}", fileName, arguments);
-                }
-                try
-                {
-                    await Task.WhenAll(stdoutTask, stderrTask);
-                }
-                catch (Exception readEx)
-                {
-                    Log.Warning(readEx, "超时后读取 stdout/stderr 异常 (流式): {File} {Args}", fileName, arguments);
-                }
-                Log.Warning("进程超时 (流式): {File} {Args}", fileName, arguments);
-                return new ProcessResult { Success = false, StandardError = "进程执行超时" };
-            }
-
-            // 等待 stdout 读取完成
-            await stdoutTask;
-            var stderr = (await stderrTask).Trim();
-
-            var result = new ProcessResult
-            {
-                Success = proc.ExitCode == 0,
-                StandardOutput = stdoutAll.ToString().Trim(),
-                StandardError = stderr,
-                ExitCode = proc.ExitCode
-            };
-
-            Log.Debug("进程完成 (流式): ExitCode={Code}, StdOut={OutLen}, StdErr={ErrLen}",
-                result.ExitCode, result.StandardOutput.Length, result.StandardError.Length);
-
-            if (!result.Success)
-            {
-                Log.Warning("进程非零退出 (流式): ExitCode={Code}, StdErr={Err}",
-                    result.ExitCode, result.StandardError);
-            }
-
-            return result;
+    private static async Task DrainOutputAsync(Task outputTask, Task<string> errorTask)
+    {
+        try
+        {
+            await Task.WhenAll(outputTask, errorTask);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "进程执行异常 (流式): {File} {Args}", fileName, arguments);
-            return new ProcessResult { Success = false, StandardError = ex.Message };
+            Log.Warning(ex, "超时后读取进程输出失败");
         }
     }
 }

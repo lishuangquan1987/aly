@@ -4,22 +4,20 @@ using Newtonsoft.Json;
 namespace AlyPublish.Models.Local;
 
 /// <summary>
-/// GUI 本地项目配置 —— 类比 SourceTree 的书签。
-/// 只存储显示名称和项目路径，server_url / project_name 等真实配置从项目的 .updator/ 目录读取。
+/// A GUI bookmark: display name and local path only. The real project settings live in
+/// <c>.updator/shared.json</c> and are read through the CLI.
 /// </summary>
-public partial class ProjectConfig : ObservableObject
+public sealed partial class ProjectConfig : ObservableObject
 {
-    /// <summary>本地显示名称，仅供 GUI 展示，用户可重命名</summary>
     [ObservableProperty]
     [property: JsonProperty("DisplayName")]
     private string _displayName = string.Empty;
 
-    /// <summary>项目本地路径（构建产物目录，内含 .updator/）</summary>
     [ObservableProperty]
     [property: JsonProperty("ProjectPath")]
     private string _projectPath = string.Empty;
 
-    /// <summary>主程序相对路径（相对于 ProjectPath），用于"启动程序"按钮</summary>
+    /// <summary>Executable launched by the "启动程序" button; relative to <see cref="ProjectPath"/> when possible.</summary>
     [ObservableProperty]
     [property: JsonProperty("MainExePath")]
     private string _mainExePath = string.Empty;

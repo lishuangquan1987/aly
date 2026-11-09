@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 
 namespace AlyPublish.Models.Cli;
 
-public class CliOutput<T>
+internal sealed class CliOutput<T>
 {
     [JsonProperty("isSuccess")]
     public bool IsSuccess { get; set; }
