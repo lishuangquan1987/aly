@@ -65,6 +65,25 @@ public sealed class ProjectInputHelperTests
         Assert.Equal("bin/app.exe", ProjectInputHelper.ToStoredMainExePath(project, inside));
     }
 
+    [Fact]
+    public void TryGetProjectRelativePath_ReturnsSlashSeparatedPath()
+    {
+        var project = @"C:\builds\app";
+        var inside = Path.Combine(project, "Log", "Config");
+
+        Assert.True(ProjectInputHelper.TryGetProjectRelativePath(project, inside, out var relative));
+        Assert.Equal("Log/Config", relative);
+    }
+
+    [Fact]
+    public void TryGetProjectRelativePath_RejectsProjectRootAndOutsidePaths()
+    {
+        var project = @"C:\builds\app";
+
+        Assert.False(ProjectInputHelper.TryGetProjectRelativePath(project, project, out _));
+        Assert.False(ProjectInputHelper.TryGetProjectRelativePath(project, @"C:\builds\other\file.txt", out _));
+    }
+
     private static string CreateTempDirectory()
     {
         var directory = Path.Combine(Path.GetTempPath(), "AlyPublish.Tests", Path.GetRandomFileName());

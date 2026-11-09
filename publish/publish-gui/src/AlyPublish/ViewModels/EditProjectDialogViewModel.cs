@@ -72,6 +72,8 @@ public sealed partial class EditProjectDialogViewModel : ViewModelBase
 
     public bool HasValidationMessage => !string.IsNullOrEmpty(ValidationMessage);
 
+    public string ProjectPath => _projectPath;
+
     public string MainExeHint
     {
         get
@@ -185,6 +187,14 @@ public sealed partial class EditProjectDialogViewModel : ViewModelBase
     [RelayCommand]
     private void AddSuggestedIgnoreFile(string? value) => AddIfMissing(IgnoreFiles, value);
 
+    public void AddIgnoreFolder(string fullPath) => AddProjectEntry(IgnoreFolders, fullPath, "文件夹");
+
+    public void AddIgnoreFile(string fullPath) => AddProjectEntry(IgnoreFiles, fullPath, "文件");
+
+    public void AddUnCopyFolder(string fullPath) => AddProjectEntry(UnCopyFolders, fullPath, "文件夹");
+
+    public void AddUnCopyFile(string fullPath) => AddProjectEntry(UnCopyFiles, fullPath, "文件");
+
     private bool CanSave()
         => !IsBusy
            && IsLoaded
@@ -228,6 +238,17 @@ public sealed partial class EditProjectDialogViewModel : ViewModelBase
         {
             target.Add(trimmed);
         }
+    }
+
+    private void AddProjectEntry(ObservableCollection<string> target, string fullPath, string kind)
+    {
+        if (!ProjectInputHelper.TryGetProjectRelativePath(_projectPath, fullPath, out var relative))
+        {
+            Notify.Warning($"请选择项目目录内的{kind}");
+            return;
+        }
+
+        AddIfMissing(target, relative);
     }
 
     private static List<string> Clean(IEnumerable<string> values)

@@ -14,6 +14,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 {
     private readonly CliService _cli;
     private readonly ConfigService _config;
+    private readonly Dictionary<string, ProjectTabViewModel> _projectViews =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public MainWindowViewModel(
         CliService cli,
@@ -28,8 +30,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IsCliAvailable = _cli.IsAvailable;
         CliPath = _cli.ExecutablePath;
 
-        Projects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProjects));
-        Tabs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasTabs));
+        Projects.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasProjects));
+            OnPropertyChanged(nameof(HasNoFilterMatches));
+            ApplyProjectFilter();
+        };
 
         LoadProjects();
         Log.Information("主窗口初始化: 项目 {Count} 个, CLI={Cli}", Projects.Count, CliPath);
@@ -37,7 +43,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<ProjectConfig> Projects { get; } = [];
 
-    public ObservableCollection<ProjectTabViewModel> Tabs { get; } = [];
+    public ObservableCollection<ProjectConfig> FilteredProjects { get; } = [];
+
+    [ObservableProperty]
+    private string _projectFilter = string.Empty;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RemoveProjectCommand))]
@@ -45,6 +54,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private ProjectConfig? _selectedProject;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedTab))]
     private ProjectTabViewModel? _selectedTab;
 
     [ObservableProperty]
@@ -57,11 +67,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public bool HasProjects => Projects.Count > 0;
 
-    public bool HasTabs => Tabs.Count > 0;
+    public bool HasFilteredProjects => FilteredProjects.Count > 0;
+
+    public bool HasNoFilterMatches => HasProjects && !HasFilteredProjects;
+
+    public bool HasSelectedTab => SelectedTab is not null;
 
     public string CliHint => IsCliAvailable
         ? $"aly-publish：{CliPath}"
         : "未找到 aly-publish.exe。请将其放在本程序目录，或点击“重新检测”。";
+
+    partial void OnProjectFilterChanged(string value) => ApplyProjectFilter();
 
     partial void OnSelectedProjectChanged(ProjectConfig? value)
     {
@@ -71,27 +87,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        var tab = Tabs.FirstOrDefault(candidate => string.Equals(
-            candidate.Project.ProjectPath,
-            value.ProjectPath,
-            StringComparison.OrdinalIgnoreCase));
-
-        if (tab is null)
+        var tab = GetOrCreateProjectView(value, out var isNew);
+        if (isNew)
         {
-            tab = CreateTab(value);
-            Tabs.Add(tab);
             tab.RefreshCommand.Execute(null);
         }
 
         SelectedTab = tab;
-    }
-
-    partial void OnSelectedTabChanged(ProjectTabViewModel? value)
-    {
-        if (value is not null && !ReferenceEquals(SelectedProject, value.Project))
-        {
-            SelectedProject = value.Project;
-        }
     }
 
     protected override void OnBusyChanged()
@@ -150,16 +152,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 SelectedProject = null;
             }
 
-            var tab = FindTab(project);
-            if (tab is not null)
-            {
-                RemoveTab(tab, selectNeighbor: false);
-            }
-
             Projects.Remove(project);
+            _projectViews.Remove(project.ProjectPath);
             if (wasSelected)
             {
-                SelectedProject = Tabs.FirstOrDefault()?.Project;
+                SelectedProject = FilteredProjects.FirstOrDefault();
             }
         });
 
@@ -180,13 +177,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void CloseTab(ProjectTabViewModel? tab)
-    {
-        if (tab is not null)
-        {
-            RemoveTab(tab, selectNeighbor: true);
-        }
-    }
+    private void ClearProjectFilter() => ProjectFilter = string.Empty;
 
     [RelayCommand]
     private void RetryCli()
@@ -234,6 +225,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private async Task AddProjectCoreAsync(ProjectConfig project)
     {
+        ProjectFilter = string.Empty;
         var added = await RunAsync("添加项目", () =>
         {
             _config.SaveProjects(Projects.Append(project));
@@ -261,6 +253,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             project.DisplayName = updated.DisplayName;
             project.MainExePath = updated.MainExePath;
             _config.SaveProjects(Projects);
+            ApplyProjectFilter();
             saved = true;
         });
 
@@ -270,39 +263,24 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async void OnTabEditRequested(object? sender, ProjectConfig project)
+    private async void OnProjectEditRequested(object? sender, ProjectConfig project)
     {
         await EditProjectCoreAsync(project);
     }
 
-    private ProjectTabViewModel CreateTab(ProjectConfig project)
+    private ProjectTabViewModel GetOrCreateProjectView(ProjectConfig project, out bool isNew)
     {
-        var tab = new ProjectTabViewModel(project, _cli, Dialogs, Notify);
-        tab.EditRequested += OnTabEditRequested;
-        return tab;
-    }
-
-    private ProjectTabViewModel? FindTab(ProjectConfig project)
-        => Tabs.FirstOrDefault(tab => ReferenceEquals(tab.Project, project));
-
-    private void RemoveTab(ProjectTabViewModel tab, bool selectNeighbor)
-    {
-        var index = Tabs.IndexOf(tab);
-        if (index < 0)
+        if (_projectViews.TryGetValue(project.ProjectPath, out var existing))
         {
-            return;
+            isNew = false;
+            return existing;
         }
 
-        var wasSelected = ReferenceEquals(SelectedTab, tab);
-        Tabs.RemoveAt(index);
-
-        if (!wasSelected || !selectNeighbor)
-        {
-            return;
-        }
-
-        SelectedTab = Tabs.Count == 0 ? null : Tabs[Math.Min(index, Tabs.Count - 1)];
-        SelectedProject = SelectedTab?.Project;
+        var view = new ProjectTabViewModel(project, _cli, Dialogs, Notify);
+        view.EditRequested += OnProjectEditRequested;
+        _projectViews[project.ProjectPath] = view;
+        isNew = true;
+        return view;
     }
 
     private void LoadProjects()
@@ -314,9 +292,42 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         if (Projects.Count > 0)
         {
-            SelectedProject = Projects[0];
+            SelectedProject = FilteredProjects.FirstOrDefault();
         }
     }
+
+    private void ApplyProjectFilter()
+    {
+        var previousSelection = SelectedProject;
+        var filter = ProjectFilter.Trim();
+        FilteredProjects.Clear();
+
+        foreach (var project in Projects.Where(project => MatchesFilter(project, filter)))
+        {
+            FilteredProjects.Add(project);
+        }
+
+        OnPropertyChanged(nameof(HasFilteredProjects));
+        OnPropertyChanged(nameof(HasNoFilterMatches));
+
+        if (previousSelection is not null && FilteredProjects.Contains(previousSelection))
+        {
+            SelectedProject = previousSelection;
+        }
+        else if (previousSelection is not null)
+        {
+            SelectedProject = FilteredProjects.FirstOrDefault();
+        }
+        else if (filter.Length == 0 && FilteredProjects.Count > 0)
+        {
+            SelectedProject = FilteredProjects[0];
+        }
+    }
+
+    private static bool MatchesFilter(ProjectConfig project, string filter)
+        => filter.Length == 0
+           || project.DisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase)
+           || project.ProjectPath.Contains(filter, StringComparison.OrdinalIgnoreCase);
 
     private void OpenDirectory(string path)
     {

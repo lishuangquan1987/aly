@@ -356,11 +356,23 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <u:TagInput
-                    AllowDuplicates="False"
-                    PlaceholderText="输入后回车添加，例如 node_modules"
-                    Separator=","
-                    Tags="{Binding IgnoreFolders}" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <u:TagInput
+                      AllowDuplicates="False"
+                      PlaceholderText="输入后回车添加，例如 node_modules"
+                      Separator=","
+                      Tags="{Binding IgnoreFolders}" />
+                  <Button
+                      Grid.Column="1"
+                      Click="OnPickIgnoreFolder"
+                      Height="32"
+                      Margin="8,0,0,0"
+                      Padding="0"
+                      ToolTip.Tip="从项目目录选择文件夹"
+                      Width="32">
+                    <materialIcons:MaterialIcon Height="14" Kind="Plus" Width="14" />
+                  </Button>
+                </Grid>
               </StackPanel>
 
               <StackPanel>
@@ -385,29 +397,65 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <u:TagInput
-                    AllowDuplicates="False"
-                    PlaceholderText="输入后回车添加，例如 *.log"
-                    Separator=","
-                    Tags="{Binding IgnoreFiles}" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <u:TagInput
+                      AllowDuplicates="False"
+                      PlaceholderText="输入后回车添加，例如 *.log"
+                      Separator=","
+                      Tags="{Binding IgnoreFiles}" />
+                  <Button
+                      Grid.Column="1"
+                      Click="OnPickIgnoreFile"
+                      Height="32"
+                      Margin="8,0,0,0"
+                      Padding="0"
+                      ToolTip.Tip="从项目目录选择文件"
+                      Width="32">
+                    <materialIcons:MaterialIcon Height="14" Kind="Plus" Width="14" />
+                  </Button>
+                </Grid>
               </StackPanel>
 
               <StackPanel>
                 <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="不复制文件夹（应用更新时跳过）" />
-                <u:TagInput
-                    AllowDuplicates="False"
-                    PlaceholderText="输入后回车添加"
-                    Separator=","
-                    Tags="{Binding UnCopyFolders}" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <u:TagInput
+                      AllowDuplicates="False"
+                      PlaceholderText="输入后回车添加"
+                      Separator=","
+                      Tags="{Binding UnCopyFolders}" />
+                  <Button
+                      Grid.Column="1"
+                      Click="OnPickUnCopyFolder"
+                      Height="32"
+                      Margin="8,0,0,0"
+                      Padding="0"
+                      ToolTip.Tip="从项目目录选择文件夹"
+                      Width="32">
+                    <materialIcons:MaterialIcon Height="14" Kind="Plus" Width="14" />
+                  </Button>
+                </Grid>
               </StackPanel>
 
               <StackPanel>
                 <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="不复制文件（应用更新时跳过）" />
-                <u:TagInput
-                    AllowDuplicates="False"
-                    PlaceholderText="输入后回车添加"
-                    Separator=","
-                    Tags="{Binding UnCopyFiles}" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <u:TagInput
+                      AllowDuplicates="False"
+                      PlaceholderText="输入后回车添加"
+                      Separator=","
+                      Tags="{Binding UnCopyFiles}" />
+                  <Button
+                      Grid.Column="1"
+                      Click="OnPickUnCopyFile"
+                      Height="32"
+                      Margin="8,0,0,0"
+                      Padding="0"
+                      ToolTip.Tip="从项目目录选择文件"
+                      Width="32">
+                    <materialIcons:MaterialIcon Height="14" Kind="Plus" Width="14" />
+                  </Button>
+                </Grid>
               </StackPanel>
             </StackPanel>
           </Expander>

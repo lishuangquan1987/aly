@@ -17,7 +17,7 @@
     </Grid.ColumnDefinitions>
 
     <!--  Changes + publish  -->
-    <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*,Auto">
+    <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*">
 
       <Border Padding="14,8">
         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
@@ -423,11 +423,21 @@
         </Border>
       </Grid>
 
+    </Grid>
+
+    <GridSplitter
+        Background="{DynamicResource SemiColorBorder}"
+        Grid.Column="1"
+        ResizeDirection="Columns" />
+
+
+    <Grid Grid.Column="2" RowDefinitions="Auto,*" Margin="0,8,12,12">
+
       <!--  Publish  -->
       <Border
           Classes="card"
-          Grid.Row="3"
-          Margin="12,8,12,12"
+          Grid.Row="0"
+          Margin="0,0,0,8"
           Padding="14,10">
         <StackPanel Spacing="8">
           <Grid ColumnDefinitions="Auto,*,Auto">
@@ -580,121 +590,111 @@
           </Border>
         </StackPanel>
       </Border>
-    </Grid>
 
-    <GridSplitter
-        Background="{DynamicResource SemiColorBorder}"
-        Grid.Column="1"
-        ResizeDirection="Columns" />
+      <!--  Version history  -->
+      <Border Classes="card" Grid.Row="1">
+        <Grid RowDefinitions="Auto,*">
+          <Border
+              BorderBrush="{DynamicResource SemiColorBorder}"
+              BorderThickness="0,0,0,1"
+              Padding="14,8">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+              <materialIcons:MaterialIcon
+                  Foreground="{DynamicResource SemiColorText2}"
+                  Height="14"
+                  Kind="History"
+                  VerticalAlignment="Center"
+                  Width="14" />
+              <TextBlock
+                  Classes="sectionTitle"
+                  Grid.Column="1"
+                  Margin="6,0,0,0"
+                  Text="版本历史"
+                  VerticalAlignment="Center" />
+              <TextBlock
+                  Classes="caption"
+                  Grid.Column="2"
+                  Margin="0,0,6,0"
+                  Text="最近 20 条"
+                  VerticalAlignment="Center" />
+              <Button
+                  Grid.Column="3"
+                  Command="{Binding RefreshCommand}"
+                  Height="24"
+                  Padding="6,0"
+                  ToolTip.Tip="刷新历史">
+                <materialIcons:MaterialIcon Height="12" Kind="Refresh" Width="12" />
+              </Button>
+            </Grid>
+          </Border>
 
-    <!--  Version history  -->
-    <Border
-        Background="{DynamicResource SemiColorBg1}"
-        BorderBrush="{DynamicResource SemiColorBorder}"
-        BorderThickness="1,0,0,0"
-        Grid.Column="2">
-      <Grid RowDefinitions="Auto,*">
-        <Border
-            BorderBrush="{DynamicResource SemiColorBorder}"
-            BorderThickness="0,0,0,1"
-            Padding="14,8">
-          <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-            <materialIcons:MaterialIcon
-                Foreground="{DynamicResource SemiColorText2}"
-                Height="14"
-                Kind="History"
-                VerticalAlignment="Center"
-                Width="14" />
-            <TextBlock
-                Classes="sectionTitle"
-                Grid.Column="1"
-                Margin="6,0,0,0"
-                Text="版本历史"
-                VerticalAlignment="Center" />
-            <TextBlock
-                Classes="caption"
-                Grid.Column="2"
-                Margin="0,0,6,0"
-                Text="最近 20 条"
-                VerticalAlignment="Center" />
-            <Button
-                Grid.Column="3"
-                Command="{Binding RefreshCommand}"
-                Height="24"
-                Padding="6,0"
-                ToolTip.Tip="刷新历史">
-              <materialIcons:MaterialIcon Height="12" Kind="Refresh" Width="12" />
-            </Button>
-          </Grid>
-        </Border>
-
-        <Grid Grid.Row="1">
-          <TableView
-                  ItemsSource="{Binding ChangeLogs}"
-                  HorizontalAlignment="Stretch"
-                  SelectionMode="Single">
-            <TableView.Columns>
-              <TableViewColumn Header="版本" Width="76">
-                <TableViewColumn.CellTemplate>
-                  <DataTemplate x:DataType="cli:ChangeLog">
-                    <Border Classes="pill" HorizontalAlignment="Left">
+          <Grid Grid.Row="1">
+            <TableView
+                    ItemsSource="{Binding ChangeLogs}"
+                    HorizontalAlignment="Stretch"
+                    SelectionMode="Single">
+              <TableView.Columns>
+                <TableViewColumn Header="版本" Width="96">
+                  <TableViewColumn.CellTemplate>
+                    <DataTemplate x:DataType="cli:ChangeLog">
+                      <Border Classes="pill historyVersion" Classes.current="{Binding IsLatest}" HorizontalAlignment="Left">
+                        <TextBlock
+                            FontSize="11"
+                            FontWeight="SemiBold"
+                            Text="{Binding Version}" />
+                      </Border>
+                    </DataTemplate>
+                  </TableViewColumn.CellTemplate>
+                </TableViewColumn>
+                <TableViewColumn Header="时间" Width="130">
+                  <TableViewColumn.CellTemplate>
+                    <DataTemplate x:DataType="cli:ChangeLog">
                       <TextBlock
-                          FontSize="11"
-                          FontWeight="SemiBold"
-                          Foreground="{DynamicResource SemiColorPrimary}"
-                          Text="{Binding Version}" />
-                    </Border>
-                  </DataTemplate>
-                </TableViewColumn.CellTemplate>
-              </TableViewColumn>
-              <TableViewColumn Header="时间" Width="120">
-                <TableViewColumn.CellTemplate>
-                  <DataTemplate x:DataType="cli:ChangeLog">
-                    <TextBlock
-                        FontSize="10"
-                        Foreground="{DynamicResource SemiColorText3}"
-                        Text="{Binding Time}" />
-                  </DataTemplate>
-                </TableViewColumn.CellTemplate>
-              </TableViewColumn>
-              <TableViewColumn Header="变更说明" Width="*">
-                <TableViewColumn.CellTemplate>
-                  <DataTemplate x:DataType="cli:ChangeLog">
-                    <ItemsControl ItemsSource="{Binding Logs}">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="x:String">
-                          <TextBlock
-                              FontSize="11"
-                              Foreground="{DynamicResource SemiColorText2}"
-                              Text="{Binding}"
-                              TextWrapping="Wrap" />
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                  </DataTemplate>
-                </TableViewColumn.CellTemplate>
-              </TableViewColumn>
-            </TableView.Columns>
-          </TableView>
+                          FontSize="10"
+                          Foreground="{DynamicResource SemiColorText3}"
+                          Text="{Binding Time}" />
+                    </DataTemplate>
+                  </TableViewColumn.CellTemplate>
+                </TableViewColumn>
+                <TableViewColumn Header="变更说明" Width="*">
+                  <TableViewColumn.CellTemplate>
+                    <DataTemplate x:DataType="cli:ChangeLog">
+                      <ItemsControl ItemsSource="{Binding Logs}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="x:String">
+                            <TextBlock
+                                FontSize="11"
+                                Foreground="{DynamicResource SemiColorText2}"
+                                Text="{Binding}"
+                                TextWrapping="Wrap" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </DataTemplate>
+                  </TableViewColumn.CellTemplate>
+                </TableViewColumn>
+              </TableView.Columns>
+            </TableView>
 
-          <StackPanel
-              HorizontalAlignment="Center"
-              IsHitTestVisible="False"
-              IsVisible="{Binding !HasChangeLogs}"
-              Spacing="4"
-              VerticalAlignment="Center">
-            <materialIcons:MaterialIcon
-                Foreground="{DynamicResource SemiColorText3}"
-                Height="28"
+            <StackPanel
                 HorizontalAlignment="Center"
-                Kind="History"
-                Width="28" />
-            <TextBlock Classes="emptyTitle" Text="暂无发布记录" />
-            <TextBlock Classes="emptyHint" Text="第一次发布成功后，版本历史会显示在这里。" />
-          </StackPanel>
+                IsHitTestVisible="False"
+                IsVisible="{Binding !HasChangeLogs}"
+                Spacing="4"
+                VerticalAlignment="Center">
+              <materialIcons:MaterialIcon
+                  Foreground="{DynamicResource SemiColorText3}"
+                  Height="28"
+                  HorizontalAlignment="Center"
+                  Kind="History"
+                  Width="28" />
+              <TextBlock Classes="emptyTitle" Text="暂无发布记录" />
+              <TextBlock Classes="emptyHint" Text="第一次发布成功后，版本历史会显示在这里。" />
+            </StackPanel>
+          </Grid>
         </Grid>
-      </Grid>
-    </Border>
+      </Border>
+    </Grid>
   </Grid>
 
   <UserControl.Styles>
@@ -749,6 +749,16 @@
     </Style>
     <Style Selector="Border.uploadBadge.failed TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource SemiColorDanger}" />
+    </Style>
+
+    <Style Selector="Border.historyVersion TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource SemiColorPrimary}" />
+    </Style>
+    <Style Selector="Border.historyVersion.current">
+      <Setter Property="Background" Value="{DynamicResource SemiColorPrimary}" />
+    </Style>
+    <Style Selector="Border.historyVersion.current TextBlock">
+      <Setter Property="Foreground" Value="White" />
     </Style>
   </UserControl.Styles>
 </UserControl>

@@ -429,7 +429,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         StatusMessage = $"未暂存 {UnstagedFiles.Count}，已暂存 {StagedFiles.Count}";
     }
 
-    private void ApplyStatus(StatusData status, IReadOnlyList<ChangeLog> changeLogs)
+    private void ApplyStatus(StatusData status, List<ChangeLog> changeLogs)
     {
         ReplaceFiles(
             UnstagedFiles,
@@ -440,8 +440,10 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         ReplaceFiles(StagedFiles, status.Staged.Select(FileItem.FromCliItem));
 
         ChangeLogs.Clear();
-        foreach (var entry in changeLogs)
+        for (var index = 0; index < changeLogs.Count; index++)
         {
+            var entry = changeLogs[index];
+            entry.IsLatest = index == 0;
             ChangeLogs.Add(entry);
         }
 

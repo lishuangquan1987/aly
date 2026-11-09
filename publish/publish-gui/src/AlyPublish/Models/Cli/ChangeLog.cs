@@ -34,4 +34,8 @@ public sealed class ChangeLog
         get => _time;
         set => _time = value ?? string.Empty;
     }
+
+    /// <summary>Set by the view model for the newest entry; not part of the CLI contract.</summary>
+    [JsonIgnore]
+    public bool IsLatest { get; set; }
 }

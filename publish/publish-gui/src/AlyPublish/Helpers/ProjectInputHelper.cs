@@ -70,6 +70,34 @@ public static class ProjectInputHelper
         return IsOutside(relative) ? mainExePath : NormalizeSeparators(relative);
     }
 
+    /// <summary>True when <paramref name="fullPath"/> is a file or folder inside the project.</summary>
+    public static bool TryGetProjectRelativePath(string projectPath, string fullPath, out string relativePath)
+    {
+        relativePath = string.Empty;
+        if (string.IsNullOrWhiteSpace(projectPath) || string.IsNullOrWhiteSpace(fullPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var projectRoot = Path.GetFullPath(projectPath);
+            var target = Path.GetFullPath(fullPath);
+            var relative = Path.GetRelativePath(projectRoot, target);
+            if (relative == "." || IsOutside(relative))
+            {
+                return false;
+            }
+
+            relativePath = NormalizeSeparators(relative);
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
     private static bool IsOutside(string relativePath)
         => relativePath == ".."
            || relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
