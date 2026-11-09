@@ -144,6 +144,7 @@
             <Grid Grid.Row="1">
               <TableView
                   CanUserResizeColumns="True"
+                  Classes="fileTable"
                   HorizontalAlignment="Stretch"
                   ItemsSource="{Binding UnstagedFiles}"
                   SelectionMode="Single">
@@ -299,6 +300,7 @@
             <Grid Grid.Row="1">
               <TableView
                   CanUserResizeColumns="True"
+                  Classes="fileTable"
                   HorizontalAlignment="Stretch"
                   ItemsSource="{Binding StagedFiles}"
                   SelectionMode="Single">
@@ -637,7 +639,11 @@
                 <TableViewColumn Header="版本" Width="96">
                   <TableViewColumn.CellTemplate>
                     <DataTemplate x:DataType="cli:ChangeLog">
-                      <Border Classes="pill historyVersion" Classes.current="{Binding IsLatest}" HorizontalAlignment="Left">
+                      <Border
+                          Classes="pill historyVersion"
+                          Classes.current="{Binding IsLatest}"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center">
                         <TextBlock
                             FontSize="11"
                             FontWeight="SemiBold"
@@ -652,7 +658,8 @@
                       <TextBlock
                           FontSize="10"
                           Foreground="{DynamicResource SemiColorText3}"
-                          Text="{Binding Time}" />
+                          Text="{Binding Time}"
+                          VerticalAlignment="Center" />
                     </DataTemplate>
                   </TableViewColumn.CellTemplate>
                 </TableViewColumn>
@@ -749,6 +756,19 @@
     </Style>
     <Style Selector="Border.uploadBadge.failed TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource SemiColorDanger}" />
+    </Style>
+
+    <Style Selector="TableView.fileTable TableViewRow">
+      <Setter Property="MinHeight" Value="34" />
+    </Style>
+    <Style Selector="TableView.fileTable TableViewCell">
+      <Setter Property="Padding" Value="10,3" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TableView.fileTable TableViewColumnHeader">
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
 
     <Style Selector="Border.historyVersion TextBlock">
