@@ -1,6 +1,7 @@
 <UserControl
     x:Class="AlyPublish.Views.ProjectTabView"
     x:DataType="vm:ProjectTabViewModel"
+    x:Name="Root"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:cli="using:AlyPublish.Models.Cli"
@@ -206,6 +207,22 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
+                  <TableViewColumn Header="" Width="44">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="local:FileItem">
+                        <Button
+                            Classes="Tertiary"
+                            Command="{Binding #Root.((vm:ProjectTabViewModel)DataContext).OpenFileLocationCommand}"
+                            CommandParameter="{Binding}"
+                            Height="24"
+                            Padding="0"
+                            ToolTip.Tip="打开所在位置"
+                            Width="24">
+                          <materialIcons:MaterialIcon Height="12" Kind="FolderOpen" Width="12" />
+                        </Button>
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
                 </TableView.Columns>
               </TableView>
 
@@ -342,6 +359,22 @@
                             HorizontalAlignment="Right"
                             Text="{Binding ServerSizeText}"
                             VerticalAlignment="Center" />
+                      </DataTemplate>
+                    </TableViewColumn.CellTemplate>
+                  </TableViewColumn>
+                  <TableViewColumn Header="" Width="44">
+                    <TableViewColumn.CellTemplate>
+                      <DataTemplate x:DataType="local:FileItem">
+                        <Button
+                            Classes="Tertiary"
+                            Command="{Binding #Root.((vm:ProjectTabViewModel)DataContext).OpenFileLocationCommand}"
+                            CommandParameter="{Binding}"
+                            Height="24"
+                            Padding="0"
+                            ToolTip.Tip="打开所在位置"
+                            Width="24">
+                          <materialIcons:MaterialIcon Height="12" Kind="FolderOpen" Width="12" />
+                        </Button>
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
