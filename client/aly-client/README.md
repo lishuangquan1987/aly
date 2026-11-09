@@ -24,9 +24,12 @@
 
 ## 兼容性
 
-- Go 1.10（兼容 Windows XP，不使用 Go Modules）
-- GOARCH=386
-- 100% 标准库 + golang.org/x/sys/windows
+- Windows：Go 1.10（兼容 Windows XP，不使用 Go Modules），GOARCH=386
+- Linux：同一份源码，Go 1.10 语法兼容；发布产物用 Go 1.27 交叉编译（无 cgo），
+  平台文件名为 `aly-client`（无 `.exe`），进程能力用 `/proc` + Unix 信号实现
+- 100% 标准库 + Windows 侧的 `golang.org/x/sys/windows`；Linux 侧无额外依赖
+- `client.json` 的 `main_exe_relative_path` 在 Linux 上会把 `\` 归一到 `/`，
+  便于同一份包跨平台部署
 
 ## stdout JSON 协议（宿主集成说明）
 

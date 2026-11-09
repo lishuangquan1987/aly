@@ -19,6 +19,7 @@ client/aly-client-ui/aly-client-winui/aly-client-ui.exe
 client/aly-client-ui/aly-client-winui/*.exe
 client/aly-client-ui/aly-client-linuxui/build/
 client/aly-client-ui/aly-client-linuxui/.mygo/
+client/aly-client-ui/dist/
 client/test/temp_test/
 client/test/*.exe
 test_data/

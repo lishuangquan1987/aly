@@ -23,6 +23,14 @@
 宿主只需要启动 `<UpdateFolder>/aly-client-ui(.exe) -mode auto -lang zh-CN`；
 UI 启动时先同步更新器（`aly-client self_update`），再按需替换 UI 自身。
 
+## 构建
+
+- Windows XP：见 `aly-client-winui/BUILD.md`（Go 1.10.8/386）。
+- Linux：`./build-linux.sh`（或 `build-linux.ps1`）构建两架构的
+  `aly-client` + `aly-client-ui`，输出到 `dist/linux-<arch>/`；Linux 侧用
+  `./deploy-client-linux.sh <UpdateFolder> <MainFolder> [arch]` 部署两件套。
+  Linux UI 需要 GTK3 运行库，不需要 WebKitGTK/Bun。
+
 ## 共同契约
 
 - CLI、标准 JSON 输出、`client.json`/`version.json`、journal

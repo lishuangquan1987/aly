@@ -650,7 +650,7 @@ aly-client.exe self_update
 | `-mode` | `auto` | `auto` / `check` / `update` / `rollback` / `silent` |
 | `-lang` | `zh-CN` | `zh-CN` / `en-US`；未知值回退中文 |
 | `-url` | 空 | 预留，当前不生效（`aly-client.exe` 自己读 `client.json`） |
-| `-project-name` | 空 | 预留，当前不生效 |
+| `-project-name` | 空 | 可选：覆盖窗口标题（缺省读 `.updator/shared.json` 的 `project_name`） |
 
 #### 模式行为
 
@@ -662,11 +662,17 @@ aly-client.exe self_update
 | `rollback` | 总是显示 | 列出可回滚版本供选择（当前版本不在列表里），选定后执行 `rollback --version <v>` |
 | `update` | 总是显示 | 保留 |
 
-**界面特征**：右下角（工作区，已扣任务栏）、`HWND_TOPMOST`、`WS_EX_TOOLWINDOW`
+**界面特征（Windows）**：右下角（工作区，已扣任务栏）、`HWND_TOPMOST`、`WS_EX_TOOLWINDOW`
 （不进任务栏、不进 Alt-Tab）、`SWP_NOACTIVATE`（不抢焦点，不打断全屏主程序）。
 尺寸 380x160（96 DPI），随系统 DPI 等比缩放。
 
-**单实例**：用命名互斥体保证同一会话只有一个 UI 实例；重复启动的实例立刻以 exit code 0 退出。
+**界面特征（Linux）**：MyGo 原生窗口 420x250（min 380x210）、无边框、
+`AlwaysOnTop`、`SkipTaskbar`、置于主显示器工作区右下角；GTK3 运行时，无
+WebKitGTK/Bun。
+
+**单实例**：Windows 用命名互斥体，Linux 用 MyGo 单实例（Unix socket）；同一会话
+只有一个 UI 实例，重复启动的实例立即以 exit code 0 退出。第二个实例的
+`-mode check` 会转发给第一个实例（触发/聚焦）。
 
 **更新流程**（询问一律走**卡片按钮**，不打断全屏主程序；强制更新 10 秒倒计时后自动重启）：
 
@@ -695,8 +701,16 @@ check_update → 有更新 → [立即更新] [稍后] 按钮 → download_updat
 - 全程不经过 `cmd.exe`/`ping`/`move`，没有 PATH、引号、`%` 展开与固定延时问题；
 - 成功/失败都追加到 `<UpdateFolder>/aly-client-ui.exe.update.log`。
 
+**Linux 差异**：UI/更新器文件名无 `.exe`；收尾进程等待旧 PID 用
+`/proc/<pid>/stat`（`starttime` 校验 PID 复用、`state=Z` 视为已退出），超时用
+`SIGKILL`；收尾进程 `Setsid` 脱离旧会话；日志
+`<UpdateFolder>/aly-client-ui.update.log`，journal
+`<UpdateFolder>/aly-client-ui.selfupdate.json`。`-finish-self-update` 在
+MyGo/GTK 之前处理，无显示环境也能完成收尾。
+
 **启动自更新防循环**：UI 自身更新失败/未收敛会写入
-`<UpdateFolder>/aly-client-ui.exe.selfupdate.json`；30 分钟观察窗口内连续 3 次
+`<UpdateFolder>/aly-client-ui.exe.selfupdate.json`（Linux 为
+`<UpdateFolder>/aly-client-ui.selfupdate.json`）；30 分钟观察窗口内连续 3 次
 未收敛则跳过本次自更新（UI 仍正常启动和检查更新），窗口过后自动恢复。
 旧 UI 派生收尾进程后即退出，收尾结果只能下一次启动观测，因此用 `pending`
 计入；收尾进程失败/超时/未收敛都会计数。删除该文件可立即重置。
@@ -719,6 +733,22 @@ check_update → 有更新 → [立即更新] [稍后] 按钮 → download_updat
 
 :: 回滚界面
 ..\UpdateFolder\aly-client-ui.exe -mode rollback -lang en-US
+```
+
+Linux 同参数（无 `.exe`）：
+
+```sh
+./aly-client-ui -mode auto -lang zh-CN
+./aly-client-ui -mode check -lang en-US
+./aly-client-ui -mode rollback -lang zh-CN
+```
+
+Linux 构建/部署（Go 1.27.3）：
+
+```sh
+cd client/aly-client-ui
+./build-linux.sh
+./deploy-client-linux.sh <UpdateFolder> <MainFolder> [amd64|arm64]
 ```
 
 ---

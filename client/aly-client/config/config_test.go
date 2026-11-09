@@ -1,11 +1,23 @@
 package config
 
 import (
+	"path/filepath"
 	"runtime"
 	"testing"
 )
 
-// TestUpdaterFileName 平台更新器文件名：Windows 带 .exe，Linux/Unix 不带。
+// TestNormalizeMainExeRelativePath 验证 Windows 打包的分隔符在 Linux 上归一。
+func TestNormalizeMainExeRelativePath(t *testing.T) {
+	got := normalizeMainExeRelativePath(`..\ApplicationFolder\app`)
+	if filepath.Separator == '/' {
+		if got != "../ApplicationFolder/app" {
+			t.Fatalf("got %q", got)
+		}
+	} else if got != `..\ApplicationFolder\app` {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestUpdaterFileName(t *testing.T) {
 	want := "aly-client"
 	if runtime.GOOS == "windows" {

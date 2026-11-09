@@ -1,0 +1,13 @@
+{
+  "name": "aly-client-ui",
+  "slug": "aly-client-ui",
+  "identifier": "com.lishuangquan.aly.client.ui",
+  "version": "1.0.0",
+  "out": "build",
+  "linux": {
+    "webview": false,
+    "maintainer": "李双全 <lishuangquan@yofc.com>",
+    "comment": "Aly client auto-update UI",
+    "categories": ["Utility"]
+  }
+}

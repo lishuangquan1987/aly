@@ -60,6 +60,7 @@
 | `test/tc/cases_116_124_test.go` | 新增（~960 行） | 用例 116–124（并发 / ACL / 自愈链 / Range / i18n / SDK 失败路径） |
 | `test/tc/cases_125_127_test.go` | 新增（~190 行） | 用例 125–127（publish-gui 初始化：布局 / 三件套 / 原子写，**未执行**） |
 | `test/tc/cases_130_135_test.go` | 新增（~420 行） | 用例 130–135（自更新统一：`self_update` 执行、UI 委派/自身收尾 + 防循环、SDK 委派） |
+| `client/aly-client-ui/aly-client-linuxui/*_test.go` | 新增 | **Linux UI 自身测试**（独立 Go module，不在 `test/tc` 的 135 条内）：client JSON 解析、flow 决策、i18n、journal、路径/复制、UI 自更新派生、收尾参数/改名、`ui.NewTester` 视图 |
 
 > **125–127 的两层钉法**：publish-gui 是 C#/Avalonia 的 UI 程序，框架跑不了它的窗口，
 > 所以每条都分两层——**源码契约**（读 C# 源码断言关键调用形态，与用例 104 的 ① 段同法）
@@ -80,6 +81,7 @@
 |---|---|---|---|
 | server / publish-cli | **go1.26** | `tc.Go126` | 二者 `go.mod` 声明 `go 1.25.0`，需 ≥1.25 的工具链 |
 | aly-client / aly-client-ui / fake_main | **go1.10.8** | `tc.Go1108` | XP 兼容口径，必须 `GOARCH=386`；用 1.26 编出的 386 产物不保证可在 XP 运行 |
+| Linux aly-client + aly-client-linuxui | **go1.27.3** | 无（module tool 固定） | MyGo 0.8.3 原生 UI；纯 Go/无 cgo，可交叉编译；运行需 GTK3 |
 | C# SDK | dotnet 10 | — | 目标框架 net40 |
 
 两个路径在 `env.go` 顶部，可用环境变量覆盖，无需改代码：
@@ -2912,6 +2914,38 @@ tc.Eq(t, ".part 应已消失", tc.Exists(part), false)
   —— 用例已加哨兵断言，找不到直接 FAIL 并打印全部进度行
 
 执行结果：`PASS（用例 45，17.05s）` — START 行存在且起点为 0（钉住 ≤100MB 全量重下），最终 50MB、MD5 一致、`.part` 已清理
+
+### 七-A Linux UI（独立 Go module，不计入 135 条）
+
+> `client/aly-client-ui/aly-client-linuxui` 是 MyGo 0.8.3 原生 UI，独立
+> Go module（Go 1.27.3）；不能纳入 `test/tc` 的 go1.10.8/GOPATH 驱动。它的测试
+> 在模块内 `go test ./...`，CI 在 Ubuntu 上跑；Windows 本地可跑跨平台部分，
+> Linux 专属收尾/进程测试用 `linux` 构建 tag。
+
+**验证命令**
+
+```sh
+cd client/aly-client-ui/aly-client-linuxui
+go tool mygo vet
+go test ./...
+go tool mygo build -platform linux/amd64,linux/arm64
+```
+
+**判据**
+
+| # | 检查 | 期望 |
+|---|---|---|
+| L1 | `go test ./...` | 根包 + `client` 包全 PASS；根包含 `TestViewUpdateCard`、`TestDecide`、`TestI18nKeysMatch`、`TestJournalLifecycle`、`TestUpdateSelfUISpawnsFinish`、`TestFinishSelfUpdateFlow`（Linux） |
+| L2 | `go tool mygo vet` | exit 0，无输出 |
+| L3 | `mygo build` | `build/linux-amd64/aly-client-ui` 是 ELF、无 `.exe`；arm64 同样 |
+| L4 | 构建产物 | 根包可执行；`resources/icon.png` 随 MyGo 输出；GTK3 运行时无 WebKit/Bun 依赖 |
+| L5 | 收尾入口 | `aly-client-ui -finish-self-update --target ... --pid ... --new ... --` 在无 GTK/显示环境下可运行（不初始化 MyGo）；参数缺失 exit 2 |
+| L6 | 自更新派生 | `updateSelfUI` 在源/目标不同时生成 `.new`、写 journal `pending`、派生带 `--target/--pid/--created/--new/--` 的 `.new`；相同内容 noop |
+| L7 | 视图 | `ui.NewTester` 下中英文卡片文本/按钮可见；不启动窗口 |
+
+> 本机 WSL 无 Go/GTK 开发包，GUI 启动冒烟放 CI（Ubuntu + GTK3）；CI 已构建
+> 两架构并跑 unit tests。完整 Linux UI 端到端（真实窗口点击）不在 135 条内，
+> 视为环境依赖用例，失败时先检查 GTK3/显示，再查代码。
 
 ---
 

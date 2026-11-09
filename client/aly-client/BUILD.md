@@ -50,6 +50,25 @@ del aly-client.exe
 
 > `deploy-client.go` 会自动完成更新器与 winui 的构建/回拷；手工构建时才需要执行。
 
+### 4. Linux 更新器（无 `.exe`）
+
+Linux 更新器与 Windows 共用同一份源码，但平台文件名/进程能力不同
+（`config.UpdaterFileName()` → `aly-client`；`util/process_unix.go` 用 `/proc`
+实现查找/终止/等待）：
+
+```sh
+mkdir -p /tmp/aly-gopath/src/aly/client
+cp -a client/aly-client /tmp/aly-gopath/src/aly/client/aly-client
+cd /tmp/aly-gopath/src/aly/client/aly-client
+GOPATH=/tmp/aly-gopath GO111MODULE=off GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+  go build -trimpath -o aly-client aly/client/aly-client
+```
+
+Go 1.27.3 交叉编译；产物无扩展名。完整两件套（更新器 + MyGo UI）用
+`client/aly-client-ui/build-linux.sh`（Windows 用 `build-linux.ps1`）。
+
+> Windows XP 仍必须用 Go 1.10.8/386 构建；不要用 Go 1.27 产物替代。
+
 ## 一键编译脚本
 
 `build.bat` 只构建更新器（内置 Go 1.10.x 版本断言）。完整部署用仓库根的

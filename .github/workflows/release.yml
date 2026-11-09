@@ -214,6 +214,67 @@ jobs:
             aly-client.exe
             aly-client-ui.exe
 
+  build-aly-client-linux:
+    name: Build aly-client + aly-client-ui (Linux)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go 1.27
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+
+      - name: Build Linux aly-client (amd64/arm64)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/gopath/src/aly/client"
+          cp -a client/aly-client "$RUNNER_TEMP/gopath/src/aly/client/aly-client"
+          for arch in amd64 arm64; do
+            mkdir -p "aly-client-linux-$arch"
+            (cd "$RUNNER_TEMP/gopath/src/aly/client/aly-client" && \
+              GOPATH="$RUNNER_TEMP/gopath" GO111MODULE=off GOOS=linux GOARCH="$arch" CGO_ENABLED=0 \
+              go build -trimpath -o "$GITHUB_WORKSPACE/aly-client-linux-$arch/aly-client" aly/client/aly-client)
+            chmod 0755 "aly-client-linux-$arch/aly-client"
+          done
+
+      - name: Test Linux aly-client (config/util/selfupdate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/gopath/src/aly/client/aly-client"
+          GOPATH="$RUNNER_TEMP/gopath" GO111MODULE=off GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+            go test ./config ./util ./selfupdate -count=1
+
+      - name: Test & build Linux UI (MyGo native)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd client/aly-client-ui/aly-client-linuxui
+          go tool mygo vet
+          go test ./...
+          go tool mygo build -platform linux/amd64,linux/arm64
+          for arch in amd64 arm64; do
+            cp -f "build/linux-$arch/aly-client-ui" \
+              "$GITHUB_WORKSPACE/aly-client-linux-$arch/aly-client-ui-linux-$arch"
+            chmod 0755 "$GITHUB_WORKSPACE/aly-client-linux-$arch/aly-client-ui-linux-$arch"
+            mv "$GITHUB_WORKSPACE/aly-client-linux-$arch/aly-client" \
+              "$GITHUB_WORKSPACE/aly-client-linux-$arch/aly-client-linux-$arch"
+          done
+
+      - name: Upload Linux client artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aly-client-linux
+          path: |
+            aly-client-linux-amd64/aly-client-linux-amd64
+            aly-client-linux-amd64/aly-client-ui-linux-amd64
+            aly-client-linux-arm64/aly-client-linux-arm64
+            aly-client-linux-arm64/aly-client-ui-linux-arm64
+
   publish-sdk-nuget:
     name: Publish AlyClient.CSharpSDK to NuGet
     runs-on: windows-latest
@@ -268,7 +329,7 @@ jobs:
 
   upload-release-assets:
     name: Upload to Release
-    needs: [build-server, build-aly-publish, build-aly-client]
+    needs: [build-server, build-aly-publish, build-aly-client, build-aly-client-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -310,4 +371,8 @@ jobs:
             aly-publish-darwin-arm64/aly-publish-darwin-arm64 \
             aly-client-win-xp/aly-client.exe \
             aly-client-win-xp/aly-client-ui.exe \
+            aly-client-linux-amd64/aly-client-linux-amd64 \
+            aly-client-linux-amd64/aly-client-ui-linux-amd64 \
+            aly-client-linux-arm64/aly-client-linux-arm64 \
+            aly-client-linux-arm64/aly-client-ui-linux-arm64 \
             --clobber

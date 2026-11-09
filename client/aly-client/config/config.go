@@ -113,14 +113,31 @@ func (c *Config) MergeFlags(mainExePath string) {
 	}
 }
 
-// MainExeFolderPath 返回主程序根目录的绝对路径 (PackageFolder/ApplicationFolder/)
-// main_exe_relative_path 相对于 ExeDir（即 UpdateFolder/），如 "../ApplicationFolder/main_application.exe"
-func (c *Config) MainExeFolderPath() (string, error) {
+// normalizeMainExeRelativePath 统一 client.json 里的分隔符：同一份包可能在
+// Windows 打包、Linux 运行，反斜杠在 Linux 上必须换成 POSIX 分隔符。
+func normalizeMainExeRelativePath(p string) string {
+	if filepath.Separator == '/' {
+		return strings.Replace(p, "\\", "/", -1)
+	}
+	return p
+}
+
+// MainExeAbsPath 返回主程序 exe 的绝对路径。
+func (c *Config) MainExeAbsPath() (string, error) {
 	exeDir, err := ExeDir()
 	if err != nil {
 		return "", err
 	}
-	mainExeAbsPath := filepath.Join(exeDir, c.MainExeRelativePath)
+	return filepath.Join(exeDir, normalizeMainExeRelativePath(c.MainExeRelativePath)), nil
+}
+
+// MainExeFolderPath 返回主程序根目录的绝对路径 (PackageFolder/ApplicationFolder/)
+// main_exe_relative_path 相对于 ExeDir（即 UpdateFolder/），如 "../ApplicationFolder/main_application.exe"
+func (c *Config) MainExeFolderPath() (string, error) {
+	mainExeAbsPath, err := c.MainExeAbsPath()
+	if err != nil {
+		return "", err
+	}
 	return filepath.Dir(mainExeAbsPath), nil
 }
 

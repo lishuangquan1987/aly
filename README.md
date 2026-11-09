@@ -233,7 +233,15 @@ go build -ldflags="-s -w -H=windowsgui" -o aly-client-ui.exe aly/client/aly-clie
 > startup with `TTM_ADDTOOL failed`.
 >
 > The Linux UI (`client/aly-client-ui/aly-client-linuxui`) uses MyGo 0.8.3 + Go 1.27.3
-> and is built separately; see its README.
+> and is built separately:
+>
+> ```sh
+> cd client/aly-client-ui
+> ./build-linux.sh              # linux/amd64 + linux/arm64: aly-client + aly-client-ui
+> ./deploy-client-linux.sh <UpdateFolder> <MainFolder> [arch]
+> ```
+>
+> Linux UI is a MyGo native UI (GTK3 runtime only; no WebKitGTK/Bun).
 >
 > Locally you can run `go run deploy-client.go` (WSL + Go 1.10.8) to build both
 > executables and deploy them to every target listed in `config.json`.

@@ -940,7 +940,11 @@ func launchMainExe(cfg *config.Config, mainFolder string) {
 		util.AppendToLog(".", "update.log", fmt.Sprintf("launch main exe: get exe dir failed: %v", err))
 		return
 	}
-	exePath := filepath.Join(exeDir, cfg.MainExeRelativePath)
+	exePath, err := cfg.MainExeAbsPath()
+	if err != nil {
+		util.AppendToLog(".", "update.log", fmt.Sprintf("launch main exe: get exe path failed: %v", err))
+		return
+	}
 	cmd := buildMainExeCmd(exePath, mainFolder)
 	if err := cmd.Start(); err != nil {
 		util.AppendToLog(exeDir, "update.log", fmt.Sprintf("launch main exe failed: %s %v", exePath, err))
