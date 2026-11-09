@@ -5,7 +5,7 @@ package view
 import (
 	"github.com/lxn/walk"
 
-	"aly/client/aly-client/ui/winui/i18n"
+	"aly/client/aly-client-ui/aly-client-winui/i18n"
 )
 
 // ChooseVersion 弹出模态列表让用户选择要回滚到的版本，**阻塞**直到关闭。

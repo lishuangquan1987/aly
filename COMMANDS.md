@@ -3,8 +3,10 @@
 本文档涵盖以下命令行工具的所有命令：
 
 1. **`aly-client.exe`**（位于 `client/aly-client/`）— 自动更新客户端，负责检查、下载、应用更新及回滚
-2. **`aly-client-ui.exe`**（位于 `client/aly-client/ui/winui/`）— 可选的更新客户端图形界面，
-   在屏幕右下角以 topmost 窗口按需显示，调用 `aly-client.exe` 完成实际工作
+2. **`aly-client-ui.exe`**（Windows，位于 `client/aly-client-ui/aly-client-winui/`）
+   或 **`aly-client-ui`**（Linux，位于 `client/aly-client-ui/aly-client-linuxui/`）—
+   可选的更新客户端图形界面，在屏幕右下角以 topmost 窗口按需显示，调用
+   `aly-client.exe`/`aly-client` 完成实际工作
 3. **`aly-publish.exe`**（位于 `publish/publish-cli/`）— 发布命令行工具，负责项目管理、文件比对、暂存和推送发布
 
 ---
@@ -637,6 +639,11 @@ aly-client.exe self_update
 主程序目录）的 `aly-client.exe` 子进程完成并解析其 JSON 输出；只有
 **UI 自身 exe** 的替换/重启由 UI 用隐藏收尾进程 `-finish-self-update` 完成
 （`self_update` 管不到 UI）。
+
+> **平台**：Windows 为 `aly-client-ui.exe`（Go 1.10.8/386/walk，XP 兼容）；
+> Linux 为 `aly-client-ui`（无扩展名，Go 1.27.3 + MyGo 0.8.3 原生 UI，运行时
+> 依赖 GTK3），同目录更新器为 `aly-client`（无 `.exe`）。两者 CLI、标准 JSON、
+> journal 与 `-finish-self-update` 语义一致。
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|

@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"aly/client/aly-client/ui/winui/bridge"
-	"aly/client/aly-client/ui/winui/flow"
-	"aly/client/aly-client/ui/winui/i18n"
-	"aly/client/aly-client/ui/winui/view"
+	"aly/client/aly-client-ui/aly-client-winui/bridge"
+	"aly/client/aly-client-ui/aly-client-winui/flow"
+	"aly/client/aly-client-ui/aly-client-winui/i18n"
+	"aly/client/aly-client-ui/aly-client-winui/view"
 )
 
 // autoCloseDelay 是 -mode check 下「无更新 / 出错」提示的自动关闭时长。

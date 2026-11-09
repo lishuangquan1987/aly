@@ -12,9 +12,9 @@ import (
 
 // realAlyClient 返回仓库内 aly-client.exe 的路径（不存在则跳过用例）。
 //
-// 路径推导：ui/winui/bridge -> ui/winui -> ui -> client/aly-client
+// 路径推导：aly-client-ui/aly-client-winui/bridge -> ... -> client -> aly-client
 func realAlyClient(t *testing.T) string {
-	p := filepath.Join("..", "..", "..", "aly-client.exe")
+	p := filepath.Join("..", "..", "..", "aly-client", "aly-client.exe")
 	abs, err := filepath.Abs(p)
 	if err != nil {
 		t.Skipf("abs path failed: %v", err)

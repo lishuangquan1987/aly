@@ -151,8 +151,9 @@ jobs:
       - name: Setup GOPATH structure
         shell: cmd
         run: |
-          mkdir "%GOPATH%\src\aly\client"
+          mkdir "%GOPATH%\src\aly\client\aly-client-ui"
           xcopy /e /i /y client\aly-client "%GOPATH%\src\aly\client\aly-client"
+          xcopy /e /i /y client\aly-client-ui\aly-client-winui "%GOPATH%\src\aly\client\aly-client-ui\aly-client-winui"
 
       - name: Build aly-client (console, 32-bit, XP compatible)
         shell: cmd
@@ -173,7 +174,7 @@ jobs:
           GOARCH: 386
           GO111MODULE: 'off'
           CGO_ENABLED: '0'
-        run: go build -ldflags="-s -w -H=windowsgui" -o aly-client-ui.exe aly/client/aly-client/ui/winui
+        run: go build -ldflags="-s -w -H=windowsgui" -o aly-client-ui.exe aly/client/aly-client-ui/aly-client-winui
 
       # 防止再次误发在 XP 上根本无法加载的产物：
       # 旧仓库里的 aly-client.exe 曾是 Go 1.26 构建（SubsystemVer=6.1），XP 直接拒绝。

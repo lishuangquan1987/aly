@@ -33,9 +33,11 @@ func envOrDefault(key, def string) string {
 var wslGopathResolved string
 
 var (
-	scriptDir string
-	wslSrc    string // WSL 内的源码路径
-	linuxSrc  string // 源码在 WSL 中的挂载路径
+	scriptDir  string
+	wslSrc     string // WSL 内的更新器源码路径
+	linuxSrc   string // 更新器源码在 WSL 中的挂载路径
+	wslUISrc   string // WSL 内的 winui 源码路径
+	linuxUISrc string // winui 源码在 WSL 中的挂载路径
 )
 
 // deployFiles 是每次构建并部署的交付物：更新器与图形前端必须同进同退，
@@ -69,6 +71,8 @@ func mustInit() {
 	wslGopathResolved = envOrDefault("ALY_WSL_GOPATH", "~/go")
 	wslSrc = wslGopathResolved + "/src/aly/client/aly-client"
 	linuxSrc = envOrDefault("ALY_LINUX_SRC", winToWsl(filepath.Join(scriptDir, "client", "aly-client")))
+	wslUISrc = wslGopathResolved + "/src/aly/client/aly-client-ui/aly-client-winui"
+	linuxUISrc = winToWsl(filepath.Join(scriptDir, "client", "aly-client-ui", "aly-client-winui"))
 }
 
 func wsl(cmd string) error {
@@ -148,15 +152,19 @@ func main() {
 
 	// ── Step 1: Copy to WSL ──
 	fmt.Println("  [1/4] Copy client to WSL ...")
-	if err := wsl("rm -rf " + wslSrc); err != nil {
+	if err := wsl("rm -rf " + wslSrc + " " + wslUISrc); err != nil {
 		fmt.Printf("  [WARN] rm failed: %v\n", err)
 	}
-	if err := wsl("mkdir -p " + wslGopathResolved + "/src/aly/client"); err != nil {
+	if err := wsl("mkdir -p " + wslGopathResolved + "/src/aly/client/aly-client-ui"); err != nil {
 		fmt.Printf("  [ERROR] mkdir failed: %v\n", err)
 		os.Exit(1)
 	}
 	if err := wsl("cp -r " + linuxSrc + " " + wslSrc); err != nil {
 		fmt.Printf("  [ERROR] copy to WSL failed: %v\n", err)
+		os.Exit(1)
+	}
+	if err := wsl("cp -r " + linuxUISrc + " " + wslUISrc); err != nil {
+		fmt.Printf("  [ERROR] copy UI to WSL failed: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Println("  Done\n")
@@ -176,7 +184,7 @@ func main() {
 	// ── Step 2b: Build UI (XP 32-bit) ──
 	fmt.Println("  [2b/4] Building aly-client-ui.exe (GOARCH=386) ...")
 	buildUICmd := fmt.Sprintf(
-		"cd %s && GOROOT=%s GOPATH=%s GOOS=windows GOARCH=386 CGO_ENABLED=0 %s build -ldflags=\"-s -w -H=windowsgui\" -o aly-client-ui.exe aly/client/aly-client/ui/winui",
+		"cd %s && GOROOT=%s GOPATH=%s GOOS=windows GOARCH=386 CGO_ENABLED=0 %s build -ldflags=\"-s -w -H=windowsgui\" -o aly-client-ui.exe aly/client/aly-client-ui/aly-client-winui",
 		wslSrc, wslGoroot, wslGopathResolved, wslGo,
 	)
 	if err := wsl(buildUICmd); err != nil {
@@ -187,12 +195,17 @@ func main() {
 
 	// ── Step 2c: 回拷两个 exe 到仓库 ──
 	// 部署目标只包含 config.json 里的目录，不含源码仓库；而仓库里的
-	// client/aly-client/aly-client.exe 与 client/aly-client/aly-client-ui.exe
-	// 都是随包交付物（也是 UI 自更新"主程序目录 → UpdateFolder"的比对源），
+	// client/aly-client/aly-client.exe 与
+	// client/aly-client-ui/aly-client-winui/aly-client-ui.exe
+	// 都是随包交付物（也是自更新"主程序目录 → UpdateFolder"的比对源），
 	// 必须与部署的一致 —— 两个 exe 走完全相同的回拷流程。
 	fmt.Println("  [2c/4] Copying aly-client.exe + aly-client-ui.exe back to repo ...")
 	for _, name := range deployFiles {
-		if err := wsl("cp -f " + wslSrc + "/" + name + " " + linuxSrc + "/" + name); err != nil {
+		dstDir := linuxSrc
+		if name == "aly-client-ui.exe" {
+			dstDir = linuxUISrc
+		}
+		if err := wsl("cp -f " + wslSrc + "/" + name + " " + dstDir + "/" + name); err != nil {
 			fmt.Printf("  [WARN] copy %s back to repo failed: %v\n", name, err)
 		} else {
 			fmt.Printf("         OK %s\n", name)

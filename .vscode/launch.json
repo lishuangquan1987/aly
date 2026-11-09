@@ -23,7 +23,7 @@
       "args": [
         "check_update"
       ],
-      "cwd": "${workspaceFolder}/client/aly-client",
+      "cwd": "${workspaceFolder}/client/aly-client-ui/aly-client-winui",
       "env": {
         "GO111MODULE": "off",
         "GOOS": "windows",
@@ -35,14 +35,14 @@
       "type": "go",
       "request": "launch",
       "mode": "debug",
-      "program": "${workspaceFolder}/client/aly-client/ui/winui",
+      "program": "${workspaceFolder}/client/aly-client-ui/aly-client-winui",
       "args": [
         "-mode",
         "check",
         "-lang",
         "zh-CN"
       ],
-      "cwd": "${workspaceFolder}/client/aly-client",
+      "cwd": "${workspaceFolder}/client/aly-client-ui/aly-client-winui",
       "env": {
         "GO111MODULE": "off",
         "GOOS": "windows",
@@ -54,14 +54,14 @@
       "type": "go",
       "request": "launch",
       "mode": "debug",
-      "program": "${workspaceFolder}/client/aly-client/ui/winui",
+      "program": "${workspaceFolder}/client/aly-client-ui/aly-client-winui",
       "args": [
         "-mode",
         "auto",
         "-lang",
         "zh-CN"
       ],
-      "cwd": "${workspaceFolder}/client/aly-client",
+      "cwd": "${workspaceFolder}/client/aly-client-ui/aly-client-winui",
       "env": {
         "GO111MODULE": "off",
         "GOOS": "windows",

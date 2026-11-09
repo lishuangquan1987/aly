@@ -5,7 +5,7 @@ package view
 import (
 	"github.com/lxn/walk"
 
-	"aly/client/aly-client/ui/winui/view/theme"
+	"aly/client/aly-client-ui/aly-client-winui/view/theme"
 )
 
 // ButtonID 标识卡片上的一个按钮。

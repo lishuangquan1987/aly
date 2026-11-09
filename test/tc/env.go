@@ -258,6 +258,13 @@ func (e *Env) BuildAll(t *testing.T) {
 			t.Fatalf("复制 aly-client 源码到 GOPATH 失败: %v", err)
 		}
 	}
+	// UI 已迁出 aly-client：winui 源码树单独复制到 GOPATH，供 BuildUI 构建。
+	uiSrcDst := filepath.Join(gp, "src", "aly", "client", "aly-client-ui", "aly-client-winui")
+	if _, err := os.Stat(uiSrcDst); err != nil {
+		if err := copyTree(filepath.Join(RepoRoot, "client", "aly-client-ui", "aly-client-winui"), uiSrcDst); err != nil {
+			t.Fatalf("复制 aly-client-winui 源码到 GOPATH 失败: %v", err)
+		}
+	}
 	xgo := map[string]string{
 		"GOPATH":      gp,
 		"GO111MODULE": "off",

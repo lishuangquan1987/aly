@@ -2595,8 +2595,8 @@ tc.Eq(t, "修改内容生效",
 
 **前置条件**
 
-1. 已执行过 `tc.NewEnv(t, true, 0)`（`BuildAll` 会把 aly-client 源码复制进 `gopath`，UI 依赖这份副本）。
-2. `gopath/src/aly/client/aly-client/ui/winui` 存在且含 `main.go`。
+1. 已执行过 `tc.NewEnv(t, true, 0)`（`BuildAll` 会把 aly-client 与 winui 源码复制进 `gopath`，UI 依赖这两份副本）。
+2. `gopath/src/aly/client/aly-client-ui/aly-client-winui` 存在且含 `main.go`。
 
 ```go
 e := tc.NewEnv(t, true, 0) // 内含 BuildAll 与 GOPATH 副本
@@ -2605,7 +2605,7 @@ uiExe := e.BuildUI(t)
 
 **步骤**
 
-1. 用 go1.10.8 在 GOPATH 模式下构建 `ui/winui`，输出到 `bin/aly-client-ui.exe`。
+1. 用 go1.10.8 在 GOPATH 模式下构建 `aly/client/aly-client-ui/aly-client-winui`，输出到 `bin/aly-client-ui.exe`。
 2. 校验产物存在、非空。
 3. 校验架构确实是 386（读 PE 头，避免"能编出来但不是 386"）。
 4. 校验是 GUI 子系统（`-H=windowsgui` 生效：PE Subsystem = 2）。
@@ -2638,16 +2638,16 @@ tc.Eq(t, "PE 子系统", tc.PESubsystem(uiExe), tc.SubsystemWindowsGUI)
 
 **前置条件**
 
-1. `gopath/src/aly/client/aly-client/ui/winui/bridge` 存在，含 `client_test.go` / `parse_test.go` / `integration_test.go`。
+1. `gopath/src/aly/client/aly-client-ui/aly-client-winui/bridge` 存在，含 `client_test.go` / `parse_test.go` / `integration_test.go`。
 2. 无外部依赖（`integration_test.go` 内部 `t.Skip` 保护找不到 exe 的情况）。
 
 ```go
-code, out := e.GoTestGopath(t, "aly/client/aly-client/ui/winui/bridge", "-v", "-count=1")
+code, out := e.GoTestGopath(t, "aly/client/aly-client-ui/aly-client-winui/bridge", "-v", "-count=1")
 ```
 
 **步骤**
 
-1. 在 GOPATH 模式下跑 `go test -v aly/client/aly-client/ui/winui/bridge`。
+1. 在 GOPATH 模式下跑 `go test -v aly/client/aly-client-ui/aly-client-winui/bridge`。
 2. 统计 `--- PASS` / `--- FAIL` / `--- SKIP` 数量。
 3. 核对关键用例出现在 PASS 列表里。
 
@@ -2796,7 +2796,7 @@ tc.True(t, e.Publish(t, proj, "1.1.0", nil, "", "").IsSuccess, "发布 1.1.0")
 
 ```go
 // ① 单位格式化与千分比：单测覆盖
-code, out := e.GoTestGopath(t, "aly/client/aly-client/ui/winui/app",
+code, out := e.GoTestGopath(t, "aly/client/aly-client-ui/aly-client-winui/app",
     "-run", "TestFormatBytes|TestByteProgressPermille", "-v", "-count=1")
 tc.Eq(t, "格式化单测退出码", code, 0)
 tc.Contains(t, out, "--- PASS: TestFormatBytes", "app 单测")
@@ -5480,7 +5480,7 @@ tc.Eq(t, "version_previous 仍是 1.0.0（备份对象）", v.VersionPrevious, "
 
 > **⚠ 原期望有误（已按实测修正）：** 原文写"`-mode update` 是**唯一**不需要人工点按钮就能走完全链路的模式（用户已明确要求更新，所以不弹卡片）"。**实测它会弹询问卡片并阻塞。**
 >
-> UI 的下一步判定在 `ui/winui/flow/updater.go` 的 `Decide`：
+> UI 的下一步判定在 `aly-client-winui/flow/updater.go` 的 `Decide`：
 > ```go
 > forced := c.IsForced()                      // = check_update 返回的 force_update
 > if c.NeedDownload {
@@ -7324,7 +7324,7 @@ for _, want := range []string{
 > （用真实 aly-client 消费 GUI 写出的那套布局与 `client.json`）。为什么不能只在 Go 里把 C# 的
 > 路径算法重算一遍：那是自证自话，C# 侧改回旧写法时重算照样通过。
 >
-> 被测对象是"更新器目录的布局"，它的口径在 `README.md` / `client/aly-client/ui/winui/DEVELOPMENT_PLAN.md §3.0`
+> 被测对象是"更新器目录的布局"，它的口径在 `README.md` / `client/aly-client-ui/aly-client-winui/DEVELOPMENT_PLAN.md §3.0`
 > 定死：**`PackageFolder/{ApplicationFolder, UpdateFolder}`**——更新器目录与主程序目录**同级**，
 > 不在主程序目录内。
 >

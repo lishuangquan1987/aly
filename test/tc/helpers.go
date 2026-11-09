@@ -193,8 +193,12 @@ func (e *Env) BuildUI(t *testing.T) string {
 	if _, err := os.Stat(src); err != nil {
 		t.Skip("UI 构建依赖 aly-client 的 GOPATH 副本，先跑 NewEnv(t, true, 0)")
 	}
+	uiPkg := filepath.Join(e.Root, "gopath", "src", "aly", "client", "aly-client-ui", "aly-client-winui")
+	if _, err := os.Stat(uiPkg); err != nil {
+		t.Skip("UI 构建依赖 aly-client-winui 的 GOPATH 副本，先跑 NewEnv(t, true, 0)")
+	}
 	out := filepath.Join(e.Bin, "aly-client-ui.exe")
-	return e.goBuild(t, Go1108, src, out, "aly/client/aly-client/ui/winui",
+	return e.goBuild(t, Go1108, src, out, "aly/client/aly-client-ui/aly-client-winui",
 		[]string{"-ldflags", "-H=windowsgui"},
 		map[string]string{
 			"GOPATH":      filepath.Join(e.Root, "gopath"),

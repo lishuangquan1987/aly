@@ -1,8 +1,12 @@
 # aly-client-ui 开发计划（v2 评审修订版）
 
+> **路径迁移（2026-11-09）**：本文档及实现已从 `client/aly-client/ui/winui/` 迁移到
+> `client/aly-client-ui/aly-client-winui/`；历史章节中的旧路径仅作记录，当前构建
+> 路径以 `BUILD.md` 为准。
+
 > 状态：**已评审通过（2026-10-19）**，尚未开始编码；详细任务拆分见同目录 `IMPLEMENTATION_PLAN.md`
 > 目标产物：`aly-client-ui.exe`（**Go 1.10.8** + walk，32 位，**兼容 Windows XP（硬性要求）**）
-> 位置：`client/aly-client/ui/winui/`（GOPATH 下即 `aly/client/aly-client/ui/winui`）
+> 位置：`client/aly-client-ui/aly-client-winui/`（GOPATH 下即 `aly/client/aly-client-ui/aly-client-winui`）
 > 调用链：`主程序(YOFC.OTDR3001.exe) → aly-client-ui.exe → aly-client.exe`
 >
 > **v2 相对 v1 的变更**（依据见 §0.9，均为实测/源码证据）：
@@ -26,7 +30,7 @@
 | **0.1 UI 实现方式** | **方案 A**：Go + walk **复刻**现有 C# SDK 的更新流程与行为（状态机、事件、JSON 字段对齐），UI 用 Go 写。与"Go+walk / 32 位 / XP"约束一致 | 2026-10-19 |
 | **0.2 多语言** | 中英双语，**由主程序（调用者）通过启动参数传入**；**未传参数默认中文**（zh-CN）。UI 不自行按系统区域切换 | 2026-10-19 |
 | **0.3 强制更新语义** | 由服务器 `force_update` 决定，本地不做额外强制；**但必须处理字段缺失**（见 §3.5） | 2026-10-19 |
-| **0.4 UI 目录** | `client/aly-client/ui/winui/`（GOPATH 下 `aly/client/aly-client/ui/winui`） | 2026-10-19 |
+| **0.4 UI 目录** | `client/aly-client-ui/aly-client-winui/`（GOPATH 下 `aly/client/aly-client-ui/aly-client-winui`） | 2026-10-19 |
 | **0.5 XP 兼容** | **硬性要求**。Go 1.10.8 + GOPATH + `GOARCH=386` | 2026-10-19（复核确认） |
 | **0.6 UI 部署位置** | **`UpdateFolder/`**（与 `aly-client.exe` 同目录）。**不得**放入主程序目录 | 2026-10-19（复核确认） |
 | **0.7 窗口形态** | **右下角按需显示**：窗口在右下角创建但默认隐藏，topmost，默认不抢焦点。`auto`（启动）无更新不显示；`check`（手动）总是显示（见 §4.1） | 2026-10-19（复核确认） |
@@ -91,7 +95,7 @@ aly-client.exe               ← 既有 Go CLI（不修改）
 ### 2.1 目录与包
 
 ```
-client/aly-client/ui/winui/
+client/aly-client-ui/aly-client-winui/
 ├── main.go               // win32gui 入口，解析 -mode/-lang，装配依赖
 ├── app/                  // 应用装配与生命周期（单实例、日志、client.json 单字段读取）
 ├── bridge/               // 调用 aly-client.exe 的薄封装
@@ -388,7 +392,7 @@ walk 依赖 Common Controls v6，且 `InitCommonControlsEx` 的返回值被 walk
    cd <wslSrc> && GOROOT=/usr/local/go GOPATH=<wslGopath> \
      GOOS=windows GOARCH=386 CGO_ENABLED=0 \
      /usr/local/go/bin/go build -ldflags="-s -w -H=windowsgui" \
-     -o aly-client-ui.exe aly/client/aly-client/ui/winui
+     -o aly-client-ui.exe aly/client/aly-client-ui/aly-client-winui
    ```
 4. 部署：
    - `aly-client.exe` → `ProjectPath`（主程序目录）**和** `UpdateFolder`（既有行为，保持不变）
@@ -538,7 +542,7 @@ C# SDK 里真正执行拷贝的是 `UpdateSelf()`（`AlyUpdateClient.cs:76-133`�
 ## 11. 确认记录
 
 - [x] §0.1 采用**方案 A**（Go+walk 复刻 C# 流程）— 2026-10-19 确认
-- [x] §0.4 UI 目录 `client/aly-client/ui/winui/` — 2026-10-19 确认
+- [x] §0.4 UI 目录 `client/aly-client-ui/aly-client-winui/` — 2026-10-19 确认
 - [x] §0.2 语言由主程序经 `-lang` 传入，**未传默认 zh-CN**，UI 不自动切换 — 2026-10-19 确认
 - [x] §0.3 强制更新**完全由服务器 `force_update` 决定** — 2026-10-19 确认
 - [x] §0.9 DTO 直接共用 `aly/client/aly-client/model`（同仓库编译，非镜像副本）；仅共享 `model`，禁共享 `config/cmd/util` — 2026-10-19 确认
@@ -580,7 +584,7 @@ C# SDK 里真正执行拷贝的是 `UpdateSelf()`（`AlyUpdateClient.cs:76-133`�
 | 12 | 单实例互斥 | 通过 | 同时启动两个 `-mode check`：第二个立刻退出（`exitCode=0`），第一个仍在运行，**可见 UI 窗口数恰好为 1** |
 | 13 | 自绘卡片渲染 | 通过 | 像素级采样：白底 133992px、描边 `#E5E7EB` 四边完整、标题 `#111827`、状态 `#6B7280`；进度条 2/5 时强调色 `#2563EB` 恰好 1872px = 522x9x2/5 |
 | 14 | 无标题栏外观 | 通过 | 清 `WS_CAPTION|WS_THICKFRAME|WS_MINIMIZEBOX|WS_MAXIMIZEBOX|WS_SYSMENU` + `SWP_FRAMECHANGED` |
-| 15 | 单元测试 | 通过 | `go test ./ui/winui/...` 5 个包全 ok（view / app / bridge / flow / i18n），含 60+ 用例 |
+| 15 | 单元测试 | 通过 | `go test ./aly-client-winui/...` 5 个包全 ok（view / app / bridge / flow / i18n），含 60+ 用例 |
 | 16 | 部署链路 | 通过 | `go run deploy-client.go` 构建并部署两个 exe 到 8 个目标；仓库内 `aly-client.exe` 与部署物 SHA256 一致 |
 | 17 | 自更新替换语义 | 通过 | 单测：源缺失时**目标文件原样保留**；`MoveFileEx(REPLACE_EXISTING)` 原子替换 |
 | 18 | 延迟替换脚本的命令行传递 | 通过 | 真实 spawn 写入「带空格的目录」成功，证明 `SysProcAttr.CmdLine` 原样传递（用 `exec.Command("cmd.exe","/c",...)` 会因 Go 转义引号而失败） |

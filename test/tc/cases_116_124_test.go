@@ -725,7 +725,7 @@ func TestCase122(t *testing.T) {
 
 	// ① en-US 文档描述 / 缺省语言：UI 的 i18n 文案表必须两套齐全（代码级校验）
 	i18nSrc := ReadText(filepath.Join(RepoRoot,
-		"client/aly-client/ui/winui/i18n/i18n.go"))
+		"client/aly-client-ui/aly-client-winui/i18n/i18n.go"))
 	True(t, len(i18nSrc) > 0, "① 必须能读到 i18n.go")
 	Contains(t, i18nSrc, "EN", "① i18n 必须有 EN 语言常量")
 	Contains(t, i18nSrc, "ParseLang", "① 必须有 ParseLang 解析入口")

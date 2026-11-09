@@ -13,9 +13,12 @@ server/aly-server-*
 
 # client build artifacts
 client/aly-update.exe
+client/aly-client/aly-client
 # aly-client-ui 是构建产物（由 build-ui.bat / deploy-client.go / CI 生成）
-client/aly-client/ui/winui/aly-client-ui.exe
-client/aly-client/ui/winui/*.exe
+client/aly-client-ui/aly-client-winui/aly-client-ui.exe
+client/aly-client-ui/aly-client-winui/*.exe
+client/aly-client-ui/aly-client-linuxui/build/
+client/aly-client-ui/aly-client-linuxui/.mygo/
 client/test/temp_test/
 client/test/*.exe
 test_data/
@@ -46,7 +49,6 @@ client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/bin/
 client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/bin/
 client/aly-client/.idea/
 client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/obj/
-client/aly-client/aly-client-ui.exe
 client/aly-client/aly-client.exe
 
 # 集成测试产物（test/tc 的构建产物与回归日志）

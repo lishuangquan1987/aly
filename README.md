@@ -8,8 +8,11 @@ A minimal, self-contained auto-update solution for desktop applications. Ship ne
 aly/
 ├── server/         # API server (Go, Gin + Ent + SQLite)
 ├── client/
-│   └── aly-client/      # Client updater (Go 1.10, Windows XP compatible)
-│   └── aly-client-sdk/  # (placeholder) Future Go/C# integration SDK
+│   ├── aly-client/          # Updater (Go 1.10, Windows XP compatible)
+│   ├── aly-client-ui/       # GUI front-ends
+│   │   ├── aly-client-winui/    # Windows XP walk UI
+│   │   └── aly-client-linuxui/  # Linux MyGo native UI (Go 1.27)
+│   └── aly-client-sdk/      # C# SDK for host integration
 ├── publish/
 │   ├── publish-cli/      # CLI publish engine (Go, cobra)
 │   └── publish-gui/  # Desktop GUI (Avalonia 11.3, .NET 8)
@@ -211,6 +214,7 @@ Requires Go 1.10 (Windows XP compatibility, no Go modules). Source must be under
 ```bat
 :: Copy source to GOPATH
 xcopy /e /i /y client\aly-client %GOPATH%\src\aly\client\aly-client
+xcopy /e /i /y client\aly-client-ui\aly-client-winui %GOPATH%\src\aly\client\aly-client-ui\aly-client-winui
 
 :: Build the updater (console)
 set GOOS=windows
@@ -219,14 +223,17 @@ set GO111MODULE=off
 set CGO_ENABLED=0
 go build -ldflags="-s -w" -o aly-client.exe aly/client/aly-client
 
-:: Build the optional GUI front-end (no console window)
-go build -ldflags="-s -w -H=windowsgui" -o aly-client-ui.exe aly/client/aly-client/ui/winui
+:: Build the optional Windows GUI front-end (no console window)
+go build -ldflags="-s -w -H=windowsgui" -o aly-client-ui.exe aly/client/aly-client-ui/aly-client-winui
 ```
 
-> `aly-client-ui` is written with [lxn/walk] and needs the ComCtl32 v6 manifest.
-> The repository already contains `client/aly-client/ui/winui/rsrc.syso`, which
+> `aly-client-winui` is written with [lxn/walk] and needs the ComCtl32 v6 manifest.
+> The repository already contains `client/aly-client-ui/aly-client-winui/rsrc.syso`, which
 > `go build` links automatically. Do **not** delete it, otherwise the UI fails at
 > startup with `TTM_ADDTOOL failed`.
+>
+> The Linux UI (`client/aly-client-ui/aly-client-linuxui`) uses MyGo 0.8.3 + Go 1.27.3
+> and is built separately; see its README.
 >
 > Locally you can run `go run deploy-client.go` (WSL + Go 1.10.8) to build both
 > executables and deploy them to every target listed in `config.json`.

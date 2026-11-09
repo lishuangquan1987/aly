@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"time"
 
+	"aly/client/aly-client-ui/aly-client-winui/bridge"
 	"aly/client/aly-client/model"
 	"aly/client/aly-client/selfupdate"
-	"aly/client/aly-client/ui/winui/bridge"
 )
 
 // 自更新防循环参数：

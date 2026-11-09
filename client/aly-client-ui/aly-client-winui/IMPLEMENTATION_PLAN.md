@@ -1,5 +1,9 @@
 # aly-client-ui 实现计划
 
+> **路径迁移（2026-11-09）**：实现已从 `client/aly-client/ui/winui/` 迁移到
+> `client/aly-client-ui/aly-client-winui/`。本文档是历史实施记录，正文中的
+> `ui/winui/...` 路径已不适用于当前构建；当前命令见 `BUILD.md`。
+
 > **面向 AI 代理的工作者：** 必需子技能：使用 `subagent-driven-development`（推荐）或 `executing-plans` 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
 **目标：** 构建 `aly-client-ui.exe` —— 一个 Go 1.10.8 + walk 编写的 32 位 Windows XP 兼容 GUI，封装 `aly-client.exe` 的更新命令，在屏幕右下角 topmost 按需显示更新界面。

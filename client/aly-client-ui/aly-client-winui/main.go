@@ -7,7 +7,7 @@ import (
 	"flag"
 	"os"
 
-	"aly/client/aly-client/ui/winui/app"
+	"aly/client/aly-client-ui/aly-client-winui/app"
 )
 
 func main() {

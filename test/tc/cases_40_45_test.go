@@ -41,7 +41,7 @@ func TestCase40(t *testing.T) {
 func TestCase41(t *testing.T) {
 	e := NewEnv(t, true, 0)
 
-	code, out := e.GoTestGopath(t, "aly/client/aly-client/ui/winui/bridge",
+	code, out := e.GoTestGopath(t, "aly/client/aly-client-ui/aly-client-winui/bridge",
 		"-v", "-count=1")
 	Eq(t, "bridge 单测退出码", code, 0)
 	NotContains(t, out, "--- FAIL", "bridge 单测不应有失败项")
@@ -186,7 +186,7 @@ func TestCase44(t *testing.T) {
 	True(t, e.Publish(t, proj, "1.1.0", nil, "", "").IsSuccess, "发布 1.1.0")
 
 	// ① 格式化与千分比：单测覆盖（1024 进制 + 单调不减）
-	code, out := e.GoTestGopath(t, "aly/client/aly-client/ui/winui/app",
+	code, out := e.GoTestGopath(t, "aly/client/aly-client-ui/aly-client-winui/app",
 		"-run", "TestFormatBytes|TestByteProgressPermille", "-v", "-count=1")
 	Eq(t, "格式化单测退出码", code, 0)
 	Contains(t, out, "--- PASS: TestFormatBytes", "app 单测缺 PASS")
