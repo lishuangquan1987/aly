@@ -26,13 +26,14 @@ func CheckSelfUpdate() {
 		return
 	}
 
-	// If aly-client.exe doesn't exist (first deploy), no update needed
+	// If the platform updater (aly-client.exe / aly-client) doesn't exist
+	// (first deploy), no update needed
 	if _, err := os.Stat(checkPath); os.IsNotExist(err) {
 		printOutput(true, "", &model.CheckSelfUpdateData{NeedUpdate: false})
 		return
 	}
 
-	// Compare SHA256 of self vs aly-client.exe
+	// Compare SHA256 of self vs the packaged updater (aly-client.exe / aly-client)
 	selfPath, err := os.Executable()
 	if err != nil {
 		printOutput(false, err.Error(), nil)

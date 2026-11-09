@@ -1,9 +1,20 @@
 package config
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
-// TestShouldSkipFolder 验证忽略文件夹（ignore_folders）/不复制文件夹（un_copy_folders）的匹配逻辑。
-// ShouldSkipFolder 同时被 apply_update 的"不复制文件夹"复制控制使用。
+// TestUpdaterFileName 平台更新器文件名：Windows 带 .exe，Linux/Unix 不带。
+func TestUpdaterFileName(t *testing.T) {
+	want := "aly-client"
+	if runtime.GOOS == "windows" {
+		want = "aly-client.exe"
+	}
+	if got := UpdaterFileName(); got != want {
+		t.Fatalf("UpdaterFileName() = %q; want %q", got, want)
+	}
+}
 func TestShouldSkipFolder(t *testing.T) {
 	tests := []struct {
 		name       string

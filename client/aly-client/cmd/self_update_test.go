@@ -53,11 +53,11 @@ func withSelfPath(t *testing.T, selfPath string) {
 // TestRunSelfUpdateAlreadyUpToDate 一致时跳过 + 顺带清理 .new/.old 残留。
 func TestRunSelfUpdateAlreadyUpToDate(t *testing.T) {
 	_, fc := newSelfUpdateTestEnv(t, "selfupdate-same")
-	self := filepath.Join(fc.MainFolder, "..", "UpdateFolder", "aly-client.exe")
+	self := filepath.Join(fc.MainFolder, "..", "UpdateFolder", config.UpdaterFileName())
 	self = filepath.Clean(self)
 	withSelfPath(t, self)
 
-	src := filepath.Join(fc.MainFolder, "aly-client.exe")
+	src := filepath.Join(fc.MainFolder, config.UpdaterFileName())
 	if err := ioutil.WriteFile(src, []byte("V1"), 0755); err != nil {
 		t.Fatalf("写源: %v", err)
 	}
@@ -93,10 +93,10 @@ func TestRunSelfUpdateAlreadyUpToDate(t *testing.T) {
 // TestRunSelfUpdateReplaces 差异时执行舞步替换：self 换新、.old 备份留存旧内容。
 func TestRunSelfUpdateReplaces(t *testing.T) {
 	_, fc := newSelfUpdateTestEnv(t, "selfupdate-replace")
-	self := filepath.Clean(filepath.Join(fc.MainFolder, "..", "UpdateFolder", "aly-client.exe"))
+	self := filepath.Clean(filepath.Join(fc.MainFolder, "..", "UpdateFolder", config.UpdaterFileName()))
 	withSelfPath(t, self)
 
-	src := filepath.Join(fc.MainFolder, "aly-client.exe")
+	src := filepath.Join(fc.MainFolder, config.UpdaterFileName())
 	if err := ioutil.WriteFile(src, []byte("V2-from-package"), 0755); err != nil {
 		t.Fatalf("写源: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestRunSelfUpdateReplaces(t *testing.T) {
 // TestRunSelfUpdateSourceMissing 主目录没有随包分发更新器：跳过不算错误。
 func TestRunSelfUpdateSourceMissing(t *testing.T) {
 	_, fc := newSelfUpdateTestEnv(t, "selfupdate-missingsrc")
-	self := filepath.Clean(filepath.Join(fc.MainFolder, "..", "UpdateFolder", "aly-client.exe"))
+	self := filepath.Clean(filepath.Join(fc.MainFolder, "..", "UpdateFolder", config.UpdaterFileName()))
 	withSelfPath(t, self)
 	// self 存在、src 缺失
 	if err := ioutil.WriteFile(self, []byte("V1"), 0755); err != nil {
@@ -156,9 +156,9 @@ func TestRunSelfUpdateSourceMissing(t *testing.T) {
 // 持锁时 self_update 必须拒绝，不能读半换位的主目录。
 func TestRunSelfUpdateRefusesWhenLockHeld(t *testing.T) {
 	_, fc := newSelfUpdateTestEnv(t, "selfupdate-locked")
-	self := filepath.Clean(filepath.Join(fc.MainFolder, "..", "UpdateFolder", "aly-client.exe"))
+	self := filepath.Clean(filepath.Join(fc.MainFolder, "..", "UpdateFolder", config.UpdaterFileName()))
 	withSelfPath(t, self)
-	if err := ioutil.WriteFile(filepath.Join(fc.MainFolder, "aly-client.exe"), []byte("V2"), 0755); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(fc.MainFolder, config.UpdaterFileName()), []byte("V2"), 0755); err != nil {
 		t.Fatalf("写源: %v", err)
 	}
 	if err := ioutil.WriteFile(self, []byte("V1"), 0755); err != nil {
@@ -186,9 +186,9 @@ func TestRunSelfUpdateRefusesWhenLockHeld(t *testing.T) {
 // TestRunSelfUpdateSelfMissing self 缺失（异常现场）：应报错而不是静默跳过。
 func TestRunSelfUpdateSelfMissing(t *testing.T) {
 	_, fc := newSelfUpdateTestEnv(t, "selfupdate-missingself")
-	self := filepath.Clean(filepath.Join(fc.MainFolder, "..", "UpdateFolder", "aly-client.exe"))
+	self := filepath.Clean(filepath.Join(fc.MainFolder, "..", "UpdateFolder", config.UpdaterFileName()))
 	withSelfPath(t, self)
-	if err := ioutil.WriteFile(filepath.Join(fc.MainFolder, "aly-client.exe"), []byte("V1"), 0755); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(fc.MainFolder, config.UpdaterFileName()), []byte("V1"), 0755); err != nil {
 		t.Fatalf("写源: %v", err)
 	}
 

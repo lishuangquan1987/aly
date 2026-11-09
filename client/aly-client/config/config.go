@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -33,7 +34,7 @@ func SetExeDir(dir string) {
 	exeDirOverride = dir
 }
 
-// ExeDir 返回 aly-client.exe 所在目录 (UpdateFolder/)
+// ExeDir 返回更新器所在目录 (UpdateFolder/)
 func ExeDir() (string, error) {
 	if exeDirOverride != "" {
 		return exeDirOverride, nil
@@ -145,13 +146,22 @@ func (c *Config) AppVersionDir(version string) (string, error) {
 	return filepath.Join(pkgDir, mainExeFolderName+"_"+version), nil
 }
 
-// CheckUpdaterPath 返回 ApplicationFolder/aly-client.exe 的绝对路径
+// UpdaterFileName 返回当前平台的更新器文件名：
+// Windows 为 aly-client.exe，Linux/其他 Unix 为 aly-client。
+func UpdaterFileName() string {
+	if runtime.GOOS == "windows" {
+		return "aly-client.exe"
+	}
+	return "aly-client"
+}
+
+// CheckUpdaterPath 返回 ApplicationFolder/<UpdaterFileName> 的绝对路径
 func (c *Config) CheckUpdaterPath() (string, error) {
 	mainFolder, err := c.MainExeFolderPath()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(mainFolder, "aly-client.exe"), nil
+	return filepath.Join(mainFolder, UpdaterFileName()), nil
 }
 
 // ShouldSkipFolder 判断文件夹是否在忽略列表中（基于 SharedConfig.IgnoreFolders）

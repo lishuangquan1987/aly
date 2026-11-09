@@ -11,16 +11,16 @@ import (
 	"aly/client/aly-client/util"
 )
 
-// SelfUpdate 用主程序目录里随版本分发的 aly-client.exe 替换 UpdateFolder
-// 中正在运行的副本（self_update 命令）。
+// SelfUpdate 用主程序目录里随版本分发的更新器（aly-client.exe / aly-client）
+// 替换 UpdateFolder 中正在运行的副本（self_update 命令）。
 //
 // 背景（缺口闭环）：此前自更新的"检测"（check_self_update）与"执行"
 // （C# SDK UpdateSelf / UI UpdateUpdater）分离，且执行方只有 SDK/UI——
 // 裸控制台部署（宿主直接 spawn aly-client）时 UpdateFolder 副本会永久
 // 漂移在旧版本。self_update 把执行能力下沉到更新器本体，三方口径统一：
 //
-//	新版本来源   ：主程序目录 aly-client.exe（随版本包分发，
-//	              完整性已由 download_update 的服务端 MD5+SHA256 校验保证）
+//	新版本来源   ：主程序目录的更新器（aly-client.exe / aly-client，随版本包
+//	              分发，完整性已由 download_update 的服务端 MD5+SHA256 校验保证）
 //	无差异       ：SHA256 相同 → 跳过并顺带清理 .new/.old 残留（updated=false）
 //	源缺失       ：主程序目录没有更新器 → 跳过，不算错误（updated=false）
 //	替换舞步     ：先复制源到 .new 并校验（此阶段 self 始终存在）→ 运行中的
