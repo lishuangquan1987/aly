@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -260,7 +261,7 @@ func TestUpdateUpdaterNoFallbackOnBusinessError(t *testing.T) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// UpdateSelfUI：UI 自身仍走延迟脚本；替换/校验复用共享包
+// UpdateSelfUI：UI 自身走 -finish-self-update 收尾进程；替换/校验复用共享包
 // ────────────────────────────────────────────────────────────────
 
 // UpdateSelfUI 的 spawn 用注入桩替换，避免测试真的去 move/start 进程。
@@ -278,13 +279,15 @@ func TestUpdateSelfUIReplacesAndSpawns(t *testing.T) {
 	writeF(t, filepath.Join(main, "aly-client-ui.exe"), "UI-V2")
 	writeF(t, filepath.Join(update, "aly-client-ui.exe"), "UI-V1")
 
-	var spawned string
-	orig := spawnDetachedFn
-	spawnDetachedFn = func(cmdLine string) error {
-		spawned = cmdLine
+	var spawnedPath string
+	var spawnedArgs []string
+	orig := spawnFinishFn
+	spawnFinishFn = func(exePath string, args []string) error {
+		spawnedPath = exePath
+		spawnedArgs = append([]string(nil), args...)
 		return nil
 	}
-	defer func() { spawnDetachedFn = orig }()
+	defer func() { spawnFinishFn = orig }()
 
 	// 重启必须带上原参数：否则手动「检查更新」重启后会退化为静默 auto 模式
 	replaced, err := UpdateSelfUI(update, main, []string{"-mode", "check", "-lang", "zh-CN"})
@@ -295,20 +298,44 @@ func TestUpdateSelfUIReplacesAndSpawns(t *testing.T) {
 		t.Fatal("replaced should be true when content differs")
 	}
 	// .new 已就绪且内容为新版
-	if got := readF(t, filepath.Join(update, "aly-client-ui.exe.new")); got != "UI-V2" {
+	self := filepath.Join(update, "aly-client-ui.exe")
+	newPath := self + ".new"
+	if got := readF(t, newPath); got != "UI-V2" {
 		t.Fatalf(".new content wrong: %q", got)
 	}
-	// 延迟脚本必须包含 move 与 start，且路径带引号；并透传原启动参数
-	for _, want := range []string{
-		"move /y", "start \"\"", "aly-client-ui.exe.new",
-		`"-mode" "check"`, `"-lang" "zh-CN"`,
-	} {
-		if !containsStr(spawned, want) {
-			t.Fatalf("spawn cmdline %q should contain %q", spawned, want)
+	// 收尾进程必须是 .new 自身；参数携带 target/pid/created/new 和原启动参数。
+	if spawnedPath != newPath {
+		t.Fatalf("spawned %q; want %q", spawnedPath, newPath)
+	}
+	if len(spawnedArgs) < 11 {
+		t.Fatalf("helper args too short: %#v", spawnedArgs)
+	}
+	if spawnedArgs[0] != "-finish-self-update" {
+		t.Fatalf("first helper arg must be -finish-self-update: %#v", spawnedArgs[:1])
+	}
+	if spawnedArgs[1] != "--target" || spawnedArgs[2] != self {
+		t.Fatalf("bad --target: %#v", spawnedArgs[1:3])
+	}
+	if spawnedArgs[3] != "--pid" || spawnedArgs[4] != strconv.Itoa(os.Getpid()) {
+		t.Fatalf("bad --pid: %#v", spawnedArgs[3:5])
+	}
+	if spawnedArgs[5] != "--created" || spawnedArgs[6] == "" {
+		t.Fatalf("bad --created: %#v", spawnedArgs[5:7])
+	}
+	if spawnedArgs[7] != "--new" || spawnedArgs[8] != newPath {
+		t.Fatalf("bad --new: %#v", spawnedArgs[7:9])
+	}
+	if spawnedArgs[9] != "--" {
+		t.Fatalf("helper args must contain -- separator: %#v", spawnedArgs)
+	}
+	restart := []string{"-mode", "check", "-lang", "zh-CN"}
+	for i, want := range restart {
+		if spawnedArgs[10+i] != want {
+			t.Fatalf("restart arg[%d] = %q; want %q", i, spawnedArgs[10+i], want)
 		}
 	}
-	// 已交给延迟脚本：journal 必须是 pending（下一次启动据此判断收敛）
-	if j := readJournal(t, filepath.Join(update, "aly-client-ui.exe")); !j.Pending || j.Count != 0 {
+	// 已交给收尾进程：journal 必须是 pending（下一次启动据此判断收敛）
+	if j := readJournal(t, self); !j.Pending || j.Count != 0 {
 		t.Fatalf("journal should be pending with count 0, got %+v", j)
 	}
 }
@@ -327,12 +354,12 @@ func TestUpdateSelfUINoChangeIsNoop(t *testing.T) {
 	writeF(t, filepath.Join(main, "aly-client-ui.exe"), "SAME")
 	writeF(t, filepath.Join(update, "aly-client-ui.exe"), "SAME")
 
-	orig := spawnDetachedFn
-	spawnDetachedFn = func(string) error {
+	orig := spawnFinishFn
+	spawnFinishFn = func(string, []string) error {
 		t.Fatal("must not spawn when content is identical")
 		return nil
 	}
-	defer func() { spawnDetachedFn = orig }()
+	defer func() { spawnFinishFn = orig }()
 
 	replaced, err := UpdateSelfUI(update, main, nil)
 	if err != nil {
@@ -384,48 +411,6 @@ func TestAcquireSingleInstance(t *testing.T) {
 		t.Fatal("acquire after release must succeed")
 	}
 	release3()
-}
-
-// 直接验证 spawnDetached 的命令行传递是**原样**的。
-// 若退回 exec.Command("cmd.exe","/c",cmdLine)，Go 会把引号转义成 \"
-// 而 cmd.exe 不认，下面这条重定向就会失败。
-func TestSpawnDetachedPassesQuotesVerbatim(t *testing.T) {
-	dir, cleanup := mkTmp(t)
-	defer cleanup()
-
-	// 目录名带空格，确保引号真的被用上
-	sub := filepath.Join(dir, "dir with space")
-	if err := os.MkdirAll(sub, 0755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-	target := filepath.Join(sub, "out.txt")
-
-	if err := spawnDetached(`echo spawned> "` + target + `"`); err != nil {
-		t.Fatalf("spawnDetached: %v", err)
-	}
-
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		if b, err := ioutil.ReadFile(target); err == nil {
-			if containsStr(string(b), "spawned") {
-				return
-			}
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	t.Fatalf("spawned command did not write %s (cmdline quoting broken?)", target)
-}
-
-func containsStr(s, sub string) bool {
-	if len(sub) == 0 {
-		return true
-	}
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }
 
 func TestCheckRequestEventRoundTrip(t *testing.T) {

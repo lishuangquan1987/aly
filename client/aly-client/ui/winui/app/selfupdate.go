@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	"strconv"
 	"time"
 
 	"aly/client/aly-client/model"
@@ -43,8 +43,8 @@ func markSelfUpdateJournal(target string, ok bool, err error) {
 	selfupdate.SaveJournal(p, j)
 }
 
-// spawnDetachedFn 是 spawnDetached 的注入点，便于单测替换。
-var spawnDetachedFn = spawnDetached
+// spawnFinishFn 是“派生收尾进程”的注入点，便于单测断言参数。
+var spawnFinishFn = spawnFinishSelfUpdate
 
 // selfUpdateViaCmd 是 UpdateUpdater 委派 self_update 命令的注入点。
 //
@@ -133,17 +133,18 @@ func UpdateUpdater(updateFolder, mainFolder string) error {
 }
 
 // UpdateSelfUI 把 <主程序目录>/aly-client-ui.exe 复制为
-// <UpdateFolder>/aly-client-ui.exe.new，并派生一个 detached cmd 在自身退出后
-// 完成替换与重启（DEVELOPMENT_PLAN §6.3B）。
+// <UpdateFolder>/aly-client-ui.exe.new，并派生 .new 的隐藏收尾模式
+//（-finish-self-update）在自身退出后完成替换与重启（DEVELOPMENT_PLAN §6.3B）。
 //
 // 注意：self_update 命令只能替换 aly-client.exe，管不了 UI 自身；UI 必须
-// "准备 .new → 自己退出 → 延迟脚本 move + start"，因此这段保留独立实现。
+// "准备 .new → 派生 .new 的隐藏收尾模式 -finish-self-update（等旧进程退出后
+// 改名并重启）"，因此这段保留独立实现。
 //
 // restartArgs 是重启新实例时透传的命令行参数（Run 传 os.Args[1:]）：
 // 自更新会重启进程，若不带上原参数，手动「检查更新」(-mode check) 重启后会变成
 // 默认的 auto 模式 —— 静默检查，"没有可用的更新"提示就不会出现。
 //
-// 返回 replaced=true 表示调用方应立刻退出，把控制权交给延迟脚本。
+// 返回 replaced=true 表示调用方应立刻退出，把控制权交给收尾进程。
 func UpdateSelfUI(updateFolder, mainFolder string, restartArgs []string) (bool, error) {
 	src := filepath.Join(mainFolder, "aly-client-ui.exe")
 	self := filepath.Join(updateFolder, "aly-client-ui.exe")
@@ -154,9 +155,9 @@ func UpdateSelfUI(updateFolder, mainFolder string, restartArgs []string) (bool, 
 	}
 
 	// 无限重启保护：观察窗口内连续未收敛达到上限时跳过本次自更新。
-	// 延迟脚本里的 move/start 失败无法被本进程观测，因此用 journal.Pending
+	// 收尾进程的等待/改名/重启失败无法被本进程观测，因此用 journal.Pending
 	// 标记"已交出替换、结果未知"，下一次启动看到 Pending 仍为 true 即计一次
-	// 未收敛失败——只统计复制/派生失败会漏掉最典型的 move 失败循环。
+	// 未收敛失败——只统计复制/派生失败会漏掉收尾进程失败导致的循环。
 	jp := selfupdate.JournalPath(self)
 	j := selfupdate.LoadJournal(jp)
 	if j.ShouldSkip(maxSelfUpdateAttempts, selfUpdateRetryWindow) {
@@ -171,14 +172,14 @@ func UpdateSelfUI(updateFolder, mainFolder string, restartArgs []string) (bool, 
 	}
 	if same {
 		// 收敛信号：当前副本已是新版——清零计数，并顺带清理历史残留
-		//（.new / .old）。此路径说明没有在途的延迟替换脚本，清理无竞态。
+		//（.new / .old）。此路径说明没有在途的收尾进程，清理无竞态。
 		selfupdate.CleanArtifacts(self)
 		j.MarkSuccess()
 		selfupdate.SaveJournal(jp, j)
 		return false, nil
 	}
 
-	// 上一次已交给延迟脚本但没收敛（典型：move 失败但依然 start 了旧版）：
+	// 上一次已交给收尾进程但没收敛（典型：等待/改名失败，或新 UI 没起来）：
 	// 先补记一次失败，再判断是否达到跳过阈值。
 	if j.Pending {
 		j.MarkFailure("previous self-update did not converge")
@@ -197,36 +198,30 @@ func UpdateSelfUI(updateFolder, mainFolder string, restartArgs []string) (bool, 
 		return false, err
 	}
 
-	// 等自身退出后再替换并重启（ping 用作 XP 上可靠的延时）
-	cmdLine := fmt.Sprintf(
-		`ping -n 3 127.0.0.1 >nul & move /y "%s" "%s" & start "" "%s"%s`,
-		newPath, self, self, quoteArgs(restartArgs))
+	// 派生新 UI 自身（.new）的隐藏收尾模式：它持有旧进程句柄，等旧 UI 退出
+	// （最多 10s，超时强杀）后把 .new 换到目标并拉起新 UI。全程不经过
+	// cmd.exe，因此没有 ping 固定延时、PATH、引号或 % 展开问题。
+	pid := os.Getpid()
+	created := processCreationTime(pid)
+	helperArgs := []string{
+		"-finish-self-update",
+		"--target", self,
+		"--pid", strconv.Itoa(pid),
+		"--created", strconv.FormatUint(created, 10),
+		"--new", newPath,
+		"--",
+	}
+	helperArgs = append(helperArgs, restartArgs...)
 
-	// 先落 Pending 再派生：脚本在自身退出后执行 move/start，本进程无法观测
-	// 其结果；下一次启动据此判断"上一次是否收敛"。派生失败则立即记一次失败
-	// 并清 Pending。
+	// 先落 Pending 再派生：收尾进程的结果本进程无法观测；下一次启动据此
+	// 判断"上一次是否收敛"。派生失败则立即记一次失败并清 Pending。
 	j.MarkAttempt()
 	selfupdate.SaveJournal(jp, j)
-	if err := spawnDetachedFn(cmdLine); err != nil {
+	if err := spawnFinishFn(newPath, helperArgs); err != nil {
 		j.MarkFailure(err.Error())
 		selfupdate.SaveJournal(jp, j)
 		return false, err
 	}
 	// 此处不 MarkSuccess：真正的收敛信号是重启后 same → noop 清零。
 	return true, nil
-}
-
-// quoteArgs 把参数拼成 cmd 命令行片段（每个参数用双引号包裹），
-// 参数里的双引号会被去掉，避免拼接出可注入的命令行。
-func quoteArgs(args []string) string {
-	if len(args) == 0 {
-		return ""
-	}
-	var sb strings.Builder
-	for _, a := range args {
-		sb.WriteString(` "`)
-		sb.WriteString(strings.Replace(a, `"`, "", -1))
-		sb.WriteString(`"`)
-	}
-	return sb.String()
 }

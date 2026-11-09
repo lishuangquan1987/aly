@@ -617,7 +617,7 @@ aly-client.exe self_update
 
 | 部署形态 | 宿主启动时调用 | 自更新由谁触发 |
 |---|---|---|
-| **UI 部署**（推荐） | `..\UpdateFolder\aly-client-ui.exe -mode auto -lang zh-CN`，其余不管 | UI 自己：`UpdateUpdater` 委派本命令更新 `aly-client.exe`；`UpdateSelfUI` 处理 UI 自身（`.new` → 退出 → 延迟脚本 `move` + `start`，原参数透传）。UI 换自身时当前进程立即退出 0，新 UI 由脚本拉起 |
+| **UI 部署**（推荐） | `..\UpdateFolder\aly-client-ui.exe -mode auto -lang zh-CN`，其余不管 | UI 自己：`UpdateUpdater` 委派本命令更新 `aly-client.exe`；`UpdateSelfUI` 处理 UI 自身——复制 `.new` 后派生 `.new` 的隐藏收尾模式 `-finish-self-update`：持有旧进程句柄等待退出（最多 10s，超时强杀）→ 旧 exe 改名 `.old` → `.new` 落位 → 原参数拉起新 UI。UI 换自身时当前进程立即退出 0 |
 | **C# SDK 部署** | `new AlyUpdateClient(...)`（设置 `UpdatorExePath`、`MustCloseProcessNames`） | SDK 构造函数后台任务调本命令，在首次 `check_update` 之前完成；目标缺失/旧版更新器时直接替换兜底 |
 | **裸控制台部署** | 首次 `check_update` 前显式调用 `UpdateFolder\aly-client.exe self_update` | 宿主自己；幂等。看 stdout JSON 的 `isSuccess`，不要看退出码（逻辑失败也退出 0） |
 
@@ -635,7 +635,8 @@ aly-client.exe self_update
 
 `aly-client-ui.exe` 没有子命令，只有启动参数。应用更新/回滚交给同目录（或
 主程序目录）的 `aly-client.exe` 子进程完成并解析其 JSON 输出；只有
-**UI 自身 exe** 的替换/重启由 UI 用延迟脚本自己完成（`self_update` 管不到 UI）。
+**UI 自身 exe** 的替换/重启由 UI 用隐藏收尾进程 `-finish-self-update` 完成
+（`self_update` 管不到 UI）。
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
@@ -676,14 +677,27 @@ check_update → 有更新 → [立即更新] [稍后] 按钮 → download_updat
 **UI 与更新器自更新**：启动时先由 `UpdateUpdater` 委派
 `<UpdateFolder>/aly-client.exe self_update` 同步更新器（命令不可用/更新器缺失时
 才直接复制主目录副本）；再比对 `<主程序目录>/aly-client-ui.exe` 与
-`<UpdateFolder>/aly-client-ui.exe`，有差异则落到 `.new` 并派生 detached 脚本
-在自身退出后替换并重启（原启动参数透传，避免 `-mode check` 重启后退化为 auto）。
+`<UpdateFolder>/aly-client-ui.exe`，有差异则复制到 `.new`，派生 `.new` 自带的
+隐藏收尾模式 `-finish-self-update`：
+
+- 持有旧 UI 的 PID 句柄等待退出（事件驱动，不是固定延时）；最多等 10s，
+  仍未退出则 `TerminateProcess` 强杀，再等 2s；
+- 用进程创建时间校验 PID 是否被复用（复用则视为旧进程已退出，绝不误杀）；
+- 旧 exe 改名 `.old`（可回滚备份）→ `.new` 改名到目标（失败回滚）→
+  用原启动参数拉起新 UI；
+- 全程不经过 `cmd.exe`/`ping`/`move`，没有 PATH、引号、`%` 展开与固定延时问题；
+- 成功/失败都追加到 `<UpdateFolder>/aly-client-ui.exe.update.log`。
 
 **启动自更新防循环**：UI 自身更新失败/未收敛会写入
 `<UpdateFolder>/aly-client-ui.exe.selfupdate.json`；30 分钟观察窗口内连续 3 次
-未收敛则跳过本次自更新（UI 仍正常启动和检查更新），窗口过后自动恢复。延迟脚本
-的 `move` 失败也会在下一次启动时计入（命令用 `&` 串联，`move` 失败仍会 `start`
-旧版，若不计数会无限重启）。删除该文件可立即重置。
+未收敛则跳过本次自更新（UI 仍正常启动和检查更新），窗口过后自动恢复。
+旧 UI 派生收尾进程后即退出，收尾结果只能下一次启动观测，因此用 `pending`
+计入；收尾进程失败/超时/未收敛都会计数。删除该文件可立即重置。
+
+> **首次升级注意**：本次改动前构建的旧 UI 仍使用旧的 `ping/move/start` 延迟
+> 脚本；它把新 UI 安装到位后，后续升级才走 `-finish-self-update` 收尾进程。
+> 首次升级的可靠性仍受旧脚本限制（journal 最多 3 次）；需要的话可在首次
+> 部署时人工确认一次。
 
 **退出码**：`0` 正常 / `2` 初始化失败（窗口创建失败、自身路径解析失败）。
 

@@ -2,17 +2,18 @@
 
 > 唯一权威的测试用例文档。后续功能改动，按本文档逐条回归即可。
 >
-> - 文档版本：**v10**（Go 驱动 · 全量合并 · 单条自洽 · 总数 134：130 PASS / 0 FAIL / 1 SKIP / 3 未执行）
+> - 文档版本：**v11**（Go 驱动 · 全量合并 · 单条自洽 · 总数 135：131 PASS / 0 FAIL / 1 SKIP / 3 未执行）
 > - 更新日期：2026-11-09
 > - 被测版本：第四批修复后（`34153ce` + `e3614ba`）及之后任一待回归版本
 > - 新增：**125–127**（publish-gui 初始化：布局 / 三件套 / 原子写，2026-11-04 加入，**未执行**，见 §十一·补四）
-> - 新增：**130–134**（自更新统一：`self_update` 执行命令、UI/SDK 委派与兜底、
->   UI 防循环，2026-11-09 加入并已在 Windows 实机执行；见 §十一·补五）
+> - 新增：**130–135**（自更新统一：`self_update` 执行命令、UI/SDK 委派与兜底、
+>   UI 防循环、UI 自身 `-finish-self-update` 收尾，2026-11-09 加入并已在 Windows
+>   实机执行；见 §十一·补五）
 > - 编号：**连续 1..N**，无分组前缀，无优先级列
 > - 每条用例自带完整的 **前置条件 → 步骤 → 期望结果 → 失败判定**，只看单条即可独立复现
 > - 全部代码示例使用 **Go**（测试驱动框架见 §〇）
-> - 实测状态：**130 PASS / 0 FAIL / 1 SKIP / 3 未执行**（134 条；2026-11-09 定点回归
->   130–134 + 42/94，明细见附录 B）
+> - 实测状态：**131 PASS / 0 FAIL / 1 SKIP / 3 未执行**（135 条；2026-11-09 定点回归
+>   130–135 + 42/94，明细见附录 B）
 
 ---
 
@@ -34,7 +35,7 @@
 - [十一·补二、判据红线的边界补齐（106–115）](#十一补二判据红线的边界补齐106115)
 - [十一·补三、尚未覆盖的 8 类缺口（116–124）](#十一补三尚未覆盖的-8-类缺口116124)
 - [十一·补四、publish-gui 初始化（125–127）](#十一补四publish-gui-初始化125127)
-- [十一·补五、自更新统一与防循环（130–134）](#十一补五自更新统一与防循环130134)
+- [十一·补五、自更新统一与防循环（130–135）](#十一补五自更新统一与防循环130135)
 - [附录 A：故障注入手法速查](#附录-a故障注入手法速查)
 - [附录 B：结果记录表](#附录-b结果记录表)
 - [附录 C：已知缺陷与口径差异登记](#附录-c已知缺陷与口径差异登记)
@@ -58,15 +59,15 @@
 | `test/tc/cases_106_115_test.go` | 已有（~850 行） | 用例 106–115（判据红线的边界补齐） |
 | `test/tc/cases_116_124_test.go` | 新增（~960 行） | 用例 116–124（并发 / ACL / 自愈链 / Range / i18n / SDK 失败路径） |
 | `test/tc/cases_125_127_test.go` | 新增（~190 行） | 用例 125–127（publish-gui 初始化：布局 / 三件套 / 原子写，**未执行**） |
-| `test/tc/cases_130_134_test.go` | 新增（~360 行） | 用例 130–134（自更新统一：`self_update` 执行、UI 委派 + 防循环、SDK 委派） |
+| `test/tc/cases_130_135_test.go` | 新增（~420 行） | 用例 130–135（自更新统一：`self_update` 执行、UI 委派/自身收尾 + 防循环、SDK 委派） |
 
 > **125–127 的两层钉法**：publish-gui 是 C#/Avalonia 的 UI 程序，框架跑不了它的窗口，
 > 所以每条都分两层——**源码契约**（读 C# 源码断言关键调用形态，与用例 104 的 ① 段同法）
 > 和**消费侧功能**（用真实 aly-client 消费 GUI 写出的那套目录布局与 `client.json`）。
 > 只在 Go 里把 C# 的路径算法重算一遍是自证自话，钉不住任何回归。
 
-截至 v10，用例总数 **134**（130 PASS / 0 FAIL / 1 SKIP / 3 未执行）；最近一次为
-2026-11-09 定点回归（130–134 + 42/94），全量历史数据见附录 B。
+截至 v11，用例总数 **135**（131 PASS / 0 FAIL / 1 SKIP / 3 未执行）；最近一次为
+2026-11-09 定点回归（130–135 + 42/94），全量历史数据见附录 B。
 文档里的 Go 片段与 `test/tc/` 下的实现保持同源，改用例时两边一起改；`go vet -tags purego ./...` 通过。
 `env.go` / `helpers.go` 已把文档引用的全部符号（`PEMachine`、`TryGetAllFiles`、`PublishCLIAt`、
 `GoTestGopath`、`OutputHasFail`、`buildApplyPoint`、`buildRollbackPoint` 等）落齐。
@@ -391,6 +392,7 @@ func TestCase01(t *testing.T) {
 | 132 | self_update 源缺失跳过 | 自更新 | `updated=false` + `source_missing`；源缺失不算错误、副本不动（self 缺失由单测覆盖） |
 | 133 | UI 防循环 + 委派更新器 | 自更新 | journal 连续 3 次未收敛跳过 UI 自身替换；同时委派 `self_update` 同步 `aly-client.exe`（`.old` 为证） |
 | 134 | SDK 委派 self_update | 自更新 | `AlyUpdateClient` 构造函数同步 `aly-client.exe`（`.old` 为证） |
+| 135 | UI 自身收尾替换 | 自更新 | `-finish-self-update` 等旧进程退出 + `.old` 备份 + 重启 |
 
 ---
 
@@ -7690,7 +7692,7 @@ func TestCase128(t *testing.T) {
 
 
 
-## 十一·补五、自更新统一与防循环（130–134）
+## 十一·补五、自更新统一与防循环（130–135）
 
 > 2026-11-09 自更新统一的回归网。背景：此前自更新"检测"（check_self_update，
 > 用例 92）与"执行"（C# SDK `UpdateSelf` / UI `UpdateUpdater`+`UpdateSelfUI`）
@@ -7707,21 +7709,27 @@ func TestCase128(t *testing.T) {
 > 2. **UI/SDK 委派**：UI `UpdateUpdater` 与 C# SDK 构造函数都调用该命令，不再
 >    各写一套；只有更新器缺失/损坏、或上游更新器还是旧版（不认识 `self_update`）
 >    时才回退直接复制——否则第一次升级会因"新程序调不动旧命令"永久卡死；
-> 3. **UI 自身**仍走 `UpdateSelfUI` 的 `.new` → 退出 → 延迟脚本 `move`+`start`
->    （命令只能管 `aly-client.exe`，管不了正在运行的 UI）；
-> 4. UI journal 增加 `pending`：延迟脚本的 `move` 失败无法被派生方观测，下一次
->    启动看到 pending 才计一次未收敛；30 分钟窗口内连续 ≥3 次则跳过，窗口过后
->    自动恢复；
+> 3. **UI 自身**：`UpdateSelfUI` 复制 `.new` 后派生 `.new` 自带的隐藏模式
+>    `-finish-self-update`。收尾进程持有旧 UI 的 PID 句柄等待退出（事件驱动，
+>    最多 10s；超时 `TerminateProcess` 强杀，再等 2s），用进程创建时间校验
+>    PID 复用；随后旧 exe 改名 `.old`、`.new` 落位、用原参数拉起新 UI。
+>    不再用 `ping` 猜固定延时，也不会因 `move` 失败仍 `start` 旧版而循环；
+> 4. UI journal 增加 `pending`：旧 UI 派生收尾进程后即退出，收尾结果只能下次
+>    启动观测；下一次启动看到 pending 才计一次未收敛。30 分钟窗口内连续 ≥3 次
+>    则跳过，窗口过后自动恢复。收尾进程的日志在
+>    `<UpdateFolder>/aly-client-ui.exe.update.log`；
 > 5. `CopyAndVerify` 在 rename 前 `Sync`，断电不会换上截断文件。
 >
 > 执行口径：与既有用例一致（Windows + go1.10.8 构建 386 产物）。单元层已在
 > Windows 实跑：`selfupdate` 包 **16 个单测**、`cmd/self_update_test.go` **5 个**
-> （含锁拒绝）、UI journal **10 个**、bridge 解析新增 2 个。本节 5 条端到端用例
-> 2026-11-09 在 Windows 实机全部执行：**130–134 5/5 PASS**。
+> （含锁拒绝）、UI journal **10 个**、bridge 解析新增 2 个、UI 收尾模式
+> **8 个**（参数/等待/强杀/PID 复用/改名/日志）。本节 6 条端到端用例
+> 2026-11-09 在 Windows 实机全部执行：**130–135 6/6 PASS**。
 >
 > 备注：`self_update` 的"self 缺失"分支端到端不可构造（Windows 不能删除正在
 > 运行的 exe，删掉后又无法 spawn），由 `cmd` 单测 `TestRunSelfUpdateSelfMissing`
-> 覆盖。
+> 覆盖。**首次升级**：改动前构建的旧 UI 仍使用旧的 `ping/move/start` 脚本安装
+> 新 UI；新 UI 到位后，后续升级才走收尾进程。
 
 ### 用例 130 — self_update：内容一致时跳过并清理残留（幂等性）
 
@@ -7755,7 +7763,7 @@ True(t, !Exists(selfPath+".new") && !Exists(selfPath+".old"), "残留必须被�
 - `updated=true` → FAIL（每次启动重写副本，徒增杀软扫描与 IO）；
 - 残留未清理 → FAIL（残留随历史堆积并污染下一次替换现场）。
 
-执行结果：**PASS（12.82s）**；单元层 `TestRunSelfUpdateAlreadyUpToDate` 同口径。
+执行结果：**PASS（23.30s）**；单元层 `TestRunSelfUpdateAlreadyUpToDate` 同口径。
 
 ---
 
@@ -7797,7 +7805,7 @@ True(t, !d2.Updated, "替换后再次调用必须幂等跳过")
 - `old_path` 为空或内容不是旧版 → FAIL（回滚保险不存在）；
 - 二次调用仍 `updated=true` 或新 exe 无法启动 → FAIL（幂等/合法性破坏）。
 
-执行结果：**PASS（13.74s）**；单元层 `TestRunSelfUpdateReplaces` 同口径。
+执行结果：**PASS（34.52s）**；单元层 `TestRunSelfUpdateReplaces` 同口径。
 
 ---
 
@@ -7831,7 +7839,7 @@ Eq(t, "源缺失不得改写副本", ReadText(selfPath), selfBefore)
 - source_missing 被当错误 → FAIL；
 - 源缺失却改写了副本 → FAIL。
 
-执行结果：**PASS（12.73s）**；单元层 `TestRunSelfUpdateSourceMissing` 同口径。
+执行结果：**PASS（23.48s）**；单元层 `TestRunSelfUpdateSourceMissing` 同口径。
 
 ---
 
@@ -7877,7 +7885,7 @@ True(t, Exists(updaterSelf+".old"), "应走 self_update 命令（.old 为证）"
 - UI 崩溃/退出码非 0/模态框未点 → FAIL；
 - 更新器未同步或无 `.old` → FAIL。
 
-执行结果：**PASS（21.20s）**。
+执行结果：**PASS（43.61s）**。
 
 ---
 
@@ -7916,7 +7924,54 @@ True(t, Exists(updaterSelf+".old"), "应走 self_update 命令（.old 为证）"
 - smoke 有 FAIL / SHA 不一致 → FAIL（委派没生效）；
 - SHA 一致但无 `.old` → FAIL（走的是直接替换兜底，正常路径未委派）。
 
-执行结果：**PASS（18.58s）**，sd16 输出 `PASS=1 FAIL=0`。
+执行结果：**PASS（32.56s）**，sd16 输出 `PASS=1 FAIL=0`。
+
+### 用例 135 — UI 自身替换：`-finish-self-update` 等旧进程退出 + 重启
+
+**前置条件**
+
+1. `tc.NewEnv(t, true, 0)`（`BuildAll` 产出 server / publish-cli / aly-client 386；
+   `BuildUI` 额外产出当前源码的 `aly-client-ui.exe`）。
+2. 客户端现场 `1.0.0 / applied`；`UpdateFolder/aly-client-ui.exe` 与
+   `主程序目录/aly-client-ui.exe` 初始为同一份真实 UI。
+3. 主目录 UI 改为**同长度、可执行、内容不同**的新版：复制真实 exe →
+   `patchPETimeDateStamp`（翻转 PE `TimeDateStamp`，加载器不校验）。
+4. 不预置 journal（首次自更新）。
+
+**步骤**
+
+1. 以 `-mode auto` 启动 `UpdateFolder/aly-client-ui.exe`（无更新，不弹模态框；
+   避免阻塞模态框污染"UI 已退出"的判据）。
+2. 旧 UI 启动时 `UpdateSelfUI`：复制主目录 UI 到 `.new` → 派生 `.new` 的隐藏
+   模式 `-finish-self-update --target <self> --pid <旧PID> --created <创建时间>
+   --new <.new> -- -mode auto` → 旧 UI 退出 0。
+3. 收尾进程：
+   - `OpenProcess` 旧 PID，`GetProcessTimes` 比对创建时间（防 PID 复用）；
+   - `WaitForSingleObject` 最多 10s；超时才 `TerminateProcess`，再等 2s；
+   - 旧 exe 改名 `.old` → `.new` 改名到目标（失败回滚）→ 用 `-mode auto`
+     拉起新 UI（`exec.Command` 直接传参，不经 cmd）。
+4. 新 UI 启动后 `UpdateSelfUI` 看到 same → `MarkSuccess`（pending/count 清零），
+   正常 `check_update`，auto 模式静默退出。
+
+**期望结果**
+
+- 旧 UI 退出码 0；
+- 20s 内 UpdateFolder UI 的 SHA256 收敛到主目录新版；
+- `.new` 已被改名（不存在）；
+- `<UpdateFolder>/aly-client-ui.exe.update.log` 存在且含 `finish OK`
+  （证明走的是收尾进程，而不是旧 `ping/move/start` 脚本）；
+- journal 的 `pending`/`count` 被新 UI 清零。
+
+**失败判定**
+
+- UI 未替换 / 20s 内未收敛 → FAIL（收尾进程没跑或改名失败）；
+- 无 `update.log` / 无 `finish OK` → FAIL（没走收尾进程）；
+- journal 仍 pending → FAIL（新 UI 没起来或没收敛）；
+- 旧 UI 非 0 退出 → FAIL（正常路径应由旧 UI 主动退出 0）。
+
+执行结果：**PASS（36.86s）**；日志实测含 `finish start` / `finish OK`
+（旧进程退出路径可能是 `already gone` 快路径，也可能是 `exited` 等待路径）；
+journal `count=0`。
 
 ---
 
@@ -8116,24 +8171,25 @@ True(t, Exists(updaterSelf+".old"), "应走 self_update 命令（.old 为证）"
 | 127 | publish-gui：原子写先 Move 后 Replace | 未执行 | — | 2026-11-04 新增；源码契约 + 只有 `client.json.tmp` 的现场不可用 |
 | 128 | 客户端真实分片上传路径 | PASS | 2.20s | 2026-11-06 新增；≥3MiB 非均匀文件走 publish-cli push，md5 逐字节一致、无 `.chunks`/`.merging` 残留。**负向对照实测**：移除服务端 `upload_chunk`/`upload_chunk_complete` 路由后重构建 → FAIL，报错与真机一致（`upload chunk 0/4: HTTP 404: 404 page not found`） |
 | 129 | 分片阈值边界 | PASS | 2.77s | 2026-11-06 新增；`chunkSize`（1048×1024）走直传、`chunkSize+1` 走分片，两文件 md5 均逐字节一致、无中间态残留 |
-| 130 | self_update 一致跳过 | PASS | 12.82s | 2026-11-09 新增；Windows 实跑。单元层：selfupdate 16 / cmd self_update 5 / UI journal 10；130–134 5/5 PASS |
-| 131 | self_update 差异替换闭环 | PASS | 13.74s | 2026-11-09 新增；PE TimeDateStamp 造同长度合法新版；替换后 SHA256 收敛、`.old` 为旧版；二次调用可启动新版并幂等清理 `.old` |
-| 132 | self_update 源缺失跳过 | PASS | 12.73s | 2026-11-09 新增；`source_missing` 不算错误、副本不动；self 缺失端到端不可构造，由 cmd 单测覆盖 |
-| 133 | UI 防循环 + 委派更新器 | PASS | 21.20s | 2026-11-09 新增；journal count=3 跳过 UI 自身替换；同时 `UpdateUpdater` 委派 `self_update` 同步 `aly-client.exe`（`.old` 为证）；`RunUIModeAuto` 点掉项目名模态框 |
-| 134 | SDK 委派 self_update | PASS | 18.58s | 2026-11-09 新增；sd16 `PASS=1 FAIL=0`；构造函数同步更新器且 `.old` 存在 |
+| 130 | self_update 一致跳过 | PASS | 23.30s | 2026-11-09 新增；Windows 实跑。单元层：selfupdate 16 / cmd self_update 5 / UI journal 10 / UI 收尾 8；130–135 6/6 PASS |
+| 131 | self_update 差异替换闭环 | PASS | 34.52s | 2026-11-09 新增；PE TimeDateStamp 造同长度合法新版；替换后 SHA256 收敛、`.old` 为旧版；二次调用可启动新版并幂等清理 `.old` |
+| 132 | self_update 源缺失跳过 | PASS | 23.48s | 2026-11-09 新增；`source_missing` 不算错误、副本不动；self 缺失端到端不可构造，由 cmd 单测覆盖 |
+| 133 | UI 防循环 + 委派更新器 | PASS | 43.61s | 2026-11-09 新增；journal count=3 跳过 UI 自身替换；同时 `UpdateUpdater` 委派 `self_update` 同步 `aly-client.exe`（`.old` 为证）；`RunUIModeAuto` 点掉项目名模态框 |
+| 134 | SDK 委派 self_update | PASS | 32.56s | 2026-11-09 新增；sd16 `PASS=1 FAIL=0`；构造函数同步更新器且 `.old` 存在 |
+| 135 | UI 自身收尾替换 | PASS | 36.86s | 2026-11-09 新增；`-finish-self-update` 等旧进程退出/防 PID 复用/改名 `.old`/重启；日志含 `finish OK`、journal 清零 |
 
 **汇总**
 
 | 项 | 值 |
 |---|---|
-| 用例总数 | **134**（131 条已实测 + 125–127 未执行） |
-| PASS | 130 |
+| 用例总数 | **135**（132 条已实测 + 125–127 未执行） |
+| PASS | 131 |
 | FAIL | 0 |
 | SKIP | 1（用例 37） |
 | 未执行 | **3**（125–127，2026-11-04 新增） |
-| 全量耗时 | **2470.71s**（上一轮 124 条全量）；本轮为定点回归（130–134 + 42/94），未重跑全量 |
-| 本轮新增 | 106–115（10 条 + 30 子测试，~850 行）+ 116–124（9 条，~985 行）；2026-11-04 追加 125–127（3 条，~190 行，未执行）；2026-11-06 追加 128–129（2 条，~170 行）；2026-11-09 追加 130–134（5 条，~360 行） |
-| 本轮新增结果 | 116–124 **9/9 PASS**；125–127 **未执行**；128–129 **2/2 PASS**；130–134 **5/5 PASS**（130 12.82s / 131 13.74s / 132 12.73s / 133 21.20s / 134 18.58s） |
+| 全量耗时 | **2470.71s**（上一轮 124 条全量）；本轮为定点回归（130–135 + 42/94），未重跑全量 |
+| 本轮新增 | 106–115（10 条 + 30 子测试，~850 行）+ 116–124（9 条，~985 行）；2026-11-04 追加 125–127（3 条，~190 行，未执行）；2026-11-06 追加 128–129（2 条，~170 行）；2026-11-09 追加 130–135（6 条，~420 行） |
+| 本轮新增结果 | 116–124 **9/9 PASS**；125–127 **未执行**；128–129 **2/2 PASS**；130–135 **6/6 PASS**（130 23.30s / 131 34.52s / 132 23.48s / 133 43.61s / 134 32.56s / 135 36.86s） |
 
 **本轮修复的测试缺陷（非产品缺陷）**
 

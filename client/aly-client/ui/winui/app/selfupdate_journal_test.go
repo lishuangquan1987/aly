@@ -96,7 +96,7 @@ func TestUpdateUpdaterNoopClearsJournal(t *testing.T) {
 }
 
 // TestUpdateSelfUISkipsAfterMaxFailures 连续失败达到上限后跳过自更新：
-// 不复制、不派生延迟脚本（防无限重启循环的核心断言）。
+// 不复制、不派生收尾进程（防无限重启循环的核心断言）。
 func TestUpdateSelfUISkipsAfterMaxFailures(t *testing.T) {
 	dir, cleanup := mkTmp(t)
 	defer cleanup()
@@ -114,12 +114,12 @@ func TestUpdateSelfUISkipsAfterMaxFailures(t *testing.T) {
 	journalFixture(t, self, maxSelfUpdateAttempts, time.Now().Unix(), "disk full")
 
 	spawned := false
-	orig := spawnDetachedFn
-	spawnDetachedFn = func(cmdLine string) error {
+	orig := spawnFinishFn
+	spawnFinishFn = func(string, []string) error {
 		spawned = true
 		return nil
 	}
-	defer func() { spawnDetachedFn = orig }()
+	defer func() { spawnFinishFn = orig }()
 
 	replaced, err := UpdateSelfUI(update, main, []string{"-mode", "check"})
 	if err != nil {
@@ -159,9 +159,9 @@ func TestUpdateSelfUISkipExpiresAfterWindow(t *testing.T) {
 	journalFixture(t, self, maxSelfUpdateAttempts,
 		time.Now().Unix()-int64((selfUpdateRetryWindow+time.Minute)/time.Second), "disk full")
 
-	orig := spawnDetachedFn
-	spawnDetachedFn = func(string) error { return nil }
-	defer func() { spawnDetachedFn = orig }()
+	orig := spawnFinishFn
+	spawnFinishFn = func(string, []string) error { return nil }
+	defer func() { spawnFinishFn = orig }()
 
 	replaced, err := UpdateSelfUI(update, main, []string{})
 	if err != nil {
@@ -250,9 +250,9 @@ func TestJournalSurvivalAcrossRestarts(t *testing.T) {
 		t.Fatalf("构造目录型源失败: %v", err)
 	}
 
-	orig := spawnDetachedFn
-	spawnDetachedFn = func(string) error { return nil }
-	defer func() { spawnDetachedFn = orig }()
+	orig := spawnFinishFn
+	spawnFinishFn = func(string, []string) error { return nil }
+	defer func() { spawnFinishFn = orig }()
 
 	// "重启" 1/3：失败计数 1
 	if _, err := UpdateSelfUI(update, main, []string{}); err == nil {
@@ -274,7 +274,7 @@ func TestJournalSurvivalAcrossRestarts(t *testing.T) {
 	if _, err := UpdateSelfUI(update, main, []string{}); err != nil {
 		t.Fatalf("recovery attempt must succeed: %v", err)
 	}
-	writeF(t, self, "UI-V2") // 模拟延迟脚本完成替换 + 重启
+	writeF(t, self, "UI-V2") // 模拟收尾进程完成替换 + 重启
 	if replaced, err := UpdateSelfUI(update, main, []string{}); err != nil || replaced {
 		t.Fatalf("post-restart noop must be (false, nil), got (%v, %v)", replaced, err)
 	}
@@ -283,7 +283,7 @@ func TestJournalSurvivalAcrossRestarts(t *testing.T) {
 	}
 }
 
-// TestUpdateSelfUIPendingAttemptCounted 上一次已交给延迟脚本但未收敛（Pending）：
+// TestUpdateSelfUIPendingAttemptCounted 上一次已交给收尾进程但未收敛（Pending）：
 // 本次启动必须先补记一次失败，再继续尝试；尝试本身重新置 Pending。
 func TestUpdateSelfUIPendingAttemptCounted(t *testing.T) {
 	dir, cleanup := mkTmp(t)
@@ -299,13 +299,13 @@ func TestUpdateSelfUIPendingAttemptCounted(t *testing.T) {
 	self := filepath.Join(update, "aly-client-ui.exe")
 	writeF(t, self, "UI-V1")
 	writeF(t, filepath.Join(main, "aly-client-ui.exe"), "UI-V2")
-	// 上一次的延迟脚本没有收敛（例如 move 失败但 start 成功）
+	// 上一次的收尾进程没有收敛（例如等待/改名失败）
 	selfupdate.SaveJournal(selfupdate.JournalPath(self), selfupdate.Journal{Pending: true})
 
 	spawned := false
-	orig := spawnDetachedFn
-	spawnDetachedFn = func(string) error { spawned = true; return nil }
-	defer func() { spawnDetachedFn = orig }()
+	orig := spawnFinishFn
+	spawnFinishFn = func(string, []string) error { spawned = true; return nil }
+	defer func() { spawnFinishFn = orig }()
 
 	replaced, err := UpdateSelfUI(update, main, []string{})
 	if err != nil {
@@ -348,9 +348,9 @@ func TestUpdateSelfUISkipsAfterPendingFailures(t *testing.T) {
 	})
 
 	spawned := false
-	orig := spawnDetachedFn
-	spawnDetachedFn = func(string) error { spawned = true; return nil }
-	defer func() { spawnDetachedFn = orig }()
+	orig := spawnFinishFn
+	spawnFinishFn = func(string, []string) error { spawned = true; return nil }
+	defer func() { spawnFinishFn = orig }()
 
 	replaced, err := UpdateSelfUI(update, main, []string{})
 	if err != nil {
@@ -390,12 +390,12 @@ func TestUpdateSelfUIPendingConvergenceClears(t *testing.T) {
 		Count: 2, LastTS: time.Now().Unix(), LastError: "move failed", Pending: true,
 	})
 
-	orig := spawnDetachedFn
-	spawnDetachedFn = func(string) error {
+	orig := spawnFinishFn
+	spawnFinishFn = func(string, []string) error {
 		t.Fatal("converged path must not spawn")
 		return nil
 	}
-	defer func() { spawnDetachedFn = orig }()
+	defer func() { spawnFinishFn = orig }()
 
 	replaced, err := UpdateSelfUI(update, main, []string{})
 	if err != nil || replaced {

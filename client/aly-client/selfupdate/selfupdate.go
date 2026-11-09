@@ -273,9 +273,10 @@ const journalSuffix = ".selfupdate.json"
 // Journal 记录自更新连续失败次数与最近一次失败时间，用于阻断
 // "替换失败 → 重启 → 再替换失败"的无限循环（UI 自更新会自动重启进程）。
 //
-// Pending 表示"已经把替换交给延迟脚本，但尚未观测到收敛"：延迟脚本里的
-// move/start 失败无法被派生方捕获，只能在下一次启动时按 Pending 计一次
-// 未收敛失败。旧 journal 没有该字段时读出 false，向后兼容。
+// Pending 表示"已经把替换交给 UI 收尾进程（-finish-self-update），但尚未
+// 观测到收敛"：收尾进程的等待/改名/重启失败无法被派生方捕获，只能在下一次
+// 启动时按 Pending 计一次未收敛失败。旧 journal 没有该字段时读出 false，
+// 向后兼容。
 type Journal struct {
 	Count     int    `json:"count"`
 	LastTS    int64  `json:"last_ts"`
@@ -326,9 +327,9 @@ func (j *Journal) MarkSuccess() {
 	j.Pending = false
 }
 
-// MarkAttempt 记录"已把替换交给延迟脚本，结果未知"。它不增加失败计数，
+// MarkAttempt 记录"已把替换交给 UI 收尾进程，结果未知"。它不增加失败计数，
 // 也不改 LastTS——真正的失败由下一次启动发现 Pending 仍为 true 时计入
-//（延迟脚本的 move/start 失败无法被派生方直接观测）。
+//（收尾进程的等待/改名/重启失败无法被派生方直接观测）。
 func (j *Journal) MarkAttempt() {
 	j.Pending = true
 }

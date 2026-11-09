@@ -1,6 +1,6 @@
 package tc
 
-// 用例 130–134：self_update 自更新执行命令 + UI 防循环 + SDK/UI 委派
+// 用例 130–135：self_update 自更新执行 + UI 防循环/自身替换 + SDK/UI 委派
 //
 // 背景（2026-11-09 自更新统一）：
 //
@@ -10,8 +10,10 @@ package tc
 //   - 新增 self_update 命令把执行能力下沉到更新器本体，并作为**正常路径**
 //     供 UI UpdateUpdater / SDK 构造函数调用；仅在命令不可用（旧版更新器/
 //     更新器缺失）时才直接复制兜底；
-//   - UI 启动自更新新增 journal 防循环（30min 窗口内连续未收敛 ≥3 跳过，
-//     延迟脚本的 move 失败也计入）与启动残留清理（ui/winui/app/selfupdate.go）。
+//   - UI 启动自更新新增 journal 防循环（30min 窗口内连续未收敛 ≥3 跳过），
+//     UI 自身替换改由新 exe 的隐藏 -finish-self-update 收尾模式完成：
+//     持有旧进程句柄等待退出（最多 10s，超时强杀）→ 改名 .old → .new 落位
+//     → 拉起新 UI，不再依赖 ping/move 的固定延时。
 //
 // 覆盖矩阵（与既有用例 92 的"检测层"互补，本文件钉"执行/委派层"）：
 //
@@ -21,6 +23,7 @@ package tc
 //	     由 cmd 单测 TestRunSelfUpdateSelfMissing 覆盖）
 //	133  UI journal 防循环 + UI 委派 self_update 更新 aly-client.exe
 //	134  SDK 构造函数委派 self_update 更新 aly-client.exe（sd16）
+//	135  UI 自身替换闭环（-finish-self-update 等旧进程退出 + .old 备份 + 重启）
 //
 // 执行环境口径与既有用例一致：aly-client / fake_main / UI 用 go1.10.8 +
 // GOARCH=386（BuildAll 已固定），在 Windows 上执行；本文件同时被
@@ -31,6 +34,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -315,4 +319,84 @@ func TestCase134(t *testing.T) {
 		SHA256Of(updaterSelf), expected)
 	True(t, Exists(updaterSelf+".old"),
 		"应走 self_update 命令（.old 备份存在）；直接替换兜底不会产生 .old")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 用例 135 — UI 自身替换：-finish-self-update 等旧进程退出 + .old 备份 + 重启
+//
+// 现场：UpdateFolder/aly-client-ui.exe = 真实 UI；主目录 UI = 同长度、可执行、
+// 内容不同的新版；无 journal。
+//
+// 步骤：以 -mode auto 启动旧 UI（无更新，不弹模态框）。旧 UI 复制 .new 后派生
+// .new 的隐藏收尾模式并退出；收尾进程持有旧 PID 句柄等待退出（最多 10s，超时
+// 强杀），把旧 exe 改名 .old、.new 落位，再以原参数拉起新 UI（auto 静默退出）。
+//
+// 期望结果
+//   - 旧 UI 退出码 0；
+//   - UpdateFolder UI 的 SHA256 收敛到主目录新版；
+//   - <ui>.update.log 存在且含 finish OK（证明走的是收尾进程，不是旧 cmd 脚本）；
+//   - journal 的 pending 被新 UI 的 same→MarkSuccess 清零；
+//   - .new 已被改名（不存在）。
+//
+// 失败判定
+//   - UI 未替换 / 20s 内未收敛 → FAIL；
+//   - 无 update.log 或无 finish OK → FAIL（没走收尾进程）；
+//   - journal 仍 pending → FAIL（新 UI 没起来/没收敛）。
+//
+// ────────────────────────────────────────────────────────────────
+func TestCase135(t *testing.T) {
+	e := NewEnv(t, true, 0)
+	const proj = "tc-ui-selfreplace"
+	e.EnsureProject(t, proj, false, nil, nil)
+	e.PutFile(t, proj, "app.exe", "app-100")
+	c := e.NewClient(t, NewClientOpts{
+		Version: "1.0.0", Status: StatusApplied, Previous: "1.0.0",
+		Project: proj, MainFile: "app-100",
+	})
+
+	uiExe := e.BuildUI(t)
+	uiSelf := filepath.Join(c.Up(), "aly-client-ui.exe")
+	CopyFile(t, uiExe, uiSelf)
+	uiSrc := filepath.Join(c.Main(), "aly-client-ui.exe")
+	CopyFile(t, uiExe, uiSrc)
+	patchPETimeDateStamp(t, uiSrc)
+	expected := SHA256Of(uiSrc)
+	True(t, expected != SHA256Of(uiSelf), "前置：主目录 UI 必须与副本内容不同")
+
+	// auto 模式无更新 → 旧 UI 派生收尾进程后立即退出；新 UI 起来后也静默退出。
+	code, _ := e.RunUIMode(t, uiSelf, c, "auto", 40*time.Second)
+	Eq(t, "旧 UI 应正常退出", code, 0)
+
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		if SHA256Of(uiSelf) == expected {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	Eq(t, "UI 自身应被收尾进程替换为 .new", SHA256Of(uiSelf), expected)
+	True(t, !Exists(uiSelf+".new"), "收尾后 .new 应已被改名")
+
+	logPath := uiSelf + ".update.log"
+	True(t, Exists(logPath), "收尾进程应写 %s", logPath)
+	// finish OK 是在拉起新 UI 之后写的，和 SHA 收敛之间有几毫秒竞态，轮询等待。
+	deadline = time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(ReadText(logPath), "finish OK") {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	Contains(t, ReadText(logPath), "finish OK", "收尾日志必须记录 finish OK")
+
+	// 新 UI 启动后 same → MarkSuccess：journal 的 pending/count 必须清零。
+	journal := uiSelf + ".selfupdate.json"
+	deadline = time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(ReadText(journal), `"count":0`) {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	Contains(t, ReadText(journal), `"count":0`, "新 UI 收敛后 journal count 应清零")
 }

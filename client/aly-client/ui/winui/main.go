@@ -11,6 +11,12 @@ import (
 )
 
 func main() {
+	// 隐藏收尾模式：旧 UI 已把新 exe 复制为 .new，并派生出本进程。
+	// 必须在单实例互斥体/窗口创建之前处理；参数见 app.FinishSelfUpdate。
+	if len(os.Args) >= 2 && os.Args[1] == "-finish-self-update" {
+		os.Exit(app.FinishSelfUpdate(os.Args[2:]))
+	}
+
 	mode := flag.String("mode", "auto", "auto|check|update|rollback|silent")
 	lang := flag.String("lang", "zh-CN", "zh-CN|en-US")
 	serverURL := flag.String("url", "", "server url override (currently unused; aly-client reads client.json)")
