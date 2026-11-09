@@ -119,6 +119,15 @@ type RollbackData struct {
 	Version string `json:"version"`
 }
 
+// SelfUpdateData 是 self_update 命令 data 字段：
+//   - updated=false 时 reason 说明跳过原因（source_missing / already_up_to_date）；
+//   - updated=true 时 old_path 携带被替换下来的旧版备份路径（.old）。
+type SelfUpdateData struct {
+	Updated bool   `json:"updated"`
+	Reason  string `json:"reason"`
+	OldPath string `json:"old_path,omitempty"`
+}
+
 // CheckSelfUpdateData 是 check_self_update 命令 data 字段
 type CheckSelfUpdateData struct {
 	NeedUpdate bool `json:"need_update"`

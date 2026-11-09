@@ -31,6 +31,8 @@ func main() {
 		cmd.Clean()
 	case "check_self_update":
 		cmd.CheckSelfUpdate()
+	case "self_update":
+		cmd.SelfUpdate()
 	default:
 		fmt.Fprintf(os.Stderr, "未知命令: %s\n", command)
 		printUsage()
@@ -50,6 +52,7 @@ func printUsage() {
 	fmt.Println("  rollback                  版本回滚")
 	fmt.Println("  clean                     清理历史版本快照与临时文件")
 	fmt.Println("  check_self_update         自更新检查")
+	fmt.Println("  self_update               用主程序目录的新版更新器替换自身")
 	fmt.Println()
 	fmt.Println("使用 -h 查看各命令的选项")
 }

@@ -2,10 +2,12 @@
 
 > 唯一权威的测试用例文档。后续功能改动，按本文档逐条回归即可。
 >
-> - 文档版本：**v8**（Go 驱动 · 全量合并 · 单条自洽 · 124 条已实测 + 125–127 新增未执行）
-> - 更新日期：2026-11-04
+> - 文档版本：**v9**（Go 驱动 · 全量合并 · 单条自洽 · 124 条已实测 + 125–133 新增）
+> - 更新日期：2026-11-09
 > - 被测版本：第四批修复后（`34153ce` + `e3614ba`）及之后任一待回归版本
 > - 新增：**125–127**（publish-gui 初始化：布局 / 三件套 / 原子写，2026-11-04 加入，**未执行**，见 §十一·补四）
+> - 新增：**130–133**（自更新执行命令 `self_update` 与 UI 防循环，2026-11-09 加入，
+>   单元层已在 Linux 全量 PASS，端到端**待 Windows 环境执行**，见 §十一·补五）
 > - 编号：**连续 1..N**，无分组前缀，无优先级列
 > - 每条用例自带完整的 **前置条件 → 步骤 → 期望结果 → 失败判定**，只看单条即可独立复现
 > - 全部代码示例使用 **Go**（测试驱动框架见 §〇）
@@ -32,6 +34,7 @@
 - [十一·补二、判据红线的边界补齐（106–115）](#十一补二判据红线的边界补齐106115)
 - [十一·补三、尚未覆盖的 8 类缺口（116–124）](#十一补三尚未覆盖的-8-类缺口116124)
 - [十一·补四、publish-gui 初始化（125–127）](#十一补四publish-gui-初始化125127)
+- [十一·补五、自更新执行与防循环（130–133）](#十一补五自更新执行与防循环130133)
 - [附录 A：故障注入手法速查](#附录-a故障注入手法速查)
 - [附录 B：结果记录表](#附录-b结果记录表)
 - [附录 C：已知缺陷与口径差异登记](#附录-c已知缺陷与口径差异登记)
@@ -381,6 +384,10 @@ func TestCase01(t *testing.T) {
 | 127 | publish-gui 原子写：先 Move 后 Replace | publish-gui | 首次写不得只留 `client.json.tmp` |
 | 128 | 客户端真实分片上传路径 | 边界 | publish-cli 推 >1MiB 文件必须走通 `upload_chunk` → `upload_chunk_complete` |
 | 129 | 分片阈值边界 | 边界 | `chunkSize` 走直传、`chunkSize+1` 走分片，两路都逐字节落地 |
+| 130 | self_update 一致跳过 | 自更新 | `updated=false` + `already_up_to_date` + `.new/.old` 残留清理 |
+| 131 | self_update 差异替换闭环 | 自更新 | `updated=true` + SHA256 收敛 + `.old` 备份 + 幂等回归 |
+| 132 | self_update 源缺失/self 缺失 | 自更新 | `source_missing` 跳过不算错误；self 缺失报错定位到比较阶段 |
+| 133 | UI 防循环（journal 上限） | 自更新 | 连续失败 ≥3 跳过替换：副本不变、journal 保留、退出码 0 |
 
 ---
 
@@ -7680,6 +7687,179 @@ func TestCase128(t *testing.T) {
 
 
 
+## 十一·补五、自更新执行与防循环（130–133）
+
+> 2026-11-09 自更新优化的回归网。背景：此前自更新"检测"（check_self_update，
+> 用例 92）与"执行"（C# SDK `UpdateSelf` / UI `UpdateUpdater`+`UpdateSelfUI`）
+> 分离，且执行方只有 SDK/UI——**裸控制台部署**（宿主直接 spawn aly-client）
+> 时 UpdateFolder 副本会永久漂移在旧版本。本次优化：
+>
+> 1. 新增 `self_update` 命令（`cmd/self_update.go` + 便携包
+>    `client/aly-client/selfupdate/`）：无差异跳过（顺带清理 `.new`/`.old`
+>    残留）、源缺失跳过（不算错误）、差异时走"运行中 exe 改名 `.old` →
+>    `.new` 中转 + SHA256 校验 → `os.Rename` 原子落位（Windows 下等价
+>    `MoveFileEx(REPLACE_EXISTING)`）→ 失败回滚 `.old`"的舞步；
+> 2. UI 启动自更新增加 **journal 防循环**（`<目标>.selfupdate.json`：观察窗口
+>    30 分钟内连续失败 ≥3 跳过本次，窗口过后自动恢复）与启动残留清理；
+> 3. C# SDK `UpdateSelf` 修复非 Windows 回退路径的两个缺陷（tmp 被提前删除
+>    导致回退必然失败；"删除目标 + 改名"存在目标消失窗口）→ 事务式
+>    `MoveWithRollback`（备份改名 → 落位 → 失败回滚）。
+>
+> 执行口径：与既有用例一致（Windows + go1.10.8 构建 386 产物）。**单元层**
+> （`selfupdate` 包 12 个单测 + `cmd/self_update_test.go` 4 个单测）已在
+> Linux（go1.21.4）全量 PASS；本节 4 条端到端用例已随 `test/tc` 通过
+> `go vet` + `go test -c` 编译验证，**待 Windows 环境执行**。
+
+### 用例 130 — self_update：内容一致时跳过并清理残留（幂等性）
+
+**前置条件**
+
+1. `tc.NewEnv(t, true, 0)`（含 `BuildAll`：server / publish-cli / aly-client 386 产物）。
+2. 客户端现场 `1.0.0 / applied`，主目录与 UpdateFolder 的 `aly-client.exe` 内容一致。
+
+**步骤**
+
+1. 预置残留：`aly-client.exe.new`（半截内容）与 `aly-client.exe.old`（旧版内容）。
+2. 调用 `self_update`，解析结果行 data（`tc.SelfUpdateExecData`）。
+3. 断言 `updated=false`、`reason=already_up_to_date`、副本内容不变、残留被清理。
+
+```go
+WriteText(t, selfPath+".new", "half-written")
+WriteText(t, selfPath+".old", "previous-version")
+d := Data[SelfUpdateExecData](t, e.RunLast(t, c, "self_update"))
+True(t, d.Updated == false, "一致时不得触发替换, data=%+v", d)
+Eq(t, "跳过原因口径", d.Reason, "already_up_to_date")
+True(t, !Exists(selfPath+".new") && !Exists(selfPath+".old"), "残留必须被清理")
+```
+
+**期望结果**
+
+- `updated=false` + `already_up_to_date`；副本逐字节不变（跳过 ≠ 重写）；
+- `.new` / `.old` 残留被顺带清理（一致路径无在途替换，清理无竞态）。
+
+**失败判定**
+
+- `updated=true` → FAIL（每次启动重写副本，徒增杀软扫描与 IO）；
+- 残留未清理 → FAIL（残留随历史堆积并污染下一次替换现场）。
+
+执行结果：**未执行**（Windows 环境待跑；单元层 `TestRunSelfUpdateAlreadyUpToDate` Linux PASS）
+
+---
+
+### 用例 131 — self_update：内容不同时替换成功（执行层闭环）
+
+**前置条件**：同用例 130，但主目录副本改为"新版"（长度与旧版一致，排除 size 假替换）。
+
+**步骤**
+
+1. 记录旧副本内容；主目录写同长度不同内容的新版。
+2. 调用 `self_update`，断言 `updated=true`、`reason=replaced`、`old_path` 非空。
+3. 断言替换后副本 SHA256 == 主目录 SHA256；`.old` 内容 == 旧版。
+4. 幂等回归：紧接着再次调用 → `already_up_to_date` 且 `.old` 被清理。
+
+```go
+oldContent := ReadText(selfPath)
+WriteText(t, srcPath, strings.Repeat("N", len(oldContent)))
+d := Data[SelfUpdateExecData](t, e.RunLast(t, c, "self_update"))
+True(t, d.Updated, "内容不同时应执行替换")
+Eq(t, "替换后副本与源一致（SHA256）", SHA256Of(selfPath), SHA256Of(srcPath))
+Eq(t, ".old 备份必须保留旧版内容", ReadText(d.OldPath), oldContent)
+d2 := Data[SelfUpdateExecData](t, e.RunLast(t, c, "self_update"))
+True(t, !d2.Updated, "替换后再次调用必须幂等跳过")
+```
+
+**期望结果**
+
+- 替换后副本与源 SHA256 一致；`.old` 是完整旧版（可回滚的备份）；
+- 二次调用幂等跳过并清理 `.old`。
+
+**失败判定**
+
+- 替换后哈希不一致 → FAIL（**严重**：副本损坏会破坏后续所有更新链）；
+- `old_path` 为空或内容不是旧版 → FAIL（回滚保险不存在）；
+- 二次调用仍 `updated=true` → FAIL（幂等破坏 → 无限自更新）。
+
+执行结果：**未执行**（Windows 环境待跑；单元层 `TestRunSelfUpdateReplaces` 等 Linux PASS）
+
+---
+
+### 用例 132 — self_update：源缺失跳过 + self 缺失报错
+
+**前置条件**：同用例 130；先删除主目录副本造"首次部署"现场。
+
+**步骤**
+
+1. 场景①：主目录无 `aly-client.exe` → `self_update` 必须 `updated=false` +
+   `reason=source_missing` 且 `isSuccess=true`（不算错误）、副本原样。
+2. 场景②：恢复主目录副本、删除 UpdateFolder 副本（异常现场）→ `self_update`
+   必须 `isSuccess=false` 且错误信息含比较阶段标识（`compare self vs source`）。
+
+```go
+d := Data[SelfUpdateExecData](t, e.RunLast(t, c, "self_update"))
+Eq(t, "源缺失原因口径", d.Reason, "source_missing")
+removePath(t, selfPath)
+out := e.RunLast(t, c, "self_update")
+True(t, !out.IsSuccess, "self 缺失必须报错而不是静默成功")
+Contains(t, out.ErrorMsg, "compare self vs source", "self 缺失错误信息")
+```
+
+**期望结果**
+
+- `source_missing` 是**跳过**不是错误（首次部署场景不刷错误日志）；
+- self 缺失是**异常**：报错并定位到比较阶段，不静默、不假装成功。
+
+**失败判定**
+
+- source_missing 被当错误 → FAIL；
+- self 缺失被静默跳过 → FAIL（更新器缺失是必须暴露的现场异常）。
+
+执行结果：**未执行**（Windows 环境待跑；单元层 `TestRunSelfUpdateSourceMissing` / `TestRunSelfUpdateSelfMissing` Linux PASS）
+
+---
+
+### 用例 133 — UI 启动自更新防循环：journal 达到上限后跳过
+
+**前置条件**
+
+1. 同用例 130 环境外，额外 `e.BuildUI(t)` 并把 `aly-client-ui.exe` 拷入 UpdateFolder。
+2. 预置 `aly-client-ui.exe.selfupdate.json`：`{"count":3,"last_ts":<now>,"last_error":"..."}`。
+
+**步骤**
+
+1. 记录 UI 副本内容；以 `-mode check` 启动 UI（`e.RunUIMode`，40s 上界）。
+2. 断言退出码 0（防循环逻辑不得影响正常退出）；
+3. 断言 UI 副本**未被替换**（journal 触发跳过）、journal 文件仍在、无 `.new` 残留。
+
+```go
+journalJSON := fmt.Sprintf(`{"count":3,"last_ts":%d,"last_error":"simulated disk full"}`,
+    time.Now().Unix())
+WriteText(t, journal, journalJSON)
+uiBefore := ReadText(uiSelf)
+code, _ := e.RunUIMode(t, filepath.Join(c.Up(), "aly-client-ui.exe"), c, "check", 40*time.Second)
+Eq(t, "UI 应正常退出", code, 0)
+Eq(t, "journal 触发跳过：UI 副本不得被替换", ReadText(uiSelf), uiBefore)
+True(t, Exists(journal), "journal 必须保留（窗口判定依据）")
+```
+
+**期望结果**
+
+- UI 正常启动、检查、退出（退出码 0）；
+- 防循环核心：连续失败达上限后**跳过**替换——否则"替换失败 → 重启 → 再失败"无限循环；
+- 窗口（30 分钟）过后自动恢复重试（单测 `TestUpdateSelfUISkipExpiresAfterWindow` 已覆盖该分支）。
+
+**失败判定**
+
+- UI 清掉 journal 并照常替换 → FAIL（防循环保护失效）；
+- UI 因 journal 解析失败崩溃 / 退出码非 0 → FAIL；
+- journal 触发跳过后产生 `.new` 残留 → FAIL（跳过路径必须零副作用）。
+
+执行结果：**未执行**（Windows 环境待跑；UI journal 单测 7 个已随 `go test -c`（go1.10.8, windows/386）编译验证通过）
+
+---
+
+
+
+
 ## 附录 A：故障注入手法速查
 
 > 用例 18–25、36–39、116–124 大量依赖"制造异常现场"。这些手法都在 `test/tc/` 里有现成函数，**不要自己发明 sleep 猜时序**。
@@ -7875,6 +8055,10 @@ func TestCase128(t *testing.T) {
 | 127 | publish-gui：原子写先 Move 后 Replace | 未执行 | — | 2026-11-04 新增；源码契约 + 只有 `client.json.tmp` 的现场不可用 |
 | 128 | 客户端真实分片上传路径 | PASS | 2.20s | 2026-11-06 新增；≥3MiB 非均匀文件走 publish-cli push，md5 逐字节一致、无 `.chunks`/`.merging` 残留。**负向对照实测**：移除服务端 `upload_chunk`/`upload_chunk_complete` 路由后重构建 → FAIL，报错与真机一致（`upload chunk 0/4: HTTP 404: 404 page not found`） |
 | 129 | 分片阈值边界 | PASS | 2.77s | 2026-11-06 新增；`chunkSize`（1048×1024）走直传、`chunkSize+1` 走分片，两文件 md5 均逐字节一致、无中间态残留 |
+| 130 | self_update 一致跳过 | 未执行 | — | 2026-11-09 新增；Windows 环境待跑。单元层已 PASS（Linux go1.21.4：`cmd/self_update_test.go` 4 用例 + `selfupdate` 包 12 用例）；tc 用例已随 `go vet`+`go test -c`（go1.25）编译验证 |
+| 131 | self_update 差异替换闭环 | 未执行 | — | 2026-11-09 新增；同上口径。覆盖 SHA256 收敛 / `.old` 备份 / 幂等回归 |
+| 132 | self_update 源缺失与 self 缺失 | 未执行 | — | 2026-11-09 新增；同上口径。`source_missing` 跳过口径 + 异常现场报错 |
+| 133 | UI 防循环（journal 上限） | 未执行 | — | 2026-11-09 新增；UI journal 单测 7 个已随 go1.10.8 `go test -c`（windows/386）编译验证；端到端待 Windows |
 
 **汇总**
 

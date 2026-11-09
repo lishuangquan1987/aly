@@ -22,6 +22,26 @@ func TestBuildMainExeCmdDir(t *testing.T) {
 	}
 }
 
+// writeScriptForPlatform 按当前平台写测试用后置脚本：
+// Windows 写 .bat（runScript 走 cmd /c，内容逐字节保持历史用例不变）；
+// Unix 写 .sh（runScript 走 sh -c，需可执行位、换行用 \n）。
+// 两端语义对齐，保证同一用例在 Windows / Linux 都可运行。
+func writeScriptForPlatform(t *testing.T, dir, base, winBody, nixBody string) string {
+	t.Helper()
+	if os.PathSeparator == '\\' {
+		p := filepath.Join(dir, base+".bat")
+		if err := ioutil.WriteFile(p, []byte(winBody), 0644); err != nil {
+			t.Fatalf("写脚本失败: %v", err)
+		}
+		return p
+	}
+	p := filepath.Join(dir, base+".sh")
+	if err := ioutil.WriteFile(p, []byte(nixBody), 0755); err != nil {
+		t.Fatalf("写脚本失败: %v", err)
+	}
+	return p
+}
+
 // TestRunScriptExecutesInWorkDir 验证后置脚本在指定工作目录下同步执行（#10/#11）：
 // 脚本创建的相对文件落在 workDir，而非调用方 CWD。
 func TestRunScriptExecutesInWorkDir(t *testing.T) {
@@ -36,11 +56,10 @@ func TestRunScriptExecutesInWorkDir(t *testing.T) {
 	}
 	defer os.RemoveAll(otherDir)
 
-	scriptPath := filepath.Join(workDir, "post_update.bat")
 	// cmd /c 执行 .bat：写入相对路径文件，用于验证工作目录
-	if err := ioutil.WriteFile(scriptPath, []byte("@echo off\r\necho ok > out.txt\r\n"), 0644); err != nil {
-		t.Fatalf("写脚本失败: %v", err)
-	}
+	scriptPath := writeScriptForPlatform(t, workDir, "post_update",
+		"@echo off\r\necho ok > out.txt\r\n",
+		"echo ok > out.txt\n")
 
 	runScript(scriptPath, workDir)
 
@@ -62,10 +81,10 @@ func TestRunScriptTimeout(t *testing.T) {
 	}
 	defer os.RemoveAll(workDir)
 
-	scriptPath := filepath.Join(workDir, "hang.bat")
-	if err := ioutil.WriteFile(scriptPath, []byte("@echo off\r\nping -n 30 127.0.0.1 >nul\r\n"), 0644); err != nil {
-		t.Fatalf("写脚本失败: %v", err)
-	}
+	// 脚本挂死 30s：Windows 用 ping 延时，Unix 用 sleep，语义对齐
+	scriptPath := writeScriptForPlatform(t, workDir, "hang",
+		"@echo off\r\nping -n 30 127.0.0.1 >nul\r\n",
+		"sleep 30\n")
 
 	orig := scriptTimeout
 	scriptTimeout = 200 * time.Millisecond
@@ -95,14 +114,13 @@ func TestRunPostApplyScriptMarker(t *testing.T) {
 	if err := os.MkdirAll(appDir, 0755); err != nil {
 		t.Fatalf("创建 appDir 失败: %v", err)
 	}
-	scriptPath := filepath.Join(appDir, "post.bat")
-	if err := ioutil.WriteFile(scriptPath, []byte("@echo off\r\necho x >> counter.txt\r\n"), 0644); err != nil {
-		t.Fatalf("写脚本失败: %v", err)
-	}
+	scriptPath := writeScriptForPlatform(t, appDir, "post",
+		"@echo off\r\necho x >> counter.txt\r\n",
+		"echo x >> counter.txt\n")
 
 	fc := &FullConfig{MainFolder: appDir}
-	runPostApplyScript(fc, "post.bat", "2.0.0")
-	runPostApplyScript(fc, "post.bat", "2.0.0")
+	runPostApplyScript(fc, filepath.Base(scriptPath), "2.0.0")
+	runPostApplyScript(fc, filepath.Base(scriptPath), "2.0.0")
 
 	data, err := ioutil.ReadFile(filepath.Join(appDir, "counter.txt"))
 	if err != nil {

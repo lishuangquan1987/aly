@@ -186,30 +186,85 @@ namespace AlyClient.CSharpSDK
                 catch (Exception ex)
                 {
                     lastErr = ex;
-                    try { File.Delete(tmp); } catch { }
                     // 非 Windows 平台（netstandard2.0/Mono 等）File.Replace 抛
-                    // PlatformNotSupportedException：回退为 删除目标 + 改名。
+                    // PlatformNotSupportedException。此时 tmp 仍在，走事务式回退
+                    // MoveWithRollback（备份改名 → 落位 → 失败回滚）。
+                    //
+                    // 2026-11-09 修复两个缺陷：
+                    //   ① 旧实现在判断异常类型之前就 File.Delete(tmp)，导致回退
+                    //      分支里的 File.Move(tmp, ...) 必然失败——回退路径从未
+                    //      真正可用过；
+                    //   ② 旧回退是"删除目标 + 改名"，存在目标消失窗口：一旦删除
+                    //      后改名失败（磁盘满/占用），更新器就彻底没了，而更新器
+                    //      损坏会破坏后续所有更新（#8）。改为任何时刻目标要么是
+                    //      旧版、要么是新版。
                     var pns = ex as PlatformNotSupportedException;
                     if (pns != null)
                     {
                         try
                         {
-                            if (File.Exists(UpdatorExePath)) File.Delete(UpdatorExePath);
-                            File.Move(tmp, UpdatorExePath);
+                            MoveWithRollback(tmp, UpdatorExePath);
                             LogError("self-update OK (move fallback): " + UpdatorExePath);
                             return;
                         }
                         catch (Exception ex2)
                         {
                             lastErr = ex2;
+                            try { File.Delete(tmp); } catch { }
+                            // 目标被占用等瞬时故障：等待后重试
+                            Thread.Sleep(1000);
+                            continue;
                         }
                     }
-                    // 目标被占用（如上一更新进程尚未完全退出）：等待后重试
+                    // Windows 正常路径失败（如上一更新进程尚未完全退出占用目标）：
+                    // 清理 tmp 后等待重试
+                    try { File.Delete(tmp); } catch { }
                     Thread.Sleep(1000);
                 }
             }
             string msg = "self-update failed: " + (lastErr != null ? lastErr.Message : "unknown");
             LogError(msg);
+        }
+
+        /// <summary>
+        /// 事务式改名落位（非 Windows 平台的 File.Replace 回退）：
+        /// 目标改名到 .bak（原子） → tmp 改名到目标（原子） → 失败则把 .bak 改回目标。
+        /// 与 Windows 的 File.Replace（原子替换、失败保留目标）语义对齐。
+        /// .bak 残留与"目标缺失 + .bak 存在"的异常现场，均由下一次调用开头恢复。
+        /// </summary>
+        private static void MoveWithRollback(string tmp, string target)
+        {
+            string bak = target + ".bak";
+            // 异常现场恢复：目标缺失但 .bak 存在（上次"备份成功、落位失败且回滚
+            // 也失败"遗留的现场）——先把 .bak 还原为目标，再走正常替换流程。
+            if (!File.Exists(target) && File.Exists(bak))
+            {
+                File.Move(bak, target);
+            }
+            bool movedToBak = false;
+            if (File.Exists(target))
+            {
+                if (File.Exists(bak)) File.Delete(bak);
+                File.Move(target, bak);
+                movedToBak = true;
+            }
+            try
+            {
+                File.Move(tmp, target);
+            }
+            catch
+            {
+                // 回滚：把 .bak 改回目标，保证目标始终存在
+                if (movedToBak && !File.Exists(target))
+                {
+                    try { File.Move(bak, target); } catch { }
+                }
+                throw;
+            }
+            if (movedToBak)
+            {
+                File.Delete(bak);
+            }
         }
 
         private static string ComputeSha256(string path)

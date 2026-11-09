@@ -1178,6 +1178,13 @@ type SelfUpdateData struct {
 	NeedUpdate bool `json:"need_update"`
 }
 
+// SelfUpdateExecData self_update 命令的 data（用例 130–132）。
+type SelfUpdateExecData struct {
+	Updated bool   `json:"updated"`
+	Reason  string `json:"reason"`
+	OldPath string `json:"old_path,omitempty"`
+}
+
 // ────────────────────────────────────────────────────────────────
 // publish-cli（aly-publish）
 // ────────────────────────────────────────────────────────────────

@@ -37,6 +37,7 @@ aly-client.exe <命令> [选项]
 | `rollback` | 回滚到指定版本 |
 | `clean` | 清理历史版本快照与临时文件 |
 | `check_self_update` | 检查更新程序自身是否需要更新 |
+| `self_update` | 用主程序目录的新版更新器替换自身（自更新执行） |
 
 ---
 
@@ -544,7 +545,64 @@ aly-client.exe check_self_update --main-exe-path ../MyApp/MyApp.exe
 
 ---
 
-### 1.8 aly-client-ui — 图形界面的启动模式
+### 1.8 self_update — 自更新执行
+
+**用途**：用主程序目录里随版本分发的 `aly-client.exe` 替换 UpdateFolder 中
+正在运行的副本。与 `check_self_update`（只检测）配套的**执行**命令。
+
+**使用场景**：
+
+- 裸控制台部署（宿主直接 spawn `aly-client.exe`、无 SDK/UI）：检测
+  `need_update=true` 后调用本命令完成替换，副本不再漂移；
+- C# SDK / UI 内部仍走各自的替换逻辑（`UpdateSelf` / `UpdateUpdater`），
+  本命令为三方统一口径提供兜底；重复调用幂等。
+
+**用法**：
+
+```bash
+aly-client.exe self_update [--main-exe-path <路径>]
+```
+
+**参数**：同 `check_self_update`（`--main-exe-path` 可选）。
+
+**实现逻辑**：
+
+1. 定位主程序目录 `aly-client.exe`（随版本包分发，完整性已由
+   `download_update` 的服务端 MD5+SHA256 校验保证）；
+2. 源缺失（首次部署）→ 跳过，不算错误；
+3. SHA256 一致 → 跳过，并顺带清理 `.new` / `.old` 历史残留；
+4. 不一致 → 替换舞步：运行中的 exe 改名到 `.old`（运行中文件允许改名）→
+   复制源到 `xxx.new` 并校验 → `os.Rename` 原子落位（Windows 下等价
+   `MoveFileEx(MOVEFILE_REPLACE_EXISTING)`）→ 落位失败回滚 `.old`，
+   保证 self 始终存在。
+
+**返回示例**：
+
+```json
+// 替换成功
+{"isSuccess":true,"errorMsg":"","data":{"updated":true,"reason":"replaced","old_path":"...\\aly-client.exe.old"}}
+
+// 内容一致（幂等跳过，残留已清理）
+{"isSuccess":true,"errorMsg":"","data":{"updated":false,"reason":"already_up_to_date"}}
+
+// 主程序目录没有更新器（首次部署，跳过不算错误）
+{"isSuccess":true,"errorMsg":"","data":{"updated":false,"reason":"source_missing"}}
+```
+
+**示例**：
+
+```bash
+# check → need_update → 执行替换 的两段式集成
+aly-client.exe check_self_update
+aly-client.exe self_update
+```
+
+> **说明**：替换成功后旧副本保留在 `.old`，下次调用在"一致"路径自动清理；
+> 当前进程继续从旧 inode 运行直至退出，宿主下次拉起即是新版。
+
+---
+
+### 1.9 aly-client-ui — 图形界面的启动模式
 
 `aly-client-ui.exe` 没有子命令，只有启动参数。它本身不实现更新逻辑，
 而是以子进程方式调用同目录（或主程序目录）的 `aly-client.exe` 并解析其 JSON 输出。
@@ -606,7 +664,7 @@ check_update → 有更新 → [立即更新] [稍后] 按钮 → download_updat
 
 ---
 
-### 1.9 clean — 清理历史版本与临时文件
+### 1.10 clean — 清理历史版本与临时文件
 
 **用途**：独立清理入口。`prune` 只在 apply/rollback 入口机会式触发，客户端不再更新时历史快照
 会永久占盘；`clean` 提供显式的磁盘回收手段。
