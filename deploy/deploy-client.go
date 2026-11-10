@@ -64,6 +64,15 @@ func mustInit() {
 	}
 	scriptDir, _ = filepath.Abs(scriptDir)
 
+	// 本脚本位于仓库 deploy/ 子目录：当前目录找不到 client/aly-client 时
+	// 回退一级到仓库根（保持从任意工作目录运行均可用）。
+	if _, statErr := os.Stat(filepath.Join(scriptDir, "client", "aly-client")); os.IsNotExist(statErr) {
+		parent := filepath.Dir(scriptDir)
+		if _, pErr := os.Stat(filepath.Join(parent, "client", "aly-client")); pErr == nil {
+			scriptDir = parent
+		}
+	}
+
 	// GOPATH 与源码挂载路径不再硬编码（#6）：
 	//   ALY_WSL_GOPATH：WSL 内 GOPATH（默认 ~/go，即 /root/go 或 /home/<user>/go）
 	//   linuxSrc：由本脚本所在目录推导（脚本位于仓库根，client 在其下），

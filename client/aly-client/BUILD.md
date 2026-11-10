@@ -48,7 +48,7 @@ copy /y aly-client.exe client\aly-client\aly-client.exe
 del aly-client.exe
 ```
 
-> `deploy-client.go` 会自动完成更新器与 winui 的构建/回拷；手工构建时才需要执行。
+> `deploy/deploy-client.go` 会自动完成更新器与 winui 的构建/回拷；手工构建时才需要执行。
 
 ### 4. Linux 更新器（无 `.exe`）
 
@@ -72,7 +72,7 @@ Go 1.27.3 交叉编译；产物无扩展名。完整两件套（更新器 + MyGo
 ## 一键编译脚本
 
 `build.bat` 只构建更新器（内置 Go 1.10.x 版本断言）。完整部署用仓库根的
-`deploy-client.go`，它会同时构建 `aly-client.exe` 与 `aly-client-ui.exe`。
+`deploy/deploy-client.go`，它会同时构建 `aly-client.exe` 与 `aly-client-ui.exe`。
 
 ## 常见问题
 

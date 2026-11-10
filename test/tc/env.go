@@ -41,10 +41,29 @@ var RepoRoot = func() string {
 }()
 
 // Go126 构建 server / publish-cli（go.mod 声明 go 1.25.0，故需 >= 1.25 的工具链）
-var Go126 = envOr("ALY_GO126", `D:\Install\go\bin\go.exe`)
+var Go126 = envOr("ALY_GO126", defaultGo126())
 
 // Go1108 构建 aly-client / aly-client-ui / fake_main（XP 兼容口径：1.10.8 + GOARCH=386）
-var Go1108 = envOr("ALY_GO1108", `C:\Users\5001494\sdk\go1.10.8\bin\go.exe`)
+var Go1108 = envOr("ALY_GO1108", defaultGo1108())
+
+// defaultGo126 返回现代 Go 的默认路径：Windows 用作者机器的安装位置；
+// 其他平台回退到 PATH 里的 go（go.mod 声明 1.25+，一般 PATH 即满足）。
+func defaultGo126() string {
+	if runtime.GOOS == "windows" {
+		return `D:\Install\go\bin\go.exe`
+	}
+	return "go"
+}
+
+// defaultGo1108 返回 go1.10.8 的默认路径：Windows 用作者机器的安装位置；
+// 其他平台按 golang.org/dl 多版本工具链的官方约定 ~/sdk/go1.10.8/bin/go
+// （go install golang.org/dl/go1.10.8@latest && go1.10.8 download 落位处）。
+func defaultGo1108() string {
+	if runtime.GOOS == "windows" {
+		return `C:\Users\5001494\sdk\go1.10.8\bin\go.exe`
+	}
+	return filepath.Join(os.Getenv("HOME"), "sdk", "go1.10.8", "bin", "go")
+}
 
 func envOr(k, def string) string {
 	if v := os.Getenv(k); v != "" {

@@ -63,3 +63,11 @@ dist-test/
 # C# 冒烟测试工程构建产物
 client/aly-client-sdk/AlyClient.CSharpSDK/AlySdkSmoke/bin/
 client/aly-client-sdk/AlyClient.CSharpSDK/AlySdkSmoke/obj/
+
+# 运行时数据与构建产物（不入库）
+server/zap.db
+server/*.db
+server/data/test/
+publish/publish-cli/publish-cli.exe
+publish/publish-cli/publish-cli-*
+*.nupkg
