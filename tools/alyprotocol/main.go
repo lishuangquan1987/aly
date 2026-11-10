@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	schemaRelPath = "spec/aly-protocol.schema.json"
-	configRelPath = "tools/alyprotocol/csharp.json"
-	dtoRelPath    = "client/aly-client/model/dto.go"
-	outputRelPath = "client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/Models/Generated"
+	schemaRelPath   = "spec/aly-protocol.schema.json"
+	configRelPath   = "tools/alyprotocol/csharp.json"
+	dtoRelPath      = "client/aly-client/model/dto.go"
+	fixturesRelPath = "spec/fixtures/scenarios"
+	outputRelPath   = "client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/Models/Generated"
 )
 
 func main() {
@@ -110,6 +111,19 @@ func process(root string, checkOnly bool) error {
 	if errs := Verify(schema, cfg, structs); len(errs) > 0 {
 		return fmt.Errorf("协议漂移（schema ↔ dto.go）：\n%s", joinErrors(errs))
 	}
+	fixtures, err := LoadScenarios(filepath.Join(root, fixturesRelPath))
+	if err != nil {
+		return err
+	}
+	var fixtureErrs []error
+	for _, sc := range fixtures {
+		fixtureErrs = append(fixtureErrs, ValidateScenario(schema, sc)...)
+	}
+	fixtureErrs = append(fixtureErrs, ValidateFixtureCoverage(fixtures)...)
+	if len(fixtureErrs) > 0 {
+		return fmt.Errorf("fixtures 校验失败：\n%s", joinErrors(fixtureErrs))
+	}
+	fmt.Printf("fixtures 校验通过：%d 个场景\n", len(fixtures))
 	files, err := Render(schema, cfg)
 	if err != nil {
 		return err

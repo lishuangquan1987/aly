@@ -1,0 +1,29 @@
+{
+  "name": "download_partial_failure",
+  "description": "部分文件下载失败：进度行 isSuccess=false，最终行带 failed_files；宿主可直接重试（断点续传）。",
+  "commands": {
+    "check_update": {
+      "lines": [
+        {
+          "isSuccess": true,
+          "errorMsg": "",
+          "data": {
+            "has_update": true,
+            "need_download_update": true,
+            "current_version": "1.0.0",
+            "new_version": "1.0.1"
+          }
+        }
+      ]
+    },
+    "download_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"index": 0, "total": 1, "file": "", "status": "BEGIN", "file_size": 0, "total_bytes": 1000}},
+        {"isSuccess": true, "errorMsg": "", "data": {"index": 1, "total": 1, "file": "a.dll", "status": "START", "file_size": 1000, "downloaded_bytes": 0, "total_bytes": 1000, "speed_bps": 0}},
+        {"isSuccess": false, "errorMsg": "a.dll: checksum mismatch", "data": {"index": 1, "total": 1, "file": "a.dll", "status": "FAIL", "file_size": 1000, "downloaded_bytes": 0, "total_bytes": 1000, "speed_bps": 0, "error": "checksum mismatch"}},
+        {"isSuccess": false, "errorMsg": "下载完成但有 1 个文件失败: a.dll", "data": {"version": "1.0.1", "failed_files": ["a.dll"]}}
+      ],
+      "line_delay_ms": 5
+    }
+  }
+}

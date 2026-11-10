@@ -1,0 +1,38 @@
+{
+  "name": "force_update",
+  "description": "强制更新：宿主不应弹确认，直接下载并应用。",
+  "commands": {
+    "check_self_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"need_update": false}}
+      ]
+    },
+    "check_update": {
+      "lines": [
+        {
+          "isSuccess": true,
+          "errorMsg": "",
+          "data": {
+            "has_update": true,
+            "need_download_update": true,
+            "current_version": "1.0.0",
+            "new_version": "1.0.2",
+            "force_update": true
+          }
+        }
+      ]
+    },
+    "download_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"index": 0, "total": 1, "file": "", "status": "BEGIN", "file_size": 0, "total_bytes": 1000}},
+        {"isSuccess": true, "errorMsg": "", "data": {"index": 1, "total": 1, "file": "app.exe", "status": "DONE", "file_size": 1000, "downloaded_bytes": 1000, "total_bytes": 1000, "speed_bps": 65536}},
+        {"isSuccess": true, "errorMsg": "", "data": null}
+      ]
+    },
+    "apply_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": null}
+      ]
+    }
+  }
+}

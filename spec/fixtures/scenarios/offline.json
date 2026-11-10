@@ -1,0 +1,24 @@
+{
+  "name": "offline",
+  "description": "服务器不可达：check_update 仍返回 success，但 has_update=false；宿主不得因此删除已下载产物。",
+  "commands": {
+    "check_self_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"need_update": false}}
+      ]
+    },
+    "check_update": {
+      "lines": [
+        {
+          "isSuccess": true,
+          "errorMsg": "",
+          "data": {
+            "has_update": false,
+            "need_download_update": false,
+            "current_version": "1.0.0"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "rollback",
+  "description": "回滚：先列出可回滚版本，再回滚到指定版本。",
+  "commands": {
+    "list_rollback_versions": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"current_version": "1.0.1", "versions": ["1.0.0", "0.9.0"]}}
+      ]
+    },
+    "rollback": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"version": "1.0.0"}}
+      ]
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "self_update",
+  "description": "更新器自身落后：check_self_update 报告需要更新，self_update 完成替换并返回旧副本备份路径。",
+  "commands": {
+    "check_self_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"need_update": true}}
+      ]
+    },
+    "self_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"updated": true, "reason": "", "old_path": "aly-client.exe.old"}}
+      ]
+    }
+  }
+}

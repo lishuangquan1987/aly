@@ -392,6 +392,10 @@ jobs:
         working-directory: tools/alyprotocol
         run: go run . -check
 
+      - name: Test fake client
+        working-directory: tools/fake-aly-client
+        run: go test ./...
+
       - name: Inject version into .targets
         shell: bash
         run: |

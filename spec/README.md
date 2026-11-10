@@ -6,6 +6,7 @@
 | 文件 | 作用 | 规范性 |
 |---|---|---|
 | `aly-protocol.schema.json` | 字段真源：信封、8 条命令的载荷、下载进度行与嵌套文件项 | 是（机器可校验） |
+| `fixtures/scenarios/*.json` | 可回放的命令输出样例（跨语言 SDK 的一致性测试向量） | 是（`-check` 逐行校验） |
 | `host-contract.md` | schema 表达不了的行为：调用约定、超时、状态机、确认语义、错误分类 | 是（人读） |
 | `README.md` | 修改流程与兼容策略 | 本文件 |
 
@@ -21,16 +22,55 @@
    go run . -check
    ```
 
-4. 编译对应 SDK（C#：`dotnet build` 双 TFM）。
-5. 提交：schema、dto.go、生成物、受影响文档必须在同一个 commit 里。
+   新增字段或命令时，同步更新 `spec/fixtures/scenarios/` 里的样例——`-check` 会校验它们。
 
-`go run . -check` 会做三件事，任何一件失败都退出码 1：
+4. 编译对应 SDK（C#：`dotnet build` 双 TFM）。
+5. 提交：schema、dto.go、fixtures、生成物、受影响文档必须在同一个 commit 里。
+
+`go run . -check` 会做四件事，任何一件失败都退出码 1：
 
 - 校验 schema 自身（`required` 必须存在、`$ref` 必须可解析、`additionalProperties:false`、命名规范）；
 - 校验 schema ↔ `dto.go` 的字段名、类型、必填/可选（双向）；
+- 逐行校验 `fixtures/scenarios/*.json`，并要求 9 条命令都有样例；
 - 比对生成物与磁盘（CRLF/BOM 归一化后逐字节）。
 
 CI 在打包 C# SDK 之前执行同一个 `-check`，漂移会直接红灯。
+
+## fixtures：可回放的协议样例
+
+`spec/fixtures/scenarios/*.json` 按命令保存输出形态，既是对 schema 的样例，也是假客户端/跨语言一致性测试的脚本：
+
+```json
+{
+  "name": "update_available",
+  "commands": {
+    "check_update": {"lines": [{"isSuccess": true, "errorMsg": "", "data": {"has_update": true}}]},
+    "download_update": {"lines": ["…进度行…", {"isSuccess": true, "errorMsg": "", "data": null}], "line_delay_ms": 10}
+  }
+}
+```
+
+- `-check` 逐行校验：信封字段、载荷类型/必填/未知字段、`download_update` 的 `data:null` 位置、最后一行带载荷必须是失败、`exit_code` 必须为 0。
+- `-check` 还要求 **9 条命令都至少有一个场景**；新增命令忘记补样例同样会失败。
+- 新增/修改命令输出时**必须**同步更新场景；场景失败说明 schema 或样例有一方漂移。
+- `line_delay_ms` 供假客户端模拟流式输出（见下节）。
+
+### 本地回放（假客户端）
+
+`tools/fake-aly-client` 按场景回放 stdout，供各语言 SDK 在无网络、无真实更新器时测试：
+
+```bash
+cd tools/fake-aly-client
+go build -o fake-aly-client.exe .
+
+# SDK 测试把更新器路径指向它，并设置 ALY_FAKE_SCENARIO
+# 路径要用绝对路径：SDK 会把子进程工作目录设为 UpdateFolder
+ALY_FAKE_SCENARIO="<repo>/spec/fixtures/scenarios/update_available.json" ./fake-aly-client.exe check_update
+```
+
+- 命令之后的参数（`--must-close-process-name`、`--close-timeout` 等）会被忽略。
+- 只回放 stdout 与退出码：不会关闭宿主、不替换文件、不重启主程序。`apply_update` 的副作用需要测试方自行模拟/断言。
+- 场景本身先经 `go run . -check`（`tools/alyprotocol`）校验，假客户端不再重复校验。
 
 ## 兼容策略
 

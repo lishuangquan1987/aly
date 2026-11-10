@@ -1,0 +1,24 @@
+{
+  "name": "already_latest",
+  "description": "已是最新版本：check_update 返回 has_update=false，宿主应复位为空闲状态。",
+  "commands": {
+    "check_self_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"need_update": false}}
+      ]
+    },
+    "check_update": {
+      "lines": [
+        {
+          "isSuccess": true,
+          "errorMsg": "",
+          "data": {
+            "has_update": false,
+            "need_download_update": false,
+            "current_version": "1.0.1"
+          }
+        }
+      ]
+    }
+  }
+}

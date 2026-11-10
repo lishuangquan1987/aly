@@ -1,0 +1,42 @@
+{
+  "name": "update_available",
+  "description": "发现新版本：非强制更新，下载成功并应用。用于宿主 SDK 的完整 check → download → apply 链路。",
+  "commands": {
+    "check_self_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"need_update": false}}
+      ]
+    },
+    "check_update": {
+      "lines": [
+        {
+          "isSuccess": true,
+          "errorMsg": "",
+          "data": {
+            "has_update": true,
+            "need_download_update": true,
+            "current_version": "1.0.0",
+            "new_version": "1.0.1",
+            "force_update": false,
+            "release_notes": ["修复登录问题", "优化启动速度"]
+          }
+        }
+      ]
+    },
+    "download_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"index": 0, "total": 1, "file": "", "status": "BEGIN", "file_size": 0, "total_bytes": 1000}},
+        {"isSuccess": true, "errorMsg": "", "data": {"index": 1, "total": 1, "file": "app.exe", "status": "START", "file_size": 1000, "downloaded_bytes": 0, "total_bytes": 1000, "speed_bps": 0}},
+        {"isSuccess": true, "errorMsg": "", "data": {"index": 1, "total": 1, "file": "app.exe", "status": "PROGRESS", "file_size": 1000, "downloaded_bytes": 500, "total_bytes": 1000, "speed_bps": 65536}},
+        {"isSuccess": true, "errorMsg": "", "data": {"index": 1, "total": 1, "file": "app.exe", "status": "DONE", "file_size": 1000, "downloaded_bytes": 1000, "total_bytes": 1000, "speed_bps": 65536}},
+        {"isSuccess": true, "errorMsg": "", "data": null}
+      ],
+      "line_delay_ms": 10
+    },
+    "apply_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": null}
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "clean_all",
+  "description": "清理全部可清理内容：mode=all 时 keep 字段缺省，用于覆盖可选字段缺席的场景。",
+  "commands": {
+    "clean": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"mode": "all"}}
+      ]
+    }
+  }
+}

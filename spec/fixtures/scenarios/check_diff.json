@@ -1,0 +1,28 @@
+{
+  "name": "check_diff",
+  "description": "列出差异文件：用于调试与可视化客户端，包含本地/服务端摘要。",
+  "commands": {
+    "check_diff": {
+      "lines": [
+        {
+          "isSuccess": true,
+          "errorMsg": "",
+          "data": {
+            "new_version": "1.0.1",
+            "files": [
+              {
+                "path": "app.exe",
+                "local_md5": "d41d8cd98f00b204e9800998ecf8427e",
+                "local_size": 100,
+                "local_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "server_md5": "0cc175b9c0f1b6a831c399e269772661",
+                "server_size": 120,
+                "server_sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
