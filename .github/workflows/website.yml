@@ -1,6 +1,6 @@
 # 部署 VitePress 站点到 GitHub Pages
 # 仓库 Settings → Pages → Source 需选择 "GitHub Actions"（首次启用后自动生效）
-name: Deploy Website
+name: 文档同步 (Deploy Website)
 
 on:
   push:

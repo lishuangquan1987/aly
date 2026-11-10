@@ -1,0 +1,78 @@
+# 在 Actions 页面选择本工作流 → Run workflow，即可一键唤起全部构建/测试/文档工作流。
+# 默认三项全选；其中 Release Build 在此模式下只构建产物、不上传 Release。
+name: 一键全部构建 (Full Build)
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_release:
+        description: 'Release Build（全量构建产物，仅构建不发布）'
+        required: false
+        type: boolean
+        default: true
+      include_sdks:
+        description: '全部 SDK 测试（Go/C++/Java/Python/Rust/TypeScript/CLR/COM/Pascal）'
+        required: false
+        type: boolean
+        default: true
+      include_website:
+        description: '文档同步（构建并部署文档站）'
+        required: false
+        type: boolean
+        default: true
+
+# GITHUB_TOKEN 需要 actions:write 才能触发其它 workflow（workflow_dispatch）
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    name: 触发全部工作流
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.ref_name }}
+        run: |
+          set -u
+          declare -A targets=()
+          fail=0
+
+          run_wf() {
+            local wf="$1"; shift
+            if gh workflow run "$wf" --ref "$REF" "$@"; then
+              targets["$wf"]="ok"
+            else
+              echo "::error::dispatch $wf 失败（$REF 上可能不存在该 workflow 文件）"
+              targets["$wf"]="FAILED"
+              fail=1
+            fi
+          }
+
+          if [ "${{ inputs.include_release }}" = "true" ]; then
+            run_wf release.yml -f upload_to_release=false
+          fi
+
+          if [ "${{ inputs.include_sdks }}" = "true" ]; then
+            for wf in sdk-go sdk-cpp sdk-java sdk-python sdk-rust sdk-typescript sdk-clr sdk-com sdk-pascal; do
+              run_wf "$wf.yml"
+            done
+          fi
+
+          if [ "${{ inputs.include_website }}" = "true" ]; then
+            run_wf website.yml
+          fi
+
+          total=${#targets[@]}
+          echo
+          echo "已触发 $total 个工作流，等待运行列表生成..."
+          sleep 20
+          echo
+          echo "本次触发的运行入口（若链接为空请稍后在 Actions 页查看）："
+          for wf in "${!targets[@]}"; do
+            url=$(gh run list --workflow "$wf" --limit 1 --json url --jq '.[0].url' 2>/dev/null || true)
+            printf '  %-22s %s\n' "$wf" "${url:-<延迟中>}"
+          done
+          exit $fail

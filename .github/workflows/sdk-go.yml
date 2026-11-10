@@ -36,6 +36,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: client/aly-client-sdk/AlyClient.GoSDK/go.mod
+          cache: false
 
       - name: Verify protocol models and fixtures
         working-directory: tools/alyprotocol

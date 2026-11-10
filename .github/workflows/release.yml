@@ -6,11 +6,39 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号 (例如 v0.0.1)'
-        required: true
+        description: '版本号 (例如 v0.0.1；留空 = 仅构建，不发布)'
+        required: false
         type: string
+      upload_to_release:
+        description: '构建完成后上传产物到 Release'
+        required: false
+        type: boolean
+        default: false
 
+# 统一解析版本号：release 事件用 tag；手动触发有 version 用 version；
+# 否则生成临时构建版本号（仅构建模式）。
 jobs:
+  resolve-version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - name: Resolve version and tag
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+          elif [ -n "${{ inputs.version }}" ]; then
+            tag="${{ inputs.version }}"
+          else
+            tag="v0.0.0-build.${{ github.run_number }}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "Resolved: tag=$tag version=${tag#v}"
+
   build-server:
     name: Build aly-server (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: windows-latest
@@ -29,13 +57,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Go
+        id: setup-go
         uses: actions/setup-go@v5
         with:
           go-version-file: server/go.mod
         continue-on-error: true
 
       - name: Fallback — download Go
-        if: failure()
+        if: steps.setup-go.outcome == 'failure'
         shell: cmd
         run: |
           echo "setup-go could not resolve Go version from go.mod, using go1.25.0..."
@@ -82,13 +111,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Go
+        id: setup-go
         uses: actions/setup-go@v5
         with:
           go-version-file: publish/publish-cli/go.mod
         continue-on-error: true
 
       - name: Fallback — download Go
-        if: failure()
+        if: steps.setup-go.outcome == 'failure'
         shell: cmd
         run: |
           echo "setup-go could not resolve Go version from go.mod, using go1.25.0..."
@@ -132,6 +162,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.10.8'
+          cache: false
         continue-on-error: true
 
       - name: Fallback — manual Go 1.10 install
@@ -226,6 +257,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.27.3'
+          cache: false
 
       - name: Build Linux aly-client (amd64/arm64)
         shell: bash
@@ -278,7 +310,7 @@ jobs:
   build-publish-gui:
     name: Build AlyPublish (Windows x64 installer + portable zip)
     runs-on: windows-latest
-    needs: [build-aly-publish]
+    needs: [resolve-version, build-aly-publish]
 
     steps:
       - name: Checkout
@@ -291,10 +323,7 @@ jobs:
 
       - name: Resolve version
         shell: pwsh
-        run: |
-          $raw = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.version }}" } else { "${{ github.event.release.tag_name }}" }
-          $version = $raw -replace '^v', ''
-          "ALY_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+        run: '"ALY_VERSION=${{ needs.resolve-version.outputs.version }}" | Out-File -FilePath $env:GITHUB_ENV -Append'
 
       - name: Test publish GUI
         shell: pwsh
@@ -366,6 +395,7 @@ jobs:
   build-csharp-sdk:
     name: Build AlyClient.CSharpSDK nupkg
     runs-on: windows-latest
+    needs: [resolve-version]
 
     steps:
       - name: Checkout
@@ -378,15 +408,13 @@ jobs:
 
       - name: Resolve version
         shell: pwsh
-        run: |
-          $raw = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.version }}" } else { "${{ github.event.release.tag_name }}" }
-          $version = $raw -replace '^v', ''
-          "ALY_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+        run: '"ALY_VERSION=${{ needs.resolve-version.outputs.version }}" | Out-File -FilePath $env:GITHUB_ENV -Append'
 
       - name: Setup Go (protocol tool)
         uses: actions/setup-go@v5
         with:
           go-version-file: tools/alyprotocol/go.mod
+          cache: false
 
       - name: Verify protocol models are generated
         working-directory: tools/alyprotocol
@@ -453,6 +481,7 @@ jobs:
   build-sdk-packages:
     name: Build all language SDK zip packages
     runs-on: windows-latest
+    needs: [resolve-version]
 
     steps:
       - name: Checkout
@@ -460,10 +489,7 @@ jobs:
 
       - name: Resolve version
         shell: pwsh
-        run: |
-          $raw = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.version }}" } else { "${{ github.event.release.tag_name }}" }
-          $version = $raw -replace '^v', ''
-          "ALY_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+        run: '"ALY_VERSION=${{ needs.resolve-version.outputs.version }}" | Out-File -FilePath $env:GITHUB_ENV -Append'
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
@@ -493,6 +519,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: tools/alyprotocol/go.mod
+          cache: false
 
       - name: Install MinGW-w64 (C++)
         run: choco install mingw -y --no-progress
@@ -521,7 +548,9 @@ jobs:
 
   upload-release-assets:
     name: Upload to Release
-    needs: [build-server, build-aly-publish, build-aly-client, build-aly-client-linux, build-publish-gui, build-csharp-sdk, build-sdk-packages]
+    # release 事件 = 正式发布；手动触发仅在勾选 upload_to_release 时上传
+    if: github.event_name == 'release' || inputs.upload_to_release == true
+    needs: [resolve-version, build-server, build-aly-publish, build-aly-client, build-aly-client-linux, build-publish-gui, build-csharp-sdk, build-sdk-packages]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -530,30 +559,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # download-artifact@v4 不指定 path 时会下载到 <artifact名>/ 子目录，
+      # 这里统一收拢到 artifacts/ 目录，供后续 find 扫描上传。
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
       - name: List downloaded artifacts
-        run: ls -laR
-
-      - name: Resolve tag
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
-          fi
+        run: ls -laR artifacts
 
       - name: Upload to Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
+          TAG="${{ needs.resolve-version.outputs.tag }}"
           mapfile -t files < <(find artifacts -type f | sort)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No release assets downloaded" >&2
             exit 1
           fi
           printf 'Uploading %d assets to %s\n' "${#files[@]}" "$TAG"
+          # 手动发布模式下 tag 可能尚无 release，自动补建
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG not found, creating it..."
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+          fi
           gh release upload "$TAG" "${files[@]}" --clobber
