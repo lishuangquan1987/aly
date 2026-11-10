@@ -86,6 +86,8 @@ Business failures may still exit 0; use `isSuccess` in the JSON. See the [comman
 
 ### 6. C# host: skip the orchestration
 
+> Other languages: see the [Language SDK overview](/en/docs/sdk/languages).
+
 ```csharp
 using AlyClient.CSharpSDK;
 

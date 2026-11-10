@@ -20,13 +20,20 @@ https://github.com/lishuangquan1987/aly/releases/latest/download/<asset>
 | **aly-client** | `aly-client.exe`（32 位，XP+） | `aly-client-linux-amd64` · `aly-client-linux-arm64` | — | 终端更新器 |
 | **aly-client-ui** | `aly-client-ui.exe`（32 位，XP+） | `aly-client-ui-linux-amd64` · `aly-client-ui-linux-arm64` | — | 可选 GUI |
 | **AlyPublish GUI** | `AlyPublish-Setup.exe` · `AlyPublish-win-x64.zip` | — | — | Windows x64；自包含，安装包内带 `aly-publish.exe` |
-| **C# SDK** | `AlyClient.CSharpSDK.*.nupkg`（Release 附件） | 同左 | 同左 | 未上架公共 NuGet，从 Release 或源码获取 |
+| **C# SDK** | `AlyClient.CSharpSDK.*.nupkg` · `AlyClient.CSharpSDK-<version>.zip` | 同左 | 同左 | 未上架公共 NuGet，从 Release 或源码获取 |
+| **语言 SDK** | `AlyClient.*SDK-<version>.zip` | 同左 | 同左 | 每个语言一个版本化 zip；内含 wheel / jar / `.crate` / 源码等 |
 
 ::: tip 平台边界
 客户端预构建只有 Windows 与 Linux。macOS / FreeBSD 的更新器可以从同一份源码编译，但没有官方预构建；服务端与发布工具提供 macOS 预构建。
 :::
 
 ## 下载命令
+
+下载全部语言 SDK：
+
+```bash
+gh release download --pattern 'AlyClient.*SDK-*.zip'
+```
 
 ::: code-group
 

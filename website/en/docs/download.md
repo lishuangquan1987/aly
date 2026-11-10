@@ -20,13 +20,20 @@ https://github.com/lishuangquan1987/aly/releases/latest/download/<asset>
 | **aly-client** | `aly-client.exe` (32-bit, XP+) | `aly-client-linux-amd64` · `aly-client-linux-arm64` | — | end-user updater |
 | **aly-client-ui** | `aly-client-ui.exe` (32-bit, XP+) | `aly-client-ui-linux-amd64` · `aly-client-ui-linux-arm64` | — | optional GUI |
 | **AlyPublish GUI** | `AlyPublish-Setup.exe` · `AlyPublish-win-x64.zip` | — | — | Windows x64; self-contained; the installer bundles `aly-publish.exe` |
-| **C# SDK** | `AlyClient.CSharpSDK.*.nupkg` (release asset) | same | same | not on public NuGet; get it from the release or source |
+| **C# SDK** | `AlyClient.CSharpSDK.*.nupkg` · `AlyClient.CSharpSDK-<version>.zip` | same | same | not on public NuGet; get it from the release or source |
+| **Language SDKs** | `AlyClient.*SDK-<version>.zip` | same | same | one versioned zip per language; contains wheel / jar / `.crate` / source as applicable |
 
 ::: tip Platform boundary
 Prebuilt clients exist for Windows and Linux only. macOS/FreeBSD updaters compile from the same source but are not published as binaries; the server and publisher do ship macOS binaries.
 :::
 
 ## Download commands
+
+Download every language SDK:
+
+```bash
+gh release download --pattern 'AlyClient.*SDK-*.zip'
+```
 
 ::: code-group
 

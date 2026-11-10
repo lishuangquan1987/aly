@@ -5,6 +5,9 @@ description: 在 net40 与 netstandard2.0 宿主中集成 AlyClient.CSharpSDK：
 
 # C# SDK 集成
 
+> 其它语言（TypeScript / Go / Python / Java / Rust / C++ / Pascal / VB.NET / F# / VB6 / 易语言）见
+> [多语言 SDK 总览](/docs/sdk/languages)。本页只讲 .NET 集成。
+
 `AlyClient.CSharpSDK` 把 `aly-client.exe` 的命令行协议封装成 .NET 类型：宿主不必拼接参数、解析 JSON、自己实现超时与进程收尸。它对外只有四个入口：
 
 > **适合谁**：要把更新能力接进 .NET 宿主（WinForms/WPF/控制台）的开发者。读完可选对集成方式、放对 `UpdateFolder`，并用最小宿主跑通第一次更新。

@@ -55,7 +55,7 @@ The Linux GUI (`aly-client-linuxui`) is built on [MyGo](https://github.com/egois
 - at startup it delegates to `aly-client self_update` (the updater takes the lock and performs the replacement), with a local fallback only when the updater is missing or outdated;
 - single instance: a second instance forwards the "manual check" request to the existing instance and then exits.
 
-The C# SDK and the GUI follow the same protocol; see [C# SDK](/en/docs/sdk).
+The C# and other language SDKs, plus the GUI, follow the same protocol; see [Language SDKs](/en/docs/sdk/languages).
 
 ## Publish GUI Languages
 
@@ -75,7 +75,7 @@ aly/
 │   ├── aly-client-ui/
 │   │   ├── aly-client-winui/   # XP-track Windows GUI (walk)
 │   │   └── aly-client-linuxui/ # Linux GUI (MyGo)
-│   └── aly-client-sdk/         # C# SDK (net40 + netstandard2.0)
+│   └── aly-client-sdk/         # multi-language SDKs (C#/TS/Go/Python/Java/Rust/C++/Pascal/COM)
 ├── publish/
 │   ├── publish-cli/            # publish CLI (cobra)
 │   └── publish-gui/            # publish desktop app (Avalonia 12.1 · .NET 8)

@@ -27,7 +27,7 @@ features:
     details: 下载阶段就把未变化文件物化进新版本目录，apply 只做三次 rename；停机窗口从分钟级全量拷贝压到秒级。
   - icon: 🧩
     title: 一份 JSON 协议
-    details: 更新器所有命令输出统一的 {isSuccess, errorMsg, data}。宿主可以是 C# SDK、可选 GUI，或任何能拉起子进程的程序。
+    details: 更新器所有命令输出统一的 {isSuccess, errorMsg, data}。宿主可以是多语言 SDK、可选 GUI，或任何能拉起子进程的程序。
   - icon: 🕰️
     title: Windows XP 原生兼容
     details: 更新器与 Windows GUI 固定用 Go 1.10.8 + 386 构建；CI 校验 PE 头与 ComCtl32 manifest，老工控机也能安全升级。

@@ -15,7 +15,7 @@ Aly is a **self-contained automatic update system for desktop applications**: pu
 | A power cut or crash mid-update bricks the install | Pure directory renames plus a `version.json` state machine; startup detects `applying` and recovers |
 | Large updates keep the app down too long | The download stage materializes unchanged files into the new directory, so apply only performs three renames — downtime is measured in seconds |
 | How the updater updates itself | `check_self_update` detects and `self_update` performs the replacement; the GUI/SDK delegate, with a failure circuit breaker |
-| The host language is locked in | Every command outputs JSON; an optional C# SDK, and any language that can spawn a subprocess, can integrate |
+| The host language is locked in | Every command outputs JSON; C#/TypeScript/Go/Python/Java/Rust/C++/Pascal SDKs plus a VB6/EPL COM wrapper cover any host that can spawn a subprocess |
 
 ## Five Components
 
@@ -27,7 +27,7 @@ Aly is a **self-contained automatic update system for desktop applications**: pu
 | **aly-client** | End-user updater | Go 1.10.8 (XP track) / modern Go (cross-platform track) |
 | **aly-client-ui** | Optional update window | Windows: walk (XP) · Linux: MyGo + GTK3 |
 
-A host application can either spawn a subprocess and parse the JSON, or integrate the [C# SDK](/en/docs/sdk); the SDK is only an orchestration layer and does not change the protocol.
+A host application can either spawn a subprocess and parse the JSON, or integrate the [language SDKs](/en/docs/sdk/languages); the SDK is only an orchestration layer and does not change the protocol.
 
 ## Platform Coverage
 

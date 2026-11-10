@@ -15,7 +15,7 @@ Aly 是一套**自包含的桌面应用自动更新系统**：发布方用发布
 | 更新过程断电/崩溃变砖 | 纯目录改名 + `version.json` 状态机；启动时检测 `applying` 并恢复 |
 | 大文件更新停机太久 | 下载阶段把未变化文件物化进新目录，apply 只做三次 rename，停机窗口秒级 |
 | 更新器自身怎么更新 | `check_self_update` 检测、`self_update` 统一执行；GUI/SDK 委派，带失败熔断 |
-| 宿主语言被绑死 | 所有命令输出统一 JSON；可选 C# SDK，任何能拉起子进程的语言都能接入 |
+| 宿主语言被绑死 | 所有命令输出统一 JSON；提供 C#/TypeScript/Go/Python/Java/Rust/C++/Pascal SDK 与 VB6/易语言 COM，任何能拉起子进程的语言都能接入 |
 
 ## 五个组件
 
@@ -27,7 +27,7 @@ Aly 是一套**自包含的桌面应用自动更新系统**：发布方用发布
 | **aly-client** | 终端更新器 | Go 1.10.8（XP 轨）/ 现代 Go（跨平台轨） |
 | **aly-client-ui** | 可选更新窗口 | Windows：walk（XP）· Linux：MyGo + GTK3 |
 
-宿主程序可以拉子进程解析 JSON，也可以集成 [C# SDK](/docs/sdk)；SDK 只是编排层，不改变协议。
+宿主程序可以拉子进程解析 JSON，也可以集成 [多语言 SDK](/docs/sdk/languages)；SDK 只是编排层，不改变协议。
 
 ## 平台覆盖
 

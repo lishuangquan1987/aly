@@ -11,7 +11,7 @@ description: 平台、宿主语言、停机时间、断电恢复、回滚、认�
 
 ## 客户端宿主必须用 C# 吗？
 
-不需要。`aly-client` 是独立可执行文件，所有命令输出统一 JSON。任何能拉起子进程并解析 JSON 的语言都能做宿主；C# SDK 只是省掉编排。
+不需要。`aly-client` 是独立可执行文件，所有命令输出统一 JSON。任何能拉起子进程并解析 JSON 的语言都能做宿主；仓库提供 C#/TypeScript/Go/Python/Java/Rust/C++/Pascal SDK 与 VB6/易语言 COM，SDK 只是省掉编排。见[多语言 SDK](/docs/sdk/languages)。
 
 ## 更新时应用会停机多久？
 

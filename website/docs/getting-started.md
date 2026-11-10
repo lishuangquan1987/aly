@@ -86,6 +86,8 @@ aly-client apply_update
 
 ### 6. C# 宿主：省掉手工编排
 
+> 其它语言见[多语言 SDK 总览](/docs/sdk/languages)。
+
 ```csharp
 using AlyClient.CSharpSDK;
 

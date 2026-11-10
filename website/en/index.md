@@ -27,7 +27,7 @@ features:
     details: Unchanged files are materialized into the new version directory during download, so apply only performs three renames instead of a full copy.
   - icon: 🧩
     title: One JSON protocol
-    details: Every updater command emits the same {isSuccess, errorMsg, data} envelope. Hosts can use the C# SDK, the optional GUI, or any language that can spawn a process.
+    details: Every updater command emits the same {isSuccess, errorMsg, data} envelope. Hosts can use a language SDK, the optional GUI, or any language that can spawn a process.
   - icon: 🕰️
     title: Native Windows XP support
     details: The updater and Windows GUI are pinned to Go 1.10.8 + 386. CI checks the PE header and ComCtl32 manifest, keeping aging industrial PCs safely updatable.

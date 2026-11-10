@@ -5,6 +5,9 @@ description: Integrating AlyClient.CSharpSDK into net40 and netstandard2.0 hosts
 
 # C# SDK Integration
 
+> For other languages (TypeScript / Go / Python / Java / Rust / C++ / Pascal / VB.NET / F# / VB6 / EPL) see the
+> [Language SDK overview](/en/docs/sdk/languages). This page covers .NET only.
+
 `AlyClient.CSharpSDK` wraps the command-line protocol of `aly-client.exe` into .NET types: hosts no longer have to concatenate arguments, parse JSON, or implement timeouts and process reaping themselves. It exposes only four entry points:
 
 > **Who this is for**: developers adding updates to a .NET host (WinForms/WPF/console). After this page you can choose an integration style, lay out `UpdateFolder` correctly, and run the first update from a minimal host.

@@ -11,5 +11,5 @@ description: "Enter Aly by role: publish a release, integrate the updater, deplo
 - Updater commands and return fields: [aly-client command reference](/en/docs/commands)
 - Publish, staging and push: [aly-publish](/en/docs/publish)
 - Server deployment and REST API: [Deployment](/en/docs/server/deploy) · [API overview](/en/docs/api)
-- .NET host integration: [C# SDK](/en/docs/sdk) · [SDK API](/en/docs/sdk/api)
+- Multi-language host integration: [Language SDKs](/en/docs/sdk/languages) · [C# SDK](/en/docs/sdk) · [C# API](/en/docs/sdk/api)
 - Understand reliability first: [Core concepts](/en/docs/concepts) · [Architecture](/en/docs/architecture)

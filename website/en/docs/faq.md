@@ -11,7 +11,7 @@ Industrial PCs, cashier terminals and hospital equipment still run XP, and those
 
 ## Must the client host be written in C#?
 
-No. `aly-client` is a standalone executable and every command outputs uniform JSON. Any language that can spawn a subprocess and parse JSON can act as the host; the C# SDK merely saves you the orchestration.
+No. `aly-client` is a standalone executable and every command outputs uniform JSON. Any language that can spawn a subprocess and parse JSON can act as the host; the repository provides C#/TypeScript/Go/Python/Java/Rust/C++/Pascal SDKs plus a VB6/EPL COM wrapper. See [Language SDKs](/en/docs/sdk/languages).
 
 ## How long is the application down during an update?
 

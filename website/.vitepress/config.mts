@@ -52,10 +52,11 @@ const zhSidebar = [
     ]
   },
   {
-    text: 'C# SDK',
+    text: 'SDK',
     items: [
-      { text: '集成指南', link: '/docs/sdk' },
-      { text: 'API 参考', link: '/docs/sdk/api' }
+      { text: '多语言 SDK 总览', link: '/docs/sdk/languages' },
+      { text: 'C# 集成指南', link: '/docs/sdk' },
+      { text: 'C# API 参考', link: '/docs/sdk/api' }
     ]
   },
   {
@@ -117,10 +118,11 @@ const enSidebar = [
     ]
   },
   {
-    text: 'C# SDK',
+    text: 'SDK',
     items: [
-      { text: 'Integration Guide', link: '/en/docs/sdk' },
-      { text: 'API Reference', link: '/en/docs/sdk/api' }
+      { text: 'Language SDKs', link: '/en/docs/sdk/languages' },
+      { text: 'C# Integration Guide', link: '/en/docs/sdk' },
+      { text: 'C# API Reference', link: '/en/docs/sdk/api' }
     ]
   },
   {

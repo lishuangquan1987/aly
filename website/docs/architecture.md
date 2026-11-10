@@ -55,7 +55,7 @@ Linux GUI（`aly-client-linuxui`）基于 [MyGo](https://github.com/egoist/mygo)
 - 启动时委派 `aly-client self_update`（更新器取锁执行替换），仅在缺失或旧版时本地兜底；
 - 单实例：第二个实例把“手动检查”请求转发给已有实例后退出。
 
-C# SDK 与 GUI 遵循同一协议，见 [C# SDK](/docs/sdk)。
+C# 与其它语言 SDK、GUI 遵循同一协议，见 [多语言 SDK](/docs/sdk/languages)。
 
 ## 发布 GUI 的语言
 
@@ -75,7 +75,7 @@ aly/
 │   ├── aly-client-ui/
 │   │   ├── aly-client-winui/   # XP 轨 Windows GUI（walk）
 │   │   └── aly-client-linuxui/ # Linux GUI（MyGo）
-│   └── aly-client-sdk/         # C# SDK（net40 + netstandard2.0）
+│   └── aly-client-sdk/         # 多语言 SDK（C#/TS/Go/Python/Java/Rust/C++/Pascal/COM）
 ├── publish/
 │   ├── publish-cli/            # 发布 CLI（cobra）
 │   └── publish-gui/            # 发布桌面端（Avalonia 12.1 · .NET 8）
