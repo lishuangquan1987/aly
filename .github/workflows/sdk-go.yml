@@ -1,0 +1,48 @@
+name: Go SDK
+
+on:
+  push:
+    paths:
+      - "client/aly-client-sdk/AlyClient.GoSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-go.yml"
+  pull_request:
+    paths:
+      - "client/aly-client-sdk/AlyClient.GoSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-go.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test Go SDK (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: client/aly-client-sdk/AlyClient.GoSDK
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: client/aly-client-sdk/AlyClient.GoSDK/go.mod
+
+      - name: Verify protocol models and fixtures
+        working-directory: tools/alyprotocol
+        run: go run . -check
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -count=1
