@@ -87,3 +87,6 @@ client/aly-client-sdk/samples/**/obj/
 client/aly-client-sdk/AlyClient.TypeScriptSDK/node_modules/
 client/aly-client-sdk/AlyClient.TypeScriptSDK/dist/
 !client/aly-client-sdk/AlyClient.TypeScriptSDK/package-lock.json
+
+# Java SDK
+client/aly-client-sdk/AlyClient.JavaSDK/out/

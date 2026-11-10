@@ -1,0 +1,58 @@
+name: Java SDK
+
+on:
+  push:
+    paths:
+      - "client/aly-client-sdk/AlyClient.JavaSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-java.yml"
+  pull_request:
+    paths:
+      - "client/aly-client-sdk/AlyClient.JavaSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-java.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Build and test Java SDK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client/aly-client-sdk/AlyClient.JavaSDK
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Go (fake client)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/fake-aly-client/go.mod
+
+      - name: Verify protocol models and fixtures
+        working-directory: tools/alyprotocol
+        run: go run . -check
+
+      - name: Build SDK and conformance tests
+        run: bash scripts/build.sh out
+
+      - name: Build fake client
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd ../../../tools/fake-aly-client && go build -o /tmp/aly-fake .)
+
+      - name: Run conformance tests
+        run: |
+          java -cp out io.github.lishuangquan1987.alyclient.tests.TestMain \
+            /tmp/aly-fake ../../../spec/fixtures/scenarios
