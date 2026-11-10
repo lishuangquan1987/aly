@@ -99,3 +99,5 @@ client/aly-client-sdk/AlyClient.CppSDK/out/
 
 # Pascal SDK
 client/aly-client-sdk/AlyClient.PascalSDK/out/
+client/aly-client-sdk/AlyClient.PascalSDK/src/*.o
+client/aly-client-sdk/AlyClient.PascalSDK/src/*.ppu
