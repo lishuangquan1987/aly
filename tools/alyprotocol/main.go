@@ -11,15 +11,17 @@ import (
 )
 
 const (
-	schemaRelPath   = "spec/aly-protocol.schema.json"
-	configRelPath   = "tools/alyprotocol/csharp.json"
-	tsConfigRelPath = "tools/alyprotocol/ts.json"
-	goConfigRelPath = "tools/alyprotocol/go.json"
-	dtoRelPath      = "client/aly-client/model/dto.go"
-	fixturesRelPath = "spec/fixtures/scenarios"
-	outputRelPath   = "client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/Models/Generated"
-	tsOutputRelPath = "client/aly-client-sdk/AlyClient.TypeScriptSDK/src/models.ts"
-	goOutputRelPath = "client/aly-client-sdk/AlyClient.GoSDK/models_gen.go"
+	schemaRelPath       = "spec/aly-protocol.schema.json"
+	configRelPath       = "tools/alyprotocol/csharp.json"
+	tsConfigRelPath     = "tools/alyprotocol/ts.json"
+	goConfigRelPath     = "tools/alyprotocol/go.json"
+	pythonConfigRelPath = "tools/alyprotocol/python.json"
+	dtoRelPath          = "client/aly-client/model/dto.go"
+	fixturesRelPath     = "spec/fixtures/scenarios"
+	outputRelPath       = "client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/Models/Generated"
+	tsOutputRelPath     = "client/aly-client-sdk/AlyClient.TypeScriptSDK/src/models.ts"
+	goOutputRelPath     = "client/aly-client-sdk/AlyClient.GoSDK/models_gen.go"
+	pythonOutputRelPath = "client/aly-client-sdk/AlyClient.PythonSDK/alyclient/models_gen.py"
 )
 
 func main() {
@@ -148,14 +150,26 @@ func process(root string, checkOnly bool) error {
 	if err != nil {
 		return err
 	}
+	pyCfg, err := LoadPythonConfig(filepath.Join(root, pythonConfigRelPath))
+	if err != nil {
+		return err
+	}
+	pyFile, err := RenderPython(schema, pyCfg)
+	if err != nil {
+		return err
+	}
 	outDir := filepath.Join(root, outputRelPath)
 	tsPath := filepath.Join(root, tsOutputRelPath)
 	goPath := filepath.Join(root, goOutputRelPath)
+	pyPath := filepath.Join(root, pythonOutputRelPath)
 	if checkOnly {
 		if err := checkGeneratedFile(tsPath, tsFile); err != nil {
 			return err
 		}
 		if err := checkGeneratedFile(goPath, goFile); err != nil {
+			return err
+		}
+		if err := checkGeneratedFile(pyPath, pyFile); err != nil {
 			return err
 		}
 		return checkFiles(outDir, files)
@@ -164,6 +178,9 @@ func process(root string, checkOnly bool) error {
 		return err
 	}
 	if err := writeGeneratedFile(goPath, goFile); err != nil {
+		return err
+	}
+	if err := writeGeneratedFile(pyPath, pyFile); err != nil {
 		return err
 	}
 	return writeFiles(outDir, files)
