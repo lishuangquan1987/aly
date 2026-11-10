@@ -66,6 +66,8 @@ The listen address is `0.0.0.0:<port>`; there is no flag to bind only to the loo
     └── demo2/
 ```
 
+<ScreenshotFrame src="/images/server-layout-en.svg" alt="aly-server directory layout: binary, SQLite database and data/ project directories at the same level" caption="data/ and aly.db stay next to the executable; one directory per project" wide />
+
 Key points:
 
 - **`data/` is fixed to the executable's directory**, derived from `os.Executable()` and independent of the working directory at startup. systemd's `WorkingDirectory` does not affect it.

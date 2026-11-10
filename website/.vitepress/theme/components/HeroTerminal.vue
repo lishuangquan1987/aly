@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import { useData } from 'vitepress'
 
 const { lang } = useData()
 const isEn = computed(() => lang.value === 'en-US')
-const ready = ref(false)
-const root = ref<HTMLElement | null>(null)
 
 const message = computed(() => (isEn.value ? 'Fix login timeout' : '修复登录超时'))
 
@@ -20,16 +18,11 @@ const lines = computed(() => [
   { kind: 'json', text: '{"has_update":true,"new_version":"1.0.2"}' }
 ])
 
-onMounted(() => {
-  ready.value = true
-})
 </script>
 
 <template>
   <div
-    ref="root"
     class="aly-terminal"
-    :class="{ 'is-ready': ready }"
     :aria-label="isEn ? 'Terminal demo of publishing and checking an update' : '发布与检查更新的终端演示'"
   >
     <div class="aly-terminal-bar">

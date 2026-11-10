@@ -5,6 +5,10 @@ description: Behavior, JSON contract, push progress stream and failure semantics
 
 # Release Workflow Commands
 
+::: tip Output language
+`aly-publish` and the server currently emit human-readable progress and error strings in Chinese. The examples preserve that real output; command names, flags, `isSuccess` and the JSON schema are the stable contract.
+:::
+
 This group of commands covers the full release path: compare the differences → stage changes → upload and register a version. Unless stated otherwise, the examples omit the global `--server`, `--project`, `--json` and `--quiet` flags.
 
 | Command | Purpose | Needs the server | Needs `project.name` | Needs the staging area |

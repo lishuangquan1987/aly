@@ -10,7 +10,8 @@ const zhSidebar = [
     items: [
       { text: '文档首页', link: '/docs/' },
       { text: '快速开始', link: '/docs/getting-started' },
-      { text: '下载与安装', link: '/docs/download' }
+      { text: '下载与安装', link: '/docs/download' },
+      { text: '文档版本', link: '/docs/versions' }
     ]
   },
   {
@@ -74,7 +75,8 @@ const enSidebar = [
     items: [
       { text: 'Docs Home', link: '/en/docs/' },
       { text: 'Quick Start', link: '/en/docs/getting-started' },
-      { text: 'Download & Install', link: '/en/docs/download' }
+      { text: 'Download & Install', link: '/en/docs/download' },
+      { text: 'Documentation Versions', link: '/en/docs/versions' }
     ]
   },
   {
@@ -181,6 +183,7 @@ export default defineConfig({
   base: '/aly/',
   srcExclude: ['scripts/**'],
   cleanUrls: true,
+  appearance: 'dark',
   lastUpdated: true,
   sitemap: {
     hostname: siteUrl

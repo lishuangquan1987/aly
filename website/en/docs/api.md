@@ -9,6 +9,12 @@ aly-server exposes HTTP endpoints through Gin, all registered under the `/api` p
 
 If you just need an endpoint, jump to the [Endpoint Index](#endpoint-index); the shared conventions follow below.
 
+> **Who this is for**: developers implementing a custom publisher/updater or debugging the HTTP layer. After this page you can call all 16 endpoints and handle HTTP 200 + `isSuccess:false` correctly.
+
+::: tip Output language
+The server currently returns `errorMsg`, changelogs and some sample values in Chinese. JSON examples preserve that real output; endpoint paths, field names and the envelope are the stable contract.
+:::
+
 | Item | Value |
 | --- | --- |
 | Base URL | `http://<host>:2000/api` |

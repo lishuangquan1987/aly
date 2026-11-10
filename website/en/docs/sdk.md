@@ -7,6 +7,8 @@ description: Integrating AlyClient.CSharpSDK into net40 and netstandard2.0 hosts
 
 `AlyClient.CSharpSDK` wraps the command-line protocol of `aly-client.exe` into .NET types: hosts no longer have to concatenate arguments, parse JSON, or implement timeouts and process reaping themselves. It exposes only four entry points:
 
+> **Who this is for**: developers adding updates to a .NET host (WinForms/WPF/console). After this page you can choose an integration style, lay out `UpdateFolder` correctly, and run the first update from a minimal host.
+
 | Type | Role |
 |---|---|
 | `AlyUpdateUIClient` | Hands the entire "check → download → apply → restart the host" chain to a standalone window, `aly-client-ui.exe`; the host only launches it at the right moment (**recommended**) |
@@ -140,7 +142,7 @@ For the full semantics of these fields see [Configuration Reference](/en/docs/cl
 
 Three prerequisites: the host project references `AlyClient.CSharpSDK` (including `Newtonsoft.Json`), `UpdateFolder` already contains `aly-client.exe` and `aly-client-ui.exe`, and `client.json` has been adjusted for the actual directory layout.
 
-A complete, compilable minimal host (`net40` + C# 5):
+A complete, compilable minimal host (`net40` + C# 5). The repository's `client/aly-client-sdk/samples/MinimalHost` is the same project (`net40` + `net8.0`) and can be used as a starting point:
 
 ```csharp
 using System;

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430" role="img" aria-label="aly-server 目录布局">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#111827"/>
+      <stop offset="1" stop-color="#0b1020"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <rect width="960" height="430" rx="18" fill="url(#bg)"/>
+  <rect x="1" y="1" width="958" height="428" rx="17" fill="none" stroke="#334155"/>
+  <text x="36" y="48" fill="#e2e8f0" font-family="Segoe UI, sans-serif" font-size="21" font-weight="700">aly-server 目录布局</text>
+  <text x="36" y="74" fill="#94a3b8" font-family="Segoe UI, sans-serif" font-size="12">data/ 与 aly.db 固定在可执行文件旁边，与启动时的工作目录无关</text>
+  <rect x="36" y="96" width="888" height="300" rx="12" fill="#0f172a" stroke="#475569"/>
+  <text x="58" y="126" fill="#c7d2fe" font-family="Consolas, monospace" font-size="14">/opt/aly/</text>
+  <rect x="58" y="146" width="180" height="46" rx="8" fill="#1e293b" stroke="#64748b"/>
+  <text x="74" y="175" fill="#f8fafc" font-family="Consolas, monospace" font-size="13">aly-server</text>
+  <rect x="58" y="206" width="180" height="46" rx="8" fill="#1e293b" stroke="#64748b"/>
+  <text x="74" y="235" fill="#f8fafc" font-family="Consolas, monospace" font-size="13">aly.db</text>
+  <text x="250" y="233" fill="#94a3b8" font-family="Segoe UI, sans-serif" font-size="11">SQLite + WAL</text>
+  <rect x="58" y="266" width="180" height="108" rx="8" fill="#1e293b" stroke="#818cf8"/>
+  <text x="74" y="292" fill="#c7d2fe" font-family="Consolas, monospace" font-size="13">data/</text>
+  <text x="74" y="313" fill="#94a3b8" font-family="Segoe UI, sans-serif" font-size="11">每个项目一个目录</text>
+  <rect x="286" y="146" width="292" height="228" rx="10" fill="#111c33" stroke="#6366f1"/>
+  <text x="304" y="174" fill="#e0e7ff" font-family="Consolas, monospace" font-size="13">demo/</text>
+  <rect x="304" y="192" width="248" height="40" rx="7" fill="#1e293b" stroke="#475569"/>
+  <text x="318" y="217" fill="#e2e8f0" font-family="Consolas, monospace" font-size="12">app.exe</text>
+  <rect x="304" y="244" width="248" height="40" rx="7" fill="#1e293b" stroke="#475569"/>
+  <text x="318" y="269" fill="#e2e8f0" font-family="Consolas, monospace" font-size="12">config/app.json</text>
+  <rect x="304" y="296" width="248" height="58" rx="7" fill="#0b1220" stroke="#22d3ee"/>
+  <text x="318" y="319" fill="#a5f3fc" font-family="Consolas, monospace" font-size="11">.updator_manifest.json</text>
+  <text x="318" y="338" fill="#64748b" font-family="Segoe UI, sans-serif" font-size="10">最近一次发布固化的清单</text>
+  <rect x="610" y="146" width="292" height="228" rx="10" fill="#111c33" stroke="#334155" stroke-dasharray="5 5"/>
+  <text x="628" y="174" fill="#94a3b8" font-family="Consolas, monospace" font-size="13">demo2/</text>
+  <text x="628" y="202" fill="#64748b" font-family="Segoe UI, sans-serif" font-size="12">项目名即目录名</text>
+  <text x="628" y="224" fill="#64748b" font-family="Segoe UI, sans-serif" font-size="12">创建项目 / 首次上传时自动建目录</text>
+  <rect x="36" y="410" width="188" height="4" rx="2" fill="url(#accent)"/>
+</svg>

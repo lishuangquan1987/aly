@@ -66,6 +66,8 @@ CGO_ENABLED=0 go build -ldflags="-s -w" -o aly-server .
     └── demo2/
 ```
 
+<ScreenshotFrame src="/images/server-layout-zh.svg" alt="aly-server 目录布局：二进制、SQLite 主库和 data/ 项目目录位于同一层" caption="data/ 与 aly.db 固定在可执行文件旁边，每个项目一个目录" wide />
+
 关键点：
 
 - **`data/` 固定在可执行文件所在目录**，由 `os.Executable()` 推导，与启动时的工作目录无关。`systemd` 的 `WorkingDirectory` 不影响它。

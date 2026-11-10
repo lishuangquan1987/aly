@@ -9,6 +9,12 @@ description: Complete reference for the nine aly-client updater commands, with p
 
 The examples below use the Windows file name `aly-client.exe` throughout. On Linux the executable is named `aly-client`; subcommands and parameters are identical.
 
+> **Who this is for**: integration developers who have completed Quick Start and need parameters, return fields and failure boundaries. After this page you can orchestrate all nine commands without trial and error.
+
+::: tip Output language
+The CLI currently emits `errorMsg` and release-note strings in Chinese. The JSON examples preserve that real output; field names and the schema are the stable contract.
+:::
+
 ## Command Overview
 
 Use this table to locate a command, then jump to its section. Protocol details, exit codes and locking follow under Common Conventions.

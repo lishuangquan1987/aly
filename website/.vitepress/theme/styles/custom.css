@@ -279,6 +279,35 @@ body {
   text-transform: uppercase;
 }
 
+/* ── Docs breadcrumb ──────────────────────────────────────────────── */
+.aly-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 18px;
+  color: var(--vp-c-text-3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.aly-breadcrumb a {
+  color: var(--vp-c-text-3);
+  text-decoration: none;
+}
+
+.aly-breadcrumb a:hover {
+  color: var(--vp-c-brand-1);
+}
+
+.aly-breadcrumb .sep {
+  color: var(--vp-c-divider);
+}
+
+.aly-breadcrumb [aria-current='page'] {
+  color: var(--vp-c-text-2);
+}
+
 /* ── Documentation hub ─────────────────────────────────────────────── */
 .aly-doc-hub {
   max-width: 920px;

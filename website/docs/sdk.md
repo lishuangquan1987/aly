@@ -7,6 +7,8 @@ description: 在 net40 与 netstandard2.0 宿主中集成 AlyClient.CSharpSDK：
 
 `AlyClient.CSharpSDK` 把 `aly-client.exe` 的命令行协议封装成 .NET 类型：宿主不必拼接参数、解析 JSON、自己实现超时与进程收尸。它对外只有四个入口：
 
+> **适合谁**：要把更新能力接进 .NET 宿主（WinForms/WPF/控制台）的开发者。读完可选对集成方式、放对 `UpdateFolder`，并用最小宿主跑通第一次更新。
+
 | 类型 | 定位 |
 |---|---|
 | `AlyUpdateUIClient` | 把「检查 → 下载 → 应用 → 重启主程序」整条链交给独立窗口 `aly-client-ui.exe`，宿主只负责在合适时机拉起（**推荐**） |
@@ -140,7 +142,7 @@ bin\Debug\
 
 前置条件三项：宿主工程引用了 `AlyClient.CSharpSDK`（含 `Newtonsoft.Json`）、`UpdateFolder` 里已有 `aly-client.exe` 与 `aly-client-ui.exe`、`client.json` 已按实际目录改过。
 
-完整可编译的最小宿主（`net40` + C# 5）：
+完整可编译的最小宿主（`net40` + C# 5）。仓库里的 `client/aly-client-sdk/samples/MinimalHost` 就是同一份可编译工程（`net40` + `net8.0`），可直接作为起点：
 
 ```csharp
 using System;

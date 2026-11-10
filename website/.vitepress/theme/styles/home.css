@@ -263,10 +263,7 @@
   opacity: 1;
 }
 
-.aly-terminal.is-ready .aly-terminal-line {
-  animation: aly-line-in 0.42s ease both;
-  animation-delay: calc(var(--i) * 55ms);
-}
+
 
 .aly-terminal-prompt {
   color: #22d3ee;
@@ -706,16 +703,7 @@
 
 
 
-@keyframes aly-line-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+
 
 /* ── Responsive ───────────────────────────────────────────────────── */
 @media (max-width: 959px) {
@@ -865,9 +853,5 @@
 
   .aly-terminal {
     transform: none;
-  }
-
-  .aly-terminal.is-ready .aly-terminal-line {
-    animation: none;
   }
 }
