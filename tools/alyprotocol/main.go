@@ -16,17 +16,19 @@ const (
 	tsConfigRelPath     = "tools/alyprotocol/ts.json"
 	goConfigRelPath     = "tools/alyprotocol/go.json"
 	pythonConfigRelPath = "tools/alyprotocol/python.json"
+	javaConfigRelPath   = "tools/alyprotocol/java.json"
 	dtoRelPath          = "client/aly-client/model/dto.go"
 	fixturesRelPath     = "spec/fixtures/scenarios"
 	outputRelPath       = "client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/Models/Generated"
 	tsOutputRelPath     = "client/aly-client-sdk/AlyClient.TypeScriptSDK/src/models.ts"
 	goOutputRelPath     = "client/aly-client-sdk/AlyClient.GoSDK/models_gen.go"
 	pythonOutputRelPath = "client/aly-client-sdk/AlyClient.PythonSDK/alyclient/models_gen.py"
+	javaOutputRelPath   = "client/aly-client-sdk/AlyClient.JavaSDK/src/main/java/io/github/lishuangquan1987/alyclient/models"
 )
 
 func main() {
 	rootFlag := flag.String("root", "", "仓库根目录（默认从当前目录向上查找 "+schemaRelPath+"）")
-	writeFlag := flag.Bool("write", false, "生成并写入 C# 模型")
+	writeFlag := flag.Bool("write", false, "生成并写入各语言模型")
 	checkFlag := flag.Bool("check", false, "只校验生成物与 schema 一致，不写盘")
 	flag.Usage = usage
 	flag.Parse()
@@ -47,8 +49,8 @@ func main() {
 func usage() {
 	fmt.Fprintf(os.Stderr, `用法：go run . -check | -write [-root <仓库根>]
 
-  -check    校验 schema ↔ dto.go 漂移，并比对 Models/Generated 与生成器输出
-  -write    重新生成 C# 模型并清理过期的 .g.cs
+  -check    校验 schema ↔ dto.go 漂移，并比对各语言生成物与生成器输出
+  -write    重新生成各语言模型并清理过期文件
 `)
 }
 
@@ -158,10 +160,19 @@ func process(root string, checkOnly bool) error {
 	if err != nil {
 		return err
 	}
+	javaCfg, err := LoadJavaConfig(filepath.Join(root, javaConfigRelPath))
+	if err != nil {
+		return err
+	}
+	javaFiles, err := RenderJava(schema, javaCfg)
+	if err != nil {
+		return err
+	}
 	outDir := filepath.Join(root, outputRelPath)
 	tsPath := filepath.Join(root, tsOutputRelPath)
 	goPath := filepath.Join(root, goOutputRelPath)
 	pyPath := filepath.Join(root, pythonOutputRelPath)
+	javaPath := filepath.Join(root, javaOutputRelPath)
 	if checkOnly {
 		if err := checkGeneratedFile(tsPath, tsFile); err != nil {
 			return err
@@ -172,7 +183,10 @@ func process(root string, checkOnly bool) error {
 		if err := checkGeneratedFile(pyPath, pyFile); err != nil {
 			return err
 		}
-		return checkFiles(outDir, files)
+		if err := checkGeneratedDir(javaPath, javaFiles, ".java"); err != nil {
+			return err
+		}
+		return checkGeneratedDir(outDir, files, ".g.cs")
 	}
 	if err := writeGeneratedFile(tsPath, tsFile); err != nil {
 		return err
@@ -183,10 +197,13 @@ func process(root string, checkOnly bool) error {
 	if err := writeGeneratedFile(pyPath, pyFile); err != nil {
 		return err
 	}
-	return writeFiles(outDir, files)
+	if err := writeGeneratedDir(javaPath, javaFiles, ".java"); err != nil {
+		return err
+	}
+	return writeGeneratedDir(outDir, files, ".g.cs")
 }
 
-func checkFiles(outDir string, expected []GeneratedFile) error {
+func checkGeneratedDir(outDir string, expected []GeneratedFile, suffix string) error {
 	var missing, mismatch, unexpected []string
 
 	want := make(map[string][]byte, len(expected))
@@ -211,7 +228,7 @@ func checkFiles(outDir string, expected []GeneratedFile) error {
 		return fmt.Errorf("读取生成目录: %v", err)
 	}
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".g.cs") {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), suffix) {
 			continue
 		}
 		if _, ok := want[e.Name()]; !ok {
@@ -264,7 +281,7 @@ func writeGeneratedFile(path string, f GeneratedFile) error {
 	return nil
 }
 
-func writeFiles(outDir string, files []GeneratedFile) error {
+func writeGeneratedDir(outDir string, files []GeneratedFile, suffix string) error {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("创建生成目录: %v", err)
 	}
@@ -283,7 +300,7 @@ func writeFiles(outDir string, files []GeneratedFile) error {
 	}
 	removed := 0
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".g.cs") || want[e.Name()] {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), suffix) || want[e.Name()] {
 			continue
 		}
 		if err := os.Remove(filepath.Join(outDir, e.Name())); err != nil {
