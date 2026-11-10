@@ -78,3 +78,5 @@ website/.vitepress/dist/
 website/.vitepress/cache/
 website/scripts/.capture-tmp/
 __pycache__/
+client/aly-client-sdk/samples/**/bin/
+client/aly-client-sdk/samples/**/obj/

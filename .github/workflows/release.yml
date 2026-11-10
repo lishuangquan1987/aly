@@ -399,6 +399,10 @@ jobs:
             --output artifacts/sdk `
             -p:Version=$env:ALY_VERSION
 
+      - name: Build minimal sample
+        shell: pwsh
+        run: dotnet build client/aly-client-sdk/samples/MinimalHost/MinimalHost.csproj --configuration Release --nologo
+
       - name: Verify nupkg
         shell: pwsh
         run: Get-ChildItem artifacts/sdk | Select-Object Name, Length
