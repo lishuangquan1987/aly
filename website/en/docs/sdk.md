@@ -1,67 +1,441 @@
-# C# SDK
+---
+title: C# SDK Integration
+description: Integrating AlyClient.CSharpSDK into net40 and netstandard2.0 hosts, covering the two integration styles, UpdateFolder deployment layout, client.json relative paths, build-time targets properties, and common pitfalls.
+---
 
-`AlyClient.CSharpSDK` is a NuGet package for .NET hosts that wraps the full check → download → apply → self-update orchestration into a few classes; hosts only subscribe to events and await tasks. Targets **net40 + netstandard2.0**.
+# C# SDK Integration
 
-## Getting It
+`AlyClient.CSharpSDK` wraps the command-line protocol of `aly-client.exe` into .NET types: hosts no longer have to concatenate arguments, parse JSON, or implement timeouts and process reaping themselves. It exposes only four entry points:
 
-- NuGet package: build the `AlyClient.CSharpSDK` project to produce the nupkg, which embeds the build targets (see automatic deployment below).
-- Source location: `client/aly-client-sdk/AlyClient.CSharpSDK/`.
+| Type | Role |
+|---|---|
+| `AlyUpdateUIClient` | Hands the entire "check → download → apply → restart the host" chain to a standalone window, `aly-client-ui.exe`; the host only launches it at the right moment (**recommended**) |
+| `AlyUpdateClient` | The host provides its own background polling and update UI, and the SDK orchestrates the same chain as an event-driven state machine |
+| `AlyApi` | Static methods mapping one `aly-client` command each, for custom timing |
+| Models and enums | Strongly typed views of command output; see [API Reference](/en/docs/sdk/api) |
 
-## Two Styles
+The first two styles are mutually exclusive; do not enable both. Each path spawns its own `aly-client` processes, and although the updater enforces mutual exclusion with `.aly.lock` internally, the windows and states will interfere with each other.
 
-### High-Level Orchestration: AlyUpdateClient (recommended)
+## Target Frameworks and Dependencies
 
-`AlyUpdateClient` drives the update state machine on a background thread; the host subscribes to events:
+| Item | Value |
+|---|---|
+| Target frameworks | `netstandard2.0`, `net40` |
+| NuGet dependency | `Newtonsoft.Json` 13.0.4 |
+| Assembly | `AlyClient.CSharpSDK.dll` |
+| Runtime components | `aly-client.exe` (required); `aly-client-ui.exe` (required only by `AlyUpdateUIClient`) |
+| Updater form | 32-bit single-file exe, built with Go 1.10 / `GOARCH=386`, compatible with Windows XP |
 
-```csharp
-using AlyClient.CSharpSDK;
+The package ships both `build\` and `buildTransitive\` targets, so both direct and transitive references trigger the deployment logic (see [build-time automatic deployment](#build-time-auto-deployment-targets)).
 
-using var client = new AlyUpdateClient();  // locates ..\UpdateFolder\aly-client.exe by default
+### net40 and C# 5 Syntax Constraints
 
-client.StatusChanged += (status, msg) => Console.WriteLine($"{status}: {msg}");
-client.RequestDownloadUpdate += _ => Console.WriteLine("New version found, downloading");
-client.RequestApplyUpdate   += _ => Console.WriteLine("Download complete, applying");
+The SDK itself is built with a modern compiler, and a host using the VS2013 C# 5 compiler has no problem **referencing the compiled DLL**. If the host pulls in the SDK source as a project reference, however, it needs VS2017 or later, or the `dotnet` CLI — the SDK projects are SDK-style (`Microsoft.NET.Sdk`), and old MSBuild cannot open them.
 
-// MustCloseProcessNames / IdlePollIntervalSeconds etc. are configurable
-client.Cancel();   // cancel an in-flight flow
+All examples in this article stay within what C# 5 can compile:
+
+| Do not use (C# 6+) | Replacement in a net40 host |
+|---|---|
+| `using var client = ...` (C# 8) | `AlyUpdateClient client = new AlyUpdateClient();` followed by an explicit `try/finally { client.Dispose(); }` |
+| String interpolation `$"{status}"` (C# 6) | `string.Format("[{0}] {1}", status, message)` or `"[" + status + "] " + message` |
+| `?.` / `??` null-conditional operators (C# 6) | explicit `if (x != null)` checks |
+| `nameof(x)` (C# 6) | write the string literal directly |
+| Expression-bodied members `=> ...` (C# 6) | a normal method body |
+| Tuples, pattern matching, `out var` (C# 7) | declare the output parameter first, then pass it in |
+| `await` (the async support types only ship with .NET 4.5) | take `Task<T>.Result`, or reference the `Microsoft.Bcl.Async` package and then `await` |
+
+`var` has been available since C# 3 and is legal on net40; this article still writes explicit types uniformly, only so that the examples behave consistently under any old compiler and code-review tool.
+
+## Getting the SDK
+
+**The package is not currently published to NuGet.org**: `AlyClient.CSharpSDK` cannot be found in public feeds, and writing a `<PackageReference>` will fail to restore. The repository's `release.yml` contains a `publish-sdk-nuget` job that injects the version number and pushes to nuget.org on a formal release; whether it has actually been published must be verified by an actual search on nuget.org — do not assume.
+
+Use one of the following two approaches.
+
+### Option A: Project Reference (Least Effort When the Source Is in the Same Repository)
+
+```xml
+<ItemGroup>
+  <ProjectReference Include="..\client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\AlyClient.CSharpSDK.csproj" />
+</ItemGroup>
 ```
 
-Features:
+Across repositories, copy the entire SDK directory into the solution, or switch to Option B.
 
-- **Status machine**: the `AlyClientStatus` enum reflects the current stage; `IsError` flags failure states.
-- **Self-update built in**: on startup it runs `CheckSelfUpdateAsync` first and delegates to the `self_update` command when needed (the updater itself takes the lock — no concurrent writes).
-- **Download guardian**: progress callback `Action<string, double>`, with a stall timeout (default 1800 s) that detects a hung download and can recover.
-- **Rollback**: `ListRollbackVersionsAsync` / `RollbackAsync` (default timeout 600 s).
+### Option B: Pack into a Local nupkg
 
-### Low-Level Calls: AlyApi Static Methods
+```bash
+cd client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK
+dotnet pack -c Release -o nupkg -p:Version=1.0.0
+```
 
-Hosts that want full control can call static methods directly — one per aly-client command:
+Put the resulting `AlyClient.CSharpSDK.1.0.0.nupkg` into a local feed (for example `<add key="local" value="D:\nuget-local" />` in `NuGet.config`), after which you can use `<PackageReference Include="AlyClient.CSharpSDK" Version="1.0.0" />`.
 
-| Method | Command | Notes |
+::: warning A local pack keeps the version placeholder
+The default value of `AlyClientVersion` in `AlyClient.CSharpSDK.targets` is the literal `ALY_CLIENT_VERSION_PLACEHOLDER`. The release pipeline replaces this string with the real version before packing; a **local `dotnet pack` does not**. The download URL the host builds is then `.../releases/download/vALY_CLIENT_VERSION_PLACEHOLDER/aly-client.exe`, the download inevitably fails (warning only, the build is not interrupted), and no `aly-client.exe` appears in `UpdateFolder`.
+
+Two remedies:
+
+- Override the property when building the host: `dotnet build -p:AlyClientVersion=1.0.0`, or put `<AlyClientVersion>1.0.0</AlyClientVersion>` in the host csproj.
+- Or replace the placeholder in the `.targets` file manually before packing, matching the release pipeline.
+:::
+
+## Deployment Layout: UpdateFolder
+
+Aly's client directory convention is a three-layer structure of "package directory + application directory + update directory":
+
+```text
+PackageFolder/
+├── ApplicationFolder/            # the active application (replaced wholesale on apply)
+│   ├── YourApp.exe
+│   └── .updator/shared.json      # server_url, project_name, ignore rules
+├── ApplicationFolder_1.0.0/      # historical version snapshot (for rollback)
+└── UpdateFolder/
+    ├── aly-client.exe            # updater (required)
+    ├── aly-client-ui.exe         # GUI front-end (required by AlyUpdateUIClient)
+    ├── client.json               # host relative path + processes to close
+    └── version.json              # version state machine (maintained automatically, do not edit)
+```
+
+The default paths of `AlyUpdateClient` and `AlyUpdateUIClient` are both one level above `AppDomain.CurrentDomain.BaseDirectory`: `..\UpdateFolder\aly-client.exe` and `..\UpdateFolder\aly-client-ui.exe`. The host process output directory must therefore live where `..\UpdateFolder` can find the updater: production usually publishes straight into `ApplicationFolder/`, while development uses `bin\Debug\net40\`.
+
+The actual shape of the development directory (`OutDir = bin\Debug\net40\`):
+
+```text
+bin\Debug\
+├── net40\YourApp.exe             # host output
+└── UpdateFolder\                 # where the targets write ($(OutDir)..\UpdateFolder\)
+    ├── aly-client.exe
+    ├── aly-client-ui.exe
+    └── client.json
+```
+
+In this case the host path in `client.json` should be written as `../net40/YourApp.exe`; if you have already switched to the `PackageFolder/ApplicationFolder` layout, write `../ApplicationFolder/YourApp.exe`.
+
+### Relative Paths in client.json
+
+`main_exe_relative_path` is **relative to UpdateFolder** (the updater's directory, `config.ExeDir()`), not to the process working directory, and not to the package root:
+
+```json
+{
+  "main_exe_relative_path": "../ApplicationFolder/YourApp.exe",
+  "must_close_process_name": ["YourApp"]
+}
+```
+
+| Desired target | Correct value |
+|---|---|
+| Host under `ApplicationFolder`, a sibling of `UpdateFolder` | `../ApplicationFolder/YourApp.exe` |
+| Host inside the development output directory (`bin\Debug\net40`) | `../net40/YourApp.exe` |
+| Another directory under the package root | `../OtherFolder/App.exe` |
+
+- Writing `ApplicationFolder/YourApp.exe` (missing the `../`) resolves to `UpdateFolder/ApplicationFolder/YourApp.exe`; after `apply_update` the host fails to restart, so the update "completes" but the application never comes up.
+- On Linux, backslashes are rewritten to `/` by `config.normalizeMainExeRelativePath`, so the same package works across platforms; writing `/` uniformly is safer.
+- `must_close_process_name` is an array of process names without `.exe`; `apply_update` sends `WM_CLOSE` first and force-kills after the timeout.
+- These two fields are read by `aly-client` itself; the SDK's `MustCloseProcessNames` property only additionally passes the value to `apply_update`/`rollback` through `--must-close-process-name`.
+
+For the full semantics of these fields see [Configuration Reference](/en/docs/client/config); for updater commands see [Command Reference](/en/docs/commands).
+
+## Quick Start (Minimal Host)
+
+Three prerequisites: the host project references `AlyClient.CSharpSDK` (including `Newtonsoft.Json`), `UpdateFolder` already contains `aly-client.exe` and `aly-client-ui.exe`, and `client.json` has been adjusted for the actual directory layout.
+
+A complete, compilable minimal host (`net40` + C# 5):
+
+```csharp
+using System;
+using AlyClient.CSharpSDK;
+using AlyClient.CSharpSDK.Models;
+
+namespace MyApp
+{
+    internal static class Program
+    {
+        private static void Main()
+        {
+            // Locates ..\UpdateFolder\aly-client-ui.exe by default
+            AlyUpdateUIClient ui = new AlyUpdateUIClient();
+            ui.Language = "zh-CN";
+
+            AlyResponse result = ui.LaunchAuto();
+            if (!result.IsSuccess)
+            {
+                Console.WriteLine("Update component unavailable: " + result.ErrorMsg);
+            }
+
+            // Host initialization and message loop
+            Console.WriteLine("Host started; press Enter to exit");
+            Console.ReadLine();
+
+            ui.Dispose();
+        }
+    }
+}
+```
+
+This code only uses the constructor, `LaunchAuto()` and `Dispose()`; `ui.Dispose()` does not close an update window that is already open. To control the update UI and its timing yourself, use `AlyUpdateClient` in the next section.
+
+## Integration Style 1: AlyUpdateUIClient (Recommended)
+
+The host draws no update UI, does no polling and handles no restart: everything is delegated to `aly-client-ui.exe`.
+
+```csharp
+using System;
+using AlyClient.CSharpSDK;
+using AlyClient.CSharpSDK.Models;
+
+class Program
+{
+    static void Main()
+    {
+        AlyUpdateUIClient ui = new AlyUpdateUIClient();   // defaults to ..\UpdateFolder\aly-client-ui.exe
+        ui.Language = "zh-CN";                            // zh-CN / en-US
+        ui.Exited += OnUiExited;
+
+        AlyResponse launched = ui.LaunchAuto();           // silent check at startup; prompts only when an update exists
+        if (!launched.IsSuccess)
+        {
+            Console.WriteLine("Failed to launch the update UI: " + launched.ErrorMsg);
+        }
+
+        // The host's own initialization and message loop
+        Console.ReadLine();
+
+        ui.Dispose();                                     // releases handles only; does not close the window
+    }
+
+    static void OnUiExited(int exitCode)
+    {
+        Console.WriteLine("aly-client-ui exited, exit code = " + exitCode);
+    }
+}
+```
+
+Choose the launch mode by scenario:
+
+| Mode | Convenience method | Behavior |
 |---|---|---|
-| `CheckUpdateAsync(alyExePath)` | `check_update` | Returns `CheckUpdateData` (has_update / force_update / new_version) |
-| `DownloadUpdateAsync(path, progress)` | `download_update` | Progress callback + stall timeout |
-| `ApplyUpdateAsync(...)` | `apply_update` | The main app is restarted after apply |
-| `ListRollbackVersionsAsync(path)` | `list_rollback_versions` | |
-| `RollbackAsync(...)` | `rollback` | |
-| `CheckSelfUpdateAsync(path)` | `check_self_update` | Detects an outdated updater copy |
-| `SelfUpdateAsync(path)` | `self_update` | Performs the self-update replacement |
+| `AlyUpdateUiMode.Auto` | `LaunchAuto()` | Window hidden by default, shown only when an update is confirmed; exits silently when there is no update or the server is unreachable. **Call at application startup** |
+| `AlyUpdateUiMode.Check` | `LaunchCheck()` | The user explicitly clicks "Check for updates": shows "Checking" first; on no update or error it still notifies and closes automatically, so that clicking it never appears to do nothing |
+| `AlyUpdateUiMode.Update` | `LaunchUpdate()` | Goes straight to download + apply without asking again |
+| `AlyUpdateUiMode.Rollback` | `LaunchRollback()` | Shows the list of rollback-able versions for the user to choose in the window |
+| `AlyUpdateUiMode.Silent` | `LaunchSilent()` | Silent check with the same semantics as `Auto`: no update/error stays unobtrusive, and the window appears only once an update is confirmed |
 
-## NuGet Targets Auto-Deployment
+You can also call `Launch(AlyUpdateUiMode.Check)` directly, which is equivalent to `LaunchCheck()`.
 
-The package's `build/AlyClient.CSharpSDK.targets` deploys the updater executables into `AlyUpdateFolder` **while building the host project**; all properties are overridable:
+Key points:
+
+- `Launch` is non-blocking and only spawns the process; downloading, applying, closing and restarting the host all happen inside the UI.
+- **Single instance**: if the process held by this object is still alive, a further `Launch` returns `IsSuccess=true` directly without spawning a second process. If the window was not launched by this object (for example the user opened it from the Start menu, or another code path launched it), `Launch` still starts a new process; that process forwards the "manual check request" to the existing instance through a named event and then exits with code 0 — this is the normal path, and the host does not need to distinguish "new window" from "existing instance taking over".
+- `aly-client-ui.exe` must exist: when missing, `Launch` returns `IsSuccess=false` and `ErrorMsg` is `aly-client-ui.exe not found: <path>`.
+- After `apply_update` the UI closes and restarts the host according to `client.json`; the host does not restart itself.
+- `Dispose` only releases the `Process` handle and unsubscribes events; it **does not close** an already running UI window.
+- When no GUI is needed, set `AlyIncludeClientUi` to `false` to skip deployment and switch to `AlyUpdateClient` below.
+
+## Integration Style 2: AlyUpdateClient Event Loop
+
+Background work starts as soon as the constructor returns: it first self-updates the updater, then enters the "check → download → apply" polling loop. The host observes stage changes through events.
+
+```csharp
+using System;
+using System.Diagnostics;
+using System.Threading;
+using AlyClient.CSharpSDK;
+
+class Program
+{
+    static AlyUpdateClient _client;
+    static ManualResetEvent _userConfirmed = new ManualResetEvent(false);
+
+    static void Main()
+    {
+        _client = new AlyUpdateClient();                       // defaults to ..\UpdateFolder\aly-client.exe
+        _client.MustCloseProcessNames = Process.GetCurrentProcess().ProcessName;
+        _client.IdlePollIntervalSeconds = 300;
+
+        _client.StatusChanged += OnStatusChanged;
+        _client.ErrorStatusChanged += OnErrorChanged;
+        _client.RequestDownloadUpdate += OnRequestDownload;
+        _client.RequestApplyUpdate += OnRequestApply;
+
+        Console.ReadLine();
+
+        _client.Cancel();
+        _client.Dispose();
+    }
+
+    static void OnStatusChanged(AlyClientStatus status, string message)
+    {
+        // Events fire on a background thread; cross-thread UI updates need marshaling
+        Console.WriteLine(string.Format("[{0}] {1}", status, message));
+    }
+
+    static void OnErrorChanged(string message)
+    {
+        if (message == null)
+        {
+            Console.WriteLine("Error cleared");
+            return;
+        }
+        Console.WriteLine("[error] " + message);
+    }
+
+    static void OnRequestDownload(string newVersion)
+    {
+        // The callback runs synchronously on the background loop thread: returning means "user confirmed", and the SDK starts downloading immediately
+        Console.WriteLine("New version " + newVersion + " found; waiting for the user to confirm the download");
+        _userConfirmed.WaitOne();
+        _userConfirmed.Reset();
+    }
+
+    static void OnRequestApply(string newVersion)
+    {
+        Console.WriteLine("New version " + newVersion + " downloaded; waiting for the user to confirm apply");
+        _userConfirmed.WaitOne();
+        _userConfirmed.Reset();
+    }
+
+    static void Confirm()
+    {
+        _userConfirmed.Set();   // real code calls this from the "OK" button on the UI thread
+    }
+}
+```
+
+Event and state correspondence:
+
+```text
+CheckUpdate ──has_update=false──▶ idle polling (300s default + jitter)
+     │
+     └─has_update=true──▶ DiscoveredUpdate ──▶ (non-force) RequestDownloadUpdate
+                                   │
+                                   ▼
+                          DownloadingUpdate (with file name and percentage)
+                                   │
+                                   ▼
+                          DownloadedUpdate ──▶ (non-force) RequestApplyUpdate
+                                   │
+                                   ▼
+                              ApplyUpdate ──▶ separate apply_update process; host is restarted
+```
+
+Key semantics:
+
+- **Events have no "reject" semantics**: returning from the callback counts as confirmation, and the SDK proceeds. The only way to abort the whole flow is `Cancel()`. If you want the user to be able to "cancel the download", the correct approach is for the host to decide not to show the update entry point, not to return a fake confirmation from the callback.
+- **Callbacks block the background thread synchronously**: waiting forever in `RequestDownloadUpdate` prevents the download from starting. Wait on a `ManualResetEvent`/semaphore and call `Set` from the UI thread.
+- With `force_update = true` the two confirmation events **do not fire**; the SDK downloads and applies directly.
+- The same error repeating does not raise `ErrorStatusChanged` again; on recovery it fires once with `message = null`.
+- Exceptions thrown by event handlers are caught by the SDK and written to the log; they do not interrupt the background loop — so do not expect exceptions to abort the flow.
+- Background polling cadence: a failed `check_update` retries after a fixed 5 seconds; with no update it follows `IdlePollIntervalSeconds` (default 300 seconds + 0–60 seconds random jitter, floor 60 seconds); after launching `apply_update` it waits 30 seconds before continuing (to avoid spawning the process repeatedly).
+- Self-update runs before the loop starts, and failure information goes to the log; it delegates the replacement to the `self_update` command and falls back to a direct replacement when the target is missing or the command is unavailable.
+- The log file lives in the host base directory: `aly-client-sdk.log`. The `self-update: ...` and `StatusChanged handler threw: ...` lines you see come from there.
+
+For the exact semantics of `Status`, `IsRunning`, `IsError` and other members see [API Reference](/en/docs/sdk/api#alyupdateclient).
+
+## Calling AlyApi Directly (Custom Timing)
+
+Each method of `AlyApi` maps to one `aly-client` command, and every return value is an `AlyResponse` / `AlyResponse<T>`:
+
+| Method | Command | Return model |
+|---|---|---|
+| `CheckSelfUpdateAsync(exePath)` | `check_self_update` | `CheckSelfUpdateData` |
+| `SelfUpdateAsync(exePath)` | `self_update` | `SelfUpdateData` |
+| `CheckUpdateAsync(exePath)` | `check_update` | `CheckUpdateData` |
+| `DownloadUpdateAsync(exePath, progress)` | `download_update` | no data |
+| `ApplyUpdateAsync(exePath, names, timeout)` | `apply_update` | no data |
+| `ListRollbackVersionsAsync(exePath)` | `list_rollback_versions` | `ListRollbackData` |
+| `RollbackAsync(exePath, version, names, timeout)` | `rollback` | `RollbackData` |
+
+```csharp
+using System;
+using AlyClient.CSharpSDK;
+using AlyClient.CSharpSDK.Models;
+
+class Direct
+{
+    static void Run(string exePath)
+    {
+        AlyResponse<CheckUpdateData> check = AlyApi.CheckUpdateAsync(exePath).Result;
+        if (!check.IsSuccess)
+        {
+            Console.WriteLine("check failed: " + check.ErrorMsg);
+            return;
+        }
+
+        if (check.Data.HasUpdate && check.Data.NeedDownloadUpdate)
+        {
+            Action<string, double> onProgress = delegate(string file, double ratio)
+            {
+                Console.WriteLine(file + " " + ((int)(ratio * 100)) + "%");
+            };
+
+            AlyResponse download = AlyApi.DownloadUpdateAsync(exePath, onProgress).Result;
+            if (!download.IsSuccess)
+            {
+                Console.WriteLine("download failed: " + download.ErrorMsg);
+                return;
+            }
+        }
+
+        // Runs in a separate process and returns immediately; the current process is closed afterwards
+        AlyResponse apply = AlyApi.ApplyUpdateAsync(exePath);
+        Console.WriteLine("apply spawn result: " + apply.IsSuccess);
+    }
+}
+```
+
+For timeouts and failure modes (30 seconds by default, 600 seconds for rollback, 1800 seconds for a stalled download) see [API Reference](/en/docs/sdk/api#timeouts-and-failure-modes).
+
+## Build-Time Auto-Deployment Targets
+
+`AlyClient.CSharpSDK.targets` in the SDK package runs `AlyDeployToUpdateFolder` (`BeforeTargets="Build"`) during the host build, downloading the updater and GUI into `UpdateFolder`. Every property is overridable:
 
 | MSBuild property | Default | Description |
 |---|---|---|
-| `AlyClientVersion` | — | Version label of the updater to download |
-| `AlyClientDownloadUrl` | GitHub Release direct link | Download URL for the `aly-client` executable |
-| `AlyClientUiDownloadUrl` | GitHub Release direct link | Download URL for the GUI executable |
-| `AlyUpdateFolder` | `$(OutDir)..\UpdateFolder\` | Destination directory |
-| `AlyIncludeClientUi` | `true` | Whether to deploy the GUI as well |
-| `AlyRid` | `amd64` | Linux architecture (override with `arm64`) |
+| `AlyUpdateFolder` | Windows: `$(OutDir)..\UpdateFolder\`; other platforms: `$(OutDir)../UpdateFolder/` | Destination directory |
+| `AlyClientVersion` | `ALY_CLIENT_VERSION_PLACEHOLDER` | Version number spliced into the download URL (`v$(AlyClientVersion)`); it is still the placeholder after a local pack |
+| `AlyClientDownloadUrl` | `https://github.com/lishuangquan1987/aly/releases/download/v$(AlyClientVersion)/aly-client.exe` | Updater download URL (the Linux asset is named `aly-client-linux-$(AlyRid)`) |
+| `AlyClientUiDownloadUrl` | `aly-client-ui.exe` under the same path (Linux: `aly-client-ui-linux-$(AlyRid)`) | GUI download URL |
+| `AlyIncludeClientUi` | `true` | Whether to download the GUI; set to `false` to skip |
+| `AlyRid` | `amd64` | Linux only: `amd64` / `arm64` |
 
-Platform behavior:
+Behavior:
 
-- **Windows**: PowerShell downloads `aly-client.exe` / `aly-client-ui.exe`.
-- **Linux**: `curl || wget` downloads `aly-client-linux-<rid>` / `aly-client-ui-linux-<rid>`, renames them to `aly-client` / `aly-client-ui` and `chmod 0755` — matching the client's `config.UpdaterFileName()` platform convention.
-- Download failures warn without breaking the build; identical existing files are skipped (idempotent).
+- If the target file already exists the download is skipped (idempotent); a hand-edited `client.json` is not overwritten, nor is an already deployed updater.
+- Download failures only warn (`ContinueOnError`) and **never fail the host build**. In other words, "build succeeded" does not mean "the updater is in place"; verify for yourself that `UpdateFolder/aly-client.exe` exists.
+- When `client.json` is missing, a default template is written (`main_exe_relative_path` is `../ApplicationFolder/YourApp.exe`, `must_close_process_name` is `["YourApp"]`), and it must be adjusted to the actual directory structure.
+- Windows downloads with PowerShell (TLS 1.2 set explicitly); Linux uses `curl` (falling back to `wget`), renames the files to `aly-client` / `aly-client-ui` and runs `chmod 0755` — consistent with the platform naming convention of `config.UpdaterFileName()`.
+- Platform detection uses `$(OS)`, which is compatible with VS2013/2015 builds on net40.
+
+Linux cross-deployment example:
+
+```bash
+dotnet build -p:AlyRid=arm64 -p:AlyClientVersion=1.0.0
+```
+
+## Common Pitfalls
+
+| Symptom | Cause and fix |
+|---|---|
+| The build succeeds but there is no `aly-client.exe` in `UpdateFolder` | Download failures only warn. Most likely `AlyClientVersion` is still the placeholder, or GitHub Releases is unreachable; retry after overriding it with `-p:AlyClientVersion=<version>` |
+| `check_update` keeps returning `has_update=false` although the server clearly has a new version | When the host machine is offline the client returns `has_update=false` (it reports nothing it cannot verify with the server) and resumes automatically once online; first confirm that `server_url` in `.updator/shared.json` is reachable |
+| The host does not start after an update | `main_exe_relative_path` in `client.json` is missing the leading `../`, or the exe name does not match the actual file. Check against the table under "Relative Paths in client.json" above |
+| The application is killed outright with no chance to save settings | `MustCloseProcessNames` is not set. The updater force-kills when it detects the directory is in use during the replacement phase; set it to `Process.GetCurrentProcess().ProcessName` (without `.exe`) |
+| A non-force update proceeds automatically without waiting for user confirmation | `RequestDownloadUpdate` / `RequestApplyUpdate` are not subscribed: with no handler the SDK treats the update as confirmed and downloads and applies directly. If you need to ask the user, you must subscribe |
+| A non-force flow hangs at "new version found" | The confirmation callback is waiting on an event that is never `Set`, or the callback performs long blocking work. Callbacks run on the background loop thread, so any wait needs the other side to signal from another thread |
+| `await` does not compile on net40 | .NET 4.0 has no async support types. Use `.Result`, or reference `Microsoft.Bcl.Async` |
+| The UI freezes after calling `.Result` on the UI thread | `check_update` waits up to 30 seconds by default and `download_update` can take longer. Call them from a background thread |
+| The host is still shutting down after `apply`, then the process suddenly disappears | `ApplyUpdateAsync` returns immediately after spawning a separate process, and `apply_update` closes the current process. Do not do cleanup after it; move cleanup into an exit hook |
+| The updater cannot be found on Linux | The default path is the Windows-style `..\UpdateFolder\aly-client.exe`; on Linux there is no `.exe` and backslash is not a separator. Pass the path explicitly: `new AlyUpdateClient("/opt/app/UpdateFolder/aly-client")` |
+| `LaunchAuto` fails saying `aly-client-ui.exe` was not found | The GUI was not deployed (`AlyIncludeClientUi=false`, or the download failed). Deploy it, or switch to `AlyUpdateClient` |
+| Two update windows appear at once | `AlyUpdateUIClient` and `AlyUpdateClient` are both enabled in one host. Keep only one |
+| Closing the host hangs for a few seconds | `Dispose` waits for the background loop to exit, up to 5 seconds; the polling sleep itself is interruptible and never sleeps a full idle period |
+
+## Related Documentation
+
+- [C# SDK API Reference](/en/docs/sdk/api)
+- [aly-client Command Reference](/en/docs/commands)
+- [Client Configuration Reference](/en/docs/client/config)
+- [Download and Installation](/en/docs/download)
+- [Self-Update Design](/en/docs/self-update)
+- [Core Concepts](/en/docs/concepts)

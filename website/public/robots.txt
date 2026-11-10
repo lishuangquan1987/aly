@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://lishuangquan1987.github.io/aly/sitemap.xml

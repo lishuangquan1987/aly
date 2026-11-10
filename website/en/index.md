@@ -1,38 +1,40 @@
 ---
 layout: home
+description: Lightweight client auto-update system with crash-safe atomic replacement, Windows XP through Linux, one JSON protocol and 135 E2E cases.
 
 hero:
   name: Aly
-  text: Lightweight Client Auto-Update System
-  tagline: Ship new versions with a single command; end-user machines upgrade with crash-safe atomic replacement — covering Windows XP all the way to Linux / macOS / FreeBSD.
+  text: Lightweight client auto-update system
+  tagline: Ship a release with one command; end-user machines upgrade with pure directory renames — from Windows XP to Linux, without ever leaving a half-new, half-old folder.
   actions:
     - theme: brand
-      text: Quick Start
+      text: Start in 5 minutes
       link: /en/docs/getting-started
     - theme: alt
-      text: Introduction
-      link: /en/intro
+      text: Module reference
+      link: /en/docs/
     - theme: alt
-      text: GitHub
-      link: https://github.com/lishuangquan1987/aly
+      text: Latest release
+      link: https://github.com/lishuangquan1987/aly/releases/latest
+      target: _blank
 
 features:
   - icon: 🛡️
-    title: Crash-Safe Atomic Replacement
-    details: Applying an update is pure directory renames. A power cut or crash at any moment never leaves a half-new half-old directory; on restart the version.json state machine recovers or rolls back automatically.
+    title: Crash-safe atomic replacement
+    details: Applying an update is three directory renames. A power cut or crash never leaves a half-new folder; the version.json state machine recovers or rolls back on the next start.
   - icon: ⚡
-    title: Seconds-Long Downtime Window
-    details: Unchanged files are materialized into the new version directory during download, so apply only performs three renames — the "app is down" window drops from minutes to seconds.
+    title: Seconds-long downtime
+    details: Unchanged files are materialized into the new version directory during download, so apply only performs three renames instead of a full copy.
   - icon: 🧩
-    title: One Protocol, Any Host
-    details: Every updater command outputs the same JSON protocol. Hosts can be a C# client (NuGet SDK), an optional GUI, or anything that can spawn a subprocess.
+    title: One JSON protocol
+    details: Every updater command emits the same {isSuccess, errorMsg, data} envelope. Hosts can use the C# SDK, the optional GUI, or any language that can spawn a process.
   - icon: 🕰️
-    title: Windows XP Compatible
-    details: The updater and Windows GUI are pinned to Go 1.10.8 + 386, with CI validating PE headers and manifests — aging industrial PCs and POS terminals stay securely updatable.
+    title: Native Windows XP support
+    details: The updater and Windows GUI are pinned to Go 1.10.8 + 386. CI checks the PE header and ComCtl32 manifest, keeping aging industrial PCs safely updatable.
   - icon: 🌍
-    title: Truly Cross-Platform
-    details: The same update logic compiles to windows 386/amd64, linux amd64/arm64, darwin amd64/arm64 and freebsd amd64; the Linux GUI renders natively in pure Go.
+    title: Prebuilt for Windows / Linux
+    details: The client ships for 32-bit Windows and Linux amd64/arm64; the server and publisher also ship for macOS. Other platforms build from the same source.
   - icon: 🧪
-    title: 135 End-to-End Cases
-    details: A Go-driven E2E framework covers normal flows, crash injection, resumable downloads, rollback and self-update — every case self-contained and independently reproducible.
+    title: 135 end-to-end cases
+    details: A Go-driven E2E harness covers normal flows, crash injection, resumable downloads, rollback, locking and self-update. Each case carries its own preconditions.
 ---

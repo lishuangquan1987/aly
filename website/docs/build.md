@@ -1,8 +1,11 @@
+---
+title: 构建与跨平台
+description: 从源码构建服务端、发布工具、XP 兼容更新器与 Linux GUI 的工具链与命令。
+---
+
 # 构建与跨平台
 
-Aly 客户端采用**双轨构建**：XP 轨锁定旧工具链保兼容，现代轨用最新 Go 保覆盖。两条轨共享同一份业务代码，差异只在 UI 壳与构建标签。
-
-## aly-server 与 aly-publish（现代轨）
+## 服务端与发布 CLI（现代 Go）
 
 ```bash
 # 服务端
@@ -11,50 +14,46 @@ cd server && go build -ldflags="-s -w" -o aly-server.exe .
 # 发布 CLI
 cd publish/publish-cli && go build -ldflags="-s -w" -o aly-publish.exe .
 
-# 交叉编译（静态、无 CGO）
+# 静态交叉编译
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o aly-server-linux-amd64 .
 ```
 
-发布 GUI（Avalonia）：
+发布 GUI（.NET 8 / Avalonia 12.1）：
 
 ```bash
-cd publish/publish-gui && dotnet build
+cd publish/publish-gui
+dotnet build src/AlyPublish/AlyPublish.csproj
+dotnet test tests/AlyPublish.Tests/AlyPublish.Tests.csproj
 ```
 
-## XP 轨：aly-client + Windows GUI
+## XP 轨：更新器 + Windows GUI
 
-需要 **Go 1.10.8**（XP 兼容的上限版本，不使用 Go Modules），源码必须位于 GOPATH 下：
+需要 **Go 1.10.8**（XP 兼容上限，不使用 Go Modules），源码位于 GOPATH 下：
 
 ```bat
-:: 拷贝源码到 GOPATH
 xcopy /e /i /y client\aly-client %GOPATH%\src\aly\client\aly-client
 xcopy /e /i /y client\aly-client-ui\aly-client-winui %GOPATH%\src\aly\client\aly-client-ui\aly-client-winui
 
-:: 构建控制台更新器（32 位 XP 兼容）
 set GOOS=windows
 set GOARCH=386
 set GO111MODULE=off
 set CGO_ENABLED=0
 go build -ldflags="-s -w" -o aly-client.exe aly/client/aly-client
-
-:: 构建可选 Windows GUI（无控制台窗口）
 go build -ldflags="-s -w -H=windowsgui" -o aly-client-ui.exe aly/client/aly-client-ui/aly-client-winui
 ```
 
 ::: warning rsrc.syso 不要删
-`aly-client-winui` 基于 [lxn/walk](https://github.com/lxn/walk)，需要 ComCtl32 v6 manifest。仓库已包含 `aly-client-winui/rsrc.syso`，`go build` 会自动链接；删除它会导致 UI 启动即报 `TTM_ADDTOOL failed`。
+`aly-client-winui` 基于 [lxn/walk](https://github.com/lxn/walk)，需要 ComCtl32 v6 manifest。仓库已包含 `aly-client-winui/rsrc.syso`，删除后 UI 启动会报 `TTM_ADDTOOL failed`。
 :::
 
-### CI 的 XP 兼容校验
+CI 对 XP 轨产物校验：
 
-CI 在每次发布前对 XP 轨产物做自动校验：
+- PE 头 `machine = 0x014C` 且 `subsystem ≤ 5.0`
+- GUI 包含 `Microsoft.Windows.Common-Controls` manifest
 
-- PE 头 `machine = 0x014C`（i386）且 `subsystem ≤ 5.0`（XP 可加载）
-- GUI 产物包含 `Microsoft.Windows.Common-Controls` manifest
+## 现代轨：跨平台更新器
 
-## 现代轨：跨平台构建
-
-控制台更新器与现代 Go（1.25+）构建，以下目标全部实测可编译：
+Go 1.25+ 可编译以下目标（预构建只发布 Windows/Linux）：
 
 | 目标 | 命令 |
 |---|---|
@@ -63,15 +62,11 @@ CI 在每次发布前对 XP 轨产物做自动校验：
 | windows amd64 / 386 | `GOOS=windows GOARCH=amd64 go build -o aly-client-windows-amd64.exe .` |
 | freebsd amd64 | `GOOS=freebsd GOARCH=amd64 go build -o aly-client-freebsd-amd64 .` |
 
-平台差异已内置处理：
+平台差异已内置：可执行文件名（Windows 带 `.exe`）、进程枚举/关闭、运行中 exe 的替换方式。
 
-- 可执行文件命名：Windows `aly-client.exe` / 其余平台 `aly-client`（`config.UpdaterFileName()`）
-- 进程枚举与关闭：Windows Toolhelp API / Linux `/proc` + 信号
-- 删除运行中的 exe：Windows 改名舞步 / Unix 直接 `os.Rename`
+## Linux GUI
 
-## Linux GUI（aly-client-linuxui）
-
-基于 MyGo 0.8.3（纯 Go、无 cgo 的原生 UI 库）+ Go 1.27.3，运行时仅依赖桌面发行版预装的 GTK3，不需要 WebKitGTK 或 Bun：
+基于 [MyGo](https://github.com/egoist/mygo) 0.8.3（纯 Go、无 cgo）+ Go 1.27.3，运行时仅依赖 GTK3：
 
 ```sh
 cd client/aly-client-ui
@@ -79,14 +74,12 @@ cd client/aly-client-ui
 ./deploy-client-linux.sh <UpdateFolder> <MainFolder> [arch]
 ```
 
-交叉编译直接生效（`GOARCH=arm64`），产物是单个 ELF 文件。
-
-## 一键部署脚本
+## 一键部署
 
 ```bash
-# Windows：构建两件套并按 config.json 清单回拷到各目标
+# Windows：构建两件套并按 config.json 回拷
 go run deploy/deploy-client.go
 
-# Linux 部署
+# Linux
 ./client/aly-client-ui/deploy-client-linux.sh
 ```

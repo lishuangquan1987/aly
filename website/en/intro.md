@@ -1,39 +1,56 @@
+---
+title: Introduction
+description: What Aly is, what it is made of, which scenarios it fits, and where platform coverage ends.
+---
+
 # Introduction
 
-Aly is a **self-contained auto-update system for desktop applications**: the publisher pushes a new version with one command, and the updater on user machines completes the upgrade with a crash-safe atomic replacement. No third-party update framework is involved — server, publish tools, updater, GUI and SDK all live in this one repository.
+Aly is a **self-contained automatic update system for desktop applications**: publishers push new versions to the server with the publishing tools, and an updater on end-user machines completes the upgrade with a crash-safe atomic replacement. The server, publishing tools, updater, GUI and SDK all live in the same repository and depend on no third-party update framework.
 
-## What Problems It Solves
+## What It Solves
 
-Four common pain points of shipping desktop apps, and how Aly answers each:
-
-| Pain point | Aly's answer |
+| Problem | How Aly handles it |
 |---|---|
-| Old machines can't run update agents | The updater is pinned to the Go 1.10.8 + 386 toolchain and **runs on Windows XP**; CI validates the artifact PE headers automatically |
-| A crash mid-update bricks the install | Pure directory renames + a version state machine; on startup an `applying` state is detected and recovered |
-| Large updates keep the app down too long | Unchanged files are materialized at download time; apply performs only three renames — downtime is seconds |
-| How does the updater update itself | The `self_update` command + GUI/SDK delegation + a failure-count journal break the loop, fully solved in-repo |
+| Old machines cannot be updated | The updater and the Windows GUI are pinned to Go 1.10.8 + 386, so **they run directly on Windows XP**; CI validates the PE header and the ComCtl32 manifest |
+| A power cut or crash mid-update bricks the install | Pure directory renames plus a `version.json` state machine; startup detects `applying` and recovers |
+| Large updates keep the app down too long | The download stage materializes unchanged files into the new directory, so apply only performs three renames — downtime is measured in seconds |
+| How the updater updates itself | `check_self_update` detects and `self_update` performs the replacement; the GUI/SDK delegate, with a failure circuit breaker |
+| The host language is locked in | Every command outputs JSON; an optional C# SDK, and any language that can spawn a subprocess, can integrate |
 
 ## Five Components
 
 | Component | Role | Stack |
 |---|---|---|
-| **aly-server** | Stores project metadata & files, serves the REST API | Go 1.25 · Gin · Ent · SQLite |
-| **aly-publish** | Publish CLI: init configs, scan diffs, stage, push | Go 1.25 · cobra |
-| **aly-publish-gui** | Desktop publisher wrapping aly-publish, for non-technical publishers | Avalonia 11.3 · .NET 8 |
-| **aly-client** | The updater executable, running on end-user machines | Go 1.10.8 (XP track) / modern Go (cross-platform track) |
-| **aly-client-ui** | Optional GUI front-end: bottom-right, topmost, on demand | Windows: walk (XP) · Linux: MyGo + GTK3 |
+| **aly-server** | Project metadata, file storage, REST API | Go 1.25 · Gin · Ent · SQLite |
+| **aly-publish** | Publish CLI: configure, diff, stage, push | Go 1.25 · cobra |
+| **aly-publish-gui** | Desktop publisher that wraps the CLI | .NET 8 · Avalonia 12.1 · Semi/Ursa |
+| **aly-client** | End-user updater | Go 1.10.8 (XP track) / modern Go (cross-platform track) |
+| **aly-client-ui** | Optional update window | Windows: walk (XP) · Linux: MyGo + GTK3 |
 
-Host applications drive the updater in two ways: spawn `aly-client` subprocesses and parse stdout JSON, or integrate the [C# SDK](/en/docs/sdk) which orchestrates check → download → apply → self-update automatically.
+A host application can either spawn a subprocess and parse the JSON, or integrate the [C# SDK](/en/docs/sdk); the SDK is only an orchestration layer and does not change the protocol.
+
+## Platform Coverage
+
+| Component | Prebuilt | Compilable from source |
+|---|---|---|
+| Updater / update window | Windows 32-bit (XP+), Linux amd64/arm64 | The same Go source can build for darwin, freebsd and others |
+| Server | Windows amd64, Linux amd64/arm64, macOS amd64/arm64 | Other Go targets |
+| Publishing tools | Windows amd64, Linux amd64/arm64, macOS amd64/arm64 | Other Go targets |
+| Publish GUI | Windows (.NET 8) | Desktop platforms supported by .NET 8 |
 
 ## Design Principles
 
-- **Single file, zero dependencies**: the updater and GUI are single executables — copy and run, no runtime installation (the Linux GUI only needs GTK3, preinstalled on desktop distros).
-- **Protocol over implementation**: all commands output `{"isSuccess": bool, "errorMsg": string, "data": ...}`; GUI, SDK and updater are decoupled, so any language can host.
-- **Configuration as data**: publisher and client share `.updator/shared.json`, and that config ships with every version — server address changes roll out with the next update automatically.
-- **Everything verifiable**: downloads are verified with MD5 + SHA256; version publishing is monotonic (the server rejects older version numbers); [135 end-to-end cases](/en/docs/testing) cover crash, power-loss and concurrency scenarios.
+- **Single file, zero dependencies**: the updater and the server are each a single executable; the Linux GUI only depends on the GTK3 preinstalled by the distribution.
+- **Protocol before implementation**: a single `{isSuccess, errorMsg, data}` shape; GUI, SDK and updater are decoupled.
+- **Configuration ships with the version**: `.updator/shared.json` is uploaded together with each version, so a server address change takes effect with the next update.
+- **Everything is verifiable**: MD5 + SHA256 double verification; monotonically increasing versions; [135 end-to-end cases](/en/docs/testing) cover crashes, power loss, concurrency and self-update.
 
 ## When to Use It
 
-- Intranet desktop apps (ticketing, POS, industrial HMI) — self-host the server, no public internet needed.
-- .NET / C++ applications with many DLLs and assets — directory-level diffing, only changed files travel.
-- Legacy systems that must stay on Windows XP / Windows 7 — something mainstream updaters (Squirrel, Velopack, Electron updater) cannot do.
+- Intranet desktop applications (work orders, point of sale, industrial HMI): self-hosted server, no public internet required.
+- .NET / C++ applications with many DLLs and resources: directory-level diffing transfers only the changed files.
+- Legacy systems that must support Windows XP / 7: something most modern update frameworks cannot do.
+
+::: warning Security boundary
+The server currently has no built-in authentication or signing and is designed to be deployed on a trusted intranet. If it is exposed to the public internet, add authentication and access control at the front-end gateway.
+:::

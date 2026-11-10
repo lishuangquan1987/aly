@@ -62,6 +62,7 @@ UI_TITLE_EN = "AlyPublish - Release Publisher"
 
 user32 = ctypes.windll.user32
 dwmapi = ctypes.windll.dwmapi
+gdi32 = ctypes.windll.gdi32
 
 DWMWA_EXTENDED_FRAME_BOUNDS = 9
 SW_RESTORE = 9
@@ -80,6 +81,29 @@ class RECT(ctypes.Structure):
         ("top", ctypes.c_long),
         ("right", ctypes.c_long),
         ("bottom", ctypes.c_long),
+    ]
+
+
+class BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [
+        ("biSize", wintypes.DWORD),
+        ("biWidth", wintypes.LONG),
+        ("biHeight", wintypes.LONG),
+        ("biPlanes", wintypes.WORD),
+        ("biBitCount", wintypes.WORD),
+        ("biCompression", wintypes.DWORD),
+        ("biSizeImage", wintypes.DWORD),
+        ("biXPelsPerMeter", wintypes.LONG),
+        ("biYPelsPerMeter", wintypes.LONG),
+        ("biClrUsed", wintypes.DWORD),
+        ("biClrImportant", wintypes.DWORD),
+    ]
+
+
+class BITMAPINFO(ctypes.Structure):
+    _fields_ = [
+        ("bmiHeader", BITMAPINFOHEADER),
+        ("bmiColors", wintypes.DWORD * 3),
     ]
 
 
@@ -189,9 +213,67 @@ def set_topmost(hwnd: int, enabled: bool) -> None:
     time.sleep(0.6)
 
 
+def grab_window(hwnd: int) -> Image.Image:
+    """Capture a window by handle, not by screen region.
+
+    ImageGrab captures whatever is physically on top at those coordinates. If
+    another always-on-top window overlaps the target, the screenshot silently
+    contains the wrong application. PrintWindow asks the target window to paint
+    itself into a memory DC, so occlusion cannot leak into the docs image.
+    """
+    rect = RECT()
+    if not user32.GetWindowRect(wintypes.HWND(hwnd), ctypes.byref(rect)):
+        raise RuntimeError("GetWindowRect failed")
+    width = rect.right - rect.left
+    height = rect.bottom - rect.top
+    if width <= 0 or height <= 0:
+        raise RuntimeError(f"invalid window size {width}x{height}")
+
+    window_dc = user32.GetWindowDC(wintypes.HWND(hwnd))
+    memory_dc = gdi32.CreateCompatibleDC(window_dc)
+    bitmap = gdi32.CreateCompatibleBitmap(window_dc, width, height)
+    previous = gdi32.SelectObject(memory_dc, bitmap)
+    try:
+        if not user32.PrintWindow(wintypes.HWND(hwnd), memory_dc, 2):
+            user32.PrintWindow(wintypes.HWND(hwnd), memory_dc, 0)
+
+        info = BITMAPINFO()
+        info.bmiHeader.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+        info.bmiHeader.biWidth = width
+        info.bmiHeader.biHeight = -height
+        info.bmiHeader.biPlanes = 1
+        info.bmiHeader.biBitCount = 32
+        info.bmiHeader.biCompression = 0  # BI_RGB
+
+        buffer = ctypes.create_string_buffer(width * height * 4)
+        if not gdi32.GetDIBits(
+            memory_dc, bitmap, 0, height, buffer, ctypes.byref(info), 0
+        ):
+            raise RuntimeError("GetDIBits failed")
+
+        image = Image.frombuffer(
+            "RGB", (width, height), buffer, "raw", "BGRX", 0, 1
+        ).copy()
+        if image.getextrema() == ((0, 0), (0, 0), (0, 0)):
+            raise RuntimeError("PrintWindow produced an all-black image")
+        return image
+    finally:
+        gdi32.SelectObject(memory_dc, previous)
+        gdi32.DeleteObject(bitmap)
+        gdi32.DeleteDC(memory_dc)
+        user32.ReleaseDC(wintypes.HWND(hwnd), window_dc)
+
+
 def capture_window(hwnd: int, dest: Path, max_width: int = 1600) -> None:
-    left, top, right, bottom = window_bounds(hwnd)
-    image = ImageGrab.grab(bbox=(left, top, right, bottom), all_screens=True)
+    try:
+        image = grab_window(hwnd)
+    except Exception as exc:
+        print(f"  PrintWindow failed ({exc}); falling back to screen grab")
+        user32.BringWindowToTop(wintypes.HWND(hwnd))
+        user32.SetForegroundWindow(wintypes.HWND(hwnd))
+        time.sleep(0.5)
+        left, top, right, bottom = window_bounds(hwnd)
+        image = ImageGrab.grab(bbox=(left, top, right, bottom), all_screens=True)
     if image.width > max_width:
         height = round(image.height * max_width / image.width)
         image = image.resize((max_width, height), Image.LANCZOS)

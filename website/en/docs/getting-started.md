@@ -1,104 +1,100 @@
+---
+title: Quick Start
+description: Pick your OS and integration path, then run the shortest working route for server, publish and client updates.
+---
+
 # Quick Start
 
-Three roles complete one full update cycle: **start the server** → **publish a version** → **client checks and applies**.
+<QuickStartWizard />
 
-## 1. Start the Server
+## Full flow (manual)
+
+### 1. Start the server
 
 ```bash
 ./aly-server -p 2000
 ```
 
-The first run creates a SQLite database (`aly.db`) automatically; uploaded files are stored per project under `data/{project_name}/`. The server binary is a statically built single file with no external dependencies — copy it to your server and run.
+The first run creates `aly.db` and `data/` next to the executable. On Linux use `./aly-server-linux-amd64`, on Windows `.\aly-server.exe`; `-db` changes the database path.
 
-## 2. Publish the First Version
+### 2. Create the server project
 
-Inside your **release directory** (the folder that ships to users, e.g. `./dist`):
-
-```bash
-cd ./dist
-
-# Initialize project config (creates .updator/)
-aly-publish config init --server http://localhost:2000 --project myapp
-
-# See what changed
-aly-publish status
-
-# Stage everything and push
-aly-publish add --all
-aly-publish push --version V1.0.0 --message "First release"
-```
-
-`push` scans the directory, uploads new/changed files (large files automatically use chunked upload) and creates a version changelog entry. Every later release repeats the same three commands: `status → add --all → push`.
-
-::: tip Config ships with versions
-The publish config `.updator/shared.json` (server URL, project name, ignore rules) is uploaded with every release. When the client downloads an update, the new config replaces the old — **changes like a new server address roll out automatically with the next update**.
-:::
-
-## 3. Client: Check & Apply
-
-On the **end-user machine**, the host application invokes `aly-client` (inside `UpdateFolder/`) in three steps:
+A new project starts at **V1.0.0**, so the first `push` must use a higher version (for example V1.0.1).
 
 ```bash
-# Step 1 — check for updates
-aly-client.exe check_update
-# → {"isSuccess":true,"data":{"has_update":true,"need_download_update":true,
-#    "new_version":"1.0.1","force_update":false}}
+# In the release directory (e.g. dist), initialize the client config
+./aly-publish config init --server http://127.0.0.1:2000 --project myapp
 
-# Step 2 — download (only changed files, SHA-256 verified)
-aly-client.exe download_update
-
-# Step 3 — apply (closes the app, atomically replaces, restarts)
-aly-client.exe apply_update
+# Register the same project on the server (once)
+./aly-publish project create --server http://127.0.0.1:2000 --name myapp --title "My App"
 ```
 
-Drive the UX from `force_update`: when `true`, auto-download and prompt for restart; when `false`, ask the user first.
+### 3. Publish the first release
 
-## 4. Deployment Layout on User Machines
+```bash
+./aly-publish status
+./aly-publish add --all
+./aly-publish push --version V1.0.1 --message "First release"
+```
+
+`status` shows new/modified/deleted files; `add --all` stages new and modified files; `push` uploads them and records a changelog. Large files use chunked upload automatically.
+
+### 4. End-user layout
 
 ```text
 PackageFolder/
-├── ApplicationFolder/            # Active app (current version)
-│   ├── your_app.exe
-│   └── .updator/shared.json     # server_url, project_name, ignore rules
-├── ApplicationFolder_V1.0.0/     # Previous version snapshot (for rollback)
-├── UpdateFolder/
-│   ├── aly-client.exe            # The updater itself
-│   ├── aly-client-ui.exe         # Optional GUI front-end
-│   ├── client.json               # main_exe_relative_path, must_close_process_name …
-│   └── version.json              # Version state machine (maintained automatically)
+├── ApplicationFolder/              # active app
+│   ├── YourApp.exe
+│   └── .updator/shared.json        # server_url, project_name, ignore rules
+├── ApplicationFolder_V1.0.0/       # previous snapshot (rollback)
+└── UpdateFolder/
+    ├── aly-client(.exe)            # updater
+    ├── aly-client-ui(.exe)         # optional GUI
+    ├── client.json                 # main exe path + processes to close
+    └── version.json                # state machine (automatic)
 ```
 
-`client.json` is the only client-side config you need to care about:
+`main_exe_relative_path` is resolved **relative to `UpdateFolder/`**:
 
 ```json
 {
-  "main_exe_relative_path": "ApplicationFolder/your_app.exe",
-  "must_close_process_name": ["your_app"]
+  "main_exe_relative_path": "../ApplicationFolder/YourApp.exe",
+  "must_close_process_name": ["YourApp"]
 }
 ```
 
-- `main_exe_relative_path`: the main executable relative to the package root; `apply_update` launches it after the replacement.
-- `must_close_process_name`: processes that must exit before an update is applied.
-
-## 5. Skip the Orchestration with the C# SDK
-
-A .NET host doesn't need to hand-write those steps — the `AlyClient.CSharpSDK` NuGet package orchestrates check, download, apply and self-update:
-
-```csharp
-var client = new AlyUpdateClient(updateFolder, mainFolder, ...);
-if ((await client.CheckUpdateAsync()).Data.HasUpdate)
-{
-    await client.DownloadUpdateAsync();
-    await client.ApplyUpdateAsync();   // app is closed, replaced and restarted
-}
-```
-
-See [C# SDK](/en/docs/sdk).
-
-## 6. Publish GUI (Optional)
-
-Prefer clicks over commands? `aly-publish-gui` (an Avalonia desktop app) wraps the full publish-cli capability set: pick a directory, review diffs, enter a version, publish.
+### 5. Check and apply on the client
 
 ```bash
-cd publish/publish-gui && dotnet build
+# Step 1 — check
+aly-client check_update
+# → {"isSuccess":true,"data":{"has_update":true,"need_download_update":true,
+#    "new_version":"1.0.2","force_update":false,"release_notes":["..."]}}
+
+# Step 2 — download changed files (MD5 + SHA256 verified)
+aly-client download_update
+
+# Step 3 — apply (close processes → atomic replace → restart)
+aly-client apply_update
 ```
+
+Business failures may still exit 0; use `isSuccess` in the JSON. See the [command reference](/en/docs/commands).
+
+### 6. C# host: skip the orchestration
+
+```csharp
+using AlyClient.CSharpSDK;
+
+// Requires UpdateFolder/aly-client-ui.exe and aly-client.exe
+var ui = new AlyUpdateUIClient();
+ui.LaunchAuto();   // silent check at startup; window appears only on update
+```
+
+The SDK is not on public NuGet yet; use a project reference or a CI-built nupkg. See [C# SDK integration](/en/docs/sdk).
+
+## Next steps
+
+- Every flag and return field: [aly-client command reference](/en/docs/commands)
+- Crash safety and the state machine: [Core concepts](/en/docs/concepts)
+- CI or scripted publishing: [aly-publish](/en/docs/publish)
+- Troubleshooting: [FAQ](/en/docs/faq)

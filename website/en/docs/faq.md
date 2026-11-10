@@ -1,41 +1,58 @@
+---
+title: FAQ
+description: Common questions about platforms, host languages, downtime, power-loss recovery, rollback, authentication and update rules.
+---
+
 # FAQ
 
-## Why still support Windows XP?
+## Why keep supporting Windows XP?
 
-Many production environments (industrial HMIs, POS terminals, hospital equipment) still run XP — and those machines are exactly where safe updates matter most. Mainstream updaters (Squirrel, Velopack, Electron updater) all require Windows 7+. Aly keeps that path alive by pinning Go 1.10.8 + 386, with CI validating XP compatibility (PE header + manifest) automatically.
+Industrial PCs, cashier terminals and hospital equipment still run XP, and those are exactly the machines that most need security updates. Mainstream update frameworks (Squirrel, Velopack, Electron updater) usually require Windows 7+; Aly keeps this path open by pinning Go 1.10.8 + 386, with CI validating the PE header and manifest.
 
-## Does the host application have to be C#?
+## Must the client host be written in C#?
 
-No. `aly-client` is a standalone executable; every command prints the same stdout JSON protocol (`{"isSuccess", "errorMsg", "data"}`). Any language that can spawn a subprocess and parse JSON can host it. The C# SDK merely saves you the orchestration.
+No. `aly-client` is a standalone executable and every command outputs uniform JSON. Any language that can spawn a subprocess and parse JSON can act as the host; the C# SDK merely saves you the orchestration.
 
-## How long is the app down during an update?
+## How long is the application down during an update?
 
-The `apply_update` downtime window is **three directory renames** — seconds. Unchanged files are materialized into the new version directory at download time (while the app still runs), so the apply stage copies nothing. GB-scale directories take the same seconds.
+`apply_update` only performs three directory renames — seconds. That is because `download_update` has already materialized unchanged files into the new version directory while the application was running.
 
 ## What happens if the power is cut mid-update?
 
-Nothing bad. All replacement is pure directory renames guarded by the `version.json` state machine: on next startup an `applying` state re-executes the rename step; the downloaded package is validated before applying (file count, content version) — an incomplete one self-heals and re-downloads. See [Crash Recovery](/en/docs/concepts#crash-recovery).
+The next startup detects `version_status=applying` and re-runs the renames; the pending directory is validated by file count and content version, and an incomplete one is refused and self-healed, with the next round downloading again. See [Core Concepts](/en/docs/concepts).
 
 ## How does the updater update itself?
 
-Through the unified `self_update` executor: the new updater rides the version package into the main application folder; at startup the GUI/SDK delegate to the updater itself, which takes the lock, compares SHA256, stages through `.new`, rolls back on failure, and circuit-breaks after 3 consecutive failures within 30 minutes. See [Self-Update Design](/en/docs/self-update).
+The new updater enters the main application directory together with the version package; `check_self_update` only detects, while `self_update` performs the replacement in a unified way (take the lock, SHA256, `.new` staging, rollback on failure, circuit breaker after 3 failures within a 30-minute window). See [Self-Update Design](/en/docs/self-update).
 
-## Does rollback need network?
+## Does rollback need a network connection?
 
-No. `rollback` uses local version snapshots (`ApplicationFolder_V1.0.0/`) — pure local renames. Snapshot retention is controlled by `clean --keep N`.
+No. `rollback` uses local snapshot directories (`ApplicationFolder_V1.0.0/`) and performs purely local renames. Snapshot retention is controlled by `clean --keep N`.
 
-## Is there authentication on the server?
+## Does the server have authentication?
 
-The current version is designed for a **trusted intranet**; the API ships without built-in authentication or signing. For public exposure, add authentication at a gateway. See [Server API · Security Notes](/en/docs/api#security-notes).
+The current version has no built-in authentication or signing and is designed for deployment on a trusted intranet. For public exposure, add authentication at the front-end gateway. See [Server API · Trust boundary](/en/docs/api#trust-boundary-no-authentication).
 
-## Are updates incremental?
+## Are incremental updates supported?
 
-Yes. The publisher uploads only files that differ from the previous version; the client downloads only files that differ locally (MD5+SHA256 comparison). Large files use chunked upload with resume; a single-file failure never aborts the rest — retries fetch only the failures.
+Yes. The publisher uploads only differing files, and the client downloads only files whose local hash differs; large files are chunked with resumable transfers; a single-file failure never aborts the whole run, and a retry covers only the failed files.
 
-## What does the Linux GUI need installed?
+## Why is my first push rejected?
 
-Only the GTK3 runtime that desktop distros preinstall. The UI library MyGo is pure Go (no cgo); artifacts are single ELF files and arm64 cross-compiles directly. Headless machines can still run the `-finish-self-update` finisher (no GTK required).
+When the server creates a project, the initial version is **V1.0.0**, and `publish_version` requires a version strictly greater than the current latest. Use `V1.0.1` or higher for the first push. The same applies to every later release: an older version number cannot overwrite a newer one.
 
-## How do I migrate or change the server address?
+## Why doesn't `logs/**` in `ignore_folders` take effect?
 
-Change `server_url` and publish again: `.updator/shared.json` ships with the version, and clients swap in the new config automatically when they download the update.
+`ignore_folders` is a **plain prefix match and is case-sensitive**, not a glob; only `logs` ignores the whole directory. Only `ignore_files` supports globs. The client's `un_copy_*` is a separate set of rules that affects materialization only. See [Core Concepts · Configuration Rules](/en/docs/concepts#configuration-rules-ignore-and-un-copy).
+
+## Does the publish GUI support English?
+
+Yes. `AlyPublish` uses Irihi.Lingua and JSON resources; the toolbar switches between Chinese and English, and `--lang zh-CN|en-US` can set the startup language. The choice is stored in `%LOCALAPPDATA%\AlyPublish\settings.json`.
+
+## What dependencies does the Linux GUI need?
+
+Only the GTK3 preinstalled on desktop distributions. MyGo is a pure-Go implementation (no cgo) and the artifact is a single ELF file; machines without a graphical environment can still run the `-finish-self-update` finisher mode.
+
+## How do I change the server address?
+
+Change `server_url` in `.updator/shared.json` and publish again; the configuration is distributed with the version, and the client replaces it automatically on the next update. You can also override it temporarily on the client with `check_update --url`.

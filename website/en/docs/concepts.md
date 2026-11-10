@@ -1,61 +1,84 @@
+---
+title: Core Concepts
+description: Precise semantics of the version state machine, atomic replacement, crash recovery, differential download, the update lock and configuration rules.
+---
+
 # Core Concepts
 
-This page explains the four pillars of Aly's reliability: the version state machine, atomic replacement, crash recovery and differential downloads.
+Understand these five mechanisms and you can explain how Aly behaves under power loss, network loss, repeated triggers and rollback.
 
 ## Version State Machine (version.json)
 
-`UpdateFolder/version.json` records which stage of the update flow the client is in; every command works around it:
+`UpdateFolder/version.json` records which stage of the update flow the client is in:
 
 ```text
-applied ──(download_update)──→ downloaded ──(apply_update starts)──→ applying
-                  │                        │
-                  │                        ├──(success)──→ applied
-                  │                        └──(crash)──→ detected on next startup → auto-recover
-                  │
-                  └──(check_update)──→ has_update=true (server reachable)
+(empty/applied) ──download_update────────→ downloaded ──apply_update──→ applying ──success──→ applied
+   │                                          │                            │
+   └── check_update finds a new version ──────┘                            └── crash → recovered on next startup
 ```
+
+| Field | Meaning |
+|---|---|
+| `version` | Current / pending version |
+| `version_previous` | Version of the actual content currently in the main directory (used for rollback and recovery) |
+| `version_status` | Empty, `applied`, `downloaded`, `applying` |
+| `apply_stage` | While `applying`, written as `activating` to mark that the backup rename has completed |
+| `downloaded_file_count` | Number of regular files in the downloaded output; apply uses it to detect an incomplete directory |
+| `rollback_previous` | Version of the actual main-directory content when the rollback started |
+| `rollback_target` | Target version of the current rollback (used to resume an interrupted one) |
+| `apply_fail_count` | Number of consecutive apply failures for the same pending version (circuit breaker) |
+| `after_apply_update_script` | Script to run after a successful update (relative to the application directory) |
 
 ### State Guards
 
-Writes happen only on consistent states — refuse rather than corrupt:
-
-- `apply_update` **refuses to replace** when `version_status` is empty or unknown (empty means "no pending update", exactly like `applied`); it also refuses `version_previous == version` (backup and version directories would collide).
-- `apply_update` validates the downloaded package first: a missing, empty, or under-counted `ApplicationFolder_{version}` (fewer files than the `downloaded_file_count` recorded at download time) refuses the replace and self-heals to `applied` — the next `check_update` re-downloads. It never "succeeds" with a copy of the current folder or a mixed old/new package.
-- `rollback` refuses to run while an apply is unfinished, and restores the pre-rollback status on failure instead of always writing `applied`.
+- `apply_update` refuses to replace when the state is empty or unknown; it rejects `version_previous == version`.
+- Before applying, it validates the pending directory: if the directory is missing, empty, or holds fewer files than `downloaded_file_count`, it refuses and self-heals to `applied`, and the next round downloads again.
+- `rollback` refuses while the apply is unfinished; on failure it restores the state from before the attempt instead of always writing `applied`.
+- Once `apply_fail_count` reaches the threshold, `check_update` no longer reports "keep applying", so the process is not repeatedly killed and relaunched.
 
 ### Offline Semantics
 
-`check_update` only reports a pending apply while the server is reachable: `downloaded` + unreachable server returns `has_update=false`, so the host never shows a "ready to update" prompt that disagrees with the online state. Nothing is discarded — `apply_update` runs as soon as the server is reachable again. `applying` is the deliberate exception: crash recovery and rollback resumption are **always reported**, even offline — otherwise a machine missing its application folder could never recover by itself.
+When `check_update` is in the `downloaded` state and the server is unreachable, it returns `has_update=false` — no prompt when it cannot verify, the downloaded content is kept, and apply continues once the network is back. `applying` (crash recovery) and rollback resumption are exceptions: they must be reported even offline, otherwise the machine cannot heal itself.
 
-## Atomic Replace
+## Atomic Replacement
 
-The heart of `apply_update` is **pure directory renames** — no copying, no deleting; GB-scale folders complete in seconds:
+The core of `apply_update` is **pure directory renames** — no copying, no deleting:
 
-1. During `download_update`, after all files are downloaded and verified, unchanged files are **materialized** from the current `ApplicationFolder` into the new version directory — while your app is still running; read-only copies don't lock the rename that follows.
-2. Rename `ApplicationFolder` → `ApplicationFolder_{previous_version}` (backup).
-3. Write the `apply_stage=activating` marker, then rename `ApplicationFolder_{new_version}` → `ApplicationFolder`.
-4. If any rename fails, revert `version_status` to `downloaded` so it can be retried, and clear transient fields.
+1. `download_update` **materializes** unchanged files from the current `ApplicationFolder` into the new version directory (the application is still running).
+2. Rename `ApplicationFolder` → `ApplicationFolder_{previous_version}`.
+3. Write `apply_stage=activating`, then rename `ApplicationFolder_{new_version}` → `ApplicationFolder`.
+4. On failure, roll the state back to `downloaded` and clear the transient fields.
 
-Because materialization happens at download time, the app is only down for three renames — from minutes (full-copy schemes) down to seconds.
+The downtime window is only three renames; even GB-scale directories take seconds.
 
 ## Crash Recovery
 
-If startup finds `version_status` in `applying`, the updater **re-executes the atomic rename step** — an update is never left in a broken half-state. The `apply_stage=activating` marker written right before the final rename decides whether the rename already happened (legacy states fall back to the old heuristic and log a warning).
+If `version_status=applying` at startup, the updater re-runs the atomic renames. `apply_stage=activating` is used to decide whether the rename actually happened; when an older version lacks this field, the updater falls back to a heuristic and logs a warning.
 
-## Differential Download & Verification
+## Differential Download and Verification
 
-- `download_update` compares MD5 + SHA256 against the server manifest and **downloads only changed files**, with byte-level progress.
-- Single-file failures retry 3 times without aborting the whole download — failed files are collected in `failed_files`; a retry downloads only the failures, already-verified files are skipped.
-- Version comparison is semver-aware: `1.0.0-beta` sorts before `1.0.0` (pre-release < release); plain numeric versions keep the legacy behavior.
-
-## Server-Side Downgrade Guard
-
-`publish_version` rejects a version that is not strictly greater than the project's latest — preventing accidental republishing of an old version number that would leave updated clients "stuck". To roll content back, publish a higher version number.
+- The publisher uploads only files that differ from the previous version; the client downloads only files whose local MD5/SHA256 differs.
+- A single file that fails 3 times does not abort the whole run; the list of failures goes into `failed_files`, and a retry covers only the failed files.
+- Large files use `.part` files for resumable transfers; the server's `download_file` supports Range.
+- Version comparison is semver-aware: `1.0.0-beta < 1.0.0`, build metadata is ignored.
 
 ## Update Lock
 
-`.aly.lock` guarantees a single update flow at any moment: live holders are identified by real process-liveness probing (not timestamp guessing), so only genuinely stale locks get cleaned. Concurrent triggers from GUI, host and SDK are all safe.
+`.aly.lock` guarantees that only one update flow runs at a time. The lock is valid while its holding process is alive; only genuinely stale leftover locks are cleaned. Concurrent triggers from the host, GUI and SDK are safe.
+
+## Configuration Rules: ignore and un_copy
+
+The two sets of rules take effect at different stages and must not be mixed up:
+
+| Setting | Where it applies | Semantics |
+|---|---|---|
+| `ignore_folders` / `ignore_files` | **Server scan / publish manifest** | Decides which files are not delivered. Folders are **matched by plain prefix and are case-sensitive** (`logs` works, `logs/**` is not interpreted as a glob); files support exact, glob, filename and `*.ext` matches |
+| `un_copy_folders` / `un_copy_files` | **Client materialization** | Everything is migrated by default; the listed paths are **not copied** into the new version directory; `*`/`**` are supported, exact names are case-insensitive |
+
+::: warning Common misunderstanding
+`ignore_*` is not applied again on the client during apply, and `un_copy_*` does not affect publisher uploads. A wrong rule raises no error; it only makes the update package larger or keeps runtime files from being migrated.
+:::
 
 ## Cleanup (clean)
 
-The `clean` command prunes old version snapshots, temp files (`.part`/`.tmp`/`.old*`) and stale logs; `--keep N` controls how many snapshots to keep, `--all` clears everything. Snapshots rollback depends on are never pruned away.
+`clean` prunes old version snapshots, `.part`/`.tmp`/`.old*` files and expired logs. `--keep N` keeps the most recent N snapshots (`N < 1` falls back to the default of 3); `--all` keeps only the protection set for the current version. The most recent snapshot that rollback depends on is never deleted.
