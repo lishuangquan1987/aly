@@ -71,3 +71,8 @@ server/data/test/
 publish/publish-cli/publish-cli.exe
 publish/publish-cli/publish-cli-*
 *.nupkg
+
+# VitePress 站点构建产物与依赖
+website/node_modules/
+website/.vitepress/dist/
+website/.vitepress/cache/
