@@ -9,7 +9,21 @@ if (-not (Test-Path $dll)) {
     throw "AlyClient.Com.dll not found. Run build.ps1 first."
 }
 
-& (Join-Path $PSScriptRoot "register-com.ps1") -DllPath $dll
+$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+$isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if ($isAdmin) {
+    $regasm = "C:\Windows\Microsoft.NET\Framework\v4.0.30319\RegAsm.exe"
+    Write-Host "Admin detected: registering COM machine-wide via RegAsm..."
+    & $regasm /codebase $dll
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "RegAsm failed; falling back to per-user registration."
+        & (Join-Path $PSScriptRoot "register-com.ps1") -DllPath $dll
+    }
+}
+else {
+    Write-Host "Non-admin: registering COM per-user..."
+    & (Join-Path $PSScriptRoot "register-com.ps1") -DllPath $dll
+}
 
 $outDir = Join-Path $PSScriptRoot "out"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null

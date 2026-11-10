@@ -19,12 +19,16 @@ on:
 
 jobs:
   test:
-    name: Test Python SDK (${{ matrix.os }})
+    name: Test Python SDK (${{ matrix.os }} / Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            python: "3.12"
+          - os: windows-latest
+            python: "3.9"
     defaults:
       run:
         working-directory: client/aly-client-sdk/AlyClient.PythonSDK
@@ -35,7 +39,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: ${{ matrix.python }}
 
       - name: Setup Go (fake client)
         uses: actions/setup-go@v5

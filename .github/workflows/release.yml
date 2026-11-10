@@ -550,26 +550,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
-          gh release upload "$TAG" \
-            aly-server-windows-amd64/aly-server-windows-amd64.exe \
-            aly-server-linux-amd64/aly-server-linux-amd64 \
-            aly-server-linux-arm64/aly-server-linux-arm64 \
-            aly-server-darwin-amd64/aly-server-darwin-amd64 \
-            aly-server-darwin-arm64/aly-server-darwin-arm64 \
-            aly-publish-windows-amd64/aly-publish-windows-amd64.exe \
-            aly-publish-linux-amd64/aly-publish-linux-amd64 \
-            aly-publish-linux-arm64/aly-publish-linux-arm64 \
-            aly-publish-darwin-amd64/aly-publish-darwin-amd64 \
-            aly-publish-darwin-arm64/aly-publish-darwin-arm64 \
-            aly-client-win-xp/aly-client.exe \
-            aly-client-win-xp/aly-client-ui.exe \
-            aly-client-linux-amd64/aly-client-linux-amd64 \
-            aly-client-linux-amd64/aly-client-ui-linux-amd64 \
-            aly-client-linux-arm64/aly-client-linux-arm64 \
-            aly-client-linux-arm64/aly-client-ui-linux-arm64 \
-            aly-publish-gui-windows-amd64/AlyPublish-Setup.exe \
-            aly-publish-gui-windows-amd64/AlyPublish-win-x64.zip \
-            aly-csharp-sdk/AlyClient.CSharpSDK.*.nupkg \
-            aly-csharp-sdk/AlyClient.CSharpSDK-*.zip \
-            sdk-packages/AlyClient.*.zip \
-            --clobber
+          mapfile -t files < <(find artifacts -type f | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No release assets downloaded" >&2
+            exit 1
+          fi
+          printf 'Uploading %d assets to %s\n' "${#files[@]}" "$TAG"
+          gh release upload "$TAG" "${files[@]}" --clobber
