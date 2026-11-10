@@ -1,5 +1,7 @@
 # Aly — Lightweight Client Auto-Update System
 
+🌐 **Project website & online documentation**: <https://lishuangquan1987.github.io/aly/>
+
 A minimal, self-contained auto-update solution for desktop applications. Ship new versions with a single command, and let your users update seamlessly with crash-safe atomic replacement.
 
 ## Project Structure
