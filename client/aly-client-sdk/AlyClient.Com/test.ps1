@@ -32,3 +32,9 @@ $scenario = Join-Path $repo "spec\fixtures\scenarios\update_available.json"
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
+
+$cscript = "C:\Windows\SysWOW64\cscript.exe"
+& $cscript //nologo (Join-Path $PSScriptRoot "tests\vbscript-smoke.vbs") $fake $scenario
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}

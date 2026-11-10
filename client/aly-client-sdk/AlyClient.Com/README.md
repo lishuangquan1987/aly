@@ -44,8 +44,11 @@ VB6 使用早期绑定（引用 TLB）或后期绑定均可；易语言建议后
 .\test.ps1
 ```
 
-脚本会注册 COM、构建假客户端，并用 **32 位 PowerShell** 运行
-[T COM smoke](tests/com-smoke.ps1)，覆盖 check/download/list/rollback/self-update。
+脚本会注册 COM、构建假客户端，并用 **32 位 PowerShell** 与
+**32 位 VBScript（VB6 同款后期绑定）** 运行 smoke：
+
+- PowerShell：[tests/com-smoke.ps1](tests/com-smoke.ps1)（check/download/list/rollback/self-update）
+- VBScript：[tests/vbscript-smoke.vbs](tests/vbscript-smoke.vbs)（check/download）
 
 ## VB6 示例
 
