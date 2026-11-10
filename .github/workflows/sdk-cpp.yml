@@ -1,0 +1,47 @@
+name: C++ SDK
+
+on:
+  push:
+    paths:
+      - "client/aly-client-sdk/AlyClient.CppSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-cpp.yml"
+  pull_request:
+    paths:
+      - "client/aly-client-sdk/AlyClient.CppSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-cpp.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Build and test C++ SDK
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: client/aly-client-sdk/AlyClient.CppSDK
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go (fake client)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/fake-aly-client/go.mod
+
+      - name: Install MinGW-w64
+        run: choco install mingw -y --no-progress
+
+      - name: Verify protocol models and fixtures
+        working-directory: tools/alyprotocol
+        run: go run . -check
+
+      - name: Build SDK and conformance tests
+        run: .\build.ps1
+
+      - name: Run conformance tests
+        run: .\test.ps1
