@@ -383,6 +383,15 @@ jobs:
           $version = $raw -replace '^v', ''
           "ALY_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      - name: Setup Go (protocol tool)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/alyprotocol/go.mod
+
+      - name: Verify protocol models are generated
+        working-directory: tools/alyprotocol
+        run: go run . -check
+
       - name: Inject version into .targets
         shell: bash
         run: |

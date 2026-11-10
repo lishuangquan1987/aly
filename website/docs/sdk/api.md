@@ -7,6 +7,8 @@ description: AlyClient.CSharpSDK 的完整 API：AlyUpdateClient、AlyApi、AlyU
 
 本页列出 `AlyClient.CSharpSDK` 的全部公开类型与成员，签名与源码一致。集成步骤与部署说明见[集成指南](/docs/sdk)。
 
+> **模型来源**：数据模型字段由仓库 [`spec/aly-protocol.schema.json`](https://github.com/lishuangquan1987/aly/blob/master/spec/aly-protocol.schema.json) 生成（生成器 `tools/alyprotocol`）。增删字段请改 schema 与 `client/aly-client/model/dto.go` 后重新生成，不要手改 `Models/Generated/*.g.cs`；流程见 [`spec/README.md`](https://github.com/lishuangquan1987/aly/blob/master/spec/README.md)。
+
 ## 命名空间
 
 | 命名空间 | 类型 |
@@ -411,17 +413,21 @@ public enum AlyUpdateUiMode
 
 ### `DownloadProgressData`（`internal`）
 
-下载进度行的原始结构，宿主无法直接引用，仅通过 `DownloadUpdateAsync` 的回调间接使用。
+下载进度行的原始结构（由 `spec/aly-protocol.schema.json` 生成），宿主无法直接引用，仅通过 `DownloadUpdateAsync` 的回调间接使用。
 
 | 成员 | 类型 | JSON 字段 | 说明 |
 |---|---|---|---|
-| `Index` | `int` | `index` | 当前文件序号 |
-| `Total` | `int` | `total` | 差异文件总数（只计需要下载的文件） |
+| `Index` | `long` | `index` | 当前文件序号 |
+| `Total` | `long` | `total` | 差异文件总数（只计需要下载的文件） |
 | `File` | `string` | `file` | 当前文件的相对路径，透传给进度回调 |
-| `Status` | `string` | `status` | 行类型：`BEGIN` / `START` / `DONE` / `FAIL`（客户端还会输出 `SKIP`，SDK 只对 `DONE` 且 `Total > 0` 的行上报进度） |
+| `Status` | `string` | `status` | 行类型：`BEGIN` / `START` / `PROGRESS` / `DONE` / `SKIP` / `FAIL`（SDK 只对 `DONE` 且 `Total > 0` 的行上报进度） |
 | `FileSize` | `double` | `file_size` | 当前文件字节数 |
+| `Error` | `string` | `error` | 该行失败原因（仅 `FAIL` 行） |
+| `DownloadedBytes` | `long` | `downloaded_bytes` | 已下载字节数（累计，字节级进度用） |
+| `TotalBytes` | `long` | `total_bytes` | 本次差异文件字节数总和（`BEGIN` 行预告） |
+| `SpeedBps` | `long` | `speed_bps` | 最近窗口的平均吞吐（字节/秒） |
 
-进度比例 = `Index / Total`，落在 0–1。它是**文件计数粒度**：客户端新增的 `downloaded_bytes` / `total_bytes` / `speed_bps` 字节级字段不在 C# 模型里，反序列化时被忽略，所以单个大文件从开始到完成只会有一次进度跳变。需要字节级进度时直接解析 `aly-client` 的 stdout。
+进度回调仍按**文件计数**粒度上报（`Index / Total`），且只统计 `DONE` 行，所以单个大文件从开始到完成只有一次进度跳变。字节级字段已进入模型（`internal`），但 `DownloadUpdateAsync` 暂未通过回调暴露；需要字节级进度时可直接解析 `aly-client` 的 stdout。
 
 客户端输出 `data:null` 的完成行时，`DownloadUpdateAsync` 返回成功。
 

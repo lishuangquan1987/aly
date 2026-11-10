@@ -7,6 +7,8 @@ description: The complete AlyClient.CSharpSDK API, covering member signatures, e
 
 This page lists every public type and member of `AlyClient.CSharpSDK`; the signatures match the source. For integration steps and deployment notes see the [Integration Guide](/en/docs/sdk).
 
+> **Model source:** data-model fields are generated from [`spec/aly-protocol.schema.json`](https://github.com/lishuangquan1987/aly/blob/master/spec/aly-protocol.schema.json) by `tools/alyprotocol`. To add or remove a field, edit the schema and `client/aly-client/model/dto.go`, then regenerate; do not hand-edit `Models/Generated/*.g.cs`. See [`spec/README.md`](https://github.com/lishuangquan1987/aly/blob/master/spec/README.md).
+
 ## Namespaces
 
 | Namespace | Types |
@@ -411,17 +413,21 @@ Inherits `AlyResponse` and adds a strongly typed payload.
 
 ### `DownloadProgressData` (`internal`)
 
-Raw structure of a download progress line; hosts cannot reference it directly and only use it indirectly through the `DownloadUpdateAsync` callback.
+Raw structure of a download progress line (generated from `spec/aly-protocol.schema.json`); hosts cannot reference it directly and only use it indirectly through the `DownloadUpdateAsync` callback.
 
 | Member | Type | JSON field | Description |
 |---|---|---|---|
-| `Index` | `int` | `index` | Current file index |
-| `Total` | `int` | `total` | Total diff files (only files that need downloading) |
+| `Index` | `long` | `index` | Current file index |
+| `Total` | `long` | `total` | Total diff files (only files that need downloading) |
 | `File` | `string` | `file` | Relative path of the current file, passed through to the progress callback |
-| `Status` | `string` | `status` | Line type: `BEGIN` / `START` / `DONE` / `FAIL` (the client also emits `SKIP`; the SDK only reports progress for `DONE` lines with `Total > 0`) |
+| `Status` | `string` | `status` | Line type: `BEGIN` / `START` / `PROGRESS` / `DONE` / `SKIP` / `FAIL` (the SDK only reports progress for `DONE` lines with `Total > 0`) |
 | `FileSize` | `double` | `file_size` | Size of the current file in bytes |
+| `Error` | `string` | `error` | Failure reason for this line (only on `FAIL` lines) |
+| `DownloadedBytes` | `long` | `downloaded_bytes` | Bytes downloaded so far (cumulative, for byte-level progress) |
+| `TotalBytes` | `long` | `total_bytes` | Total bytes of the diff files (announced on the `BEGIN` line) |
+| `SpeedBps` | `long` | `speed_bps` | Average throughput of the recent window (bytes/s) |
 
-Progress ratio = `Index / Total`, in the range 0–1. It is **file-count granularity**: the byte-level fields `downloaded_bytes` / `total_bytes` / `speed_bps` added by the client are not in the C# model and are ignored during deserialization, so a single large file produces only one progress jump from start to finish. For byte-level progress, parse `aly-client`'s stdout directly.
+The progress callback still reports at **file-count** granularity (`Index / Total`) and only counts `DONE` lines, so a single large file produces only one progress jump from start to finish. The byte-level fields are now part of the model (`internal`) but `DownloadUpdateAsync` does not expose them through the callback yet; parse `aly-client`'s stdout directly if you need byte-level progress.
 
 When the client emits a completion line with `data:null`, `DownloadUpdateAsync` returns success.
 
