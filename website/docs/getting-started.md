@@ -100,7 +100,7 @@ if ((await client.CheckUpdateAsync()).Data.HasUpdate)
 }
 ```
 
-详见 [C# SDK 集成](/reference/sdk)。
+详见 [C# SDK 集成](/docs/sdk)。
 
 ## 6. 发布 GUI（可选）
 

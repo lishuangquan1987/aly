@@ -8,10 +8,10 @@ hero:
   actions:
     - theme: brand
       text: 快速开始
-      link: /guide/getting-started
+      link: /docs/getting-started
     - theme: alt
       text: 项目简介
-      link: /guide/overview
+      link: /docs/intro
     - theme: alt
       text: GitHub
       link: https://github.com/lishuangquan1987/aly

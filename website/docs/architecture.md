@@ -53,7 +53,7 @@ Aly 的客户端采用**双轨构建**策略，这是"支持 Windows XP"与"现�
 - 屏幕右下角置顶窗口按需显示进度/暂停/完成；
 - 自更新由 UI 启动时委派 `aly-client self_update`（更新器本体取锁执行替换），仅在更新器缺失或过旧时才走本地复制兜底。
 
-C# SDK 与 GUI 遵循同一协议，见 [C# SDK 集成](/reference/sdk)。
+C# SDK 与 GUI 遵循同一协议，见 [C# SDK 集成](/docs/sdk)。
 
 ## 仓库结构
 

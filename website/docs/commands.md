@@ -53,7 +53,7 @@ aly-client.exe download_update
 aly-client.exe apply_update
 ```
 
-流程：校验已下载包完整性 → 关闭 `must_close_process_name` 中的进程 → 三次目录改名（备份 → 激活）→ 重启主程序。任意时刻崩溃，下次启动自动恢复，详见[核心概念](/guide/concepts#崩溃恢复)。
+流程：校验已下载包完整性 → 关闭 `must_close_process_name` 中的进程 → 三次目录改名（备份 → 激活）→ 重启主程序。任意时刻崩溃，下次启动自动恢复，详见[核心概念](/docs/concepts#崩溃恢复)。
 
 ### rollback
 
@@ -70,7 +70,7 @@ aly-client.exe rollback --version V1.0.0
 aly-client.exe self_update
 ```
 
-用主程序目录（`ApplicationFolder`）中随版本分发的新版更新器，替换 `UpdateFolder` 中正在运行的自身副本：SHA256 比对决定是否需要更新、`.new` 中转 + 校验 + 原子落位、运行中 exe 采用改名舞步（`.old` 备份 + 失败回滚）。与 `check_self_update` 的检测输出配合，构成自更新闭环——详见[自更新设计](/advanced/self-update)。
+用主程序目录（`ApplicationFolder`）中随版本分发的新版更新器，替换 `UpdateFolder` 中正在运行的自身副本：SHA256 比对决定是否需要更新、`.new` 中转 + 校验 + 原子落位、运行中 exe 采用改名舞步（`.old` 备份 + 失败回滚）。与 `check_self_update` 的检测输出配合，构成自更新闭环——详见[自更新设计](/docs/self-update)。
 
 ## aly-client-ui 的启动模式
 

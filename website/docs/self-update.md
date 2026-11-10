@@ -45,7 +45,7 @@ aly-client-ui -finish-self-update \
 
 ## 测试口径
 
-自更新链路的行为契约由三层测试钉住（详见[测试体系](/advanced/testing)）：
+自更新链路的行为契约由三层测试钉住（详见[测试体系](/docs/testing)）：
 
 - `selfupdate` 包 14 个单元测试（哈希比对、替换编排、改名舞步、回滚、Journal）；
 - `cmd` 包 `self_update` 命令 4 个测试（JSON 协议、锁语义）；
