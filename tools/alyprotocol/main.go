@@ -104,6 +104,9 @@ func process(root string, checkOnly bool) error {
 	if err != nil {
 		return err
 	}
+	if err := validateCoverage(schema, cfg); err != nil {
+		return err
+	}
 	if errs := Verify(schema, cfg, structs); len(errs) > 0 {
 		return fmt.Errorf("协议漂移（schema ↔ dto.go）：\n%s", joinErrors(errs))
 	}
@@ -215,4 +218,20 @@ func joinErrors(errs []error) string {
 		lines[i] = "  - " + e.Error()
 	}
 	return strings.Join(lines, "\n")
+}
+
+// validateCoverage 防止 schema 新增定义后"没人管"：
+// 每个定义都必须登记漂移映射，每个生成类型都必须有漂移映射。
+func validateCoverage(s *Schema, cfg *Config) error {
+	for _, defName := range s.DefNames() {
+		if _, ok := cfg.Go.Structs[defName]; !ok {
+			return fmt.Errorf("schema 定义 %q 未在 csharp.json 的 go.structs 中登记，字段漂移无法校验", defName)
+		}
+	}
+	for defName := range cfg.Types {
+		if _, ok := cfg.Go.Structs[defName]; !ok {
+			return fmt.Errorf("生成类型 %q 未在 csharp.json 的 go.structs 中登记，字段漂移无法校验", defName)
+		}
+	}
+	return nil
 }

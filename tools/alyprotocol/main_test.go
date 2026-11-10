@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -18,5 +19,17 @@ func TestRepoSchemaMatchesGeneratedModels(t *testing.T) {
 	}
 	if err := process(root, true); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestValidateCoverageRejectsUnmappedDefinition(t *testing.T) {
+	s := mustSchema(t, renderTestSchema)
+	cfg := &Config{Go: GoSection{Structs: map[string]string{"Output": "Output"}}}
+	err := validateCoverage(s, cfg)
+	if err == nil {
+		t.Fatal("expected coverage error")
+	}
+	if !strings.Contains(err.Error(), "DownloadProgress") {
+		t.Fatalf("error should name the uncovered definition: %v", err)
 	}
 }
