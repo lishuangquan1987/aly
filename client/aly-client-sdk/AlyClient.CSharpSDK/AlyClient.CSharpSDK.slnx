@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="AlyClient.CSharpSDK/AlyClient.CSharpSDK.csproj" />
   <Project Path="AlySdkSmoke/AlySdkSmoke.csproj" />
+  <Project Path="AlySdkConformance/AlySdkConformance.csproj" />
 </Solution>

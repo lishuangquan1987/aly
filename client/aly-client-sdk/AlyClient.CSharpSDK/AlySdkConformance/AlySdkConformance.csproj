@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net40</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <AssemblyName>AlySdkConformance</AssemblyName>
+    <RootNamespace>AlySdkConformance</RootNamespace>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AlyClient.CSharpSDK\AlyClient.CSharpSDK.csproj" />
+  </ItemGroup>
+
+</Project>

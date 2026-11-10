@@ -396,6 +396,19 @@ jobs:
         working-directory: tools/fake-aly-client
         run: go test ./...
 
+      - name: Build fake client for conformance
+        working-directory: tools/fake-aly-client
+        run: go build -o $env:RUNNER_TEMP/fake-aly-client.exe .
+
+      - name: Build SDK conformance tests
+        run: dotnet build client/aly-client-sdk/AlyClient.CSharpSDK/AlySdkConformance/AlySdkConformance.csproj --configuration Release --nologo
+
+      - name: Run SDK conformance tests
+        shell: pwsh
+        run: |
+          $fake = Join-Path $env:RUNNER_TEMP "fake-aly-client.exe"
+          & "client\aly-client-sdk\AlyClient.CSharpSDK\AlySdkConformance\bin\Release\net40\AlySdkConformance.exe" $fake "spec\fixtures\scenarios"
+
       - name: Inject version into .targets
         shell: bash
         run: |

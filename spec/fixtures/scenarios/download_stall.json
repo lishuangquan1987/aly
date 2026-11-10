@@ -1,0 +1,13 @@
+{
+  "name": "download_stall",
+  "description": "停流看门狗用例：进度行之后长时间无输出，宿主应杀进程并报 stalled。",
+  "commands": {
+    "download_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"index": 0, "total": 1, "file": "", "status": "BEGIN", "file_size": 0}},
+        {"isSuccess": true, "errorMsg": "", "data": null}
+      ],
+      "line_delay_ms": 8000
+    }
+  }
+}

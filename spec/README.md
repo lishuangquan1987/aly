@@ -72,6 +72,11 @@ ALY_FAKE_SCENARIO="<repo>/spec/fixtures/scenarios/update_available.json" ./fake-
 - 只回放 stdout 与退出码：不会关闭宿主、不替换文件、不重启主程序。`apply_update` 的副作用需要测试方自行模拟/断言。
 - 场景本身先经 `go run . -check`（`tools/alyprotocol`）校验，假客户端不再重复校验。
 
+现有协议级用例（同一套 fixtures）：
+
+- **C#**：`AlySdkConformance.exe <fake-aly-client.exe> spec/fixtures/scenarios`，覆盖 check/download/部分失败/停流/apply/自更新/回滚/缺失更新器。
+- **TypeScript**：`cd client/aly-client-sdk/AlyClient.TypeScriptSDK && npm test`，自动构建假客户端并回放同一批场景。
+
 ## 兼容策略
 
 `x-protocol-version` 采用 `MAJOR.MINOR.PATCH`：
