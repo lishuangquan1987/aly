@@ -265,7 +265,6 @@ export function downloadUpdate(
   return new Promise((resolve) => {
     let settled = false;
     let stalled = false;
-    let failureMsg: string | null = null;
     let timer: NodeJS.Timeout | undefined;
     let child;
 
@@ -333,7 +332,13 @@ export function downloadUpdate(
       }
 
       if (!env.isSuccess) {
-        failureMsg = env.errorMsg || "download failed";
+        // 与 C# SDK 一致：任一行失败即返回该行 errorMsg（host-contract §6）。
+        finish(ng(env.errorMsg || "download failed"));
+        try {
+          child.kill();
+        } catch {
+          /* already gone */
+        }
         return;
       }
       if (env.data === null) {
@@ -366,8 +371,6 @@ export function downloadUpdate(
       if (settled) return;
       if (stalled) {
         finish(ng(`download stalled: no output for ${Math.round(stallMs / 1000)}s, process killed`));
-      } else if (failureMsg) {
-        finish(ng(failureMsg));
       } else {
         finish(ng(stderr.trim() || "download interrupted (aly-client exited before finish line)"));
       }

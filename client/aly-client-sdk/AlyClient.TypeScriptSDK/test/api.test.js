@@ -64,7 +64,7 @@ test("downloadUpdate surfaces partial failure", async () => {
     const progress = [];
     const response = await downloadUpdate(client, (p) => progress.push(p));
     assert.equal(response.isSuccess, false);
-    assert.match(response.errorMsg, /下载完成但有 1 个文件失败/);
+    assert.match(response.errorMsg, /checksum mismatch/);
     assert.equal(progress.length, 0);
   });
 });
