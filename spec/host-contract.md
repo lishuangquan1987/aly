@@ -67,7 +67,7 @@
 | 场景 | 超时 | 说明 |
 |---|---|---|
 | `check_update`、`check_self_update`、`self_update`、`list_rollback_versions` | **30 s** | 短命令，超时杀进程并报错 |
-| `download_update` | **无总时长上限**；停流看门狗 **1800 s** | 连续无任何 stdout 输出即判死；下载期间每个文件至少每 3 s 有 `PROGRESS` 行 |
+| `download_update` | **无总时长上限**；停流看门狗 **1800 s** | 连续无任何 stdout 输出即判死；大文件下载期间每 3 s 至少输出一行 `PROGRESS` |
 | `rollback` | **600 s** | 含目录改名、等待主进程退出、崩溃恢复；30 s 会把回滚留在中间态 |
 | `apply_update` | **不等待** | 拉起独立进程后立即返回；30 s 内不要重复拉起（锁在它手里） |
 
