@@ -1,0 +1,44 @@
+name: Rust SDK
+
+on:
+  push:
+    paths:
+      - "client/aly-client-sdk/AlyClient.RustSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-rust.yml"
+  pull_request:
+    paths:
+      - "client/aly-client-sdk/AlyClient.RustSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-rust.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test Rust SDK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client/aly-client-sdk/AlyClient.RustSDK
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Go (fake client)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/fake-aly-client/go.mod
+
+      - name: Verify protocol models and fixtures
+        working-directory: tools/alyprotocol
+        run: go run . -check
+
+      - name: Run tests
+        run: cargo test --locked
