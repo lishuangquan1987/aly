@@ -1,0 +1,52 @@
+name: Pascal SDK
+
+on:
+  push:
+    paths:
+      - "client/aly-client-sdk/AlyClient.PascalSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-pascal.yml"
+  pull_request:
+    paths:
+      - "client/aly-client-sdk/AlyClient.PascalSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-pascal.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Build and test Pascal SDK
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: client/aly-client-sdk/AlyClient.PascalSDK
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go (fake client)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/fake-aly-client/go.mod
+
+      - name: Install Free Pascal
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP "fpc-3.2.2.i386-win32.exe"
+          curl.exe -L --fail -o $installer "https://downloads.freepascal.org/fpc/dist/3.2.2/i386-win32/fpc-3.2.2.i386-win32.exe"
+          Start-Process -FilePath $installer -Wait -ArgumentList `
+            "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=C:\FPC\3.2.2"
+
+      - name: Verify protocol models and fixtures
+        working-directory: tools/alyprotocol
+        run: go run . -check
+
+      - name: Build SDK and conformance tests
+        run: .\build.ps1
+
+      - name: Run conformance tests
+        run: .\test.ps1
