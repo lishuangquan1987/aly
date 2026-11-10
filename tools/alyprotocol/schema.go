@@ -38,7 +38,7 @@ type Property struct {
 
 var (
 	protocolVersionRe = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
-	propertyNameRe    = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	propertyNameRe    = regexp.MustCompile(`^[a-z][A-Za-z0-9_]*$`)
 )
 
 // ParseSchema 解析并校验协议 schema。
@@ -168,7 +168,7 @@ func parseProperty(defName, propName string, raw json.RawMessage) (*Property, er
 		return nil, fmt.Errorf("解析属性 %s.%s: %v", defName, propName, err)
 	}
 	if !propertyNameRe.MatchString(propName) {
-		return nil, fmt.Errorf("属性名 %s.%s 必须是 snake_case（小写字母/数字/下划线）", defName, propName)
+		return nil, fmt.Errorf("属性名 %s.%s 必须是 lowerCamelCase 或 snake_case（小写开头）", defName, propName)
 	}
 	if p.Type != "" && p.Ref != "" {
 		return nil, fmt.Errorf("属性 %s.%s 不能同时有 type 和 $ref", defName, propName)
