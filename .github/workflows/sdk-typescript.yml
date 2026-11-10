@@ -1,0 +1,54 @@
+name: TypeScript SDK
+
+on:
+  push:
+    paths:
+      - "client/aly-client-sdk/AlyClient.TypeScriptSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-typescript.yml"
+  pull_request:
+    paths:
+      - "client/aly-client-sdk/AlyClient.TypeScriptSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-typescript.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Build and test TypeScript SDK
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: client/aly-client-sdk/AlyClient.TypeScriptSDK
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/aly-client-sdk/AlyClient.TypeScriptSDK/package-lock.json
+
+      - name: Setup Go (fake client)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/fake-aly-client/go.mod
+
+      - name: Verify protocol models and fixtures
+        working-directory: tools/alyprotocol
+        run: go run . -check
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and test
+        run: npm test
+
+      - name: Pack (dry run)
+        run: npm pack --dry-run

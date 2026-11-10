@@ -1,0 +1,30 @@
+{
+  "name": "aly-client-sdk",
+  "version": "1.0.0",
+  "description": "Aly auto-update client SDK for Node.js and Electron. Wraps aly-client and provides a managed update lifecycle.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build",
+    "test": "npm run build && node --test test/api.test.js test/client.test.js"
+  },
+  "keywords": [
+    "aly",
+    "auto-update",
+    "updater",
+    "electron"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "5.9.3"
+  }
+}
