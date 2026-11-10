@@ -7,6 +7,8 @@ description: aly-server 的请求约定、统一响应信封、HTTP 200 错误�
 
 aly-server 基于 Gin 提供 HTTP 接口，全部注册在 `/api` 前缀下（见 `server/routers/routers.go`）。
 
+如果你只想查某个接口，直接跳到[接口索引](#接口索引)；下面先说明所有接口共用的约定。
+
 | 项目 | 值 |
 | --- | --- |
 | 基础 URL | `http://<host>:2000/api` |

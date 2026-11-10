@@ -9,6 +9,22 @@ description: aly-client 更新器九个命令的完整参考，包含用途、�
 
 下文示例统一使用 Windows 文件名 `aly-client.exe`。Linux 下可执行文件名为 `aly-client`，子命令与参数完全一致。
 
+## 命令总览
+
+先看这张表定位命令，再跳到对应小节；协议、退出码和锁的细节在后面统一约定。
+
+| 命令 | 用途 | 联网 | 取全局锁 | 写 version.json | 典型调用方 |
+|---|---|---|---|---|---|
+| [`check_update`](#check-update) | 检查服务端是否有新版本 | 是 | 否 | 否 | 宿主、GUI、SDK |
+| [`check_diff`](#check-diff) | 列出需要下载的差异文件 | 是 | 否 | 否 | 调试、可视化客户端 |
+| [`download_update`](#download-update) | 下载差异文件并物化未变化文件 | 是 | 是 | 是 | 宿主、GUI、SDK |
+| [`apply_update`](#apply-update) | 原子替换主目录并重启主程序 | 否 | 是 | 是 | 宿主、GUI、SDK |
+| [`list_rollback_versions`](#list-rollback-versions) | 列出可回滚的历史快照 | 否 | 否 | 否 | GUI、SDK、运维 |
+| [`rollback`](#rollback) | 回滚到指定历史版本 | 否 | 是 | 是 | GUI、SDK、运维 |
+| [`clean`](#clean) | 清理历史快照与临时文件 | 否 | 是 | 否 | 运维、计划任务 |
+| [`check_self_update`](#check-self-update) | 检查更新器自身是否需要更新 | 否 | 否 | 否 | SDK、GUI、宿主 |
+| [`self_update`](#self-update) | 用主程序目录的新版更新器替换自身 | 否 | 是 | 否 | SDK、GUI、裸控制台宿主 |
+
 ## 统一约定
 
 ### 输出信封
@@ -73,20 +89,6 @@ applied/空 ──download_update──> downloaded ──apply_update──> ap
 ```
 
 `version_status=applying` 表示更新或回滚在途，下一次 `check_update` / `apply_update` 会走崩溃恢复。字段含义见[version.json](/docs/client/config#version-json)。
-
-## 命令总览
-
-| 命令 | 用途 | 联网 | 取全局锁 | 写 version.json | 典型调用方 |
-|---|---|---|---|---|---|
-| [`check_update`](#check-update) | 检查服务端是否有新版本 | 是 | 否 | 否 | 宿主、GUI、SDK |
-| [`check_diff`](#check-diff) | 列出需要下载的差异文件 | 是 | 否 | 否 | 调试、可视化客户端 |
-| [`download_update`](#download-update) | 下载差异文件并物化未变化文件 | 是 | 是 | 是 | 宿主、GUI、SDK |
-| [`apply_update`](#apply-update) | 原子替换主目录并重启主程序 | 否 | 是 | 是 | 宿主、GUI、SDK |
-| [`list_rollback_versions`](#list-rollback-versions) | 列出可回滚的历史快照 | 否 | 否 | 否 | GUI、SDK、运维 |
-| [`rollback`](#rollback) | 回滚到指定历史版本 | 否 | 是 | 是 | GUI、SDK、运维 |
-| [`clean`](#clean) | 清理历史快照与临时文件 | 否 | 是 | 否 | 运维、计划任务 |
-| [`check_self_update`](#check-self-update) | 检查更新器自身是否需要更新 | 否 | 否 | 否 | SDK、GUI、宿主 |
-| [`self_update`](#self-update) | 用主程序目录的新版更新器替换自身 | 否 | 是 | 否 | SDK、GUI、裸控制台宿主 |
 
 ## check_update
 

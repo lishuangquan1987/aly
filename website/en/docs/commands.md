@@ -9,6 +9,22 @@ description: Complete reference for the nine aly-client updater commands, with p
 
 The examples below use the Windows file name `aly-client.exe` throughout. On Linux the executable is named `aly-client`; subcommands and parameters are identical.
 
+## Command Overview
+
+Use this table to locate a command, then jump to its section. Protocol details, exit codes and locking follow under Common Conventions.
+
+| Command | Purpose | Network | Takes global lock | Writes version.json | Typical caller |
+|---|---|---|---|---|---|
+| [`check_update`](#check-update) | Check whether the server has a new version | Yes | No | No | Host, GUI, SDK |
+| [`check_diff`](#check-diff) | List the differing files that need downloading | Yes | No | No | Debugging, visual client |
+| [`download_update`](#download-update) | Download differing files and materialize unchanged ones | Yes | Yes | Yes | Host, GUI, SDK |
+| [`apply_update`](#apply-update) | Atomically replace the main directory and restart the main program | No | Yes | Yes | Host, GUI, SDK |
+| [`list_rollback_versions`](#list-rollback-versions) | List historical snapshots available for rollback | No | No | No | GUI, SDK, operations |
+| [`rollback`](#rollback) | Roll back to a specified historical version | No | Yes | Yes | GUI, SDK, operations |
+| [`clean`](#clean) | Clean up historical snapshots and temporary files | No | Yes | No | Operations, scheduled tasks |
+| [`check_self_update`](#check-self-update) | Check whether the updater itself needs updating | No | No | No | SDK, GUI, host |
+| [`self_update`](#self-update) | Replace itself with the newer updater from the main program directory | No | Yes | No | SDK, GUI, bare console host |
+
 ## Common Conventions
 
 ### Output Envelope
@@ -73,20 +89,6 @@ applied/empty ──download_update──> downloaded ──apply_update──> 
 ```
 
 `version_status=applying` means an update or a rollback is in flight; the next `check_update` / `apply_update` goes through crash recovery. For field meanings see [version.json](/en/docs/client/config#version-json).
-
-## Command Overview
-
-| Command | Purpose | Network | Takes global lock | Writes version.json | Typical caller |
-|---|---|---|---|---|---|
-| [`check_update`](#check-update) | Check whether the server has a new version | Yes | No | No | Host, GUI, SDK |
-| [`check_diff`](#check-diff) | List the differing files that need downloading | Yes | No | No | Debugging, visual client |
-| [`download_update`](#download-update) | Download differing files and materialize unchanged ones | Yes | Yes | Yes | Host, GUI, SDK |
-| [`apply_update`](#apply-update) | Atomically replace the main directory and restart the main program | No | Yes | Yes | Host, GUI, SDK |
-| [`list_rollback_versions`](#list-rollback-versions) | List historical snapshots available for rollback | No | No | No | GUI, SDK, operations |
-| [`rollback`](#rollback) | Roll back to a specified historical version | No | Yes | Yes | GUI, SDK, operations |
-| [`clean`](#clean) | Clean up historical snapshots and temporary files | No | Yes | No | Operations, scheduled tasks |
-| [`check_self_update`](#check-self-update) | Check whether the updater itself needs updating | No | No | No | SDK, GUI, host |
-| [`self_update`](#self-update) | Replace itself with the newer updater from the main program directory | No | Yes | No | SDK, GUI, bare console host |
 
 ## check_update
 

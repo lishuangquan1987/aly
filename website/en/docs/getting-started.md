@@ -5,6 +5,10 @@ description: Pick your OS and integration path, then run the shortest working ro
 
 # Quick Start
 
+::: tip Check the server first
+The “Publish a release” and “Integrate the updater” paths assume the server is already running. If it is not, choose “Deploy the server”, or start it in step 1 of the manual flow below.
+:::
+
 <QuickStartWizard />
 
 ## Full flow (manual)

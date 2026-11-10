@@ -7,6 +7,8 @@ description: aly-server request conventions, the unified response envelope, HTTP
 
 aly-server exposes HTTP endpoints through Gin, all registered under the `/api` prefix (see `server/routers/routers.go`).
 
+If you just need an endpoint, jump to the [Endpoint Index](#endpoint-index); the shared conventions follow below.
+
 | Item | Value |
 | --- | --- |
 | Base URL | `http://<host>:2000/api` |
