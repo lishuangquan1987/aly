@@ -1,0 +1,15 @@
+{
+  "types": {
+    "CheckUpdateData": {},
+    "CheckDiffData": {},
+    "DiffFileItem": {},
+    "DownloadUpdateData": {},
+    "DownloadProgress": {},
+    "RollbackListData": {},
+    "RollbackData": {},
+    "SelfUpdateData": {},
+    "CheckSelfUpdateData": {},
+    "CleanData": {}
+  },
+  "skip": ["Output"]
+}

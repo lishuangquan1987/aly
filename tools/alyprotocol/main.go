@@ -14,10 +14,12 @@ const (
 	schemaRelPath   = "spec/aly-protocol.schema.json"
 	configRelPath   = "tools/alyprotocol/csharp.json"
 	tsConfigRelPath = "tools/alyprotocol/ts.json"
+	goConfigRelPath = "tools/alyprotocol/go.json"
 	dtoRelPath      = "client/aly-client/model/dto.go"
 	fixturesRelPath = "spec/fixtures/scenarios"
 	outputRelPath   = "client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/Models/Generated"
 	tsOutputRelPath = "client/aly-client-sdk/AlyClient.TypeScriptSDK/src/models.ts"
+	goOutputRelPath = "client/aly-client-sdk/AlyClient.GoSDK/models_gen.go"
 )
 
 func main() {
@@ -138,15 +140,30 @@ func process(root string, checkOnly bool) error {
 	if err != nil {
 		return err
 	}
+	goCfg, err := LoadGoConfig(filepath.Join(root, goConfigRelPath))
+	if err != nil {
+		return err
+	}
+	goFile, err := RenderGo(schema, goCfg)
+	if err != nil {
+		return err
+	}
 	outDir := filepath.Join(root, outputRelPath)
 	tsPath := filepath.Join(root, tsOutputRelPath)
+	goPath := filepath.Join(root, goOutputRelPath)
 	if checkOnly {
 		if err := checkGeneratedFile(tsPath, tsFile); err != nil {
+			return err
+		}
+		if err := checkGeneratedFile(goPath, goFile); err != nil {
 			return err
 		}
 		return checkFiles(outDir, files)
 	}
 	if err := writeGeneratedFile(tsPath, tsFile); err != nil {
+		return err
+	}
+	if err := writeGeneratedFile(goPath, goFile); err != nil {
 		return err
 	}
 	return writeFiles(outDir, files)
