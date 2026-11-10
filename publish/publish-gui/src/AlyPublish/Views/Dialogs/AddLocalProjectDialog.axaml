@@ -7,7 +7,7 @@
     xmlns:loc="using:AlyPublish.Localization"
     xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
     xmlns:vm="using:AlyPublish.ViewModels"
-    Title="{Translate {x:Static loc:LanguageManager+Keys.S004}}"
+    Title="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_WindowTitle}}"
     Width="580"
     SizeToContent="Height"
     CanResize="False"
@@ -19,22 +19,22 @@
       <TextBlock
           FontSize="15"
           FontWeight="SemiBold"
-          Text="{Translate {x:Static loc:LanguageManager+Keys.S068}}" />
+          Text="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_Heading}}" />
       <TextBlock
           Classes="caption"
-          Text="{Translate {x:Static loc:LanguageManager+Keys.S069}}" />
+          Text="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_Hint}}" />
     </StackPanel>
 
     <StackPanel>
-      <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S070}}" />
+      <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_Folder_Label}}" />
       <Grid ColumnDefinitions="*,Auto">
         <TextBox
-            PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S071}}"
+            PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_Folder_Placeholder}}"
             Text="{Binding ProjectPath}" />
         <Button
             Grid.Column="1"
             Click="OnBrowseProjectFolder"
-            Content="{Translate {x:Static loc:LanguageManager+Keys.S072}}"
+            Content="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_Folder_Browse}}"
             Height="32"
             Margin="8,0,0,0"
             Padding="12,0" />
@@ -51,7 +51,7 @@
               Kind="FolderOpenOutline"
               VerticalAlignment="Center"
               Width="14" />
-          <TextBlock Classes="caption" Text="{Translate {x:Static loc:LanguageManager+Keys.S073}}" VerticalAlignment="Center" />
+          <TextBlock Classes="caption" Text="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_DropHint}}" VerticalAlignment="Center" />
         </StackPanel>
       </Border>
     </StackPanel>
@@ -83,7 +83,7 @@
         IsVisible="{Binding HasPreview}"
         Padding="12,10">
       <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="6">
-        <TextBlock Classes="fieldLabel" Text="{Translate {x:Static loc:LanguageManager+Keys.S038}}" />
+        <TextBlock Classes="fieldLabel" Text="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_Preview_Server}}" />
         <TextBlock
             Grid.Column="1"
             FontSize="12"
@@ -92,7 +92,7 @@
         <TextBlock
             Classes="fieldLabel"
             Grid.Row="1"
-            Text="{Translate {x:Static loc:LanguageManager+Keys.S074}}" />
+            Text="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_Preview_Project}}" />
         <TextBlock
             Grid.Column="1"
             Grid.Row="1"
@@ -101,31 +101,31 @@
         <TextBlock
             Classes="fieldLabel"
             Grid.Row="2"
-            Text="{Translate {x:Static loc:LanguageManager+Keys.S075}}" />
+            Text="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_Preview_IgnoreRules}}" />
         <TextBlock
             Grid.Column="1"
             Grid.Row="2"
             FontSize="12">
           <Run Text="{Binding PreviewIgnoreCount}" />
-          <Run Text="{Translate {x:Static loc:LanguageManager+Keys.S076}}" />
+          <Run Text="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_Preview_ItemsSuffix}}" />
         </TextBlock>
       </Grid>
     </Border>
 
     <StackPanel>
-      <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S077}}" />
-      <TextBox PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S078}}" Text="{Binding DisplayName}" />
+      <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_DisplayName_Label}}" />
+      <TextBox PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_DisplayName_Placeholder}}" Text="{Binding DisplayName}" />
     </StackPanel>
 
     <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,6,0,0">
       <TextBlock
           Classes="caption"
-          Text="{Translate {x:Static loc:LanguageManager+Keys.S079}}"
+          Text="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_Note}}"
           VerticalAlignment="Center" />
       <Button
           Grid.Column="1"
           Command="{Binding CancelCommand}"
-          Content="{Translate {x:Static loc:LanguageManager+Keys.S058}}"
+          Content="{Translate {x:Static loc:LanguageManager+Keys.Common_Cancel}}"
           Height="32"
           Margin="0,0,8,0"
           Padding="16,0" />
@@ -133,7 +133,7 @@
           Grid.Column="2"
           Classes="Primary"
           Command="{Binding ConfirmCommand}"
-          Content="{Translate {x:Static loc:LanguageManager+Keys.S080}}"
+          Content="{Translate {x:Static loc:LanguageManager+Keys.AddLocalProjectDialog_AddButton}}"
           Height="32"
           Padding="20,0" />
     </Grid>

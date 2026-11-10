@@ -20,7 +20,7 @@ public static class UpdateFolderService
         var projectDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectPath));
         var parentDirectory = Path.GetDirectoryName(projectDirectory)
             ?? throw new InvalidOperationException(
-                LanguageManager.T(LanguageManager.Instance.Update_ParentMissing));
+                LanguageManager.T(LanguageManager.Instance.Message_UpdateFolder_ParentMissing));
         var updateFolder = Path.Combine(parentDirectory, "UpdateFolder");
         Directory.CreateDirectory(updateFolder);
 
@@ -31,7 +31,7 @@ public static class UpdateFolderService
             var source = FindClientExecutable(projectDirectory, executableName);
             if (source is null)
             {
-                warnings.Add(LanguageManager.F(LanguageManager.Instance.Update_FileMissing, executableName));
+                warnings.Add(LanguageManager.F(LanguageManager.Instance.Message_UpdateFolder_FileMissing, executableName));
                 continue;
             }
 
@@ -43,7 +43,7 @@ public static class UpdateFolderService
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 warnings.Add(LanguageManager.F(
-                    LanguageManager.Instance.Update_CopyFailed,
+                    LanguageManager.Instance.Message_UpdateFolder_CopyFailed,
                     executableName,
                     ex.Message));
             }
@@ -54,7 +54,7 @@ public static class UpdateFolderService
         if (Path.IsPathRooted(relativePath))
         {
             throw new InvalidOperationException(
-                LanguageManager.T(LanguageManager.Instance.Update_SameDisk));
+                LanguageManager.T(LanguageManager.Instance.Message_UpdateFolder_SameDisk));
         }
 
         var processName = string.IsNullOrWhiteSpace(closeProcessName)
@@ -75,7 +75,7 @@ public static class UpdateFolderService
         return warnings.Count == 0
             ? null
             : LanguageManager.F(
-                LanguageManager.Instance.Update_Incomplete,
+                LanguageManager.Instance.Message_UpdateFolder_Incomplete,
                 string.Join("; ", warnings));
     }
 

@@ -150,7 +150,7 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
 
     public string SelectedProjectVersionText
         => string.IsNullOrWhiteSpace(SelectedServerProject?.Version)
-        ? LanguageManager.T(LanguageManager.Instance.Dlg_NotPublished)
+        ? LanguageManager.T(LanguageManager.Instance.AddProjectDialog_Server_NotPublished)
         : SelectedServerProject.Version;
 
     public void Initialize()
@@ -255,21 +255,21 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
             var projects = await _cli.GetServerProjectsAsync(ServerUrl.Trim());
             _allServerProjects = projects;
             ApplyServerFilter();
-            FetchError = projects.Count == 0 ? LanguageManager.T(LanguageManager.Instance.Dlg_NoServerProjects) : string.Empty;
+            FetchError = projects.Count == 0 ? LanguageManager.T(LanguageManager.Instance.AddProjectDialog_Server_NoProjects) : string.Empty;
             Log.Information("获取服务端项目: {Count} 个", projects.Count);
         }
         catch (CliException ex)
         {
             _allServerProjects = [];
             ApplyServerFilter();
-            FetchError = LanguageManager.F(LanguageManager.Instance.Dlg_FetchFailed, ex.Message);
+            FetchError = LanguageManager.F(LanguageManager.Instance.AddProjectDialog_Server_FetchFailed, ex.Message);
             Log.Warning(ex, "获取服务端项目失败");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _allServerProjects = [];
             ApplyServerFilter();
-            FetchError = LanguageManager.F(LanguageManager.Instance.Dlg_FetchFailed, ex.Message);
+            FetchError = LanguageManager.F(LanguageManager.Instance.AddProjectDialog_Server_FetchFailed, ex.Message);
             Log.Error(ex, "获取服务端项目发生未预期异常");
         }
         finally
@@ -332,7 +332,7 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
 
         ProjectSetupResult? result = null;
         var completed = await RunAsync(
-            LanguageManager.T(LanguageManager.Instance.Op_InitProject),
+            LanguageManager.T(LanguageManager.Instance.Operation_InitializeProject),
             async token => result = await _setup.InitializeAsync(request, token));
 
         if (!completed || result is null)
@@ -363,13 +363,13 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
         }
     }
 
-    public void AddIgnoreFolder(string fullPath) => AddProjectEntry(IgnoreFolders, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_Folder));
+    public void AddIgnoreFolder(string fullPath) => AddProjectEntry(IgnoreFolders, fullPath, LanguageManager.T(LanguageManager.Instance.Common_Kind_Folder));
 
-    public void AddIgnoreFile(string fullPath) => AddProjectEntry(IgnoreFiles, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_File));
+    public void AddIgnoreFile(string fullPath) => AddProjectEntry(IgnoreFiles, fullPath, LanguageManager.T(LanguageManager.Instance.Common_Kind_File));
 
-    public void AddUnCopyFolder(string fullPath) => AddProjectEntry(UnCopyFolders, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_Folder));
+    public void AddUnCopyFolder(string fullPath) => AddProjectEntry(UnCopyFolders, fullPath, LanguageManager.T(LanguageManager.Instance.Common_Kind_Folder));
 
-    public void AddUnCopyFile(string fullPath) => AddProjectEntry(UnCopyFiles, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_File));
+    public void AddUnCopyFile(string fullPath) => AddProjectEntry(UnCopyFiles, fullPath, LanguageManager.T(LanguageManager.Instance.Common_Kind_File));
 
     [RelayCommand]
     private void Cancel() => Close(null);
@@ -445,30 +445,30 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
 
         if (path.Length == 0)
         {
-            PathState = LanguageManager.T(LanguageManager.Instance.Dlg_PathSelect);
+            PathState = LanguageManager.T(LanguageManager.Instance.AddProjectDialog_Message_PathSelect);
             return;
         }
 
         if (!Directory.Exists(path))
         {
-            PathState = LanguageManager.T(LanguageManager.Instance.Dlg_PathNotExist);
+            PathState = LanguageManager.T(LanguageManager.Instance.AddProjectDialog_Message_PathNotExist);
             return;
         }
 
         if (ProjectInputHelper.IsInitialized(path))
         {
-            PathState = LanguageManager.T(LanguageManager.Instance.Dlg_PathInitialized);
+            PathState = LanguageManager.T(LanguageManager.Instance.AddProjectDialog_Message_PathInitialized);
             return;
         }
 
         if (_existingProjectPaths.Contains(NormalizeForComparison(path)))
         {
-            PathState = LanguageManager.T(LanguageManager.Instance.Dlg_AlreadyListed);
+            PathState = LanguageManager.T(LanguageManager.Instance.AddLocalProjectDialog_Message_AlreadyListed);
             return;
         }
 
         IsPathUsable = true;
-        PathState = LanguageManager.T(LanguageManager.Instance.Dlg_PathWillInitialize);
+        PathState = LanguageManager.T(LanguageManager.Instance.AddProjectDialog_Message_PathWillInitialize);
     }
 
     private void UpdateMainExeCandidates()
@@ -508,17 +508,17 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
     {
         if (IsServerStep)
         {
-            return IsServerSelectionValid ? string.Empty : LanguageManager.T(LanguageManager.Instance.Dlg_SelectServerFirst);
+            return IsServerSelectionValid ? string.Empty : LanguageManager.T(LanguageManager.Instance.AddProjectDialog_Message_SelectServerFirst);
         }
 
         if (!IsPathUsable)
         {
             return string.IsNullOrWhiteSpace(PathState)
-                ? LanguageManager.T(LanguageManager.Instance.Dlg_SelectProjectDir)
+                ? LanguageManager.T(LanguageManager.Instance.AddProjectDialog_Message_SelectProjectDir)
                 : PathState;
         }
 
-        return string.IsNullOrWhiteSpace(DisplayName) ? LanguageManager.T(LanguageManager.Instance.Dlg_DisplayNameRequired) : string.Empty;
+        return string.IsNullOrWhiteSpace(DisplayName) ? LanguageManager.T(LanguageManager.Instance.AddProjectDialog_Message_DisplayNameRequired) : string.Empty;
     }
 
     private static void AddIfMissing(ObservableCollection<string> target, string? value)
@@ -539,7 +539,7 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
     {
         if (!ProjectInputHelper.TryGetProjectRelativePath(ProjectPath.Trim(), fullPath, out var relative))
         {
-            Notify.Warning(LanguageManager.F(LanguageManager.Instance.Dlg_PickInProject, kind));
+            Notify.Warning(LanguageManager.F(LanguageManager.Instance.Common_PickInProject, kind));
             return;
         }
 

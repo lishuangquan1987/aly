@@ -108,24 +108,24 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         {
             if (StagedFiles.Count == 0)
             {
-                return LanguageManager.T(LanguageManager.Instance.Tab_StageFirst);
+                return LanguageManager.T(LanguageManager.Instance.ProjectTab_Publish_StageFirst);
             }
 
             if (string.IsNullOrWhiteSpace(NewVersion))
             {
-                return LanguageManager.T(LanguageManager.Instance.Tab_NeedVersion);
+                return LanguageManager.T(LanguageManager.Instance.ProjectTab_Publish_NeedVersion);
             }
 
-            return string.IsNullOrWhiteSpace(CommitMessage) ? LanguageManager.T(LanguageManager.Instance.Tab_NeedNotes) : string.Empty;
+            return string.IsNullOrWhiteSpace(CommitMessage) ? LanguageManager.T(LanguageManager.Instance.ProjectTab_Publish_NeedNotes) : string.Empty;
         }
     }
 
     public string PublishButtonText => StagedFiles.Count == 0
-        ? LanguageManager.T(LanguageManager.Instance.Tab_PublishStaged)
-        : LanguageManager.F(LanguageManager.Instance.Tab_PublishCount, StagedFiles.Count);
+        ? LanguageManager.T(LanguageManager.Instance.ProjectTab_Publish_PublishStaged)
+        : LanguageManager.F(LanguageManager.Instance.ProjectTab_Publish_PublishCount, StagedFiles.Count);
 
     public string CurrentVersionText => string.IsNullOrWhiteSpace(CurrentVersion)
-        ? LanguageManager.T(LanguageManager.Instance.Tab_NoVersion)
+        ? LanguageManager.T(LanguageManager.Instance.ProjectTab_Publish_NoVersion)
         : CurrentVersion;
 
     public bool HasPublishHint => !string.IsNullOrEmpty(PublishHint);
@@ -138,13 +138,13 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
 
     public string UnstagedSelectionText
         => UnstagedFiles.Count > 0 && UnstagedFiles.All(file => file.IsSelected)
-            ? LanguageManager.T(LanguageManager.Instance.Tab_UnselectAll)
-            : LanguageManager.T(LanguageManager.Instance.Tab_SelectAll);
+            ? LanguageManager.T(LanguageManager.Instance.ProjectTab_Changes_UnselectAll)
+            : LanguageManager.T(LanguageManager.Instance.ProjectTab_Changes_SelectAll);
 
     public string StagedSelectionText
         => StagedFiles.Count > 0 && StagedFiles.All(file => file.IsSelected)
-            ? LanguageManager.T(LanguageManager.Instance.Tab_UnselectAll)
-            : LanguageManager.T(LanguageManager.Instance.Tab_SelectAll);
+            ? LanguageManager.T(LanguageManager.Instance.ProjectTab_Changes_UnselectAll)
+            : LanguageManager.T(LanguageManager.Instance.ProjectTab_Changes_SelectAll);
 
     /// <summary>Called after a culture switch to refresh computed strings.</summary>
     public void RefreshLocalization()
@@ -161,7 +161,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         }
 
         StatusMessage = LanguageManager.F(
-            LanguageManager.T(LanguageManager.Instance.Tab_StatusSummary),
+            LanguageManager.T(LanguageManager.Instance.ProjectTab_Changes_StatusSummary),
             UnstagedFiles.Count,
             StagedFiles.Count);
     }
@@ -185,11 +185,11 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRefresh))]
     private async Task RefreshAsync()
     {
-        StatusMessage = LanguageManager.T(LanguageManager.Instance.Tab_ReadingStatus);
+        StatusMessage = LanguageManager.T(LanguageManager.Instance.ProjectTab_Changes_ReadingStatus);
         IsInitialLoading = !_hasLoaded;
         try
         {
-            await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_Refresh), token => FetchDataAsync(token), showErrorDialog: false);
+            await RunAsync(LanguageManager.T(LanguageManager.Instance.Operation_Refresh), token => FetchDataAsync(token), showErrorDialog: false);
         }
         finally
         {
@@ -201,7 +201,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanAddAll))]
     private async Task AddAllAsync()
     {
-        var added = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_StageAll), async token =>
+        var added = await RunAsync(LanguageManager.T(LanguageManager.Instance.Operation_StageAll), async token =>
         {
             await _cli.AddAllAsync(Project.ProjectPath, token);
             await FetchDataAsync(token);
@@ -209,7 +209,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
 
         if (added)
         {
-            Notify.Success(LanguageManager.T(LanguageManager.Instance.Tab_StagedNotify));
+            Notify.Success(LanguageManager.T(LanguageManager.Instance.ProjectTab_Message_StagedNotify));
         }
     }
 
@@ -217,14 +217,14 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
     private async Task ResetAllAsync()
     {
         var confirmed = await Dialogs.ConfirmAsync(
-            LanguageManager.T(LanguageManager.Instance.Tab_ClearStagingTitle),
-            LanguageManager.T(LanguageManager.Instance.Tab_ClearStagingMessage));
+            LanguageManager.T(LanguageManager.Instance.ProjectTab_ClearStagingDialog_Title),
+            LanguageManager.T(LanguageManager.Instance.ProjectTab_ClearStagingDialog_Message));
         if (!confirmed)
         {
             return;
         }
 
-        var reset = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_ClearStaging), async token =>
+        var reset = await RunAsync(LanguageManager.T(LanguageManager.Instance.Operation_ClearStaging), async token =>
         {
             await _cli.ResetAllAsync(Project.ProjectPath, token);
             await FetchDataAsync(token);
@@ -232,7 +232,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
 
         if (reset)
         {
-            Notify.Success(LanguageManager.T(LanguageManager.Instance.Tab_StagingCleared));
+            Notify.Success(LanguageManager.T(LanguageManager.Instance.ProjectTab_Message_StagingCleared));
         }
     }
 
@@ -240,7 +240,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
     private async Task AddSelectedAsync()
     {
         var files = SelectedPaths(UnstagedFiles);
-        var added = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_StageSelected), async token =>
+        var added = await RunAsync(LanguageManager.T(LanguageManager.Instance.Operation_StageSelected), async token =>
         {
             await _cli.AddFilesAsync(Project.ProjectPath, files, token);
             await FetchDataAsync(token);
@@ -248,7 +248,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
 
         if (added)
         {
-            Notify.Success(LanguageManager.F(LanguageManager.Instance.Tab_StagedSelected, files.Count));
+            Notify.Success(LanguageManager.F(LanguageManager.Instance.ProjectTab_Message_StagedSelected, files.Count));
         }
     }
 
@@ -256,7 +256,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
     private async Task ResetSelectedAsync()
     {
         var files = SelectedPaths(StagedFiles);
-        var reset = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_UnstageSelected), async token =>
+        var reset = await RunAsync(LanguageManager.T(LanguageManager.Instance.Operation_UnstageSelected), async token =>
         {
             await _cli.ResetFilesAsync(Project.ProjectPath, files, token);
             await FetchDataAsync(token);
@@ -264,7 +264,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
 
         if (reset)
         {
-            Notify.Success(LanguageManager.F(LanguageManager.Instance.Tab_UnstagedSelected, files.Count));
+            Notify.Success(LanguageManager.F(LanguageManager.Instance.ProjectTab_Message_UnstagedSelected, files.Count));
         }
     }
 
@@ -279,7 +279,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         try
         {
             var succeeded = await RunAsync(
-                LanguageManager.T(LanguageManager.Instance.Op_Publish),
+                LanguageManager.T(LanguageManager.Instance.Operation_Publish),
                 async token =>
                 {
                     await _cli.PushAsync(
@@ -297,8 +297,8 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
             if (!succeeded)
             {
                 UploadProgressText = cancellationToken.IsCancellationRequested
-                    ? LanguageManager.T(LanguageManager.Instance.Tab_PublishCancelled)
-                    : LanguageManager.T(LanguageManager.Instance.Tab_PublishFailed);
+                    ? LanguageManager.T(LanguageManager.Instance.ProjectTab_Publish_Cancelled)
+                    : LanguageManager.T(LanguageManager.Instance.ProjectTab_Publish_Failed);
                 return;
             }
 
@@ -307,12 +307,12 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
             AfterApplyUpdateScript = string.Empty;
             SetForceUpdate = false;
             await RunAsync(
-                LanguageManager.T(LanguageManager.Instance.Op_Refresh),
+                LanguageManager.T(LanguageManager.Instance.Operation_Refresh),
                 token => FetchDataAsync(token),
                 showErrorDialog: false,
                 cancellationToken: CancellationToken.None);
-            StatusMessage = LanguageManager.F(LanguageManager.Instance.Tab_PublishSucceededStatus, stagedCount);
-            Notify.Success(LanguageManager.F(LanguageManager.Instance.Tab_PublishSucceededNotify, version));
+            StatusMessage = LanguageManager.F(LanguageManager.Instance.ProjectTab_Publish_SucceededStatus, stagedCount);
+            Notify.Success(LanguageManager.F(LanguageManager.Instance.ProjectTab_Publish_SucceededNotify, version));
         }
         finally
         {
@@ -329,19 +329,19 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         var executablePath = GetMainExeFullPath();
         if (executablePath is null)
         {
-            Notify.Warning(LanguageManager.T(LanguageManager.Instance.Tab_LaunchNoMain));
+            Notify.Warning(LanguageManager.T(LanguageManager.Instance.ProjectTab_Message_LaunchNoMain));
             return;
         }
 
         if (!File.Exists(executablePath))
         {
             await Dialogs.ErrorAsync(
-                LanguageManager.T(LanguageManager.Instance.Tab_LaunchFailedTitle),
-                LanguageManager.F(LanguageManager.Instance.Tab_MainMissing, executablePath));
+                LanguageManager.T(LanguageManager.Instance.ProjectTab_Message_LaunchFailedTitle),
+                LanguageManager.F(LanguageManager.Instance.ProjectTab_Message_MainMissing, executablePath));
             return;
         }
 
-        await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_Launch), () =>
+        await RunAsync(LanguageManager.T(LanguageManager.Instance.Operation_Launch), () =>
         {
             Process.Start(new ProcessStartInfo
             {
@@ -349,7 +349,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
                 WorkingDirectory = Path.GetDirectoryName(executablePath) ?? Project.ProjectPath,
                 UseShellExecute = true
             });
-            StatusMessage = LanguageManager.F(LanguageManager.Instance.Tab_Launched, executablePath);
+            StatusMessage = LanguageManager.F(LanguageManager.Instance.ProjectTab_Message_Launched, executablePath);
         });
     }
 
@@ -359,19 +359,19 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         if (!Directory.Exists(Project.ProjectPath))
         {
             await Dialogs.ErrorAsync(
-                LanguageManager.T(LanguageManager.Instance.Tab_OpenFolderFailedTitle),
-                LanguageManager.F(LanguageManager.Instance.Tab_DirectoryMissing, Project.ProjectPath));
+                LanguageManager.T(LanguageManager.Instance.ProjectTab_Message_OpenFolderFailedTitle),
+                LanguageManager.F(LanguageManager.Instance.ProjectTab_Message_DirectoryMissing, Project.ProjectPath));
             return;
         }
 
-        await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_OpenProjectFolder), () =>
+        await RunAsync(LanguageManager.T(LanguageManager.Instance.Operation_OpenProjectFolder), () =>
         {
             Process.Start(new ProcessStartInfo
             {
                 FileName = Project.ProjectPath,
                 UseShellExecute = true
             });
-            StatusMessage = LanguageManager.F(LanguageManager.Instance.Tab_Opened, Project.ProjectPath);
+            StatusMessage = LanguageManager.F(LanguageManager.Instance.ProjectTab_Message_Opened, Project.ProjectPath);
         });
     }
 
@@ -388,12 +388,12 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         if (directory is null || !Directory.Exists(directory))
         {
             await Dialogs.ErrorAsync(
-                LanguageManager.T(LanguageManager.Instance.Tab_OpenFileLocationFailedTitle),
-                LanguageManager.F(LanguageManager.Instance.Tab_DirectoryMissing, directory));
+                LanguageManager.T(LanguageManager.Instance.ProjectTab_Message_OpenFileLocationFailedTitle),
+                LanguageManager.F(LanguageManager.Instance.ProjectTab_Message_DirectoryMissing, directory));
             return;
         }
 
-        await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_OpenFileLocation), () =>
+        await RunAsync(LanguageManager.T(LanguageManager.Instance.Operation_OpenFileLocation), () =>
         {
             Process.Start(new ProcessStartInfo
             {
@@ -464,7 +464,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         var changeLogs = await _cli.GetLogAsync(Project.ProjectPath, cancellationToken: cancellationToken);
         ApplyStatus(status, changeLogs);
         StatusMessage = LanguageManager.F(
-            LanguageManager.T(LanguageManager.Instance.Tab_StatusSummary),
+            LanguageManager.T(LanguageManager.Instance.ProjectTab_Changes_StatusSummary),
             UnstagedFiles.Count,
             StagedFiles.Count);
     }
@@ -514,8 +514,8 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         UploadProgressPercent = 0;
         IsUploadProgressIndeterminate = total == 0;
         UploadProgressText = total == 0
-            ? LanguageManager.T(LanguageManager.Instance.Tab_UploadPreparing)
-            : LanguageManager.F(LanguageManager.Instance.Tab_UploadPreparingCount, total);
+            ? LanguageManager.T(LanguageManager.Instance.ProjectTab_Publish_Upload_Preparing)
+            : LanguageManager.F(LanguageManager.Instance.ProjectTab_Publish_Upload_PreparingCount, total);
         UploadSummary = string.Empty;
         IsUploading = true;
     }
@@ -534,7 +534,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
             case "START":
                 UpsertProgress(progress);
                 UploadProgressText = LanguageManager.F(
-                    LanguageManager.T(LanguageManager.Instance.Tab_Uploading),
+                    LanguageManager.T(LanguageManager.Instance.ProjectTab_Publish_Upload_Uploading),
                     progress.File,
                     UploadDoneCount + UploadFailedCount,
                     UploadTotalCount);
@@ -554,17 +554,17 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
 
                 UpdateUploadPercent();
                 UploadSummary = LanguageManager.F(
-                    LanguageManager.T(LanguageManager.Instance.Tab_UploadSummary),
+                    LanguageManager.T(LanguageManager.Instance.ProjectTab_Publish_Upload_Summary),
                     UploadDoneCount,
                     UploadFailedCount,
                     UploadTotalCount);
                 UploadProgressText = progress.IsDone
                     ? LanguageManager.F(
-                        LanguageManager.T(LanguageManager.Instance.Tab_UploadDone),
+                        LanguageManager.T(LanguageManager.Instance.ProjectTab_Publish_Upload_Done),
                         progress.File,
                         UploadDoneCount + UploadFailedCount,
                         UploadTotalCount)
-                    : LanguageManager.F(LanguageManager.Instance.Tab_UploadFailed, progress.File, progress.Error);
+                    : LanguageManager.F(LanguageManager.Instance.ProjectTab_Publish_Upload_Failed, progress.File, progress.Error);
                 break;
         }
     }

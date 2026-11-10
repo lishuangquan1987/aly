@@ -9,7 +9,7 @@
     xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
     xmlns:u="https://irihi.tech/ursa"
     xmlns:vm="using:AlyPublish.ViewModels"
-    Title="{Translate {x:Static loc:LanguageManager+Keys.S006}}"
+    Title="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_WindowTitle}}"
     Width="660"
     Height="820"
     MinWidth="580"
@@ -23,10 +23,10 @@
       <TextBlock
           FontSize="15"
           FontWeight="SemiBold"
-          Text="{Translate {x:Static loc:LanguageManager+Keys.S006}}" />
+          Text="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Heading}}" />
       <TextBlock
           Classes="caption"
-          Text="{Translate {x:Static loc:LanguageManager+Keys.S127}}" />
+          Text="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Hint}}" />
     </StackPanel>
 
     <Border
@@ -68,24 +68,24 @@
                   Height="14"
                   Kind="Monitor"
                   Width="14" />
-              <TextBlock Classes="sectionTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S128}}" />
+              <TextBlock Classes="sectionTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_LocalDisplay_Label}}" />
             </StackPanel>
 
             <StackPanel>
-              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S129}}" />
-              <TextBox PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S130}}" Text="{Binding DisplayName}" />
+              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_DisplayName_Label}}" />
+              <TextBox PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_DisplayName_Placeholder}}" Text="{Binding DisplayName}" />
             </StackPanel>
 
             <StackPanel>
-              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S131}}" />
+              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_MainExe_Label}}" />
               <Grid ColumnDefinitions="*,Auto">
                 <TextBox
-                    PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S132}}"
+                    PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_MainExe_Placeholder}}"
                     Text="{Binding MainExePath}" />
                 <Button
                     Grid.Column="1"
                     Click="OnBrowseMainExe"
-                    Content="{Translate {x:Static loc:LanguageManager+Keys.S072}}"
+                    Content="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_BrowseMainExe}}"
                     Height="32"
                     Margin="8,0,0,0"
                     Padding="12,0" />
@@ -107,11 +107,11 @@
                   Height="14"
                   Kind="Cog"
                   Width="14" />
-              <TextBlock Classes="sectionTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S133}}" />
+              <TextBlock Classes="sectionTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Config_SectionTitle}}" />
             </StackPanel>
 
             <StackPanel>
-              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S083}}" />
+              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Config_ServerUrlLabel}}" />
               <TextBox PlaceholderText="http://localhost:2000" Text="{Binding ServerUrl}" />
               <ItemsControl ItemsSource="{Binding KnownServerUrls}" Margin="0,6,0,0">
                 <ItemsControl.ItemsPanel>
@@ -136,17 +136,17 @@
             </StackPanel>
 
             <StackPanel>
-              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S134}}" />
-              <TextBox PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S120}}" Text="{Binding ProjectName}" />
+              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Config_ProjectNameLabel}}" />
+              <TextBox PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Config_ProjectNamePlaceholder}}" Text="{Binding ProjectName}" />
               <TextBlock
                   Classes="caption"
                   Margin="0,4,0,0"
-                  Text="{Translate {x:Static loc:LanguageManager+Keys.S135}}"
+                  Text="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Config_ProjectNameHint}}"
                   TextWrapping="Wrap" />
             </StackPanel>
 
             <StackPanel>
-              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S103}}" />
+              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Rules_IgnoreFolders}}" />
               <ItemsControl ItemsSource="{x:Static constants:AppConstants.IgnoreFolderSuggestions}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
@@ -170,7 +170,7 @@
               <Grid ColumnDefinitions="*,Auto">
                 <u:TagInput
                     AllowDuplicates="False"
-                    PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S110}}"
+                    PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Rules_IgnoreFoldersPlaceholder}}"
                     Separator=","
                     Tags="{Binding IgnoreFolders}" />
                 <Button
@@ -179,7 +179,7 @@
                     Height="32"
                     Margin="8,0,0,0"
                     Padding="0"
-                    ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S105}}"
+                    ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Rules_PickIgnoreFolderTooltip}}"
                     Width="32">
                   <materialIcons:MaterialIcon Height="14" Kind="Plus" Width="14" />
                 </Button>
@@ -187,7 +187,7 @@
             </StackPanel>
 
             <StackPanel>
-              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S106}}" />
+              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Rules_IgnoreFiles}}" />
               <ItemsControl ItemsSource="{x:Static constants:AppConstants.IgnoreFileSuggestions}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
@@ -211,7 +211,7 @@
               <Grid ColumnDefinitions="*,Auto">
                 <u:TagInput
                     AllowDuplicates="False"
-                    PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S110}}"
+                    PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Rules_IgnoreFilesPlaceholder}}"
                     Separator=","
                     Tags="{Binding IgnoreFiles}" />
                 <Button
@@ -220,7 +220,7 @@
                     Height="32"
                     Margin="8,0,0,0"
                     Padding="0"
-                    ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S108}}"
+                    ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Rules_PickIgnoreFileTooltip}}"
                     Width="32">
                   <materialIcons:MaterialIcon Height="14" Kind="Plus" Width="14" />
                 </Button>
@@ -228,11 +228,11 @@
             </StackPanel>
 
             <StackPanel>
-              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S109}}" />
+              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Rules_UnCopyFolders}}" />
               <Grid ColumnDefinitions="*,Auto">
                 <u:TagInput
                     AllowDuplicates="False"
-                    PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S110}}"
+                    PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Rules_UnCopyFoldersPlaceholder}}"
                     Separator=","
                     Tags="{Binding UnCopyFolders}" />
                 <Button
@@ -241,7 +241,7 @@
                     Height="32"
                     Margin="8,0,0,0"
                     Padding="0"
-                    ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S105}}"
+                    ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Rules_PickUnCopyFolderTooltip}}"
                     Width="32">
                   <materialIcons:MaterialIcon Height="14" Kind="Plus" Width="14" />
                 </Button>
@@ -249,11 +249,11 @@
             </StackPanel>
 
             <StackPanel>
-              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S111}}" />
+              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Rules_UnCopyFiles}}" />
               <Grid ColumnDefinitions="*,Auto">
                 <u:TagInput
                     AllowDuplicates="False"
-                    PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S110}}"
+                    PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Rules_UnCopyFilesPlaceholder}}"
                     Separator=","
                     Tags="{Binding UnCopyFiles}" />
                 <Button
@@ -262,7 +262,7 @@
                     Height="32"
                     Margin="8,0,0,0"
                     Padding="0"
-                    ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S108}}"
+                    ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_Rules_PickUnCopyFileTooltip}}"
                     Width="32">
                   <materialIcons:MaterialIcon Height="14" Kind="Plus" Width="14" />
                 </Button>
@@ -291,7 +291,7 @@
       <Button
           Grid.Column="1"
           Command="{Binding CancelCommand}"
-          Content="{Translate {x:Static loc:LanguageManager+Keys.S058}}"
+          Content="{Translate {x:Static loc:LanguageManager+Keys.Common_Cancel}}"
           Height="32"
           Margin="0,0,8,0"
           Padding="16,0" />
@@ -299,7 +299,7 @@
           Grid.Column="2"
           Classes="Primary"
           Command="{Binding SaveCommand}"
-          Content="{Translate {x:Static loc:LanguageManager+Keys.S136}}"
+          Content="{Translate {x:Static loc:LanguageManager+Keys.EditProjectDialog_SaveButton}}"
           Height="32"
           Padding="20,0" />
     </Grid>

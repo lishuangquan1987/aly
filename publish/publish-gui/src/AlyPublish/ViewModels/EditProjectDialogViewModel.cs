@@ -81,13 +81,13 @@ public sealed partial class EditProjectDialogViewModel : ViewModelBase
         {
             if (string.IsNullOrWhiteSpace(MainExePath))
             {
-                return LanguageManager.T(LanguageManager.Instance.Dlg_MainExeOptional);
+                return LanguageManager.T(LanguageManager.Instance.EditProjectDialog_MainExe_OptionalHint);
             }
 
             var stored = ProjectInputHelper.ToStoredMainExePath(_projectPath, MainExePath.Trim());
             return Path.IsPathRooted(stored)
-            ? LanguageManager.T(LanguageManager.Instance.Dlg_MainExeOutside)
-            : LanguageManager.F(LanguageManager.Instance.Dlg_MainExeWillSave, stored);
+            ? LanguageManager.T(LanguageManager.Instance.EditProjectDialog_MainExe_OutsideProject)
+            : LanguageManager.F(LanguageManager.Instance.EditProjectDialog_MainExe_WillSave, stored);
         }
     }
 
@@ -145,7 +145,7 @@ public sealed partial class EditProjectDialogViewModel : ViewModelBase
             Clean(UnCopyFiles));
 
         string? syncWarning = null;
-        var saved = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_SaveSettings), async token =>
+        var saved = await RunAsync(LanguageManager.T(LanguageManager.Instance.Operation_SaveProjectSettings), async token =>
         {
             var changed = await _projectConfig.SaveAsync(_projectPath, draft, token);
             if (changed)
@@ -190,13 +190,13 @@ public sealed partial class EditProjectDialogViewModel : ViewModelBase
     [RelayCommand]
     private void AddSuggestedIgnoreFile(string? value) => AddIfMissing(IgnoreFiles, value);
 
-    public void AddIgnoreFolder(string fullPath) => AddProjectEntry(IgnoreFolders, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_Folder));
+    public void AddIgnoreFolder(string fullPath) => AddProjectEntry(IgnoreFolders, fullPath, LanguageManager.T(LanguageManager.Instance.Common_Kind_Folder));
 
-    public void AddIgnoreFile(string fullPath) => AddProjectEntry(IgnoreFiles, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_File));
+    public void AddIgnoreFile(string fullPath) => AddProjectEntry(IgnoreFiles, fullPath, LanguageManager.T(LanguageManager.Instance.Common_Kind_File));
 
-    public void AddUnCopyFolder(string fullPath) => AddProjectEntry(UnCopyFolders, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_Folder));
+    public void AddUnCopyFolder(string fullPath) => AddProjectEntry(UnCopyFolders, fullPath, LanguageManager.T(LanguageManager.Instance.Common_Kind_Folder));
 
-    public void AddUnCopyFile(string fullPath) => AddProjectEntry(UnCopyFiles, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_File));
+    public void AddUnCopyFile(string fullPath) => AddProjectEntry(UnCopyFiles, fullPath, LanguageManager.T(LanguageManager.Instance.Common_Kind_File));
 
     private bool CanSave()
         => !IsBusy
@@ -209,9 +209,9 @@ public sealed partial class EditProjectDialogViewModel : ViewModelBase
     private void UpdateValidation()
     {
         ValidationMessage = string.IsNullOrWhiteSpace(ServerUrl)
-            ? LanguageManager.T(LanguageManager.Instance.Dlg_ServerUrlRequired)
+            ? LanguageManager.T(LanguageManager.Instance.EditProjectDialog_Message_ServerUrlRequired)
             : string.IsNullOrWhiteSpace(ProjectName)
-                ? LanguageManager.T(LanguageManager.Instance.Dlg_ServerProjectRequired)
+                ? LanguageManager.T(LanguageManager.Instance.EditProjectDialog_Message_ServerProjectRequired)
                 : string.Empty;
 
         SaveCommand.NotifyCanExecuteChanged();
@@ -247,7 +247,7 @@ public sealed partial class EditProjectDialogViewModel : ViewModelBase
     {
         if (!ProjectInputHelper.TryGetProjectRelativePath(_projectPath, fullPath, out var relative))
         {
-            Notify.Warning(LanguageManager.F(LanguageManager.Instance.Dlg_PickInProject, kind));
+            Notify.Warning(LanguageManager.F(LanguageManager.Instance.Common_PickInProject, kind));
             return;
         }
 

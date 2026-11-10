@@ -38,20 +38,20 @@
               Command="{Binding AddProjectCommand}"
               Height="30"
               Padding="12,0"
-              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S001}}">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Toolbar_InitializeProjectTooltip}}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <materialIcons:MaterialIcon Height="16" Kind="PlusCircleOutline" Width="16" />
-              <TextBlock FontSize="13" Text="{Translate {x:Static loc:LanguageManager+Keys.S002}}" VerticalAlignment="Center" />
+              <TextBlock FontSize="13" Text="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Toolbar_InitializeProject}}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Button
               Command="{Binding AddLocalProjectCommand}"
               Height="30"
               Padding="12,0"
-              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S003}}">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Toolbar_AddLocalProjectTooltip}}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <materialIcons:MaterialIcon Height="16" Kind="FolderOpenOutline" Width="16" />
-              <TextBlock FontSize="13" Text="{Translate {x:Static loc:LanguageManager+Keys.S004}}" VerticalAlignment="Center" />
+              <TextBlock FontSize="13" Text="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Toolbar_AddLocalProject}}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Separator
@@ -63,10 +63,10 @@
               Command="{Binding EditProjectCommand}"
               Height="30"
               Padding="10,0"
-              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S005}}">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Toolbar_ProjectSettingsTooltip}}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <materialIcons:MaterialIcon Height="14" Kind="CogOutline" Width="14" />
-              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.S006}}" VerticalAlignment="Center" />
+              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Toolbar_ProjectSettings}}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Button
@@ -74,10 +74,10 @@
               Command="{Binding RemoveProjectCommand}"
               Height="30"
               Padding="10,0"
-              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S007}}">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Toolbar_RemoveTooltip}}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <materialIcons:MaterialIcon Height="14" Kind="DeleteOutline" Width="14" />
-              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.S008}}" VerticalAlignment="Center" />
+              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Toolbar_Remove}}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
         </StackPanel>
@@ -93,7 +93,7 @@
               FontSize="11"
               Height="26"
               Padding="10,0"
-              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.Lang_Switch}}" />
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.Common_Language_Switch}}" />
           <Border
               Classes="pill"
               IsVisible="{Binding IsCliAvailable}"
@@ -106,7 +106,7 @@
               <TextBlock
                   FontSize="11"
                   Foreground="{DynamicResource SemiColorText2}"
-                  Text="{Translate {x:Static loc:LanguageManager+Keys.S009}}" />
+                  Text="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Cli_Ready}}" />
             </StackPanel>
           </Border>
         </StackPanel>
@@ -133,7 +133,7 @@
               FontSize="13"
               FontWeight="SemiBold"
               Foreground="{DynamicResource SemiColorWarning}"
-              Text="{Translate {x:Static loc:LanguageManager+Keys.S010}}" />
+              Text="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Cli_Missing}}" />
           <TextBlock
               Classes="caption"
               Text="{Binding CliHint}"
@@ -142,13 +142,13 @@
         <Button
             Grid.Column="2"
             Command="{Binding RetryCliCommand}"
-            Content="{Translate {x:Static loc:LanguageManager+Keys.S011}}"
+            Content="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Cli_Redetect}}"
             Height="28"
             Padding="10,0" />
         <Button
             Grid.Column="3"
             Command="{Binding OpenCliFolderCommand}"
-            Content="{Translate {x:Static loc:LanguageManager+Keys.S012}}"
+            Content="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Cli_OpenFolder}}"
             Height="28"
             Margin="8,0,0,0"
             Padding="10,0" />
@@ -180,14 +180,14 @@
                 <TextBlock
                     Classes="sectionTitle"
                     VerticalAlignment="Center">
-                  <Run Text="{Translate {x:Static loc:LanguageManager+Keys.S013}}" />
+                  <Run Text="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_ProjectList_Title}}" />
                   <Run Foreground="{DynamicResource SemiColorText3}" Text="{Binding Projects.Count}" />
                 </TextBlock>
               </StackPanel>
               <TextBox
                   FontSize="12"
                   Height="28"
-                  PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S014}}"
+                  PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_ProjectList_SearchPlaceholder}}"
                   Text="{Binding ProjectFilter, Mode=TwoWay}" />
             </StackPanel>
           </Border>
@@ -227,10 +227,10 @@
                 Kind="Magnify"
                 HorizontalAlignment="Center"
                 Width="28" />
-            <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S015}}" />
+            <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_ProjectList_NoMatch}}" />
             <Button
                 Command="{Binding ClearProjectFilterCommand}"
-                Content="{Translate {x:Static loc:LanguageManager+Keys.S016}}"
+                Content="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_ProjectList_ClearSearch}}"
                 Height="28"
                 Padding="12,0" />
           </StackPanel>
@@ -247,21 +247,21 @@
                 Kind="FolderPlusOutline"
                 HorizontalAlignment="Center"
                 Width="32" />
-            <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S017}}" />
+            <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_ProjectList_EmptyTitle}}" />
             <TextBlock
                 Classes="emptyHint"
                 MaxWidth="180"
-                Text="{Translate {x:Static loc:LanguageManager+Keys.S018}}" />
+                Text="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_ProjectList_EmptyHint}}" />
             <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
               <Button
                   Classes="Primary"
                   Command="{Binding AddProjectCommand}"
-                  Content="{Translate {x:Static loc:LanguageManager+Keys.S002}}"
+                  Content="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_ProjectList_InitializeProject}}"
                   Height="30"
                   Padding="12,0" />
               <Button
                   Command="{Binding AddLocalProjectCommand}"
-                  Content="{Translate {x:Static loc:LanguageManager+Keys.S004}}"
+                  Content="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_ProjectList_AddLocalProject}}"
                   Height="30"
                   Padding="12,0" />
             </StackPanel>
@@ -286,11 +286,11 @@
               Kind="FolderOpenOutline"
               HorizontalAlignment="Center"
               Width="36" />
-          <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S019}}" />
+          <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Content_NoSelection}}" />
           <TextBlock
               Classes="emptyHint"
               MaxWidth="340"
-              Text="{Translate {x:Static loc:LanguageManager+Keys.S020}}" />
+              Text="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Content_Hint}}" />
         </StackPanel>
       </Grid>
     </Grid>
@@ -334,8 +334,8 @@
               Command="{Binding OpenLogFolderCommand}"
               Height="22"
               Padding="6,0"
-              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S021}}">
-            <TextBlock FontSize="10" Text="{Translate {x:Static loc:LanguageManager+Keys.S022}}" />
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Footer_OpenLogsTooltip}}">
+            <TextBlock FontSize="10" Text="{Translate {x:Static loc:LanguageManager+Keys.MainWindow_Footer_Logs}}" />
           </Button>
         </StackPanel>
       </Grid>

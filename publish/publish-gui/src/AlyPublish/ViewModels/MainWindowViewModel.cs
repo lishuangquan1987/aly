@@ -77,8 +77,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool HasSelectedTab => SelectedTab is not null;
 
     public string CliHint => IsCliAvailable
-        ? LanguageManager.F(LanguageManager.Instance.Main_CliHint, CliPath)
-        : LanguageManager.T(LanguageManager.Instance.Main_Hint_CliMissing);
+        ? LanguageManager.F(LanguageManager.Instance.MainWindow_Cli_Hint, CliPath)
+        : LanguageManager.T(LanguageManager.Instance.MainWindow_Cli_MissingHint);
 
     [SuppressMessage(
         "Performance",
@@ -143,14 +143,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
 
         var confirmed = await Dialogs.ConfirmAsync(
-            LanguageManager.T(LanguageManager.Instance.Main_RemoveTitle),
-            LanguageManager.F(LanguageManager.Instance.Main_RemoveMessage, project.DisplayName));
+            LanguageManager.T(LanguageManager.Instance.MainWindow_RemoveProjectDialog_Title),
+            LanguageManager.F(LanguageManager.Instance.MainWindow_RemoveProjectDialog_Message, project.DisplayName));
         if (!confirmed)
         {
             return;
         }
 
-        var removed = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_RemoveProject), () =>
+        var removed = await RunAsync(LanguageManager.T(LanguageManager.Instance.Operation_RemoveProject), () =>
         {
             var remaining = Projects.Where(candidate => !ReferenceEquals(candidate, project)).ToList();
             _config.SaveProjects(remaining);
@@ -171,7 +171,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         if (removed)
         {
-            Notify.Success(LanguageManager.F(LanguageManager.Instance.Main_Removed, project.DisplayName));
+            Notify.Success(LanguageManager.F(LanguageManager.Instance.MainWindow_Message_Removed, project.DisplayName));
         }
     }
 
@@ -211,11 +211,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         if (IsCliAvailable)
         {
-            Notify.Success(LanguageManager.T(LanguageManager.Instance.Main_FoundCli));
+            Notify.Success(LanguageManager.T(LanguageManager.Instance.MainWindow_Message_FoundCli));
         }
         else
         {
-            Notify.Warning(LanguageManager.T(LanguageManager.Instance.Main_StillNoCli));
+            Notify.Warning(LanguageManager.T(LanguageManager.Instance.MainWindow_Message_StillNoCli));
         }
     }
 
@@ -249,7 +249,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private async Task AddProjectCoreAsync(ProjectConfig project)
     {
         ProjectFilter = string.Empty;
-        var added = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_AddProject), () =>
+        var added = await RunAsync(LanguageManager.T(LanguageManager.Instance.Operation_AddProject), () =>
         {
             _config.SaveProjects(Projects.Append(project));
             Projects.Add(project);
@@ -258,14 +258,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         if (added)
         {
-            Notify.Success(LanguageManager.F(LanguageManager.Instance.Main_Added, project.DisplayName));
+            Notify.Success(LanguageManager.F(LanguageManager.Instance.MainWindow_Message_Added, project.DisplayName));
         }
     }
 
     private async Task EditProjectCoreAsync(ProjectConfig project)
     {
         var saved = false;
-        var completed = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_SaveSettings), async _ =>
+        var completed = await RunAsync(LanguageManager.T(LanguageManager.Instance.Operation_SaveProjectSettings), async _ =>
         {
             var updated = await Dialogs.ShowEditProjectAsync(project);
             if (updated is null)
@@ -282,7 +282,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         if (completed && saved)
         {
-            Notify.Success(LanguageManager.T(LanguageManager.Instance.Main_SettingsSaved));
+            Notify.Success(LanguageManager.T(LanguageManager.Instance.MainWindow_Message_SettingsSaved));
         }
     }
 
@@ -356,7 +356,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         if (!Directory.Exists(path))
         {
-            Notify.Warning(LanguageManager.F(LanguageManager.Instance.Main_DirectoryMissing, path));
+            Notify.Warning(LanguageManager.F(LanguageManager.Instance.MainWindow_Message_DirectoryMissing, path));
             return;
         }
 
@@ -371,7 +371,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             Log.Error(ex, "打开目录失败: {Path}", path);
-            Notify.ShowError(LanguageManager.F(LanguageManager.Instance.Main_OpenFolderFailed, ex.Message));
+            Notify.ShowError(LanguageManager.F(LanguageManager.Instance.MainWindow_Message_OpenFolderFailed, ex.Message));
         }
     }
 }

@@ -25,14 +25,14 @@ public sealed class ProjectSetupService
             if (!File.Exists(mainExeFullPath))
             {
                 throw new FileNotFoundException(
-                    LanguageManager.F(LanguageManager.Instance.Setup_MainMissing, mainExeFullPath));
+                    LanguageManager.F(LanguageManager.Instance.Message_Setup_MainMissing, mainExeFullPath));
             }
 
             var relative = Path.GetRelativePath(request.ProjectPath, mainExeFullPath);
             if (Path.IsPathRooted(relative))
             {
                 throw new InvalidOperationException(
-                    LanguageManager.T(LanguageManager.Instance.Setup_MainSameDisk));
+                    LanguageManager.T(LanguageManager.Instance.Message_Setup_MainSameDisk));
             }
         }
 

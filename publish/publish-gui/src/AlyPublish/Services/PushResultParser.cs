@@ -51,7 +51,7 @@ public static class PushResultParser
                 PushLineKind.Failure,
                 null,
                 string.IsNullOrWhiteSpace(errorMessage)
-                    ? LanguageManager.T(LanguageManager.Instance.Push_Failed)
+                    ? LanguageManager.T(LanguageManager.Instance.Message_Push_Failed)
                     : errorMessage);
         }
 

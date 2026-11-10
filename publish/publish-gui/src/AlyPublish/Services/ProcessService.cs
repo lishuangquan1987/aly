@@ -77,11 +77,11 @@ public static class ProcessService
             if (canceledByCaller)
             {
                 Log.Information("进程已取消: {File}", fileName);
-                return new ProcessResult(false, true, -1, output.ToString().Trim(), LanguageManager.T(LanguageManager.Instance.Proc_Cancelled));
+                return new ProcessResult(false, true, -1, output.ToString().Trim(), LanguageManager.T(LanguageManager.Instance.Message_Process_Cancelled));
             }
 
             Log.Warning("进程超时: {File} ({Timeout}ms)", fileName, timeoutMs);
-            return new ProcessResult(false, false, -1, output.ToString().Trim(), LanguageManager.T(LanguageManager.Instance.Proc_Timeout));
+            return new ProcessResult(false, false, -1, output.ToString().Trim(), LanguageManager.T(LanguageManager.Instance.Message_Process_Timeout));
         }
 
         await outputTask;

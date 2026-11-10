@@ -104,7 +104,7 @@ public sealed partial class CreateProjectDialogViewModel : ViewModelBase
         var title = ProjectTitle.Trim();
         ProjectInfo? created = null;
 
-        var saved = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_CreateServerProject), async token =>
+        var saved = await RunAsync(LanguageManager.T(LanguageManager.Instance.Operation_CreateServerProject), async token =>
         {
             created = await _cli.CreateServerProjectAsync(
                 ServerUrl,
@@ -142,7 +142,7 @@ public sealed partial class CreateProjectDialogViewModel : ViewModelBase
         var name = ProjectName.Trim();
         ValidationMessage = name.Length > 0 && _existingProjectNames.Any(existing =>
             string.Equals(existing, name, StringComparison.OrdinalIgnoreCase))
-            ? LanguageManager.T(LanguageManager.Instance.Dlg_DuplicateProject)
+            ? LanguageManager.T(LanguageManager.Instance.CreateProjectDialog_Message_DuplicateProject)
             : string.Empty;
 
         CreateCommand.NotifyCanExecuteChanged();

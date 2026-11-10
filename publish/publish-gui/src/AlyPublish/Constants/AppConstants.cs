@@ -11,10 +11,10 @@ public static class FileStatus
 
     public static string GetDisplayText(string status) => status switch
     {
-        New => LanguageManager.T(LanguageManager.Instance.Status_new),
-        Modified => LanguageManager.T(LanguageManager.Instance.Status_modified),
-        Deleted => LanguageManager.T(LanguageManager.Instance.Status_deleted),
-        Unchanged => LanguageManager.T(LanguageManager.Instance.Status_unchanged),
+        New => LanguageManager.T(LanguageManager.Instance.Status_New),
+        Modified => LanguageManager.T(LanguageManager.Instance.Status_Modified),
+        Deleted => LanguageManager.T(LanguageManager.Instance.Status_Deleted),
+        Unchanged => LanguageManager.T(LanguageManager.Instance.Status_Unchanged),
         _ => status
     };
 }

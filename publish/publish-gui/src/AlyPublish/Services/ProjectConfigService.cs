@@ -32,7 +32,7 @@ public sealed class ProjectConfigService
         {
             throw new ProjectConfigException(
                 LanguageManager.F(
-                    LanguageManager.Instance.Proj_SharedMissing,
+                    LanguageManager.Instance.Message_ProjectConfig_SharedMissing,
                     Path.Combine(UpdatorDirectoryName, SharedFileName)));
         }
 
@@ -41,13 +41,13 @@ public sealed class ProjectConfigService
             var json = File.ReadAllText(sharedPath);
             return JsonConvert.DeserializeObject<SharedConfig>(json)
                 ?? throw new ProjectConfigException(
-                    LanguageManager.F(LanguageManager.Instance.Proj_SharedEmpty, SharedFileName));
+                    LanguageManager.F(LanguageManager.Instance.Message_ProjectConfig_SharedEmpty, SharedFileName));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             throw new ProjectConfigException(
                 LanguageManager.F(
-                    LanguageManager.Instance.Proj_ReadSharedFailed,
+                    LanguageManager.Instance.Message_ProjectConfig_ReadSharedFailed,
                     SharedFileName,
                     ex.Message),
                 ex);
@@ -96,7 +96,7 @@ public sealed class ProjectConfigService
         var shared = Load(projectPath);
         if (string.IsNullOrWhiteSpace(shared.ServerUrl) || string.IsNullOrWhiteSpace(shared.ProjectName))
         {
-            return LanguageManager.T(LanguageManager.Instance.Proj_NoServer);
+            return LanguageManager.T(LanguageManager.Instance.Message_ProjectConfig_NoServer);
         }
 
         try
@@ -106,7 +106,7 @@ public sealed class ProjectConfigService
                 string.Equals(candidate.Name, shared.ProjectName, StringComparison.OrdinalIgnoreCase));
             if (project is null)
             {
-                return LanguageManager.F(LanguageManager.Instance.Proj_ProjectMissing, shared.ProjectName);
+                return LanguageManager.F(LanguageManager.Instance.Message_ProjectConfig_ProjectMissing, shared.ProjectName);
             }
 
             await _cli.UpdateServerProjectAsync(
@@ -122,7 +122,7 @@ public sealed class ProjectConfigService
         catch (CliException ex)
         {
             Log.Warning(ex, "同步忽略规则到服务端失败: {Project}", shared.ProjectName);
-            return LanguageManager.F(LanguageManager.Instance.Proj_SyncFailed, ex.Message);
+            return LanguageManager.F(LanguageManager.Instance.Message_ProjectConfig_SyncFailed, ex.Message);
         }
     }
 
@@ -168,7 +168,7 @@ public sealed class ProjectConfigService
         catch (CliException ex)
         {
             throw new CliException(
-                LanguageManager.F(LanguageManager.Instance.Proj_SaveFailed, key, ex.Message),
+                LanguageManager.F(LanguageManager.Instance.Message_ProjectConfig_SaveFailed, key, ex.Message),
                 ex);
         }
     }
@@ -195,7 +195,7 @@ public sealed class ProjectConfigService
             catch (CliException ex)
             {
                 throw new CliException(
-                    LanguageManager.F(LanguageManager.Instance.Proj_RemoveFailed, key, item, ex.Message),
+                    LanguageManager.F(LanguageManager.Instance.Message_ProjectConfig_RemoveFailed, key, item, ex.Message),
                     ex);
             }
         }
@@ -209,7 +209,7 @@ public sealed class ProjectConfigService
             catch (CliException ex)
             {
                 throw new CliException(
-                    LanguageManager.F(LanguageManager.Instance.Proj_AddFailed, key, item, ex.Message),
+                    LanguageManager.F(LanguageManager.Instance.Message_ProjectConfig_AddFailed, key, item, ex.Message),
                     ex);
             }
         }

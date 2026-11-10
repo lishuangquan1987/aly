@@ -25,7 +25,7 @@ public partial class LanguageManager
     public static bool IsChinese => Instance.CurrentCulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
 
     public static string LanguageLabel
-        => IsChinese ? T(Instance.Lang_English) : T(Instance.Lang_Chinese);
+        => IsChinese ? T(Instance.Common_Language_English) : T(Instance.Common_Language_Chinese);
 
     /// <summary>Current translated value of a generated observable string.</summary>
     public static string T(IObservable<string?> value)

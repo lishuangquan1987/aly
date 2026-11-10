@@ -229,14 +229,14 @@ public sealed class CliService
         if (!processResult.Success)
         {
             var error = string.IsNullOrWhiteSpace(processResult.StandardError)
-                ? LanguageManager.T(LanguageManager.Instance.Cli_PushExited)
+                ? LanguageManager.T(LanguageManager.Instance.Message_Cli_PushExited)
                 : processResult.StandardError;
             throw new CliException(error);
         }
 
         if (!hasResult)
         {
-            throw new CliException(LanguageManager.T(LanguageManager.Instance.Cli_PushInvalid));
+            throw new CliException(LanguageManager.T(LanguageManager.Instance.Message_Cli_PushInvalid));
         }
 
         Log.Information("推送成功: {Version}", version);
@@ -249,7 +249,7 @@ public sealed class CliService
         CancellationToken cancellationToken)
     {
         var output = await RunCoreAsync<T>(arguments, projectPath, timeoutMilliseconds, cancellationToken);
-        return output.Data ?? throw new CliException(LanguageManager.T(LanguageManager.Instance.Cli_NoData));
+        return output.Data ?? throw new CliException(LanguageManager.T(LanguageManager.Instance.Message_Cli_NoData));
     }
 
     private async Task RunAsync(
@@ -289,14 +289,14 @@ public sealed class CliService
         if (!result.Success)
         {
             var error = string.IsNullOrWhiteSpace(result.StandardError)
-                ? LanguageManager.T(LanguageManager.Instance.Cli_Failed)
+                ? LanguageManager.T(LanguageManager.Instance.Message_Cli_Failed)
                 : result.StandardError;
             throw new CliException(error);
         }
 
         if (string.IsNullOrWhiteSpace(result.StandardOutput))
         {
-            throw new CliException(LanguageManager.T(LanguageManager.Instance.Cli_NoOutput));
+            throw new CliException(LanguageManager.T(LanguageManager.Instance.Message_Cli_NoOutput));
         }
 
         CliOutput<T>? output;
@@ -307,19 +307,19 @@ public sealed class CliService
         catch (JsonException ex)
         {
             Log.Error(ex, "解析 CLI 输出失败: {Output}", result.StandardOutput);
-            throw new CliException(LanguageManager.T(LanguageManager.Instance.Cli_Unparsable), ex);
+            throw new CliException(LanguageManager.T(LanguageManager.Instance.Message_Cli_Unparsable), ex);
         }
 
         if (output is null)
         {
-            throw new CliException(LanguageManager.T(LanguageManager.Instance.Cli_NoResult));
+            throw new CliException(LanguageManager.T(LanguageManager.Instance.Message_Cli_NoResult));
         }
 
         if (!output.IsSuccess)
         {
             throw new CliException(
                 string.IsNullOrWhiteSpace(output.ErrorMsg)
-                    ? LanguageManager.T(LanguageManager.Instance.Cli_Failed)
+                    ? LanguageManager.T(LanguageManager.Instance.Message_Cli_Failed)
                     : output.ErrorMsg);
         }
 
@@ -334,7 +334,7 @@ public sealed class CliService
         }
 
         Log.Error("未找到 aly-publish，无法执行: {Arguments}", string.Join(' ', arguments));
-        throw new CliException(LanguageManager.T(LanguageManager.Instance.Cli_NotFound));
+        throw new CliException(LanguageManager.T(LanguageManager.Instance.Message_Cli_NotFound));
     }
 
     private static List<string> WithFiles(string command, IReadOnlyList<string> files)

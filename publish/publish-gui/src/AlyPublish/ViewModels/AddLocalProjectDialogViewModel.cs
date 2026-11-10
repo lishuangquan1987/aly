@@ -56,7 +56,7 @@ public sealed partial class AddLocalProjectDialogViewModel : ViewModelBase
             _config.LoadProjects().Select(project => NormalizeForComparison(project.ProjectPath)),
             StringComparer.OrdinalIgnoreCase);
 
-        InitStatusMessage = LanguageManager.T(LanguageManager.Instance.Dlg_SelectInitialized);
+        InitStatusMessage = LanguageManager.T(LanguageManager.Instance.AddLocalProjectDialog_Message_SelectInitialized);
     }
 
     /// <summary>Called by the view when a folder is dropped onto the dialog.</summary>
@@ -73,25 +73,25 @@ public sealed partial class AddLocalProjectDialogViewModel : ViewModelBase
         var path = value.Trim();
         if (path.Length == 0)
         {
-            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.Dlg_SelectInitialized);
+            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.AddLocalProjectDialog_Message_SelectInitialized);
             return;
         }
 
         if (!Directory.Exists(path))
         {
-            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.Dlg_DirectoryMissing);
+            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.AddLocalProjectDialog_Message_DirectoryMissing);
             return;
         }
 
         if (_existingProjectPaths.Contains(NormalizeForComparison(path)))
         {
-            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.Dlg_AlreadyListed);
+            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.AddLocalProjectDialog_Message_AlreadyListed);
             return;
         }
 
         if (!ProjectInputHelper.IsInitialized(path))
         {
-            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.Dlg_SharedMissing);
+            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.AddLocalProjectDialog_Message_SharedMissing);
             return;
         }
 
@@ -104,7 +104,7 @@ public sealed partial class AddLocalProjectDialogViewModel : ViewModelBase
             PreviewIgnoreCount = shared.IgnoreFolders.Count + shared.IgnoreFiles.Count;
             HasPreview = true;
             IsReady = true;
-            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.Dlg_ConfigFound);
+            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.AddLocalProjectDialog_Message_ConfigFound);
         }
         catch (ProjectConfigException ex)
         {

@@ -22,7 +22,7 @@
 
       <Border Padding="14,8">
         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
-          <TextBlock Classes="sectionTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S023}}" VerticalAlignment="Center" />
+          <TextBlock Classes="sectionTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Title}}" VerticalAlignment="Center" />
           <Border
               Classes="pill"
               Grid.Column="1"
@@ -41,10 +41,10 @@
               Height="28"
               Margin="0,0,4,0"
               Padding="8,0"
-              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S024}}">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_RefreshTooltip}}">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <materialIcons:MaterialIcon Height="14" Kind="Refresh" Width="14" />
-              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.S025}}" />
+              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Refresh}}" />
             </StackPanel>
           </Button>
           <Button
@@ -53,10 +53,10 @@
               Height="28"
               Margin="0,0,4,0"
               Padding="8,0"
-              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S005}}">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_SettingsTooltip}}">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <materialIcons:MaterialIcon Height="14" Kind="CogOutline" Width="14" />
-              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.S026}}" />
+              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Settings}}" />
             </StackPanel>
           </Button>
           <Button
@@ -65,10 +65,10 @@
               Height="28"
               Margin="0,0,4,0"
               Padding="8,0"
-              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S027}}">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_OpenFolderTooltip}}">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <materialIcons:MaterialIcon Height="14" Kind="FolderOpen" Width="14" />
-              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.S028}}" />
+              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_OpenFolder}}" />
             </StackPanel>
           </Button>
           <Button
@@ -76,10 +76,10 @@
               Command="{Binding LaunchProgramCommand}"
               Height="28"
               Padding="8,0"
-              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S029}}">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_LaunchTooltip}}">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <materialIcons:MaterialIcon Height="14" Kind="Play" Width="14" />
-              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.S030}}" />
+              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Launch}}" />
             </StackPanel>
           </Button>
         </Grid>
@@ -111,7 +111,7 @@
                       Kind="FileDocumentOutline"
                       Width="14" />
                   <TextBlock FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center">
-                    <Run Text="{Translate {x:Static loc:LanguageManager+Keys.S031}}" />
+                    <Run Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_UnstagedTitle}}" />
                     <Run Text="{Binding UnstagedFiles.Count}" />
                   </TextBlock>
                 </StackPanel>
@@ -125,7 +125,7 @@
                 <Button
                     Grid.Column="3"
                     Command="{Binding AddSelectedCommand}"
-                    Content="{Translate {x:Static loc:LanguageManager+Keys.S032}}"
+                    Content="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_StageSelected}}"
                     FontSize="12"
                     Height="26"
                     Margin="4,0,0,0"
@@ -134,7 +134,7 @@
                     Grid.Column="4"
                     Classes="Primary"
                     Command="{Binding AddAllCommand}"
-                    Content="{Translate {x:Static loc:LanguageManager+Keys.S033}}"
+                    Content="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_StageAll}}"
                     FontSize="12"
                     Height="26"
                     Margin="4,0,0,0"
@@ -150,7 +150,7 @@
                   ItemsSource="{Binding UnstagedFiles}"
                   SelectionMode="Single">
                 <TableView.Columns>
-                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S034}}" Width="76">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Table_Select}}" Width="76">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <CheckBox
@@ -160,7 +160,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S035}}" Width="*">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Table_File}}" Width="*">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <TextBlock
@@ -172,7 +172,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S036}}" Width="76">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Table_Status}}" Width="76">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <Border
@@ -185,7 +185,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S037}}" Width="88">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Table_Local}}" Width="88">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <TextBlock
@@ -197,7 +197,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S038}}" Width="88">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Table_Server}}" Width="88">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <TextBlock
@@ -218,7 +218,7 @@
                             CommandParameter="{Binding}"
                             Height="24"
                             Padding="0"
-                            ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S039}}"
+                            ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_ShowInFolderTooltip}}"
                             Width="24">
                           <materialIcons:MaterialIcon Height="12" Kind="FolderOpen" Width="12" />
                         </Button>
@@ -240,8 +240,8 @@
                     HorizontalAlignment="Center"
                     Kind="CheckCircleOutline"
                     Width="24" />
-                <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S040}}" />
-                <TextBlock Classes="emptyHint" Text="{Translate {x:Static loc:LanguageManager+Keys.S041}}" />
+                <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_UnstagedEmpty_Title}}" />
+                <TextBlock Classes="emptyHint" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_UnstagedEmpty_Hint}}" />
               </StackPanel>
             </Grid>
           </Grid>
@@ -267,7 +267,7 @@
                       Kind="FileCheckOutline"
                       Width="14" />
                   <TextBlock FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center">
-                    <Run Text="{Translate {x:Static loc:LanguageManager+Keys.S042}}" />
+                    <Run Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_StagedTitle}}" />
                     <Run Text="{Binding StagedFiles.Count}" />
                   </TextBlock>
                 </StackPanel>
@@ -281,7 +281,7 @@
                 <Button
                     Grid.Column="3"
                     Command="{Binding ResetSelectedCommand}"
-                    Content="{Translate {x:Static loc:LanguageManager+Keys.S043}}"
+                    Content="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Unstage}}"
                     FontSize="12"
                     Height="26"
                     Margin="4,0,0,0"
@@ -290,7 +290,7 @@
                     Grid.Column="4"
                     Classes="Danger"
                     Command="{Binding ResetAllCommand}"
-                    Content="{Translate {x:Static loc:LanguageManager+Keys.S044}}"
+                    Content="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Clear}}"
                     FontSize="12"
                     Height="26"
                     Margin="4,0,0,0"
@@ -306,7 +306,7 @@
                   ItemsSource="{Binding StagedFiles}"
                   SelectionMode="Single">
                 <TableView.Columns>
-                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S034}}" Width="76">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Table_Select}}" Width="76">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <CheckBox
@@ -316,7 +316,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S035}}" Width="*">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Table_File}}" Width="*">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <TextBlock
@@ -328,7 +328,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S036}}" Width="76">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Table_Status}}" Width="76">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <Border
@@ -341,7 +341,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S037}}" Width="88">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Table_Local}}" Width="88">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <TextBlock
@@ -353,7 +353,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S038}}" Width="88">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_Table_Server}}" Width="88">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <TextBlock
@@ -374,7 +374,7 @@
                             CommandParameter="{Binding}"
                             Height="24"
                             Padding="0"
-                            ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S039}}"
+                            ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_ShowInFolderTooltip}}"
                             Width="24">
                           <materialIcons:MaterialIcon Height="12" Kind="FolderOpen" Width="12" />
                         </Button>
@@ -396,8 +396,8 @@
                     HorizontalAlignment="Center"
                     Kind="InboxArrowDownOutline"
                     Width="24" />
-                <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S045}}" />
-                <TextBlock Classes="emptyHint" Text="{Translate {x:Static loc:LanguageManager+Keys.S046}}" />
+                <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_StagedEmpty_Title}}" />
+                <TextBlock Classes="emptyHint" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_StagedEmpty_Hint}}" />
               </StackPanel>
             </Grid>
           </Grid>
@@ -421,7 +421,7 @@
             <TextBlock
                 Classes="caption"
                 HorizontalAlignment="Center"
-                Text="{Translate {x:Static loc:LanguageManager+Keys.S047}}" />
+                Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Changes_ReadingStatus}}" />
           </StackPanel>
         </Border>
       </Grid>
@@ -444,7 +444,7 @@
           Padding="14,10">
         <StackPanel Spacing="8">
           <Grid ColumnDefinitions="Auto,*,Auto">
-            <TextBlock Classes="sectionTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S048}}" VerticalAlignment="Center" />
+            <TextBlock Classes="sectionTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_Title}}" VerticalAlignment="Center" />
             <Border
                 Classes="pill"
                 Grid.Column="2"
@@ -458,37 +458,37 @@
           </Grid>
 
           <Grid ColumnDefinitions="Auto,*,Auto">
-            <TextBlock Classes="fieldLabel" Text="{Translate {x:Static loc:LanguageManager+Keys.S049}}" VerticalAlignment="Center" />
+            <TextBlock Classes="fieldLabel" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_VersionLabel}}" VerticalAlignment="Center" />
             <TextBox
                 Grid.Column="1"
                 Margin="10,0,0,0"
-                PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S050}}"
+                PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_VersionPlaceholder}}"
                 Text="{Binding NewVersion}" />
             <Button
                 Grid.Column="2"
                 Command="{Binding SuggestVersionCommand}"
-                Content="{Translate {x:Static loc:LanguageManager+Keys.S051}}"
+                Content="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_NextVersion}}"
                 Height="32"
                 Margin="8,0,0,0"
                 Padding="10,0"
-                ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S052}}" />
+                ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_NextVersionTooltip}}" />
           </Grid>
 
           <TextBox
               AcceptsReturn="True"
               MinHeight="48"
-              PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S053}}"
+              PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_ReleaseNotesPlaceholder}}"
               Text="{Binding CommitMessage}"
               TextWrapping="Wrap" />
 
-          <Expander Header="{Translate {x:Static loc:LanguageManager+Keys.S054}}" HorizontalAlignment="Stretch">
+          <Expander Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_Advanced}}" HorizontalAlignment="Stretch">
             <StackPanel Margin="0,8,0,0" Spacing="8">
-              <TextBlock Classes="fieldLabel" Text="{Translate {x:Static loc:LanguageManager+Keys.S055}}" />
+              <TextBlock Classes="fieldLabel" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_ScriptLabel}}" />
               <TextBox
-                  PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S056}}"
+                  PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_ScriptPlaceholder}}"
                   Text="{Binding AfterApplyUpdateScript}" />
               <CheckBox
-                  Content="{Translate {x:Static loc:LanguageManager+Keys.S057}}"
+                  Content="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_ForceUpdate}}"
                   FontSize="12"
                   Foreground="{DynamicResource SemiColorWarning}"
                   IsChecked="{Binding SetForceUpdate}" />
@@ -535,7 +535,7 @@
                 <Button
                     Grid.Column="1"
                     Command="{Binding PublishCancelCommand}"
-                    Content="{Translate {x:Static loc:LanguageManager+Keys.S058}}"
+                    Content="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_Cancel}}"
                     FontSize="11"
                     Height="22"
                     Padding="8,0" />
@@ -553,7 +553,7 @@
                   MaxHeight="150"
                   SelectionMode="Single">
                 <TableView.Columns>
-                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S035}}" Width="*">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_Upload_Table_File}}" Width="*">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="cli:UploadProgress">
                         <TextBlock
@@ -564,7 +564,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S059}}" Width="72">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_Upload_Table_Size}}" Width="72">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="cli:UploadProgress">
                         <TextBlock
@@ -574,7 +574,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S036}}" Width="140">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_Publish_Upload_Table_Status}}" Width="140">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="cli:UploadProgress">
                         <Border
@@ -612,20 +612,20 @@
                   Classes="sectionTitle"
                   Grid.Column="1"
                   Margin="6,0,0,0"
-                  Text="{Translate {x:Static loc:LanguageManager+Keys.S060}}"
+                  Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_History_Title}}"
                   VerticalAlignment="Center" />
               <TextBlock
                   Classes="caption"
                   Grid.Column="2"
                   Margin="0,0,6,0"
-                  Text="{Translate {x:Static loc:LanguageManager+Keys.S061}}"
+                  Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_History_Latest}}"
                   VerticalAlignment="Center" />
               <Button
                   Grid.Column="3"
                   Command="{Binding RefreshCommand}"
                   Height="24"
                   Padding="6,0"
-                  ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S062}}">
+                  ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_History_RefreshTooltip}}">
                 <materialIcons:MaterialIcon Height="12" Kind="Refresh" Width="12" />
               </Button>
             </Grid>
@@ -637,7 +637,7 @@
                     HorizontalAlignment="Stretch"
                     SelectionMode="Single">
               <TableView.Columns>
-                <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S063}}" Width="96">
+                <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_History_Table_Version}}" Width="96">
                   <TableViewColumn.CellTemplate>
                     <DataTemplate x:DataType="cli:ChangeLog">
                       <Border
@@ -653,7 +653,7 @@
                     </DataTemplate>
                   </TableViewColumn.CellTemplate>
                 </TableViewColumn>
-                <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S064}}" Width="130">
+                <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_History_Table_Time}}" Width="130">
                   <TableViewColumn.CellTemplate>
                     <DataTemplate x:DataType="cli:ChangeLog">
                       <TextBlock
@@ -664,7 +664,7 @@
                     </DataTemplate>
                   </TableViewColumn.CellTemplate>
                 </TableViewColumn>
-                <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S065}}" Width="*">
+                <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_History_Table_Notes}}" Width="*">
                   <TableViewColumn.CellTemplate>
                     <DataTemplate x:DataType="cli:ChangeLog">
                       <ItemsControl ItemsSource="{Binding Logs}">
@@ -696,8 +696,8 @@
                   HorizontalAlignment="Center"
                   Kind="History"
                   Width="28" />
-              <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S066}}" />
-              <TextBlock Classes="emptyHint" Text="{Translate {x:Static loc:LanguageManager+Keys.S067}}" />
+              <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_History_EmptyTitle}}" />
+              <TextBlock Classes="emptyHint" Text="{Translate {x:Static loc:LanguageManager+Keys.ProjectTab_History_EmptyHint}}" />
             </StackPanel>
           </Grid>
         </Grid>
