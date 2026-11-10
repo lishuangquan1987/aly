@@ -13,9 +13,11 @@ import (
 const (
 	schemaRelPath   = "spec/aly-protocol.schema.json"
 	configRelPath   = "tools/alyprotocol/csharp.json"
+	tsConfigRelPath = "tools/alyprotocol/ts.json"
 	dtoRelPath      = "client/aly-client/model/dto.go"
 	fixturesRelPath = "spec/fixtures/scenarios"
 	outputRelPath   = "client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/Models/Generated"
+	tsOutputRelPath = "client/aly-client-sdk/AlyClient.TypeScriptSDK/src/models.ts"
 )
 
 func main() {
@@ -128,9 +130,24 @@ func process(root string, checkOnly bool) error {
 	if err != nil {
 		return err
 	}
+	tsCfg, err := LoadTSConfig(filepath.Join(root, tsConfigRelPath))
+	if err != nil {
+		return err
+	}
+	tsFile, err := RenderTS(schema, tsCfg)
+	if err != nil {
+		return err
+	}
 	outDir := filepath.Join(root, outputRelPath)
+	tsPath := filepath.Join(root, tsOutputRelPath)
 	if checkOnly {
+		if err := checkGeneratedFile(tsPath, tsFile); err != nil {
+			return err
+		}
 		return checkFiles(outDir, files)
+	}
+	if err := writeGeneratedFile(tsPath, tsFile); err != nil {
+		return err
 	}
 	return writeFiles(outDir, files)
 }
@@ -187,6 +204,30 @@ func checkFiles(outDir string, expected []GeneratedFile) error {
 		b.WriteString("\n多余：\n  " + strings.Join(unexpected, "\n  "))
 	}
 	return fmt.Errorf("%s", b.String())
+}
+
+func checkGeneratedFile(path string, f GeneratedFile) error {
+	got, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("生成文件缺失：%s（请运行：cd tools/alyprotocol && go run . -write）", path)
+		}
+		return fmt.Errorf("读取 %s: %v", path, err)
+	}
+	if !bytes.Equal(normalize(got), normalize(f.Content)) {
+		return fmt.Errorf("生成文件与 schema 不一致：%s（请运行：cd tools/alyprotocol && go run . -write）", path)
+	}
+	return nil
+}
+
+func writeGeneratedFile(path string, f GeneratedFile) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("创建目录 %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, f.Content, 0o644); err != nil {
+		return fmt.Errorf("写入 %s: %v", path, err)
+	}
+	return nil
 }
 
 func writeFiles(outDir string, files []GeneratedFile) error {

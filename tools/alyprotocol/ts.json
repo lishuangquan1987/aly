@@ -1,0 +1,15 @@
+{
+  "types": {
+    "Output": { "name": "AlyOutput" },
+    "CheckUpdateData": {},
+    "CheckDiffData": {},
+    "DiffFileItem": {},
+    "DownloadUpdateData": {},
+    "DownloadProgress": {},
+    "RollbackListData": {},
+    "RollbackData": {},
+    "SelfUpdateData": {},
+    "CheckSelfUpdateData": {},
+    "CleanData": {}
+  }
+}
