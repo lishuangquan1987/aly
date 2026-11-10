@@ -18,6 +18,7 @@ const (
 	pythonConfigRelPath = "tools/alyprotocol/python.json"
 	javaConfigRelPath   = "tools/alyprotocol/java.json"
 	rustConfigRelPath   = "tools/alyprotocol/rust.json"
+	cppConfigRelPath    = "tools/alyprotocol/cpp.json"
 	dtoRelPath          = "client/aly-client/model/dto.go"
 	fixturesRelPath     = "spec/fixtures/scenarios"
 	outputRelPath       = "client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/Models/Generated"
@@ -26,6 +27,7 @@ const (
 	pythonOutputRelPath = "client/aly-client-sdk/AlyClient.PythonSDK/alyclient/models_gen.py"
 	javaOutputRelPath   = "client/aly-client-sdk/AlyClient.JavaSDK/src/main/java/io/github/lishuangquan1987/alyclient/models"
 	rustOutputRelPath   = "client/aly-client-sdk/AlyClient.RustSDK/src/models_gen.rs"
+	cppOutputRelPath    = "client/aly-client-sdk/AlyClient.CppSDK/include/aly/models_gen.h"
 )
 
 func main() {
@@ -178,12 +180,21 @@ func process(root string, checkOnly bool) error {
 	if err != nil {
 		return err
 	}
+	cppCfg, err := LoadCppConfig(filepath.Join(root, cppConfigRelPath))
+	if err != nil {
+		return err
+	}
+	cppFile, err := RenderCpp(schema, cppCfg)
+	if err != nil {
+		return err
+	}
 	outDir := filepath.Join(root, outputRelPath)
 	tsPath := filepath.Join(root, tsOutputRelPath)
 	goPath := filepath.Join(root, goOutputRelPath)
 	pyPath := filepath.Join(root, pythonOutputRelPath)
 	javaPath := filepath.Join(root, javaOutputRelPath)
 	rustPath := filepath.Join(root, rustOutputRelPath)
+	cppPath := filepath.Join(root, cppOutputRelPath)
 	if checkOnly {
 		if err := checkGeneratedFile(tsPath, tsFile); err != nil {
 			return err
@@ -195,6 +206,9 @@ func process(root string, checkOnly bool) error {
 			return err
 		}
 		if err := checkGeneratedFile(rustPath, rustFile); err != nil {
+			return err
+		}
+		if err := checkGeneratedFile(cppPath, cppFile); err != nil {
 			return err
 		}
 		if err := checkGeneratedDir(javaPath, javaFiles, ".java"); err != nil {
@@ -212,6 +226,9 @@ func process(root string, checkOnly bool) error {
 		return err
 	}
 	if err := writeGeneratedFile(rustPath, rustFile); err != nil {
+		return err
+	}
+	if err := writeGeneratedFile(cppPath, cppFile); err != nil {
 		return err
 	}
 	if err := writeGeneratedDir(javaPath, javaFiles, ".java"); err != nil {
