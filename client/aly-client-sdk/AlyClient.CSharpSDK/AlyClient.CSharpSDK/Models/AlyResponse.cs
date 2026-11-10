@@ -1,17 +1,14 @@
-﻿using Newtonsoft.Json;
 using System;
+using Newtonsoft.Json;
 
 namespace AlyClient.CSharpSDK.Models
 {
-    /// <summary>aly-client.exe stdout JSON wrapper (non-generic).</summary>
-    public class AlyResponse
+    /// <summary>
+    /// aly-client.exe stdout JSON 信封（非泛型）。
+    /// IsSuccess / ErrorMsg 两个 JSON 属性由 Models/Generated/AlyResponse.g.cs 生成，请勿在此手写。
+    /// </summary>
+    public partial class AlyResponse
     {
-        [JsonProperty("isSuccess")]
-        public bool IsSuccess { get; set; }
-
-        [JsonProperty("errorMsg")]
-        public string ErrorMsg { get; set; }
-
         public static AlyResponse OK()
         {
             return new AlyResponse { IsSuccess = true };
