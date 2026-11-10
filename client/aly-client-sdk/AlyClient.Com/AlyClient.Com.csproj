@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net40</TargetFramework>
+    <OutputType>Library</OutputType>
+    <AssemblyName>AlyClient.Com</AssemblyName>
+    <RootNamespace>AlyClient.Com</RootNamespace>
+    <PlatformTarget>x86</PlatformTarget>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AlyClient.CSharpSDK\AlyClient.CSharpSDK\AlyClient.CSharpSDK.csproj" />
+  </ItemGroup>
+
+</Project>

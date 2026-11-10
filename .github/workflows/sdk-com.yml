@@ -1,0 +1,48 @@
+name: COM (VB6 / EPL)
+
+on:
+  push:
+    paths:
+      - "client/aly-client-sdk/AlyClient.Com/**"
+      - "client/aly-client-sdk/AlyClient.CSharpSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-com.yml"
+  pull_request:
+    paths:
+      - "client/aly-client-sdk/AlyClient.Com/**"
+      - "client/aly-client-sdk/AlyClient.CSharpSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-com.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Build, register and test COM wrapper
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Setup Go (fake client)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/fake-aly-client/go.mod
+
+      - name: Verify protocol models and fixtures
+        working-directory: tools/alyprotocol
+        run: go run . -check
+
+      - name: Build COM wrapper
+        run: client\aly-client-sdk\AlyClient.Com\build.ps1
+
+      - name: Register and run COM smoke tests
+        run: client\aly-client-sdk\AlyClient.Com\test.ps1

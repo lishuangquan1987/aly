@@ -86,6 +86,9 @@ client/aly-client-sdk/AlyClient.VbNetSample/bin/
 client/aly-client-sdk/AlyClient.VbNetSample/obj/
 client/aly-client-sdk/AlyClient.FSharpSample/bin/
 client/aly-client-sdk/AlyClient.FSharpSample/obj/
+client/aly-client-sdk/AlyClient.Com/bin/
+client/aly-client-sdk/AlyClient.Com/obj/
+client/aly-client-sdk/AlyClient.Com/out/
 
 # TypeScript SDK
 client/aly-client-sdk/AlyClient.TypeScriptSDK/node_modules/
