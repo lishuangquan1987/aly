@@ -19,7 +19,8 @@ https://github.com/lishuangquan1987/aly/releases/latest/download/<asset>
 | **aly-publish** | `aly-publish-windows-amd64.exe` | `aly-publish-linux-amd64` · `aly-publish-linux-arm64` | `aly-publish-darwin-amd64` · `aly-publish-darwin-arm64` | publish CLI |
 | **aly-client** | `aly-client.exe` (32-bit, XP+) | `aly-client-linux-amd64` · `aly-client-linux-arm64` | — | end-user updater |
 | **aly-client-ui** | `aly-client-ui.exe` (32-bit, XP+) | `aly-client-ui-linux-amd64` · `aly-client-ui-linux-arm64` | — | optional GUI |
-| **C# SDK** | source / local nupkg | source / local nupkg | source / local nupkg | not on public NuGet |
+| **AlyPublish GUI** | `AlyPublish-Setup.exe` · `AlyPublish-win-x64.zip` | — | — | Windows x64; self-contained; the installer bundles `aly-publish.exe` |
+| **C# SDK** | `AlyClient.CSharpSDK.*.nupkg` (release asset) | same | same | not on public NuGet; get it from the release or source |
 
 ::: tip Platform boundary
 Prebuilt clients exist for Windows and Linux only. macOS/FreeBSD updaters compile from the same source but are not published as binaries; the server and publisher do ship macOS binaries.
@@ -39,6 +40,10 @@ Invoke-WebRequest -Uri "https://github.com/lishuangquan1987/aly/releases/latest/
 # Updater + optional GUI
 Invoke-WebRequest -Uri "https://github.com/lishuangquan1987/aly/releases/latest/download/aly-client.exe" -OutFile "aly-client.exe"
 Invoke-WebRequest -Uri "https://github.com/lishuangquan1987/aly/releases/latest/download/aly-client-ui.exe" -OutFile "aly-client-ui.exe"
+
+# Publish GUI installer (self-contained; bundles aly-publish.exe)
+Invoke-WebRequest -Uri "https://github.com/lishuangquan1987/aly/releases/latest/download/AlyPublish-Setup.exe" -OutFile "AlyPublish-Setup.exe"
+Start-Process ".\AlyPublish-Setup.exe"
 ```
 
 ```bash [Linux]

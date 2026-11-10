@@ -17,7 +17,7 @@ For the Chinese UI, see [publish-gui-overview-zh.webp](/images/publish-gui-overv
 |---|---|
 | Executable | `AlyPublish.exe` |
 | Required dependency | `aly-publish.exe` in the same directory (`aly-publish` on non-Windows platforms) |
-| Runtime | .NET 8 desktop runtime (framework-dependent build) |
+| Runtime | Release installer/portable zip is self-contained on .NET 8; a source `dotnet build` is framework-dependent |
 | Minimum window | 1080 × 640; default 1320 × 840 |
 
 CLI lookup order:
@@ -237,24 +237,27 @@ The "Logs" button in the status bar opens that directory directly.
 
 ## Building and distribution
 
-The repository's Release workflow builds `aly-server`, `aly-publish`, `aly-client` and the C# SDK, and has **no** `AlyPublish.exe` asset (see `.github/workflows/release.yml`). The GUI must be built from source:
+The Release workflow now builds and uploads two GUI assets (see `.github/workflows/release.yml`):
+
+- `AlyPublish-Setup.exe`: a Windows x64 installer, self-contained on .NET 8, bundling `aly-publish.exe`;
+- `AlyPublish-win-x64.zip`: a portable bundle that runs after extraction.
+
+The installer is produced with Inno Setup, installs into `Program Files\AlyPublish`, and creates Start Menu and optional desktop shortcuts. Neither artifact requires a separate .NET runtime on the target machine.
+
+Build from source:
 
 ```bash
+# Day-to-day debug build (framework-dependent; needs .NET 8 locally)
 dotnet build publish/publish-gui/src/AlyPublish/AlyPublish.csproj -c Release
+
+# Self-contained single file (same shape as the CI portable bundle)
+dotnet publish publish/publish-gui/src/AlyPublish/AlyPublish.csproj \
+  -c Release -r win-x64 --self-contained true \
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+  -o publish/publish-gui/artifacts/app
 ```
 
-Output directory:
-
-```text
-publish/publish-gui/src/AlyPublish/bin/Release/net8.0/
-```
-
-When distributing:
-
-- Copy the whole output directory (`AlyPublish.exe` plus its dependency DLLs);
-- Rename `aly-publish-windows-amd64.exe` to `aly-publish.exe` and place it in the same directory as `AlyPublish.exe`;
-- If the initialization wizard should also generate `UpdateFolder` automatically, place `aly-client.exe` / `aly-client-ui.exe` in the GUI directory (or the project directory);
-- The GUI is a framework-dependent build (AOT is not enabled), so the target machine needs the .NET 8 desktop runtime.
+When distributing manually, keep `AlyPublish.exe` and `aly-publish.exe` in the same directory. If the initialization wizard should also generate `UpdateFolder` automatically, place `aly-client.exe` / `aly-client-ui.exe` in the GUI directory (or the project directory).
 
 ## Next steps
 

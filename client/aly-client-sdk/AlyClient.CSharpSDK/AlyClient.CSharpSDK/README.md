@@ -4,11 +4,14 @@ Aly auto-update client SDK for .NET. Wraps `aly-client.exe` CLI and provides a m
 
 ## Installation
 
+The package is **not published to NuGet.org**. Add a project reference, or put the
+`AlyClient.CSharpSDK.*.nupkg` release asset into a local feed and reference it:
+
 ```xml
 <PackageReference Include="AlyClient.CSharpSDK" Version="1.0.0" />
 ```
 
-After installing the NuGet package, the following files are automatically copied to `..\UpdateFolder\` relative to your project's output directory on build:
+With the package referenced, the following files are automatically copied to `..\UpdateFolder\` relative to your project's output directory on build:
 
 ```
 ..\UpdateFolder\
@@ -98,7 +101,7 @@ Notes:
   handles the request interactively. `Launch` returns success either way.
 - After `apply_update` the UI relaunches your main executable (see `client.json`
   `main_exe_relative_path` / `must_close_process_name`), so the host does not need to restart itself.
-- Deployed next to `aly-client.exe` by the NuGet targets; set `AlyIncludeClientUi=false` to skip it.
+- Deployed next to `aly-client.exe` by the SDK build targets; set `AlyIncludeClientUi=false` to skip it.
 
 ## Update Lifecycle
 
@@ -161,7 +164,7 @@ await AlyApi.RollbackAsync(exePath, "1.0.0");
 ## Prerequisites
 
 - `.NET Framework 4.0+` or `.NET Standard 2.0+`
-- `..\UpdateFolder\aly-client.exe` (deployed by NuGet build targets)
+- `..\UpdateFolder\aly-client.exe` (deployed by SDK build targets)
 - `..\UpdateFolder\aly-client-ui.exe` (optional GUI front-end, deployed by the same targets;
   required by `AlyUpdateUIClient`)
 - A Aly server running and configured in `..\UpdateFolder\.updator\shared.json` (or passed via CLI args to `aly-client.exe`)

@@ -17,7 +17,7 @@ description: AlyPublish.exe 的运行条件、项目书签、初始化与本地�
 |---|---|
 | 可执行文件 | `AlyPublish.exe` |
 | 必需依赖 | 同目录下的 `aly-publish.exe`（非 Windows 平台为 `aly-publish`） |
-| 运行时 | .NET 8 桌面运行时（框架依赖构建） |
+| 运行时 | Release 安装包/便携包为自包含 .NET 8；源码 `dotnet build` 为框架依赖 |
 | 最小窗口 | 1080 × 640，默认 1320 × 840 |
 
 CLI 的查找顺序：
@@ -237,24 +237,27 @@ GUI 用 Serilog 写文件日志。文件位于 `logs/` 目录，按天滚动，�
 
 ## 构建与分发
 
-仓库的 Release 工作流构建 `aly-server`、`aly-publish`、`aly-client` 与 C# SDK，**没有** `AlyPublish.exe` 资产（见 `.github/workflows/release.yml`）。GUI 需要从源码构建：
+Release 工作流会构建并上传两个 GUI 资产（见 `.github/workflows/release.yml`）：
+
+- `AlyPublish-Setup.exe`：Windows x64 安装包，自包含 .NET 8，内含 `aly-publish.exe`；
+- `AlyPublish-win-x64.zip`：便携版，解压即可运行。
+
+安装包由 Inno Setup 生成，安装到 `Program Files\AlyPublish`，创建开始菜单与可选桌面快捷方式。安装包和 zip 都**不需要**目标机另外安装 .NET 运行时。
+
+从源码构建：
 
 ```bash
+# 日常调试（框架依赖，需要本机 .NET 8）
 dotnet build publish/publish-gui/src/AlyPublish/AlyPublish.csproj -c Release
+
+# 生成自包含单文件（与 CI 便携包一致）
+dotnet publish publish/publish-gui/src/AlyPublish/AlyPublish.csproj \
+  -c Release -r win-x64 --self-contained true \
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+  -o publish/publish-gui/artifacts/app
 ```
 
-输出目录：
-
-```text
-publish/publish-gui/src/AlyPublish/bin/Release/net8.0/
-```
-
-分发时：
-
-- 把整个输出目录（`AlyPublish.exe` 及其依赖 DLL）一起复制；
-- 把 `aly-publish-windows-amd64.exe` 重命名为 `aly-publish.exe`，放在 `AlyPublish.exe` 同一目录；
-- 如需初始化向导自动生成 `UpdateFolder`，再把 `aly-client.exe` / `aly-client-ui.exe` 放在 GUI 同目录（或项目目录）；
-- GUI 是框架依赖构建（未启用 AOT），目标机需要 .NET 8 桌面运行时。
+手工分发时，把 `AlyPublish.exe` 与 `aly-publish.exe` 放在同一目录；如需初始化向导自动生成 `UpdateFolder`，再把 `aly-client.exe` / `aly-client-ui.exe` 放在 GUI 同目录（或项目目录）。
 
 ## 下一步
 

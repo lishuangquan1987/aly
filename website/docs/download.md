@@ -19,7 +19,8 @@ https://github.com/lishuangquan1987/aly/releases/latest/download/<asset>
 | **aly-publish** | `aly-publish-windows-amd64.exe` | `aly-publish-linux-amd64` · `aly-publish-linux-arm64` | `aly-publish-darwin-amd64` · `aly-publish-darwin-arm64` | 发布 CLI |
 | **aly-client** | `aly-client.exe`（32 位，XP+） | `aly-client-linux-amd64` · `aly-client-linux-arm64` | — | 终端更新器 |
 | **aly-client-ui** | `aly-client-ui.exe`（32 位，XP+） | `aly-client-ui-linux-amd64` · `aly-client-ui-linux-arm64` | — | 可选 GUI |
-| **C# SDK** | 源码/本地 nupkg | 源码/本地 nupkg | 源码/本地 nupkg | 未上架公共 NuGet |
+| **AlyPublish GUI** | `AlyPublish-Setup.exe` · `AlyPublish-win-x64.zip` | — | — | Windows x64；自包含，安装包内带 `aly-publish.exe` |
+| **C# SDK** | `AlyClient.CSharpSDK.*.nupkg`（Release 附件） | 同左 | 同左 | 未上架公共 NuGet，从 Release 或源码获取 |
 
 ::: tip 平台边界
 客户端预构建只有 Windows 与 Linux。macOS / FreeBSD 的更新器可以从同一份源码编译，但没有官方预构建；服务端与发布工具提供 macOS 预构建。
@@ -39,6 +40,10 @@ Invoke-WebRequest -Uri "https://github.com/lishuangquan1987/aly/releases/latest/
 # 更新器 + 可选 GUI
 Invoke-WebRequest -Uri "https://github.com/lishuangquan1987/aly/releases/latest/download/aly-client.exe" -OutFile "aly-client.exe"
 Invoke-WebRequest -Uri "https://github.com/lishuangquan1987/aly/releases/latest/download/aly-client-ui.exe" -OutFile "aly-client-ui.exe"
+
+# 发布 GUI 安装包（自包含，内含 aly-publish.exe）
+Invoke-WebRequest -Uri "https://github.com/lishuangquan1987/aly/releases/latest/download/AlyPublish-Setup.exe" -OutFile "AlyPublish-Setup.exe"
+Start-Process ".\AlyPublish-Setup.exe"
 ```
 
 ```bash [Linux]

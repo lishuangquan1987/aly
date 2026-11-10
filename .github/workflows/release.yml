@@ -275,61 +275,143 @@ jobs:
             aly-client-linux-arm64/aly-client-linux-arm64
             aly-client-linux-arm64/aly-client-ui-linux-arm64
 
-  publish-sdk-nuget:
-    name: Publish AlyClient.CSharpSDK to NuGet
+  build-publish-gui:
+    name: Build AlyPublish (Windows x64 installer + portable zip)
     runs-on: windows-latest
-    permissions:
-      id-token: write
-      contents: read
+    needs: [build-aly-publish]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolve version
-        id: version
-        shell: cmd
-        run: |
-          if "${{ github.event_name }}"=="workflow_dispatch" (
-            set RAW=${{ inputs.version }}
-          ) else (
-            set RAW=${{ github.event.release.tag_name }}
-          )
-          :: Strip leading 'v' for NuGet semver compatibility
-          set ALY_VERSION=%RAW:v=%
-          echo ALY_VERSION=%ALY_VERSION%>> %GITHUB_ENV%
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
 
-      - name: Inject version into .targets file
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          $raw = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.version }}" } else { "${{ github.event.release.tag_name }}" }
+          $version = $raw -replace '^v', ''
+          "ALY_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Test publish GUI
+        shell: pwsh
+        run: dotnet test publish/publish-gui/tests/AlyPublish.Tests/AlyPublish.Tests.csproj --configuration Release --nologo
+
+      - name: Publish publish GUI (self-contained single file)
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:GITHUB_WORKSPACE "publish\publish-gui\artifacts\app"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          dotnet publish publish/publish-gui/src/AlyPublish/AlyPublish.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -p:Version=$env:ALY_VERSION `
+            --output $out
+
+      - name: Download publisher CLI
+        uses: actions/download-artifact@v4
+        with:
+          name: aly-publish-windows-amd64
+          path: publish/publish-gui/artifacts
+
+      - name: Bundle aly-publish.exe
+        shell: pwsh
+        run: |
+          $cli = Get-ChildItem "publish\publish-gui\artifacts" -Recurse -Filter "aly-publish-windows-amd64.exe" | Select-Object -First 1
+          if (-not $cli) { throw "aly-publish-windows-amd64.exe artifact not found" }
+          Copy-Item $cli.FullName "publish\publish-gui\artifacts\app\aly-publish.exe" -Force
+          $app = "publish\publish-gui\artifacts\app"
+          if (-not (Test-Path "$app\AlyPublish.exe")) { throw "AlyPublish.exe missing from publish output" }
+          if (-not (Test-Path "$app\aly-publish.exe")) { throw "aly-publish.exe missing from bundle" }
+          Get-ChildItem $app -Filter *.pdb -Recurse | Remove-Item -Force
+          Get-ChildItem $app | Select-Object Name, Length
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = Get-ChildItem "${env:ProgramFiles(x86)}" -Filter ISCC.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup --no-progress -y
+            $iscc = Get-ChildItem "${env:ProgramFiles(x86)}" -Filter ISCC.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $iscc) { throw "Inno Setup ISCC.exe not found" }
+          "ISCC=$($iscc.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          & $env:ISCC "/DMyAppVersion=$env:ALY_VERSION" "publish\publish-gui\installer\AlyPublish.iss"
+
+      - name: Build portable zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "publish\publish-gui\artifacts\app\*" -DestinationPath "publish\publish-gui\artifacts\AlyPublish-win-x64.zip" -Force
+
+      - name: Upload publish GUI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aly-publish-gui-windows-amd64
+          path: |
+            publish/publish-gui/artifacts/AlyPublish-Setup.exe
+            publish/publish-gui/artifacts/AlyPublish-win-x64.zip
+
+  build-csharp-sdk:
+    name: Build AlyClient.CSharpSDK nupkg
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          $raw = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.version }}" } else { "${{ github.event.release.tag_name }}" }
+          $version = $raw -replace '^v', ''
+          "ALY_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Inject version into .targets
         shell: bash
         run: |
           TARGETS="client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/AlyClient.CSharpSDK.targets"
-          python -c "p='$TARGETS';f=open(p,'r',encoding='utf-8');c=f.read();f.close();open(p,'w',encoding='utf-8').write(c.replace('ALY_CLIENT_VERSION_PLACEHOLDER','$ALY_VERSION'));print('Injected version $ALY_VERSION into .targets')"
+          sed -i "s/ALY_CLIENT_VERSION_PLACEHOLDER/${ALY_VERSION}/g" "$TARGETS"
+          echo "Injected $ALY_VERSION into $TARGETS"
 
-      - name: Build & Pack SDK
-        shell: cmd
+      - name: Pack SDK
+        shell: pwsh
         run: |
-          cd client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK
-          dotnet pack --configuration Release -o nupkg -p:Version=%ALY_VERSION%
+          New-Item -ItemType Directory -Force -Path artifacts/sdk | Out-Null
+          dotnet pack client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/AlyClient.CSharpSDK.csproj `
+            --configuration Release `
+            --output artifacts/sdk `
+            -p:Version=$env:ALY_VERSION
 
       - name: Verify nupkg
-        shell: cmd
-        run: |
-          dir client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\nupkg\
+        shell: pwsh
+        run: Get-ChildItem artifacts/sdk | Select-Object Name, Length
 
-      - name: NuGet login (OIDC → temp API key)
-        id: login
-        uses: NuGet/login@v1
+      - name: Upload SDK artifact
+        uses: actions/upload-artifact@v4
         with:
-          user: ${{ secrets.NUGET_USER }}
-
-      - name: Publish to NuGet
-        shell: cmd
-        run: |
-          dotnet nuget push "client\aly-client-sdk\AlyClient.CSharpSDK\AlyClient.CSharpSDK\nupkg\*.nupkg" --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+          name: aly-csharp-sdk
+          path: artifacts/sdk/*.nupkg
 
   upload-release-assets:
     name: Upload to Release
-    needs: [build-server, build-aly-publish, build-aly-client, build-aly-client-linux]
+    needs: [build-server, build-aly-publish, build-aly-client, build-aly-client-linux, build-publish-gui, build-csharp-sdk]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -375,4 +457,7 @@ jobs:
             aly-client-linux-amd64/aly-client-ui-linux-amd64 \
             aly-client-linux-arm64/aly-client-linux-arm64 \
             aly-client-linux-arm64/aly-client-ui-linux-arm64 \
+            aly-publish-gui-windows-amd64/AlyPublish-Setup.exe \
+            aly-publish-gui-windows-amd64/AlyPublish-win-x64.zip \
+            aly-csharp-sdk/AlyClient.CSharpSDK.*.nupkg \
             --clobber

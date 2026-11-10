@@ -48,7 +48,7 @@ All examples in this article stay within what C# 5 can compile:
 
 ## Getting the SDK
 
-**The package is not currently published to NuGet.org**: `AlyClient.CSharpSDK` cannot be found in public feeds, and writing a `<PackageReference>` will fail to restore. The repository's `release.yml` contains a `publish-sdk-nuget` job that injects the version number and pushes to nuget.org on a formal release; whether it has actually been published must be verified by an actual search on nuget.org — do not assume.
+**The package is not published to NuGet.org**: `AlyClient.CSharpSDK` cannot be found in public feeds, and writing a `<PackageReference>` will fail to restore. The Release workflow only builds `AlyClient.CSharpSDK.*.nupkg` and uploads it as a **GitHub Release asset**; it does not push to nuget.org. Download the nupkg from the release, or pack it locally as described below.
 
 Use one of the following two approaches.
 

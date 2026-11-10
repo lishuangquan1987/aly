@@ -48,7 +48,7 @@ SDK 自身用现代编译器构建，宿主用 VS2013 的 C# 5 编译器**引用
 
 ## 获取 SDK
 
-**该包当前没有发布到 NuGet.org**：在公开源检索不到 `AlyClient.CSharpSDK`，写 `<PackageReference>` 会导致还原失败。仓库的 `release.yml` 里有 `publish-sdk-nuget` 作业，正式发版时会注入版本号并推送到 nuget.org；是否已经发布以 nuget.org 上的实际检索结果为准，不要假设。
+**该包当前没有发布到 NuGet.org**：在公开源检索不到 `AlyClient.CSharpSDK`，写 `<PackageReference>` 会导致还原失败。仓库的 Release 工作流只构建 `AlyClient.CSharpSDK.*.nupkg` 并作为 **GitHub Release 附件**上传，不会推送到 nuget.org；从 Release 下载 nupkg，或按下面的方式在本地打包。
 
 可用下面两种方式之一。
 
