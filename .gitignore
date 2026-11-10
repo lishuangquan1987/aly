@@ -82,6 +82,10 @@ website/scripts/.capture-tmp/
 __pycache__/
 client/aly-client-sdk/samples/**/bin/
 client/aly-client-sdk/samples/**/obj/
+client/aly-client-sdk/AlyClient.VbNetSample/bin/
+client/aly-client-sdk/AlyClient.VbNetSample/obj/
+client/aly-client-sdk/AlyClient.FSharpSample/bin/
+client/aly-client-sdk/AlyClient.FSharpSample/obj/
 
 # TypeScript SDK
 client/aly-client-sdk/AlyClient.TypeScriptSDK/node_modules/

@@ -1,0 +1,73 @@
+name: CLR languages (VB.NET / F#)
+
+on:
+  push:
+    paths:
+      - "client/aly-client-sdk/AlyClient.VbNetSample/**"
+      - "client/aly-client-sdk/AlyClient.FSharpSample/**"
+      - "client/aly-client-sdk/AlyClient.CSharpSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-clr.yml"
+  pull_request:
+    paths:
+      - "client/aly-client-sdk/AlyClient.VbNetSample/**"
+      - "client/aly-client-sdk/AlyClient.FSharpSample/**"
+      - "client/aly-client-sdk/AlyClient.CSharpSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-clr.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Build and run VB.NET / F# samples
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Setup Go (fake client)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/fake-aly-client/go.mod
+
+      - name: Verify protocol models and fixtures
+        working-directory: tools/alyprotocol
+        run: go run . -check
+
+      - name: Build VB.NET sample
+        run: dotnet build client/aly-client-sdk/AlyClient.VbNetSample/AlySdkVbSample.vbproj -c Release
+
+      - name: Build F# sample
+        run: dotnet build client/aly-client-sdk/AlyClient.FSharpSample/AlySdkFSharpSample.fsproj -c Release
+
+      - name: Build fake client
+        shell: pwsh
+        run: |
+          Push-Location tools/fake-aly-client
+          go build -o "$env:RUNNER_TEMP\aly-fake.exe" .
+          Pop-Location
+
+      - name: Run VB.NET sample
+        shell: pwsh
+        run: |
+          & "client/aly-client-sdk/AlyClient.VbNetSample/bin/Release/net40/AlySdkVbSample.exe" `
+            "$env:RUNNER_TEMP\aly-fake.exe" `
+            "spec/fixtures/scenarios/update_available.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run F# sample
+        shell: pwsh
+        run: |
+          & "client/aly-client-sdk/AlyClient.FSharpSample/bin/Release/net472/AlySdkFSharpSample.exe" `
+            "$env:RUNNER_TEMP\aly-fake.exe" `
+            "spec/fixtures/scenarios/update_available.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
