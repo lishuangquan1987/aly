@@ -1,0 +1,311 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/lishuangquan1987/aly/blob/master/spec/aly-protocol.schema.json",
+  "title": "Aly client protocol",
+  "description": "aly-client 命令行输出协议的唯一真源。所有命令输出单行 JSON 信封；download_update 额外先输出多行进度（同样是信封）。本 schema 对客户端严格（additionalProperties=false），用于在 CI 中拦截协议漂移；宿主/SDK 反序列化必须忽略未知字段，以保证前向兼容。字段语义、超时、状态机与错误处理见同目录 host-contract.md。",
+  "x-protocol-version": "1.0.0",
+  "$defs": {
+    "Output": {
+      "type": "object",
+      "description": "所有命令的统一输出信封。download_update 的每一行进度也使用同一信封，此时 data 为 DownloadProgress；最终完成行的 data 为 null。",
+      "additionalProperties": false,
+      "required": [
+        "isSuccess",
+        "errorMsg",
+        "data"
+      ],
+      "properties": {
+        "isSuccess": {
+          "type": "boolean",
+          "description": "业务是否成功。宿主必须以此判断结果，不要用退出码判断。"
+        },
+        "errorMsg": {
+          "type": "string",
+          "description": "失败原因；成功时为空串。"
+        },
+        "data": {
+          "description": "命令载荷。无载荷或下载完成时为 null；进度行为 DownloadProgress。"
+        }
+      }
+    },
+    "CheckUpdateData": {
+      "type": "object",
+      "description": "check_update 命令的 data：检查服务端是否有新版本。服务器不可达时 has_update 为 false，不报错。",
+      "additionalProperties": false,
+      "required": [
+        "has_update",
+        "need_download_update",
+        "current_version"
+      ],
+      "properties": {
+        "has_update": {
+          "type": "boolean",
+          "description": "是否有新版本。服务器不可达或本地已下载待应用时为 false。"
+        },
+        "need_download_update": {
+          "type": "boolean",
+          "description": "是否需要下载变更文件。已下载待应用时为 false。"
+        },
+        "current_version": {
+          "type": "string",
+          "description": "当前版本。"
+        },
+        "new_version": {
+          "type": "string",
+          "description": "新版本。仅在 has_update 为 true 时下发。"
+        },
+        "force_update": {
+          "type": "boolean",
+          "description": "是否强制更新。为 true 时宿主应直接下载并应用，不弹确认。"
+        },
+        "release_notes": {
+          "type": "array",
+          "description": "新版本变更内容，逐条一项。服务端未配置时缺省。",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "CheckDiffData": {
+      "type": "object",
+      "description": "check_diff 命令的 data：列出需要下载的差异文件，用于调试与可视化客户端。",
+      "additionalProperties": false,
+      "required": [
+        "new_version",
+        "files"
+      ],
+      "properties": {
+        "new_version": {
+          "type": "string",
+          "description": "对比得到的新版本。"
+        },
+        "files": {
+          "type": "array",
+          "description": "差异文件清单。",
+          "items": {
+            "$ref": "#/$defs/DiffFileItem"
+          }
+        }
+      }
+    },
+    "DiffFileItem": {
+      "type": "object",
+      "description": "单个差异文件的本地与服务端摘要。",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "local_md5",
+        "local_size",
+        "local_sha256",
+        "server_md5",
+        "server_size",
+        "server_sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "文件相对路径，统一使用正斜杠。"
+        },
+        "local_md5": {
+          "type": "string",
+          "description": "本地文件 MD5；本地不存在时为空串。"
+        },
+        "local_size": {
+          "type": "integer",
+          "description": "本地文件字节数；本地不存在时为 0。"
+        },
+        "local_sha256": {
+          "type": "string",
+          "description": "本地文件 SHA-256；本地不存在时为空串。"
+        },
+        "server_md5": {
+          "type": "string",
+          "description": "服务端文件 MD5。"
+        },
+        "server_size": {
+          "type": "integer",
+          "description": "服务端文件字节数。"
+        },
+        "server_sha256": {
+          "type": "string",
+          "description": "服务端文件 SHA-256。"
+        }
+      }
+    },
+    "DownloadUpdateData": {
+      "type": "object",
+      "description": "download_update 命令的 data：仅在部分文件下载失败时出现。成功完成行的 data 为 null。",
+      "additionalProperties": false,
+      "required": [
+        "version"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "本次下载的目标版本。"
+        },
+        "failed_files": {
+          "type": "array",
+          "description": "最终失败的文件相对路径清单。全部成功时缺省。",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "DownloadProgress": {
+      "type": "object",
+      "description": "download_update 的进度行 data。每行都是一个 Output 信封；status 的取值含义见 host-contract.md。",
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "total",
+        "file",
+        "status",
+        "file_size"
+      ],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "description": "当前文件序号，从 1 开始；BEGIN 行为 0。"
+        },
+        "total": {
+          "type": "integer",
+          "description": "需要下载的差异文件总数。"
+        },
+        "file": {
+          "type": "string",
+          "description": "当前文件相对路径；BEGIN 行为空串。"
+        },
+        "status": {
+          "type": "string",
+          "description": "行类型。未知值必须被宿主容忍。",
+          "enum": [
+            "BEGIN",
+            "START",
+            "PROGRESS",
+            "DONE",
+            "SKIP",
+            "FAIL"
+          ]
+        },
+        "file_size": {
+          "type": "integer",
+          "description": "当前文件字节数。"
+        },
+        "error": {
+          "type": "string",
+          "description": "该行失败原因；仅 FAIL 行下发。"
+        },
+        "downloaded_bytes": {
+          "type": "integer",
+          "description": "已下载字节数（累计）。BEGIN/START/DONE 行下发，用于字节级进度。"
+        },
+        "total_bytes": {
+          "type": "integer",
+          "description": "本次差异文件字节数总和。BEGIN 行预告。"
+        },
+        "speed_bps": {
+          "type": "integer",
+          "description": "最近窗口的平均吞吐（字节/秒）。"
+        }
+      }
+    },
+    "RollbackListData": {
+      "type": "object",
+      "description": "list_rollback_versions 命令的 data：可回滚的历史版本快照。",
+      "additionalProperties": false,
+      "required": [
+        "current_version",
+        "versions"
+      ],
+      "properties": {
+        "current_version": {
+          "type": "string",
+          "description": "当前版本。"
+        },
+        "versions": {
+          "type": "array",
+          "description": "可回滚版本号列表，按目录发现顺序。",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "RollbackData": {
+      "type": "object",
+      "description": "rollback 命令的 data：实际回滚到的版本。崩溃恢复分支可能只输出 data:null。",
+      "additionalProperties": false,
+      "required": [
+        "version"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "实际回滚到的版本。"
+        }
+      }
+    },
+    "SelfUpdateData": {
+      "type": "object",
+      "description": "self_update 命令的 data：更新器自更新结果。源缺失或已是最新同样视为成功。",
+      "additionalProperties": false,
+      "required": [
+        "updated",
+        "reason"
+      ],
+      "properties": {
+        "updated": {
+          "type": "boolean",
+          "description": "是否真的替换了更新器本体。"
+        },
+        "reason": {
+          "type": "string",
+          "description": "updated=false 时的跳过原因：source_missing 或 already_up_to_date；updated=true 时为空串。"
+        },
+        "old_path": {
+          "type": "string",
+          "description": "updated=true 时被替换下来的旧版备份路径（.old）。"
+        }
+      }
+    },
+    "CheckSelfUpdateData": {
+      "type": "object",
+      "description": "check_self_update 命令的 data：更新器自身副本是否需要更新。只检测，不替换。",
+      "additionalProperties": false,
+      "required": [
+        "need_update"
+      ],
+      "properties": {
+        "need_update": {
+          "type": "boolean",
+          "description": "更新器自身副本是否落后于主程序目录中的副本。"
+        }
+      }
+    },
+    "CleanData": {
+      "type": "object",
+      "description": "clean 命令的 data：清理模式与保留数量。",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "清理模式。keep 保留最近若干快照；all 清理全部可清理内容。",
+          "enum": [
+            "keep",
+            "all"
+          ]
+        },
+        "keep": {
+          "type": "integer",
+          "description": "mode=keep 时保留的快照数量；mode=all 时缺省。"
+        }
+      }
+    }
+  }
+}
