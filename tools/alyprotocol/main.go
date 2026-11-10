@@ -19,6 +19,7 @@ const (
 	javaConfigRelPath   = "tools/alyprotocol/java.json"
 	rustConfigRelPath   = "tools/alyprotocol/rust.json"
 	cppConfigRelPath    = "tools/alyprotocol/cpp.json"
+	pascalConfigRelPath = "tools/alyprotocol/pascal.json"
 	dtoRelPath          = "client/aly-client/model/dto.go"
 	fixturesRelPath     = "spec/fixtures/scenarios"
 	outputRelPath       = "client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/Models/Generated"
@@ -28,6 +29,7 @@ const (
 	javaOutputRelPath   = "client/aly-client-sdk/AlyClient.JavaSDK/src/main/java/io/github/lishuangquan1987/alyclient/models"
 	rustOutputRelPath   = "client/aly-client-sdk/AlyClient.RustSDK/src/models_gen.rs"
 	cppOutputRelPath    = "client/aly-client-sdk/AlyClient.CppSDK/include/aly/models_gen.h"
+	pascalOutputRelPath = "client/aly-client-sdk/AlyClient.PascalSDK/src/models_gen.pas"
 )
 
 func main() {
@@ -188,6 +190,14 @@ func process(root string, checkOnly bool) error {
 	if err != nil {
 		return err
 	}
+	pascalCfg, err := LoadPascalConfig(filepath.Join(root, pascalConfigRelPath))
+	if err != nil {
+		return err
+	}
+	pascalFile, err := RenderPascal(schema, pascalCfg)
+	if err != nil {
+		return err
+	}
 	outDir := filepath.Join(root, outputRelPath)
 	tsPath := filepath.Join(root, tsOutputRelPath)
 	goPath := filepath.Join(root, goOutputRelPath)
@@ -195,6 +205,7 @@ func process(root string, checkOnly bool) error {
 	javaPath := filepath.Join(root, javaOutputRelPath)
 	rustPath := filepath.Join(root, rustOutputRelPath)
 	cppPath := filepath.Join(root, cppOutputRelPath)
+	pascalPath := filepath.Join(root, pascalOutputRelPath)
 	if checkOnly {
 		if err := checkGeneratedFile(tsPath, tsFile); err != nil {
 			return err
@@ -209,6 +220,9 @@ func process(root string, checkOnly bool) error {
 			return err
 		}
 		if err := checkGeneratedFile(cppPath, cppFile); err != nil {
+			return err
+		}
+		if err := checkGeneratedFile(pascalPath, pascalFile); err != nil {
 			return err
 		}
 		if err := checkGeneratedDir(javaPath, javaFiles, ".java"); err != nil {
@@ -229,6 +243,9 @@ func process(root string, checkOnly bool) error {
 		return err
 	}
 	if err := writeGeneratedFile(cppPath, cppFile); err != nil {
+		return err
+	}
+	if err := writeGeneratedFile(pascalPath, pascalFile); err != nil {
 		return err
 	}
 	if err := writeGeneratedDir(javaPath, javaFiles, ".java"); err != nil {
