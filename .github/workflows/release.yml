@@ -433,15 +433,95 @@ jobs:
         shell: pwsh
         run: Get-ChildItem artifacts/sdk | Select-Object Name, Length
 
+      - name: Package C# SDK zip
+        shell: pwsh
+        run: |
+          $stage = "artifacts/sdk/csharp"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item "artifacts/sdk/*.nupkg" $stage -Force
+          Copy-Item "client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/README.md" $stage -Force
+          Compress-Archive -Path "$stage\*" -DestinationPath "artifacts/sdk/AlyClient.CSharpSDK-$env:ALY_VERSION.zip" -Force
+
       - name: Upload SDK artifact
         uses: actions/upload-artifact@v4
         with:
           name: aly-csharp-sdk
-          path: artifacts/sdk/*.nupkg
+          path: |
+            artifacts/sdk/*.nupkg
+            artifacts/sdk/*.zip
+
+  build-sdk-packages:
+    name: Build all language SDK zip packages
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          $raw = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.version }}" } else { "${{ github.event.release.tag_name }}" }
+          $version = $raw -replace '^v', ''
+          "ALY_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Go (protocol verification)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/alyprotocol/go.mod
+
+      - name: Install MinGW-w64 (C++)
+        run: choco install mingw -y --no-progress
+
+      - name: Install Free Pascal (Pascal)
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP "fpc-3.2.2.i386-win32.exe"
+          curl.exe -L --fail -o $installer "https://downloads.freepascal.org/fpc/dist/3.2.2/i386-win32/fpc-3.2.2.i386-win32.exe"
+          Start-Process -FilePath $installer -Wait -ArgumentList `
+            "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=C:\FPC\3.2.2"
+
+      - name: Verify protocol models and fixtures
+        working-directory: tools/alyprotocol
+        run: go run . -check
+
+      - name: Build SDK zip packages
+        shell: pwsh
+        run: tools/package-sdks/package-sdks.ps1 -Version $env:ALY_VERSION -Out artifacts/sdks -SkipCSharp
+
+      - name: Upload SDK zip packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-packages
+          path: artifacts/sdks/*.zip
 
   upload-release-assets:
     name: Upload to Release
-    needs: [build-server, build-aly-publish, build-aly-client, build-aly-client-linux, build-publish-gui, build-csharp-sdk]
+    needs: [build-server, build-aly-publish, build-aly-client, build-aly-client-linux, build-publish-gui, build-csharp-sdk, build-sdk-packages]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -490,4 +570,6 @@ jobs:
             aly-publish-gui-windows-amd64/AlyPublish-Setup.exe \
             aly-publish-gui-windows-amd64/AlyPublish-win-x64.zip \
             aly-csharp-sdk/AlyClient.CSharpSDK.*.nupkg \
+            aly-csharp-sdk/AlyClient.CSharpSDK-*.zip \
+            sdk-packages/AlyClient.*.zip \
             --clobber

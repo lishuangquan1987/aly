@@ -80,6 +80,9 @@ website/.vitepress/dist/
 website/.vitepress/cache/
 website/scripts/.capture-tmp/
 __pycache__/
+client/aly-client-sdk/AlyClient.PythonSDK/build/
+client/aly-client-sdk/AlyClient.PythonSDK/dist/
+client/aly-client-sdk/AlyClient.PythonSDK/*.egg-info/
 client/aly-client-sdk/samples/**/bin/
 client/aly-client-sdk/samples/**/obj/
 client/aly-client-sdk/AlyClient.VbNetSample/bin/
