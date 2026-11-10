@@ -14,7 +14,7 @@
 
 1. 改 `aly-protocol.schema.json`（新增/删除/改名字段），必要时同步 `host-contract.md`。
 2. 改 `client/aly-client/model/dto.go`，让客户端真的输出/不再输出该字段。
-3. 重新生成各语言模型（当前 C#、TypeScript、Go）：
+3. 重新生成各语言模型（当前 C#、TypeScript、Go、Python）：
 
    ```bash
    cd tools/alyprotocol
@@ -24,7 +24,7 @@
 
    新增字段或命令时，同步更新 `spec/fixtures/scenarios/` 里的样例——`-check` 会校验它们。
 
-4. 编译对应 SDK（C#：`dotnet build` 双 TFM；TypeScript：`npm test`；Go：`go test ./...`）。
+4. 编译对应 SDK（C#：`dotnet build` 双 TFM；TypeScript：`npm test`；Go：`go test ./...`；Python：`python -m unittest discover -s tests`）。
 5. 提交：schema、dto.go、fixtures、生成物、受影响文档必须在同一个 commit 里。
 
 `go run . -check` 会做四件事，任何一件失败都退出码 1：
@@ -34,7 +34,7 @@
 - 逐行校验 `fixtures/scenarios/*.json`，并要求 9 条命令都有样例；
 - 比对生成物与磁盘（CRLF/BOM 归一化后逐字节）。
 
-CI 在打包 C# SDK、运行 TypeScript/Go SDK 测试之前执行同一个 `-check`，漂移会直接红灯。
+CI 在打包 C# SDK、运行 TypeScript/Go/Python SDK 测试之前执行同一个 `-check`，漂移会直接红灯。
 
 ## fixtures：可回放的协议样例
 
@@ -99,7 +99,8 @@ ALY_FAKE_SCENARIO="<repo>/spec/fixtures/scenarios/update_available.json" ./fake-
    不要手抄模型（C# 与 TypeScript 都是这样生成的）。
 2. 读 `host-contract.md`，实现进程调用、超时、状态机、确认事件与错误分类。
 3. 参考现有实现：`AlyClient.CSharpSDK`（事件驱动、net40）、`AlyClient.TypeScriptSDK`
-   （Promise/回调、Node ≥18）与 `AlyClient.GoSDK`（context/回调、Go ≥1.21）；不要发明新的语义。
+   （Promise/回调、Node ≥18）、`AlyClient.GoSDK`（context/回调、Go ≥1.21）与
+   `AlyClient.PythonSDK`（threading/回调、Python ≥3.9）；不要发明新的语义。
 4. 部署更新器与 `client.json` 的方式由各生态自己决定（NuGet targets / npm 本地依赖 /
    Go embed 等），参考 C# 的 `AlyClient.CSharpSDK.targets` 与 TS SDK 的 README。
 
@@ -108,5 +109,6 @@ ALY_FAKE_SCENARIO="<repo>/spec/fixtures/scenarios/update_available.json" ./fake-
 - 只改 schema 不改 `dto.go`：`-check` 报“schema property is not emitted by Go struct”。
 - 只改 `dto.go` 不改 schema：`-check` 报“Go field is missing from schema”。
 - 手改 `Models/Generated/*.g.cs`：下次 `-write` 会被覆盖，`-check` 会失败。
-- 手改 TypeScript 的 `src/models.ts` 或 Go 的 `models_gen.go`：同样会被覆盖，`-check` 会失败。
+- 手改 TypeScript 的 `src/models.ts`、Go 的 `models_gen.go` 或 Python 的
+  `alyclient/models_gen.py`：同样会被覆盖，`-check` 会失败。
 - 把严格 schema 当成 SDK 的解析规则：宿主必须容忍未知字段。

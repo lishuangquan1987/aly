@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aly-client-sdk"
+version = "1.0.0"
+description = "Aly auto-update client SDK for Python. Wraps aly-client and provides a managed update lifecycle."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["aly", "auto-update", "updater"]
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["alyclient*"]

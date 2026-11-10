@@ -14,7 +14,7 @@ aly/
 │   ├── aly-client-ui/       # GUI front-ends
 │   │   ├── aly-client-winui/    # Windows XP walk UI
 │   │   └── aly-client-linuxui/  # Linux MyGo native UI (Go 1.27)
-│   └── aly-client-sdk/      # C# / TypeScript / Go SDKs for host integration
+│   └── aly-client-sdk/      # C# / TypeScript / Go / Python SDKs for host integration
 ├── publish/
 │   ├── publish-cli/      # CLI publish engine (Go, cobra)
 │   └── publish-gui/  # Desktop GUI (Avalonia 11.3, .NET 8)

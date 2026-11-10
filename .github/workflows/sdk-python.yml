@@ -1,0 +1,50 @@
+name: Python SDK
+
+on:
+  push:
+    paths:
+      - "client/aly-client-sdk/AlyClient.PythonSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-python.yml"
+  pull_request:
+    paths:
+      - "client/aly-client-sdk/AlyClient.PythonSDK/**"
+      - "spec/**"
+      - "tools/alyprotocol/**"
+      - "tools/fake-aly-client/**"
+      - ".github/workflows/sdk-python.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test Python SDK (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: client/aly-client-sdk/AlyClient.PythonSDK
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Setup Go (fake client)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/fake-aly-client/go.mod
+
+      - name: Verify protocol models and fixtures
+        working-directory: tools/alyprotocol
+        run: go run . -check
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
