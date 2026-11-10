@@ -123,9 +123,10 @@
 }
 
 .VPHome .VPHero .name {
+  padding-bottom: 0.06em;
   font-size: clamp(4.2rem, 9vw, 6.8rem);
   font-weight: 900;
-  line-height: 0.9;
+  line-height: 1.02;
   letter-spacing: -0.06em;
 }
 
@@ -137,7 +138,7 @@
 }
 
 .VPHome .VPHero .text {
-  margin-top: 14px;
+  margin-top: 30px !important;
   font-size: clamp(1.35rem, 2.4vw, 1.9rem);
   font-weight: 650;
   line-height: 1.28;
@@ -191,20 +192,13 @@
   box-shadow:
     0 28px 80px rgba(2, 6, 23, 0.45),
     0 0 0 1px rgba(99, 102, 241, 0.18) inset;
-  transform: perspective(1200px) rotateY(-4deg) rotateX(2deg);
-  transform-origin: 50% 50%;
-  animation: aly-float 8s ease-in-out infinite alternate;
+  /* Keep the terminal static: a continuously transformed text layer renders
+     blurry on some DPI/GPU combinations. The aurora and sheen still animate. */
+  transform: none;
+  animation: none;
 }
 
-.aly-terminal::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.07), transparent 65%);
-  transform: translateX(-120%);
-  animation: aly-sheen 7s ease-in-out 1.4s infinite;
-}
+
 
 .aly-terminal-bar {
   display: flex;
@@ -708,25 +702,9 @@
   }
 }
 
-@keyframes aly-float {
-  from {
-    transform: perspective(1200px) rotateY(-4deg) rotateX(2deg) translateY(0);
-  }
-  to {
-    transform: perspective(1200px) rotateY(-2deg) rotateX(1deg) translateY(-8px);
-  }
-}
 
-@keyframes aly-sheen {
-  0%,
-  55% {
-    transform: translateX(-120%);
-  }
-  75%,
-  100% {
-    transform: translateX(120%);
-  }
-}
+
+
 
 @keyframes aly-line-in {
   from {
@@ -881,8 +859,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .aly-aurora,
-  .aly-terminal,
-  .aly-terminal::before {
+  .aly-terminal {
     animation: none !important;
   }
 
