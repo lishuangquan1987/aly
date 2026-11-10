@@ -4,11 +4,12 @@
     x:Name="Root"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="using:AlyPublish.Localization"
     xmlns:cli="using:AlyPublish.Models.Cli"
     xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
     xmlns:u="https://irihi.tech/ursa"
     xmlns:vm="using:AlyPublish.ViewModels"
-    Title="初始化项目"
+    Title="{Translate {x:Static loc:LanguageManager+Keys.S002}}"
     Width="680"
     Height="780"
     MinWidth="600"
@@ -29,7 +30,7 @@
           FontSize="13"
           Foreground="{DynamicResource SemiColorText1}"
           Margin="8,0,0,0"
-          Text="选择服务端项目"
+          Text="{Translate {x:Static loc:LanguageManager+Keys.S081}}"
           VerticalAlignment="Center" />
       <Border
           Background="{DynamicResource SemiColorBorder}"
@@ -46,7 +47,7 @@
           FontSize="13"
           Foreground="{DynamicResource SemiColorText1}"
           Margin="8,0,0,0"
-          Text="本地目录与主程序"
+          Text="{Translate {x:Static loc:LanguageManager+Keys.S082}}"
           VerticalAlignment="Center" />
     </Grid>
 
@@ -58,7 +59,7 @@
           VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="12">
           <StackPanel>
-            <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="服务端地址" />
+            <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S083}}" />
             <Grid ColumnDefinitions="*,Auto">
               <TextBox
                   PlaceholderText="http://localhost:2000"
@@ -67,7 +68,7 @@
                   Grid.Column="1"
                   Classes="Primary"
                   Command="{Binding FetchProjectsCommand}"
-                  Content="获取项目"
+                  Content="{Translate {x:Static loc:LanguageManager+Keys.S084}}"
                   Height="32"
                   Margin="8,0,0,0"
                   Padding="12,0" />
@@ -97,7 +98,7 @@
                 Foreground="{DynamicResource SemiColorText2}"
                 IsVisible="{Binding IsFetching}"
                 Margin="0,6,0,0"
-                Text="正在获取项目列表…" />
+                Text="{Translate {x:Static loc:LanguageManager+Keys.S085}}" />
           </StackPanel>
 
           <Border
@@ -126,13 +127,13 @@
           <StackPanel Spacing="8" IsVisible="{Binding HasServerProjects}">
             <Grid ColumnDefinitions="*,Auto">
               <TextBox
-                  PlaceholderText="搜索项目名称或标题"
+                  PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S086}}"
                   Text="{Binding FilterText}" />
               <TextBlock
                   Grid.Column="1"
                   Classes="caption"
                   Margin="10,0,0,0"
-                  Text="选中后在下一步填写本地目录"
+                  Text="{Translate {x:Static loc:LanguageManager+Keys.S087}}"
                   VerticalAlignment="Center" />
             </Grid>
 
@@ -169,7 +170,7 @@
                         <Border Classes="pill">
                           <TextBlock
                               FontSize="10"
-                              Text="{Binding Version, FallbackValue=未发布}" />
+                              Text="{Binding Version, FallbackValue=' '}" />
                         </Border>
                         <Border
                             Background="{DynamicResource SemiColorWarning}"
@@ -179,7 +180,7 @@
                           <TextBlock
                               FontSize="10"
                               Foreground="White"
-                              Text="强制更新" />
+                              Text="{Translate {x:Static loc:LanguageManager+Keys.S088}}" />
                         </Border>
                       </StackPanel>
                     </Grid>
@@ -203,23 +204,23 @@
                   HorizontalAlignment="Center"
                   Kind="Server"
                   Width="26" />
-              <TextBlock Classes="emptyTitle" Text="还没有载入服务端项目" />
+              <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S089}}" />
               <TextBlock
                   Classes="emptyHint"
                   MaxWidth="360"
-                  Text="点击“获取项目”载入已有项目；如果服务端还没有项目，可以直接新建。" />
+                  Text="{Translate {x:Static loc:LanguageManager+Keys.S090}}" />
             </StackPanel>
           </Border>
 
           <StackPanel HorizontalAlignment="Left" Orientation="Horizontal" Spacing="8">
             <Button
                 Command="{Binding CreateServerProjectCommand}"
-                Content="在服务端新建项目"
+                Content="{Translate {x:Static loc:LanguageManager+Keys.S091}}"
                 Height="30"
                 Padding="12,0" />
             <TextBlock
                 Classes="caption"
-                Text="还没有项目时，可以直接新建。"
+                Text="{Translate {x:Static loc:LanguageManager+Keys.S092}}"
                 VerticalAlignment="Center" />
           </StackPanel>
         </StackPanel>
@@ -258,15 +259,15 @@
           </Border>
 
           <StackPanel>
-            <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="本地项目目录" />
+            <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S093}}" />
             <Grid ColumnDefinitions="*,Auto">
               <TextBox
-                  PlaceholderText="选择构建产物所在目录"
+                  PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S094}}"
                   Text="{Binding ProjectPath}" />
               <Button
                   Grid.Column="1"
                   Click="OnBrowseProjectFolder"
-                  Content="浏览…"
+                  Content="{Translate {x:Static loc:LanguageManager+Keys.S072}}"
                   Height="32"
                   Margin="8,0,0,0"
                   Padding="12,0" />
@@ -285,7 +286,7 @@
                     Width="14" />
                 <TextBlock
                     Classes="caption"
-                    Text="也可以把文件夹直接拖到本窗口。目录中不能已包含 .updator/shared.json。"
+                    Text="{Translate {x:Static loc:LanguageManager+Keys.S095}}"
                     VerticalAlignment="Center" />
               </StackPanel>
             </Border>
@@ -297,24 +298,24 @@
           </StackPanel>
 
           <StackPanel>
-            <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="显示名称（左侧列表中的别名）" />
-            <TextBox PlaceholderText="默认使用服务端项目名" Text="{Binding DisplayName}" />
+            <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S077}}" />
+            <TextBox PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S096}}" Text="{Binding DisplayName}" />
           </StackPanel>
 
           <StackPanel>
-            <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="主程序（可选，用于“启动”和 UpdateFolder）" />
+            <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S097}}" />
             <ComboBox
-                PlaceholderText="自动检测到的可执行文件"
+                PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S098}}"
                 ItemsSource="{Binding MainExeCandidates}"
                 SelectedItem="{Binding SelectedMainExeCandidate}" />
             <Grid ColumnDefinitions="*,Auto">
               <TextBox
-                  PlaceholderText="手动选择主程序 exe"
+                  PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S099}}"
                   Text="{Binding MainExePath}" />
               <Button
                   Grid.Column="1"
                   Click="OnBrowseMainExe"
-                  Content="浏览…"
+                  Content="{Translate {x:Static loc:LanguageManager+Keys.S072}}"
                   Height="32"
                   Margin="8,0,0,0"
                   Padding="12,0" />
@@ -322,20 +323,20 @@
             <Grid ColumnDefinitions="Auto,*" Margin="0,8,0,0">
               <TextBlock
                   Classes="fieldLabel"
-                  Text="更新时关闭的进程"
+                  Text="{Translate {x:Static loc:LanguageManager+Keys.S100}}"
                   VerticalAlignment="Center" />
               <TextBox
                   Grid.Column="1"
                   Margin="10,0,0,0"
-                  PlaceholderText="默认取主程序文件名"
+                  PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S101}}"
                   Text="{Binding CloseProcessName}" />
             </Grid>
           </StackPanel>
 
-          <Expander Header="忽略与不复制规则" HorizontalAlignment="Stretch">
+          <Expander Header="{Translate {x:Static loc:LanguageManager+Keys.S102}}" HorizontalAlignment="Stretch">
             <StackPanel Margin="0,8,0,0" Spacing="12">
               <StackPanel>
-                <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="忽略文件夹" />
+                <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S103}}" />
                 <ItemsControl ItemsSource="{Binding IgnoreFolderSuggestions}">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -359,7 +360,7 @@
                 <Grid ColumnDefinitions="*,Auto">
                   <u:TagInput
                       AllowDuplicates="False"
-                      PlaceholderText="输入后回车添加，例如 node_modules"
+                      PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S104}}"
                       Separator=","
                       Tags="{Binding IgnoreFolders}" />
                   <Button
@@ -368,7 +369,7 @@
                       Height="32"
                       Margin="8,0,0,0"
                       Padding="0"
-                      ToolTip.Tip="从项目目录选择文件夹"
+                      ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S105}}"
                       Width="32">
                     <materialIcons:MaterialIcon Height="14" Kind="Plus" Width="14" />
                   </Button>
@@ -376,7 +377,7 @@
               </StackPanel>
 
               <StackPanel>
-                <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="忽略文件" />
+                <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S106}}" />
                 <ItemsControl ItemsSource="{Binding IgnoreFileSuggestions}">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -400,7 +401,7 @@
                 <Grid ColumnDefinitions="*,Auto">
                   <u:TagInput
                       AllowDuplicates="False"
-                      PlaceholderText="输入后回车添加，例如 *.log"
+                      PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S107}}"
                       Separator=","
                       Tags="{Binding IgnoreFiles}" />
                   <Button
@@ -409,7 +410,7 @@
                       Height="32"
                       Margin="8,0,0,0"
                       Padding="0"
-                      ToolTip.Tip="从项目目录选择文件"
+                      ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S108}}"
                       Width="32">
                     <materialIcons:MaterialIcon Height="14" Kind="Plus" Width="14" />
                   </Button>
@@ -417,11 +418,11 @@
               </StackPanel>
 
               <StackPanel>
-                <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="不复制文件夹（应用更新时跳过）" />
+                <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S109}}" />
                 <Grid ColumnDefinitions="*,Auto">
                   <u:TagInput
                       AllowDuplicates="False"
-                      PlaceholderText="输入后回车添加"
+                      PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S110}}"
                       Separator=","
                       Tags="{Binding UnCopyFolders}" />
                   <Button
@@ -430,7 +431,7 @@
                       Height="32"
                       Margin="8,0,0,0"
                       Padding="0"
-                      ToolTip.Tip="从项目目录选择文件夹"
+                      ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S105}}"
                       Width="32">
                     <materialIcons:MaterialIcon Height="14" Kind="Plus" Width="14" />
                   </Button>
@@ -438,11 +439,11 @@
               </StackPanel>
 
               <StackPanel>
-                <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="不复制文件（应用更新时跳过）" />
+                <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S111}}" />
                 <Grid ColumnDefinitions="*,Auto">
                   <u:TagInput
                       AllowDuplicates="False"
-                      PlaceholderText="输入后回车添加"
+                      PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S110}}"
                       Separator=","
                       Tags="{Binding UnCopyFiles}" />
                   <Button
@@ -451,7 +452,7 @@
                       Height="32"
                       Margin="8,0,0,0"
                       Padding="0"
-                      ToolTip.Tip="从项目目录选择文件"
+                      ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S108}}"
                       Width="32">
                     <materialIcons:MaterialIcon Height="14" Kind="Plus" Width="14" />
                   </Button>
@@ -484,24 +485,24 @@
           HorizontalAlignment="Right"
           Orientation="Horizontal"
           Spacing="8">
-        <Button Command="{Binding CancelCommand}" Content="取消" Height="32" Padding="16,0" />
+        <Button Command="{Binding CancelCommand}" Content="{Translate {x:Static loc:LanguageManager+Keys.S058}}" Height="32" Padding="16,0" />
         <Button
             Command="{Binding PreviousStepCommand}"
-            Content="上一步"
+            Content="{Translate {x:Static loc:LanguageManager+Keys.S112}}"
             Height="32"
             IsVisible="{Binding IsLocalStep}"
             Padding="16,0" />
         <Button
             Classes="Primary"
             Command="{Binding NextStepCommand}"
-            Content="下一步"
+            Content="{Translate {x:Static loc:LanguageManager+Keys.S113}}"
             Height="32"
             IsVisible="{Binding IsServerStep}"
             Padding="20,0" />
         <Button
             Classes="Primary"
             Command="{Binding ConfirmCommand}"
-            Content="初始化并添加"
+            Content="{Translate {x:Static loc:LanguageManager+Keys.S114}}"
             Height="32"
             IsVisible="{Binding IsLocalStep}"
             Padding="20,0" />

@@ -1,4 +1,5 @@
 using AlyPublish.Helpers;
+using AlyPublish.Localization;
 using AlyPublish.Models.Local;
 using Newtonsoft.Json;
 using Serilog;
@@ -18,7 +19,8 @@ public static class UpdateFolderService
     {
         var projectDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectPath));
         var parentDirectory = Path.GetDirectoryName(projectDirectory)
-            ?? throw new InvalidOperationException("无法获取项目目录的上级目录");
+            ?? throw new InvalidOperationException(
+                LanguageManager.T(LanguageManager.Instance.Update_ParentMissing));
         var updateFolder = Path.Combine(parentDirectory, "UpdateFolder");
         Directory.CreateDirectory(updateFolder);
 
@@ -29,7 +31,7 @@ public static class UpdateFolderService
             var source = FindClientExecutable(projectDirectory, executableName);
             if (source is null)
             {
-                warnings.Add($"未找到 {executableName}");
+                warnings.Add(LanguageManager.F(LanguageManager.Instance.Update_FileMissing, executableName));
                 continue;
             }
 
@@ -40,7 +42,10 @@ public static class UpdateFolderService
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                warnings.Add($"复制 {executableName} 失败：{ex.Message}");
+                warnings.Add(LanguageManager.F(
+                    LanguageManager.Instance.Update_CopyFailed,
+                    executableName,
+                    ex.Message));
             }
         }
 
@@ -48,7 +53,8 @@ public static class UpdateFolderService
         var relativePath = Path.GetRelativePath(updateFolder, mainExeFullPath);
         if (Path.IsPathRooted(relativePath))
         {
-            throw new InvalidOperationException("主程序必须与 UpdateFolder 位于同一磁盘");
+            throw new InvalidOperationException(
+                LanguageManager.T(LanguageManager.Instance.Update_SameDisk));
         }
 
         var processName = string.IsNullOrWhiteSpace(closeProcessName)
@@ -66,7 +72,11 @@ public static class UpdateFolderService
             JsonConvert.SerializeObject(config, Formatting.Indented));
 
         Log.Information("创建 UpdateFolder: {Path} (主程序相对路径={RelativePath})", updateFolder, relativePath);
-        return warnings.Count == 0 ? null : $"UpdateFolder 不完整：{string.Join('；', warnings)}";
+        return warnings.Count == 0
+            ? null
+            : LanguageManager.F(
+                LanguageManager.Instance.Update_Incomplete,
+                string.Join("; ", warnings));
     }
 
     /// <summary>

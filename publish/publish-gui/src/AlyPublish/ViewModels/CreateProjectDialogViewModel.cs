@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using AlyPublish.Constants;
+using AlyPublish.Localization;
 using AlyPublish.Models.Cli;
 using AlyPublish.Models.Local;
 using AlyPublish.Services;
@@ -103,7 +104,7 @@ public sealed partial class CreateProjectDialogViewModel : ViewModelBase
         var title = ProjectTitle.Trim();
         ProjectInfo? created = null;
 
-        var saved = await RunAsync("创建服务端项目", async token =>
+        var saved = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_CreateServerProject), async token =>
         {
             created = await _cli.CreateServerProjectAsync(
                 ServerUrl,
@@ -141,7 +142,7 @@ public sealed partial class CreateProjectDialogViewModel : ViewModelBase
         var name = ProjectName.Trim();
         ValidationMessage = name.Length > 0 && _existingProjectNames.Any(existing =>
             string.Equals(existing, name, StringComparison.OrdinalIgnoreCase))
-            ? "服务端已存在同名项目"
+            ? LanguageManager.T(LanguageManager.Instance.Dlg_DuplicateProject)
             : string.Empty;
 
         CreateCommand.NotifyCanExecuteChanged();

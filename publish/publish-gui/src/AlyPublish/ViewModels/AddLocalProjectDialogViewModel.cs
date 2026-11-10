@@ -1,5 +1,6 @@
 using System.IO;
 using AlyPublish.Helpers;
+using AlyPublish.Localization;
 using AlyPublish.Models.Local;
 using AlyPublish.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -55,7 +56,7 @@ public sealed partial class AddLocalProjectDialogViewModel : ViewModelBase
             _config.LoadProjects().Select(project => NormalizeForComparison(project.ProjectPath)),
             StringComparer.OrdinalIgnoreCase);
 
-        InitStatusMessage = "请选择已初始化的项目文件夹";
+        InitStatusMessage = LanguageManager.T(LanguageManager.Instance.Dlg_SelectInitialized);
     }
 
     /// <summary>Called by the view when a folder is dropped onto the dialog.</summary>
@@ -72,25 +73,25 @@ public sealed partial class AddLocalProjectDialogViewModel : ViewModelBase
         var path = value.Trim();
         if (path.Length == 0)
         {
-            InitStatusMessage = "请选择已初始化的项目文件夹";
+            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.Dlg_SelectInitialized);
             return;
         }
 
         if (!Directory.Exists(path))
         {
-            InitStatusMessage = "目录不存在";
+            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.Dlg_DirectoryMissing);
             return;
         }
 
         if (_existingProjectPaths.Contains(NormalizeForComparison(path)))
         {
-            InitStatusMessage = "该项目已在左侧列表中";
+            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.Dlg_AlreadyListed);
             return;
         }
 
         if (!ProjectInputHelper.IsInitialized(path))
         {
-            InitStatusMessage = "未找到 .updator/shared.json，请先初始化该项目";
+            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.Dlg_SharedMissing);
             return;
         }
 
@@ -103,7 +104,7 @@ public sealed partial class AddLocalProjectDialogViewModel : ViewModelBase
             PreviewIgnoreCount = shared.IgnoreFolders.Count + shared.IgnoreFiles.Count;
             HasPreview = true;
             IsReady = true;
-            InitStatusMessage = "已检测到项目配置";
+            InitStatusMessage = LanguageManager.T(LanguageManager.Instance.Dlg_ConfigFound);
         }
         catch (ProjectConfigException ex)
         {

@@ -76,3 +76,5 @@ publish/publish-cli/publish-cli-*
 website/node_modules/
 website/.vitepress/dist/
 website/.vitepress/cache/
+website/scripts/.capture-tmp/
+__pycache__/

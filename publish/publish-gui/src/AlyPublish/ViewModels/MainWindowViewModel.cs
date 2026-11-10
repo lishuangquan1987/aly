@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using AlyPublish.Constants;
+using AlyPublish.Localization;
 using AlyPublish.Models.Local;
 using AlyPublish.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -37,6 +39,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             ApplyProjectFilter();
         };
 
+        LanguageManager.LanguageChanged += OnLanguageChanged;
         LoadProjects();
         Log.Information("主窗口初始化: 项目 {Count} 个, CLI={Cli}", Projects.Count, CliPath);
     }
@@ -74,8 +77,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool HasSelectedTab => SelectedTab is not null;
 
     public string CliHint => IsCliAvailable
-        ? $"aly-publish：{CliPath}"
-        : "未找到 aly-publish.exe。请将其放在本程序目录，或点击“重新检测”。";
+        ? LanguageManager.F(LanguageManager.Instance.Main_CliHint, CliPath)
+        : LanguageManager.T(LanguageManager.Instance.Main_Hint_CliMissing);
+
+    [SuppressMessage(
+        "Performance",
+        "CA1822:Mark members as static",
+        Justification = "Bound from XAML; bound members must remain instance members.")]
+    public string LanguageLabel => LanguageManager.LanguageLabel;
 
     partial void OnProjectFilterChanged(string value) => ApplyProjectFilter();
 
@@ -134,14 +143,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
 
         var confirmed = await Dialogs.ConfirmAsync(
-            "移除项目",
-            $"确定从列表中移除 “{project.DisplayName}” 吗？\n\n项目文件和 .updator 配置不会被删除。");
+            LanguageManager.T(LanguageManager.Instance.Main_RemoveTitle),
+            LanguageManager.F(LanguageManager.Instance.Main_RemoveMessage, project.DisplayName));
         if (!confirmed)
         {
             return;
         }
 
-        var removed = await RunAsync("移除项目", () =>
+        var removed = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_RemoveProject), () =>
         {
             var remaining = Projects.Where(candidate => !ReferenceEquals(candidate, project)).ToList();
             _config.SaveProjects(remaining);
@@ -162,7 +171,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         if (removed)
         {
-            Notify.Success($"项目 “{project.DisplayName}” 已移除");
+            Notify.Success(LanguageManager.F(LanguageManager.Instance.Main_Removed, project.DisplayName));
         }
     }
 
@@ -179,6 +188,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void ClearProjectFilter() => ProjectFilter = string.Empty;
 
+    [SuppressMessage(
+        "Performance",
+        "CA1822:Mark members as static",
+        Justification = "Generated command is bound from XAML.")]
+    [RelayCommand]
+    private void ToggleLanguage() => LanguageManager.Toggle();
+
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(LanguageLabel));
+        OnPropertyChanged(nameof(CliHint));
+        SelectedTab?.RefreshLocalization();
+    }
+
     [RelayCommand]
     private void RetryCli()
     {
@@ -188,11 +211,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         if (IsCliAvailable)
         {
-            Notify.Success("已找到 aly-publish");
+            Notify.Success(LanguageManager.T(LanguageManager.Instance.Main_FoundCli));
         }
         else
         {
-            Notify.Warning("仍未找到 aly-publish.exe，请检查程序目录");
+            Notify.Warning(LanguageManager.T(LanguageManager.Instance.Main_StillNoCli));
         }
     }
 
@@ -226,7 +249,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private async Task AddProjectCoreAsync(ProjectConfig project)
     {
         ProjectFilter = string.Empty;
-        var added = await RunAsync("添加项目", () =>
+        var added = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_AddProject), () =>
         {
             _config.SaveProjects(Projects.Append(project));
             Projects.Add(project);
@@ -235,14 +258,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         if (added)
         {
-            Notify.Success($"项目 “{project.DisplayName}” 已添加");
+            Notify.Success(LanguageManager.F(LanguageManager.Instance.Main_Added, project.DisplayName));
         }
     }
 
     private async Task EditProjectCoreAsync(ProjectConfig project)
     {
         var saved = false;
-        var completed = await RunAsync("保存项目设置", async _ =>
+        var completed = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_SaveSettings), async _ =>
         {
             var updated = await Dialogs.ShowEditProjectAsync(project);
             if (updated is null)
@@ -259,7 +282,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         if (completed && saved)
         {
-            Notify.Success("项目设置已保存");
+            Notify.Success(LanguageManager.T(LanguageManager.Instance.Main_SettingsSaved));
         }
     }
 
@@ -333,7 +356,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         if (!Directory.Exists(path))
         {
-            Notify.Warning($"目录不存在：{path}");
+            Notify.Warning(LanguageManager.F(LanguageManager.Instance.Main_DirectoryMissing, path));
             return;
         }
 
@@ -348,7 +371,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             Log.Error(ex, "打开目录失败: {Path}", path);
-            Notify.ShowError($"打开目录失败：{ex.Message}");
+            Notify.ShowError(LanguageManager.F(LanguageManager.Instance.Main_OpenFolderFailed, ex.Message));
         }
     }
 }

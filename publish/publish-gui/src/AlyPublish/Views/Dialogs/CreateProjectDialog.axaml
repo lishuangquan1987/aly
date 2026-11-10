@@ -4,10 +4,11 @@
     x:Name="Root"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="using:AlyPublish.Localization"
     xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
     xmlns:u="https://irihi.tech/ursa"
     xmlns:vm="using:AlyPublish.ViewModels"
-    Title="在服务端新建项目"
+    Title="{Translate {x:Static loc:LanguageManager+Keys.S091}}"
     Width="560"
     Height="640"
     MinWidth="480"
@@ -21,9 +22,9 @@
       <TextBlock
           FontSize="15"
           FontWeight="SemiBold"
-          Text="新建服务端项目" />
+          Text="{Translate {x:Static loc:LanguageManager+Keys.S115}}" />
       <StackPanel Orientation="Horizontal" Spacing="6">
-        <TextBlock Classes="caption" Text="服务端：" />
+        <TextBlock Classes="caption" Text="{Translate {x:Static loc:LanguageManager+Keys.S116}}" />
         <TextBlock Classes="caption" Text="{Binding ServerUrl}" />
       </StackPanel>
     </StackPanel>
@@ -35,36 +36,36 @@
         VerticalScrollBarVisibility="Auto">
       <StackPanel Spacing="14">
         <StackPanel>
-          <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="项目标题（展示给最终用户）" />
-          <TextBox PlaceholderText="例如 我的应用" Text="{Binding ProjectTitle}" />
+          <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S117}}" />
+          <TextBox PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S118}}" Text="{Binding ProjectTitle}" />
         </StackPanel>
 
         <StackPanel>
-          <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="项目名称（唯一标识，默认跟随标题）" />
-          <TextBox PlaceholderText="例如 myapp" Text="{Binding ProjectName}" />
+          <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S119}}" />
+          <TextBox PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S120}}" Text="{Binding ProjectName}" />
           <TextBlock
               Classes="caption"
               Margin="0,4,0,0"
-              Text="一旦修改名称，后续修改标题不会再自动同步名称。请确保服务端不存在同名项目。" />
+              Text="{Translate {x:Static loc:LanguageManager+Keys.S121}}" />
         </StackPanel>
 
         <StackPanel>
-          <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="更新策略" />
+          <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S122}}" />
           <CheckBox
-              Content="强制更新（客户端不再询问，直接更新）"
+              Content="{Translate {x:Static loc:LanguageManager+Keys.S057}}"
               FontSize="12"
               Foreground="{DynamicResource SemiColorWarning}"
               IsChecked="{Binding ForceUpdate}" />
           <TextBlock
               Classes="caption"
-              Text="仅在客户端必须跳过用户确认时启用；普通发布保持关闭。"
+              Text="{Translate {x:Static loc:LanguageManager+Keys.S123}}"
               TextWrapping="Wrap" />
         </StackPanel>
 
-        <Expander Header="忽略规则（可稍后在项目设置中修改）" HorizontalAlignment="Stretch">
+        <Expander Header="{Translate {x:Static loc:LanguageManager+Keys.S124}}" HorizontalAlignment="Stretch">
           <StackPanel Margin="0,8,0,0" Spacing="12">
             <StackPanel>
-              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="忽略文件夹" />
+              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S103}}" />
               <ItemsControl ItemsSource="{Binding IgnoreFolderSuggestions}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
@@ -87,13 +88,13 @@
               </ItemsControl>
               <u:TagInput
                   AllowDuplicates="False"
-                  PlaceholderText="输入后回车添加"
+                  PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S110}}"
                   Separator=","
                   Tags="{Binding IgnoreFolders}" />
             </StackPanel>
 
             <StackPanel>
-              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="忽略文件" />
+              <TextBlock Classes="fieldLabel" Margin="0,0,0,6" Text="{Translate {x:Static loc:LanguageManager+Keys.S106}}" />
               <ItemsControl ItemsSource="{Binding IgnoreFileSuggestions}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
@@ -116,7 +117,7 @@
               </ItemsControl>
               <u:TagInput
                   AllowDuplicates="False"
-                  PlaceholderText="输入后回车添加"
+                  PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S110}}"
                   Separator=","
                   Tags="{Binding IgnoreFiles}" />
             </StackPanel>
@@ -142,13 +143,13 @@
     <Grid ColumnDefinitions="*,Auto,Auto" Grid.Row="3" Margin="0,16,0,0">
       <TextBlock
           Classes="caption"
-          Text="创建成功后会自动回到项目选择步骤并选中它。"
+          Text="{Translate {x:Static loc:LanguageManager+Keys.S125}}"
           TextWrapping="Wrap"
           VerticalAlignment="Center" />
       <Button
           Grid.Column="1"
           Command="{Binding CancelCommand}"
-          Content="取消"
+          Content="{Translate {x:Static loc:LanguageManager+Keys.S058}}"
           Height="32"
           Margin="0,0,8,0"
           Padding="16,0" />
@@ -156,7 +157,7 @@
           Grid.Column="2"
           Classes="Primary"
           Command="{Binding CreateCommand}"
-          Content="创建项目"
+          Content="{Translate {x:Static loc:LanguageManager+Keys.S126}}"
           Height="32"
           Padding="20,0" />
     </Grid>

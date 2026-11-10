@@ -1,4 +1,5 @@
 using AlyPublish.Helpers;
+using AlyPublish.Localization;
 using AlyPublish.Models.Local;
 
 namespace AlyPublish.Services;
@@ -23,13 +24,15 @@ public sealed class ProjectSetupService
             mainExeFullPath = ProjectInputHelper.ResolveMainExePath(request.ProjectPath, request.MainExePath);
             if (!File.Exists(mainExeFullPath))
             {
-                throw new FileNotFoundException($"主程序不存在：{mainExeFullPath}");
+                throw new FileNotFoundException(
+                    LanguageManager.F(LanguageManager.Instance.Setup_MainMissing, mainExeFullPath));
             }
 
             var relative = Path.GetRelativePath(request.ProjectPath, mainExeFullPath);
             if (Path.IsPathRooted(relative))
             {
-                throw new InvalidOperationException("主程序必须与项目目录位于同一磁盘");
+                throw new InvalidOperationException(
+                    LanguageManager.T(LanguageManager.Instance.Setup_MainSameDisk));
             }
         }
 

@@ -1,5 +1,6 @@
 using AlyPublish.Constants;
 using AlyPublish.Helpers;
+using AlyPublish.Localization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AlyPublish.Models.Local;
@@ -45,6 +46,8 @@ public sealed partial class FileItem : ObservableObject
     public string LocalSizeText => FileSizeHelper.Format(LocalSize);
 
     public string ServerSizeText => string.IsNullOrEmpty(ServerMd5) ? "—" : FileSizeHelper.Format(ServerSize);
+
+    public void RefreshLocalization() => OnPropertyChanged(nameof(StatusDisplay));
 
     public static FileItem FromCliItem(Models.Cli.FileStatusItem item) => new()
     {

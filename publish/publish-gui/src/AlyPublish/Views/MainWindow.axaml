@@ -4,12 +4,12 @@
     x:Name="Root"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:constants="using:AlyPublish.Constants"
+    xmlns:loc="using:AlyPublish.Localization"
     xmlns:local="using:AlyPublish.Models.Local"
     xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
     xmlns:views="using:AlyPublish.Views"
     xmlns:vm="using:AlyPublish.ViewModels"
-    Title="{x:Static constants:AppConstants.AppTitle}"
+    Title="{Translate {x:Static loc:LanguageManager+Keys.App_Title}}"
     Width="1320"
     Height="840"
     MinWidth="1080"
@@ -38,20 +38,20 @@
               Command="{Binding AddProjectCommand}"
               Height="30"
               Padding="12,0"
-              ToolTip.Tip="选择一个未初始化的目录并生成 .updator 配置">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S001}}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <materialIcons:MaterialIcon Height="16" Kind="PlusCircleOutline" Width="16" />
-              <TextBlock FontSize="13" Text="初始化项目" VerticalAlignment="Center" />
+              <TextBlock FontSize="13" Text="{Translate {x:Static loc:LanguageManager+Keys.S002}}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Button
               Command="{Binding AddLocalProjectCommand}"
               Height="30"
               Padding="12,0"
-              ToolTip.Tip="添加已经包含 .updator/shared.json 的目录">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S003}}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <materialIcons:MaterialIcon Height="16" Kind="FolderOpenOutline" Width="16" />
-              <TextBlock FontSize="13" Text="添加本地项目" VerticalAlignment="Center" />
+              <TextBlock FontSize="13" Text="{Translate {x:Static loc:LanguageManager+Keys.S004}}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Separator
@@ -63,10 +63,10 @@
               Command="{Binding EditProjectCommand}"
               Height="30"
               Padding="10,0"
-              ToolTip.Tip="项目设置 (Ctrl+E)">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S005}}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <materialIcons:MaterialIcon Height="14" Kind="CogOutline" Width="14" />
-              <TextBlock FontSize="12" Text="项目设置" VerticalAlignment="Center" />
+              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.S006}}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Button
@@ -74,10 +74,10 @@
               Command="{Binding RemoveProjectCommand}"
               Height="30"
               Padding="10,0"
-              ToolTip.Tip="从列表移除项目（不会删除项目文件）">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S007}}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <materialIcons:MaterialIcon Height="14" Kind="DeleteOutline" Width="14" />
-              <TextBlock FontSize="12" Text="移除" VerticalAlignment="Center" />
+              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.S008}}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
         </StackPanel>
@@ -87,6 +87,13 @@
             Orientation="Horizontal"
             Spacing="8"
             VerticalAlignment="Center">
+          <Button
+              Command="{Binding ToggleLanguageCommand}"
+              Content="{Binding LanguageLabel}"
+              FontSize="11"
+              Height="26"
+              Padding="10,0"
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.Lang_Switch}}" />
           <Border
               Classes="pill"
               IsVisible="{Binding IsCliAvailable}"
@@ -99,7 +106,7 @@
               <TextBlock
                   FontSize="11"
                   Foreground="{DynamicResource SemiColorText2}"
-                  Text="CLI 就绪" />
+                  Text="{Translate {x:Static loc:LanguageManager+Keys.S009}}" />
             </StackPanel>
           </Border>
         </StackPanel>
@@ -126,7 +133,7 @@
               FontSize="13"
               FontWeight="SemiBold"
               Foreground="{DynamicResource SemiColorWarning}"
-              Text="未找到 aly-publish.exe" />
+              Text="{Translate {x:Static loc:LanguageManager+Keys.S010}}" />
           <TextBlock
               Classes="caption"
               Text="{Binding CliHint}"
@@ -135,13 +142,13 @@
         <Button
             Grid.Column="2"
             Command="{Binding RetryCliCommand}"
-            Content="重新检测"
+            Content="{Translate {x:Static loc:LanguageManager+Keys.S011}}"
             Height="28"
             Padding="10,0" />
         <Button
             Grid.Column="3"
             Command="{Binding OpenCliFolderCommand}"
-            Content="打开程序目录"
+            Content="{Translate {x:Static loc:LanguageManager+Keys.S012}}"
             Height="28"
             Margin="8,0,0,0"
             Padding="10,0" />
@@ -173,14 +180,14 @@
                 <TextBlock
                     Classes="sectionTitle"
                     VerticalAlignment="Center">
-                  <Run Text="项目 " />
+                  <Run Text="{Translate {x:Static loc:LanguageManager+Keys.S013}}" />
                   <Run Foreground="{DynamicResource SemiColorText3}" Text="{Binding Projects.Count}" />
                 </TextBlock>
               </StackPanel>
               <TextBox
                   FontSize="12"
                   Height="28"
-                  PlaceholderText="搜索名称或路径"
+                  PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S014}}"
                   Text="{Binding ProjectFilter, Mode=TwoWay}" />
             </StackPanel>
           </Border>
@@ -220,10 +227,10 @@
                 Kind="Magnify"
                 HorizontalAlignment="Center"
                 Width="28" />
-            <TextBlock Classes="emptyTitle" Text="没有匹配的项目" />
+            <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S015}}" />
             <Button
                 Command="{Binding ClearProjectFilterCommand}"
-                Content="清除搜索"
+                Content="{Translate {x:Static loc:LanguageManager+Keys.S016}}"
                 Height="28"
                 Padding="12,0" />
           </StackPanel>
@@ -240,21 +247,21 @@
                 Kind="FolderPlusOutline"
                 HorizontalAlignment="Center"
                 Width="32" />
-            <TextBlock Classes="emptyTitle" Text="还没有项目" />
+            <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S017}}" />
             <TextBlock
                 Classes="emptyHint"
                 MaxWidth="180"
-                Text="初始化一个新的发布项目，或添加已经配置好的目录。" />
+                Text="{Translate {x:Static loc:LanguageManager+Keys.S018}}" />
             <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
               <Button
                   Classes="Primary"
                   Command="{Binding AddProjectCommand}"
-                  Content="初始化项目"
+                  Content="{Translate {x:Static loc:LanguageManager+Keys.S002}}"
                   Height="30"
                   Padding="12,0" />
               <Button
                   Command="{Binding AddLocalProjectCommand}"
-                  Content="添加本地项目"
+                  Content="{Translate {x:Static loc:LanguageManager+Keys.S004}}"
                   Height="30"
                   Padding="12,0" />
             </StackPanel>
@@ -279,11 +286,11 @@
               Kind="FolderOpenOutline"
               HorizontalAlignment="Center"
               Width="36" />
-          <TextBlock Classes="emptyTitle" Text="从左侧选择一个项目" />
+          <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S019}}" />
           <TextBlock
               Classes="emptyHint"
               MaxWidth="340"
-              Text="项目详情、文件变更、发布面板和版本历史都会显示在这里。" />
+              Text="{Translate {x:Static loc:LanguageManager+Keys.S020}}" />
         </StackPanel>
       </Grid>
     </Grid>
@@ -305,7 +312,7 @@
           <TextBlock
               FontSize="11"
               Foreground="{DynamicResource SemiColorText2}"
-              Text="{Binding SelectedTab.StatusMessage, FallbackValue='未选择项目'}"
+              Text="{Binding SelectedTab.StatusMessage, FallbackValue=' '}"
               TextTrimming="CharacterEllipsis" />
         </StackPanel>
 
@@ -327,8 +334,8 @@
               Command="{Binding OpenLogFolderCommand}"
               Height="22"
               Padding="6,0"
-              ToolTip.Tip="打开日志目录">
-            <TextBlock FontSize="10" Text="日志" />
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S021}}">
+            <TextBlock FontSize="10" Text="{Translate {x:Static loc:LanguageManager+Keys.S022}}" />
           </Button>
         </StackPanel>
       </Grid>

@@ -1,3 +1,5 @@
+using AlyPublish.Localization;
+
 namespace AlyPublish.Constants;
 
 public static class FileStatus
@@ -9,10 +11,10 @@ public static class FileStatus
 
     public static string GetDisplayText(string status) => status switch
     {
-        New => "新增",
-        Modified => "修改",
-        Deleted => "删除",
-        Unchanged => "无变化",
+        New => LanguageManager.T(LanguageManager.Instance.Status_new),
+        Modified => LanguageManager.T(LanguageManager.Instance.Status_modified),
+        Deleted => LanguageManager.T(LanguageManager.Instance.Status_deleted),
+        Unchanged => LanguageManager.T(LanguageManager.Instance.Status_unchanged),
         _ => status
     };
 }
@@ -20,7 +22,6 @@ public static class FileStatus
 public static class AppConstants
 {
     public const string AppName = "AlyPublish";
-    public const string AppTitle = "AlyPublish - 版本发布工具";
     public const string ConfigDirectoryName = "AlyPublish";
     public const string ConfigFileName = "config.json";
     public const string LogDirectoryName = "logs";

@@ -1,3 +1,4 @@
+using AlyPublish.Localization;
 using AlyPublish.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Serilog;
@@ -24,7 +25,7 @@ public abstract partial class ViewModelBase : ObservableObject
     private bool _isBusy;
 
     [ObservableProperty]
-    private string _statusMessage = "就绪";
+    private string _statusMessage = LanguageManager.T(LanguageManager.Instance.Ready);
 
     /// <summary>The view subscribes to close the dialog with a result.</summary>
     public event Action<object?>? RequestClose;
@@ -73,7 +74,7 @@ public abstract partial class ViewModelBase : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = $"{operation}已取消";
+            StatusMessage = LanguageManager.F(LanguageManager.Instance.Msg_Cancelled, operation);
             Log.Information("{Operation} 已取消", operation);
             return false;
         }
@@ -90,7 +91,10 @@ public abstract partial class ViewModelBase : ObservableObject
         catch (Exception ex)
         {
             Log.Error(ex, "{Operation} 发生未预期异常", operation);
-            await ReportFailureAsync(operation, $"{operation}失败，请查看日志：{ex.Message}", showErrorDialog);
+            await ReportFailureAsync(
+                operation,
+                LanguageManager.F(LanguageManager.Instance.Msg_UnexpectedFailure, operation, ex.Message),
+                showErrorDialog);
             return false;
         }
         finally
@@ -101,12 +105,12 @@ public abstract partial class ViewModelBase : ObservableObject
 
     private async Task ReportFailureAsync(string operation, string message, bool showErrorDialog)
     {
-        StatusMessage = $"{operation}失败：{message}";
+        StatusMessage = LanguageManager.F(LanguageManager.Instance.Msg_Failed, operation, message);
         Log.Warning("{Operation} 失败: {Message}", operation, message);
 
         if (showErrorDialog)
         {
-            await Dialogs.ErrorAsync($"{operation}失败", message);
+            await Dialogs.ErrorAsync(LanguageManager.F(LanguageManager.Instance.Msg_FailedTitle, operation), message);
         }
         else
         {

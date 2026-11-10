@@ -1,3 +1,4 @@
+using AlyPublish.Localization;
 using AlyPublish.Models.Cli;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -49,7 +50,9 @@ public static class PushResultParser
             return new PushLine(
                 PushLineKind.Failure,
                 null,
-                string.IsNullOrWhiteSpace(errorMessage) ? "推送失败" : errorMessage);
+                string.IsNullOrWhiteSpace(errorMessage)
+                    ? LanguageManager.T(LanguageManager.Instance.Push_Failed)
+                    : errorMessage);
         }
 
         return data is JObject

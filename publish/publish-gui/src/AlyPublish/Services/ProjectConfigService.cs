@@ -1,4 +1,5 @@
 using AlyPublish.Helpers;
+using AlyPublish.Localization;
 using AlyPublish.Models.Local;
 using Newtonsoft.Json;
 using Serilog;
@@ -29,18 +30,27 @@ public sealed class ProjectConfigService
         var sharedPath = GetSharedConfigPath(projectPath);
         if (!File.Exists(sharedPath))
         {
-            throw new ProjectConfigException($"未找到 {Path.Combine(UpdatorDirectoryName, SharedFileName)}，项目可能未初始化");
+            throw new ProjectConfigException(
+                LanguageManager.F(
+                    LanguageManager.Instance.Proj_SharedMissing,
+                    Path.Combine(UpdatorDirectoryName, SharedFileName)));
         }
 
         try
         {
             var json = File.ReadAllText(sharedPath);
             return JsonConvert.DeserializeObject<SharedConfig>(json)
-                ?? throw new ProjectConfigException($"{SharedFileName} 内容为空");
+                ?? throw new ProjectConfigException(
+                    LanguageManager.F(LanguageManager.Instance.Proj_SharedEmpty, SharedFileName));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            throw new ProjectConfigException($"读取 {SharedFileName} 失败：{ex.Message}", ex);
+            throw new ProjectConfigException(
+                LanguageManager.F(
+                    LanguageManager.Instance.Proj_ReadSharedFailed,
+                    SharedFileName,
+                    ex.Message),
+                ex);
         }
     }
 
@@ -86,7 +96,7 @@ public sealed class ProjectConfigService
         var shared = Load(projectPath);
         if (string.IsNullOrWhiteSpace(shared.ServerUrl) || string.IsNullOrWhiteSpace(shared.ProjectName))
         {
-            return "服务端地址或项目名称为空，未同步服务端";
+            return LanguageManager.T(LanguageManager.Instance.Proj_NoServer);
         }
 
         try
@@ -96,7 +106,7 @@ public sealed class ProjectConfigService
                 string.Equals(candidate.Name, shared.ProjectName, StringComparison.OrdinalIgnoreCase));
             if (project is null)
             {
-                return $"服务端未找到项目 “{shared.ProjectName}”，未同步忽略规则";
+                return LanguageManager.F(LanguageManager.Instance.Proj_ProjectMissing, shared.ProjectName);
             }
 
             await _cli.UpdateServerProjectAsync(
@@ -112,7 +122,7 @@ public sealed class ProjectConfigService
         catch (CliException ex)
         {
             Log.Warning(ex, "同步忽略规则到服务端失败: {Project}", shared.ProjectName);
-            return $"服务端同步失败：{ex.Message}";
+            return LanguageManager.F(LanguageManager.Instance.Proj_SyncFailed, ex.Message);
         }
     }
 
@@ -157,7 +167,9 @@ public sealed class ProjectConfigService
         }
         catch (CliException ex)
         {
-            throw new CliException($"保存 {key} 失败：{ex.Message}", ex);
+            throw new CliException(
+                LanguageManager.F(LanguageManager.Instance.Proj_SaveFailed, key, ex.Message),
+                ex);
         }
     }
 
@@ -182,7 +194,9 @@ public sealed class ProjectConfigService
             }
             catch (CliException ex)
             {
-                throw new CliException($"移除 {key} 项 “{item}” 失败：{ex.Message}", ex);
+                throw new CliException(
+                    LanguageManager.F(LanguageManager.Instance.Proj_RemoveFailed, key, item, ex.Message),
+                    ex);
             }
         }
 
@@ -194,7 +208,9 @@ public sealed class ProjectConfigService
             }
             catch (CliException ex)
             {
-                throw new CliException($"添加 {key} 项 “{item}” 失败：{ex.Message}", ex);
+                throw new CliException(
+                    LanguageManager.F(LanguageManager.Instance.Proj_AddFailed, key, item, ex.Message),
+                    ex);
             }
         }
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using AlyPublish.Localization;
 using Serilog;
 
 namespace AlyPublish.Services;
@@ -76,11 +77,11 @@ public static class ProcessService
             if (canceledByCaller)
             {
                 Log.Information("进程已取消: {File}", fileName);
-                return new ProcessResult(false, true, -1, output.ToString().Trim(), "操作已取消");
+                return new ProcessResult(false, true, -1, output.ToString().Trim(), LanguageManager.T(LanguageManager.Instance.Proc_Cancelled));
             }
 
             Log.Warning("进程超时: {File} ({Timeout}ms)", fileName, timeoutMs);
-            return new ProcessResult(false, false, -1, output.ToString().Trim(), "进程执行超时");
+            return new ProcessResult(false, false, -1, output.ToString().Trim(), LanguageManager.T(LanguageManager.Instance.Proc_Timeout));
         }
 
         await outputTask;

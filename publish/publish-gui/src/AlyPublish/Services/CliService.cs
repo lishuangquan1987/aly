@@ -1,5 +1,6 @@
 using System.Globalization;
 using AlyPublish.Constants;
+using AlyPublish.Localization;
 using AlyPublish.Models.Cli;
 using Newtonsoft.Json;
 using Serilog;
@@ -228,14 +229,14 @@ public sealed class CliService
         if (!processResult.Success)
         {
             var error = string.IsNullOrWhiteSpace(processResult.StandardError)
-                ? "推送失败：aly-publish 进程异常退出"
+                ? LanguageManager.T(LanguageManager.Instance.Cli_PushExited)
                 : processResult.StandardError;
             throw new CliException(error);
         }
 
         if (!hasResult)
         {
-            throw new CliException("推送失败：aly-publish 未返回有效结果");
+            throw new CliException(LanguageManager.T(LanguageManager.Instance.Cli_PushInvalid));
         }
 
         Log.Information("推送成功: {Version}", version);
@@ -248,7 +249,7 @@ public sealed class CliService
         CancellationToken cancellationToken)
     {
         var output = await RunCoreAsync<T>(arguments, projectPath, timeoutMilliseconds, cancellationToken);
-        return output.Data ?? throw new CliException("aly-publish 未返回有效数据");
+        return output.Data ?? throw new CliException(LanguageManager.T(LanguageManager.Instance.Cli_NoData));
     }
 
     private async Task RunAsync(
@@ -287,13 +288,15 @@ public sealed class CliService
 
         if (!result.Success)
         {
-            var error = string.IsNullOrWhiteSpace(result.StandardError) ? "aly-publish 执行失败" : result.StandardError;
+            var error = string.IsNullOrWhiteSpace(result.StandardError)
+                ? LanguageManager.T(LanguageManager.Instance.Cli_Failed)
+                : result.StandardError;
             throw new CliException(error);
         }
 
         if (string.IsNullOrWhiteSpace(result.StandardOutput))
         {
-            throw new CliException("aly-publish 未返回输出");
+            throw new CliException(LanguageManager.T(LanguageManager.Instance.Cli_NoOutput));
         }
 
         CliOutput<T>? output;
@@ -304,17 +307,20 @@ public sealed class CliService
         catch (JsonException ex)
         {
             Log.Error(ex, "解析 CLI 输出失败: {Output}", result.StandardOutput);
-            throw new CliException("aly-publish 返回了无法解析的输出", ex);
+            throw new CliException(LanguageManager.T(LanguageManager.Instance.Cli_Unparsable), ex);
         }
 
         if (output is null)
         {
-            throw new CliException("aly-publish 未返回有效结果");
+            throw new CliException(LanguageManager.T(LanguageManager.Instance.Cli_NoResult));
         }
 
         if (!output.IsSuccess)
         {
-            throw new CliException(string.IsNullOrWhiteSpace(output.ErrorMsg) ? "aly-publish 执行失败" : output.ErrorMsg);
+            throw new CliException(
+                string.IsNullOrWhiteSpace(output.ErrorMsg)
+                    ? LanguageManager.T(LanguageManager.Instance.Cli_Failed)
+                    : output.ErrorMsg);
         }
 
         return output;
@@ -328,7 +334,7 @@ public sealed class CliService
         }
 
         Log.Error("未找到 aly-publish，无法执行: {Arguments}", string.Join(' ', arguments));
-        throw new CliException("未找到 aly-publish.exe，请确认它与本程序位于同一目录");
+        throw new CliException(LanguageManager.T(LanguageManager.Instance.Cli_NotFound));
     }
 
     private static List<string> WithFiles(string command, IReadOnlyList<string> files)

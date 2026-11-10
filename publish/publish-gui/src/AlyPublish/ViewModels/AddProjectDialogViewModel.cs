@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using AlyPublish.Constants;
 using AlyPublish.Helpers;
+using AlyPublish.Localization;
 using AlyPublish.Models.Cli;
 using AlyPublish.Models.Local;
 using AlyPublish.Services;
@@ -148,7 +149,9 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
     }
 
     public string SelectedProjectVersionText
-        => string.IsNullOrWhiteSpace(SelectedServerProject?.Version) ? "未发布" : SelectedServerProject.Version;
+        => string.IsNullOrWhiteSpace(SelectedServerProject?.Version)
+        ? LanguageManager.T(LanguageManager.Instance.Dlg_NotPublished)
+        : SelectedServerProject.Version;
 
     public void Initialize()
     {
@@ -252,21 +255,21 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
             var projects = await _cli.GetServerProjectsAsync(ServerUrl.Trim());
             _allServerProjects = projects;
             ApplyServerFilter();
-            FetchError = projects.Count == 0 ? "服务端暂无项目，可以点击“新建服务端项目”。" : string.Empty;
+            FetchError = projects.Count == 0 ? LanguageManager.T(LanguageManager.Instance.Dlg_NoServerProjects) : string.Empty;
             Log.Information("获取服务端项目: {Count} 个", projects.Count);
         }
         catch (CliException ex)
         {
             _allServerProjects = [];
             ApplyServerFilter();
-            FetchError = $"获取项目列表失败：{ex.Message}";
+            FetchError = LanguageManager.F(LanguageManager.Instance.Dlg_FetchFailed, ex.Message);
             Log.Warning(ex, "获取服务端项目失败");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _allServerProjects = [];
             ApplyServerFilter();
-            FetchError = $"获取项目列表失败：{ex.Message}";
+            FetchError = LanguageManager.F(LanguageManager.Instance.Dlg_FetchFailed, ex.Message);
             Log.Error(ex, "获取服务端项目发生未预期异常");
         }
         finally
@@ -329,7 +332,7 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
 
         ProjectSetupResult? result = null;
         var completed = await RunAsync(
-            "初始化项目",
+            LanguageManager.T(LanguageManager.Instance.Op_InitProject),
             async token => result = await _setup.InitializeAsync(request, token));
 
         if (!completed || result is null)
@@ -360,13 +363,13 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
         }
     }
 
-    public void AddIgnoreFolder(string fullPath) => AddProjectEntry(IgnoreFolders, fullPath, "文件夹");
+    public void AddIgnoreFolder(string fullPath) => AddProjectEntry(IgnoreFolders, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_Folder));
 
-    public void AddIgnoreFile(string fullPath) => AddProjectEntry(IgnoreFiles, fullPath, "文件");
+    public void AddIgnoreFile(string fullPath) => AddProjectEntry(IgnoreFiles, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_File));
 
-    public void AddUnCopyFolder(string fullPath) => AddProjectEntry(UnCopyFolders, fullPath, "文件夹");
+    public void AddUnCopyFolder(string fullPath) => AddProjectEntry(UnCopyFolders, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_Folder));
 
-    public void AddUnCopyFile(string fullPath) => AddProjectEntry(UnCopyFiles, fullPath, "文件");
+    public void AddUnCopyFile(string fullPath) => AddProjectEntry(UnCopyFiles, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_File));
 
     [RelayCommand]
     private void Cancel() => Close(null);
@@ -442,30 +445,30 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
 
         if (path.Length == 0)
         {
-            PathState = "请选择项目目录";
+            PathState = LanguageManager.T(LanguageManager.Instance.Dlg_PathSelect);
             return;
         }
 
         if (!Directory.Exists(path))
         {
-            PathState = "目录不存在";
+            PathState = LanguageManager.T(LanguageManager.Instance.Dlg_PathNotExist);
             return;
         }
 
         if (ProjectInputHelper.IsInitialized(path))
         {
-            PathState = "该目录已初始化，请使用“添加本地项目”";
+            PathState = LanguageManager.T(LanguageManager.Instance.Dlg_PathInitialized);
             return;
         }
 
         if (_existingProjectPaths.Contains(NormalizeForComparison(path)))
         {
-            PathState = "该项目已在左侧列表中";
+            PathState = LanguageManager.T(LanguageManager.Instance.Dlg_AlreadyListed);
             return;
         }
 
         IsPathUsable = true;
-        PathState = "将初始化 .updator/shared.json";
+        PathState = LanguageManager.T(LanguageManager.Instance.Dlg_PathWillInitialize);
     }
 
     private void UpdateMainExeCandidates()
@@ -505,15 +508,17 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
     {
         if (IsServerStep)
         {
-            return IsServerSelectionValid ? string.Empty : "请先获取并选择一个服务端项目";
+            return IsServerSelectionValid ? string.Empty : LanguageManager.T(LanguageManager.Instance.Dlg_SelectServerFirst);
         }
 
         if (!IsPathUsable)
         {
-            return string.IsNullOrWhiteSpace(PathState) ? "请选择本地项目目录" : PathState;
+            return string.IsNullOrWhiteSpace(PathState)
+                ? LanguageManager.T(LanguageManager.Instance.Dlg_SelectProjectDir)
+                : PathState;
         }
 
-        return string.IsNullOrWhiteSpace(DisplayName) ? "请填写显示名称" : string.Empty;
+        return string.IsNullOrWhiteSpace(DisplayName) ? LanguageManager.T(LanguageManager.Instance.Dlg_DisplayNameRequired) : string.Empty;
     }
 
     private static void AddIfMissing(ObservableCollection<string> target, string? value)
@@ -534,7 +539,7 @@ public sealed partial class AddProjectDialogViewModel : ViewModelBase
     {
         if (!ProjectInputHelper.TryGetProjectRelativePath(ProjectPath.Trim(), fullPath, out var relative))
         {
-            Notify.Warning($"请选择项目目录内的{kind}");
+            Notify.Warning(LanguageManager.F(LanguageManager.Instance.Dlg_PickInProject, kind));
             return;
         }
 

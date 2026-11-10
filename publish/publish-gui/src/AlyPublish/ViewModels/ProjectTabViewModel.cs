@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using AlyPublish.Constants;
 using AlyPublish.Helpers;
+using AlyPublish.Localization;
 using AlyPublish.Models.Cli;
 using AlyPublish.Models.Local;
 using AlyPublish.Services;
@@ -107,21 +108,25 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         {
             if (StagedFiles.Count == 0)
             {
-                return "请先在左侧勾选文件并暂存";
+                return LanguageManager.T(LanguageManager.Instance.Tab_StageFirst);
             }
 
             if (string.IsNullOrWhiteSpace(NewVersion))
             {
-                return "请填写版本号";
+                return LanguageManager.T(LanguageManager.Instance.Tab_NeedVersion);
             }
 
-            return string.IsNullOrWhiteSpace(CommitMessage) ? "请填写变更说明" : string.Empty;
+            return string.IsNullOrWhiteSpace(CommitMessage) ? LanguageManager.T(LanguageManager.Instance.Tab_NeedNotes) : string.Empty;
         }
     }
 
-    public string PublishButtonText => StagedFiles.Count == 0 ? "发布暂存文件" : $"发布 {StagedFiles.Count} 个文件";
+    public string PublishButtonText => StagedFiles.Count == 0
+        ? LanguageManager.T(LanguageManager.Instance.Tab_PublishStaged)
+        : LanguageManager.F(LanguageManager.Instance.Tab_PublishCount, StagedFiles.Count);
 
-    public string CurrentVersionText => string.IsNullOrWhiteSpace(CurrentVersion) ? "尚无版本" : CurrentVersion;
+    public string CurrentVersionText => string.IsNullOrWhiteSpace(CurrentVersion)
+        ? LanguageManager.T(LanguageManager.Instance.Tab_NoVersion)
+        : CurrentVersion;
 
     public bool HasPublishHint => !string.IsNullOrEmpty(PublishHint);
 
@@ -132,10 +137,34 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
     public bool HasChangeLogs => ChangeLogs.Count > 0;
 
     public string UnstagedSelectionText
-        => UnstagedFiles.Count > 0 && UnstagedFiles.All(file => file.IsSelected) ? "取消全选" : "全选";
+        => UnstagedFiles.Count > 0 && UnstagedFiles.All(file => file.IsSelected)
+            ? LanguageManager.T(LanguageManager.Instance.Tab_UnselectAll)
+            : LanguageManager.T(LanguageManager.Instance.Tab_SelectAll);
 
     public string StagedSelectionText
-        => StagedFiles.Count > 0 && StagedFiles.All(file => file.IsSelected) ? "取消全选" : "全选";
+        => StagedFiles.Count > 0 && StagedFiles.All(file => file.IsSelected)
+            ? LanguageManager.T(LanguageManager.Instance.Tab_UnselectAll)
+            : LanguageManager.T(LanguageManager.Instance.Tab_SelectAll);
+
+    /// <summary>Called after a culture switch to refresh computed strings.</summary>
+    public void RefreshLocalization()
+    {
+        OnPropertyChanged(nameof(PublishHint));
+        OnPropertyChanged(nameof(HasPublishHint));
+        OnPropertyChanged(nameof(PublishButtonText));
+        OnPropertyChanged(nameof(CurrentVersionText));
+        OnPropertyChanged(nameof(UnstagedSelectionText));
+        OnPropertyChanged(nameof(StagedSelectionText));
+        foreach (var file in UnstagedFiles.Concat(StagedFiles))
+        {
+            file.RefreshLocalization();
+        }
+
+        StatusMessage = LanguageManager.F(
+            LanguageManager.T(LanguageManager.Instance.Tab_StatusSummary),
+            UnstagedFiles.Count,
+            StagedFiles.Count);
+    }
 
     protected override void OnBusyChanged()
     {
@@ -156,11 +185,11 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRefresh))]
     private async Task RefreshAsync()
     {
-        StatusMessage = "正在读取项目状态…";
+        StatusMessage = LanguageManager.T(LanguageManager.Instance.Tab_ReadingStatus);
         IsInitialLoading = !_hasLoaded;
         try
         {
-            await RunAsync("刷新", token => FetchDataAsync(token), showErrorDialog: false);
+            await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_Refresh), token => FetchDataAsync(token), showErrorDialog: false);
         }
         finally
         {
@@ -172,7 +201,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanAddAll))]
     private async Task AddAllAsync()
     {
-        var added = await RunAsync("暂存全部文件", async token =>
+        var added = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_StageAll), async token =>
         {
             await _cli.AddAllAsync(Project.ProjectPath, token);
             await FetchDataAsync(token);
@@ -180,7 +209,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
 
         if (added)
         {
-            Notify.Success("已暂存全部变更");
+            Notify.Success(LanguageManager.T(LanguageManager.Instance.Tab_StagedNotify));
         }
     }
 
@@ -188,14 +217,14 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
     private async Task ResetAllAsync()
     {
         var confirmed = await Dialogs.ConfirmAsync(
-            "清空暂存区",
-            "确定取消暂存所有文件吗？\n\n文件不会被删除，但需要重新勾选并暂存。");
+            LanguageManager.T(LanguageManager.Instance.Tab_ClearStagingTitle),
+            LanguageManager.T(LanguageManager.Instance.Tab_ClearStagingMessage));
         if (!confirmed)
         {
             return;
         }
 
-        var reset = await RunAsync("清空暂存区", async token =>
+        var reset = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_ClearStaging), async token =>
         {
             await _cli.ResetAllAsync(Project.ProjectPath, token);
             await FetchDataAsync(token);
@@ -203,7 +232,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
 
         if (reset)
         {
-            Notify.Success("暂存区已清空");
+            Notify.Success(LanguageManager.T(LanguageManager.Instance.Tab_StagingCleared));
         }
     }
 
@@ -211,7 +240,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
     private async Task AddSelectedAsync()
     {
         var files = SelectedPaths(UnstagedFiles);
-        var added = await RunAsync("暂存所选文件", async token =>
+        var added = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_StageSelected), async token =>
         {
             await _cli.AddFilesAsync(Project.ProjectPath, files, token);
             await FetchDataAsync(token);
@@ -219,7 +248,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
 
         if (added)
         {
-            Notify.Success($"已暂存 {files.Count} 个文件");
+            Notify.Success(LanguageManager.F(LanguageManager.Instance.Tab_StagedSelected, files.Count));
         }
     }
 
@@ -227,7 +256,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
     private async Task ResetSelectedAsync()
     {
         var files = SelectedPaths(StagedFiles);
-        var reset = await RunAsync("取消暂存所选文件", async token =>
+        var reset = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_UnstageSelected), async token =>
         {
             await _cli.ResetFilesAsync(Project.ProjectPath, files, token);
             await FetchDataAsync(token);
@@ -235,7 +264,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
 
         if (reset)
         {
-            Notify.Success($"已取消暂存 {files.Count} 个文件");
+            Notify.Success(LanguageManager.F(LanguageManager.Instance.Tab_UnstagedSelected, files.Count));
         }
     }
 
@@ -250,7 +279,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         try
         {
             var succeeded = await RunAsync(
-                "发布",
+                LanguageManager.T(LanguageManager.Instance.Op_Publish),
                 async token =>
                 {
                     await _cli.PushAsync(
@@ -267,7 +296,9 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
 
             if (!succeeded)
             {
-                UploadProgressText = cancellationToken.IsCancellationRequested ? "发布已取消" : "发布失败";
+                UploadProgressText = cancellationToken.IsCancellationRequested
+                    ? LanguageManager.T(LanguageManager.Instance.Tab_PublishCancelled)
+                    : LanguageManager.T(LanguageManager.Instance.Tab_PublishFailed);
                 return;
             }
 
@@ -276,12 +307,12 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
             AfterApplyUpdateScript = string.Empty;
             SetForceUpdate = false;
             await RunAsync(
-                "刷新",
+                LanguageManager.T(LanguageManager.Instance.Op_Refresh),
                 token => FetchDataAsync(token),
                 showErrorDialog: false,
                 cancellationToken: CancellationToken.None);
-            StatusMessage = $"发布成功（{stagedCount} 个暂存文件）";
-            Notify.Success($"发布成功：{version}");
+            StatusMessage = LanguageManager.F(LanguageManager.Instance.Tab_PublishSucceededStatus, stagedCount);
+            Notify.Success(LanguageManager.F(LanguageManager.Instance.Tab_PublishSucceededNotify, version));
         }
         finally
         {
@@ -298,17 +329,19 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         var executablePath = GetMainExeFullPath();
         if (executablePath is null)
         {
-            Notify.Warning("请先在项目设置中选择主程序");
+            Notify.Warning(LanguageManager.T(LanguageManager.Instance.Tab_LaunchNoMain));
             return;
         }
 
         if (!File.Exists(executablePath))
         {
-            await Dialogs.ErrorAsync("启动程序失败", $"主程序不存在：{executablePath}");
+            await Dialogs.ErrorAsync(
+                LanguageManager.T(LanguageManager.Instance.Tab_LaunchFailedTitle),
+                LanguageManager.F(LanguageManager.Instance.Tab_MainMissing, executablePath));
             return;
         }
 
-        await RunAsync("启动程序", () =>
+        await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_Launch), () =>
         {
             Process.Start(new ProcessStartInfo
             {
@@ -316,7 +349,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
                 WorkingDirectory = Path.GetDirectoryName(executablePath) ?? Project.ProjectPath,
                 UseShellExecute = true
             });
-            StatusMessage = $"已启动：{executablePath}";
+            StatusMessage = LanguageManager.F(LanguageManager.Instance.Tab_Launched, executablePath);
         });
     }
 
@@ -325,18 +358,20 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
     {
         if (!Directory.Exists(Project.ProjectPath))
         {
-            await Dialogs.ErrorAsync("打开项目目录失败", $"目录不存在：{Project.ProjectPath}");
+            await Dialogs.ErrorAsync(
+                LanguageManager.T(LanguageManager.Instance.Tab_OpenFolderFailedTitle),
+                LanguageManager.F(LanguageManager.Instance.Tab_DirectoryMissing, Project.ProjectPath));
             return;
         }
 
-        await RunAsync("打开项目目录", () =>
+        await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_OpenProjectFolder), () =>
         {
             Process.Start(new ProcessStartInfo
             {
                 FileName = Project.ProjectPath,
                 UseShellExecute = true
             });
-            StatusMessage = $"已打开：{Project.ProjectPath}";
+            StatusMessage = LanguageManager.F(LanguageManager.Instance.Tab_Opened, Project.ProjectPath);
         });
     }
 
@@ -352,11 +387,13 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         var directory = Path.GetDirectoryName(fullPath);
         if (directory is null || !Directory.Exists(directory))
         {
-            await Dialogs.ErrorAsync("打开文件位置失败", $"目录不存在：{directory}");
+            await Dialogs.ErrorAsync(
+                LanguageManager.T(LanguageManager.Instance.Tab_OpenFileLocationFailedTitle),
+                LanguageManager.F(LanguageManager.Instance.Tab_DirectoryMissing, directory));
             return;
         }
 
-        await RunAsync("打开文件位置", () =>
+        await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_OpenFileLocation), () =>
         {
             Process.Start(new ProcessStartInfo
             {
@@ -426,7 +463,10 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         var status = await _cli.GetStatusAsync(Project.ProjectPath, cancellationToken);
         var changeLogs = await _cli.GetLogAsync(Project.ProjectPath, cancellationToken: cancellationToken);
         ApplyStatus(status, changeLogs);
-        StatusMessage = $"未暂存 {UnstagedFiles.Count}，已暂存 {StagedFiles.Count}";
+        StatusMessage = LanguageManager.F(
+            LanguageManager.T(LanguageManager.Instance.Tab_StatusSummary),
+            UnstagedFiles.Count,
+            StagedFiles.Count);
     }
 
     private void ApplyStatus(StatusData status, List<ChangeLog> changeLogs)
@@ -473,7 +513,9 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         UploadTotalCount = total;
         UploadProgressPercent = 0;
         IsUploadProgressIndeterminate = total == 0;
-        UploadProgressText = total == 0 ? "准备上传…" : $"准备上传 {total} 个文件…";
+        UploadProgressText = total == 0
+            ? LanguageManager.T(LanguageManager.Instance.Tab_UploadPreparing)
+            : LanguageManager.F(LanguageManager.Instance.Tab_UploadPreparingCount, total);
         UploadSummary = string.Empty;
         IsUploading = true;
     }
@@ -491,7 +533,11 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         {
             case "START":
                 UpsertProgress(progress);
-                UploadProgressText = $"正在上传 {progress.File}（{UploadDoneCount + UploadFailedCount}/{UploadTotalCount}）";
+                UploadProgressText = LanguageManager.F(
+                    LanguageManager.T(LanguageManager.Instance.Tab_Uploading),
+                    progress.File,
+                    UploadDoneCount + UploadFailedCount,
+                    UploadTotalCount);
                 break;
 
             case "DONE":
@@ -507,10 +553,18 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
                 }
 
                 UpdateUploadPercent();
-                UploadSummary = $"完成 {UploadDoneCount}，失败 {UploadFailedCount}，共 {UploadTotalCount}";
+                UploadSummary = LanguageManager.F(
+                    LanguageManager.T(LanguageManager.Instance.Tab_UploadSummary),
+                    UploadDoneCount,
+                    UploadFailedCount,
+                    UploadTotalCount);
                 UploadProgressText = progress.IsDone
-                    ? $"已完成 {progress.File}（{UploadDoneCount + UploadFailedCount}/{UploadTotalCount}）"
-                    : $"上传失败 {progress.File}：{progress.Error}";
+                    ? LanguageManager.F(
+                        LanguageManager.T(LanguageManager.Instance.Tab_UploadDone),
+                        progress.File,
+                        UploadDoneCount + UploadFailedCount,
+                        UploadTotalCount)
+                    : LanguageManager.F(LanguageManager.Instance.Tab_UploadFailed, progress.File, progress.Error);
                 break;
         }
     }

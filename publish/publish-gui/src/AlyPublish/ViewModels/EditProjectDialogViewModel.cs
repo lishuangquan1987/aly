@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using AlyPublish.Helpers;
+using AlyPublish.Localization;
 using AlyPublish.Models.Local;
 using AlyPublish.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -80,11 +81,13 @@ public sealed partial class EditProjectDialogViewModel : ViewModelBase
         {
             if (string.IsNullOrWhiteSpace(MainExePath))
             {
-                return "可选：用于“启动程序”和 UpdateFolder";
+                return LanguageManager.T(LanguageManager.Instance.Dlg_MainExeOptional);
             }
 
             var stored = ProjectInputHelper.ToStoredMainExePath(_projectPath, MainExePath.Trim());
-            return Path.IsPathRooted(stored) ? "不在项目目录内，将保存为绝对路径" : $"将保存为：{stored}";
+            return Path.IsPathRooted(stored)
+            ? LanguageManager.T(LanguageManager.Instance.Dlg_MainExeOutside)
+            : LanguageManager.F(LanguageManager.Instance.Dlg_MainExeWillSave, stored);
         }
     }
 
@@ -142,7 +145,7 @@ public sealed partial class EditProjectDialogViewModel : ViewModelBase
             Clean(UnCopyFiles));
 
         string? syncWarning = null;
-        var saved = await RunAsync("保存项目配置", async token =>
+        var saved = await RunAsync(LanguageManager.T(LanguageManager.Instance.Op_SaveSettings), async token =>
         {
             var changed = await _projectConfig.SaveAsync(_projectPath, draft, token);
             if (changed)
@@ -187,13 +190,13 @@ public sealed partial class EditProjectDialogViewModel : ViewModelBase
     [RelayCommand]
     private void AddSuggestedIgnoreFile(string? value) => AddIfMissing(IgnoreFiles, value);
 
-    public void AddIgnoreFolder(string fullPath) => AddProjectEntry(IgnoreFolders, fullPath, "文件夹");
+    public void AddIgnoreFolder(string fullPath) => AddProjectEntry(IgnoreFolders, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_Folder));
 
-    public void AddIgnoreFile(string fullPath) => AddProjectEntry(IgnoreFiles, fullPath, "文件");
+    public void AddIgnoreFile(string fullPath) => AddProjectEntry(IgnoreFiles, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_File));
 
-    public void AddUnCopyFolder(string fullPath) => AddProjectEntry(UnCopyFolders, fullPath, "文件夹");
+    public void AddUnCopyFolder(string fullPath) => AddProjectEntry(UnCopyFolders, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_Folder));
 
-    public void AddUnCopyFile(string fullPath) => AddProjectEntry(UnCopyFiles, fullPath, "文件");
+    public void AddUnCopyFile(string fullPath) => AddProjectEntry(UnCopyFiles, fullPath, LanguageManager.T(LanguageManager.Instance.Kind_File));
 
     private bool CanSave()
         => !IsBusy
@@ -206,9 +209,9 @@ public sealed partial class EditProjectDialogViewModel : ViewModelBase
     private void UpdateValidation()
     {
         ValidationMessage = string.IsNullOrWhiteSpace(ServerUrl)
-            ? "请填写服务端地址"
+            ? LanguageManager.T(LanguageManager.Instance.Dlg_ServerUrlRequired)
             : string.IsNullOrWhiteSpace(ProjectName)
-                ? "请填写服务端项目名称"
+                ? LanguageManager.T(LanguageManager.Instance.Dlg_ServerProjectRequired)
                 : string.Empty;
 
         SaveCommand.NotifyCanExecuteChanged();
@@ -244,7 +247,7 @@ public sealed partial class EditProjectDialogViewModel : ViewModelBase
     {
         if (!ProjectInputHelper.TryGetProjectRelativePath(_projectPath, fullPath, out var relative))
         {
-            Notify.Warning($"请选择项目目录内的{kind}");
+            Notify.Warning(LanguageManager.F(LanguageManager.Instance.Dlg_PickInProject, kind));
             return;
         }
 

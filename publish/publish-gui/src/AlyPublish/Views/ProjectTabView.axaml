@@ -4,6 +4,7 @@
     x:Name="Root"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="using:AlyPublish.Localization"
     xmlns:cli="using:AlyPublish.Models.Cli"
     xmlns:local="using:AlyPublish.Models.Local"
     xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
@@ -21,7 +22,7 @@
 
       <Border Padding="14,8">
         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
-          <TextBlock Classes="sectionTitle" Text="变更" VerticalAlignment="Center" />
+          <TextBlock Classes="sectionTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S023}}" VerticalAlignment="Center" />
           <Border
               Classes="pill"
               Grid.Column="1"
@@ -40,10 +41,10 @@
               Height="28"
               Margin="0,0,4,0"
               Padding="8,0"
-              ToolTip.Tip="刷新 (F5)">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S024}}">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <materialIcons:MaterialIcon Height="14" Kind="Refresh" Width="14" />
-              <TextBlock FontSize="12" Text="刷新" />
+              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.S025}}" />
             </StackPanel>
           </Button>
           <Button
@@ -52,10 +53,10 @@
               Height="28"
               Margin="0,0,4,0"
               Padding="8,0"
-              ToolTip.Tip="项目设置 (Ctrl+E)">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S005}}">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <materialIcons:MaterialIcon Height="14" Kind="CogOutline" Width="14" />
-              <TextBlock FontSize="12" Text="设置" />
+              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.S026}}" />
             </StackPanel>
           </Button>
           <Button
@@ -64,10 +65,10 @@
               Height="28"
               Margin="0,0,4,0"
               Padding="8,0"
-              ToolTip.Tip="打开项目目录">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S027}}">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <materialIcons:MaterialIcon Height="14" Kind="FolderOpen" Width="14" />
-              <TextBlock FontSize="12" Text="目录" />
+              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.S028}}" />
             </StackPanel>
           </Button>
           <Button
@@ -75,10 +76,10 @@
               Command="{Binding LaunchProgramCommand}"
               Height="28"
               Padding="8,0"
-              ToolTip.Tip="启动设置的主程序">
+              ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S029}}">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <materialIcons:MaterialIcon Height="14" Kind="Play" Width="14" />
-              <TextBlock FontSize="12" Text="启动" />
+              <TextBlock FontSize="12" Text="{Translate {x:Static loc:LanguageManager+Keys.S030}}" />
             </StackPanel>
           </Button>
         </Grid>
@@ -110,7 +111,7 @@
                       Kind="FileDocumentOutline"
                       Width="14" />
                   <TextBlock FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center">
-                    <Run Text="未暂存 " />
+                    <Run Text="{Translate {x:Static loc:LanguageManager+Keys.S031}}" />
                     <Run Text="{Binding UnstagedFiles.Count}" />
                   </TextBlock>
                 </StackPanel>
@@ -124,7 +125,7 @@
                 <Button
                     Grid.Column="3"
                     Command="{Binding AddSelectedCommand}"
-                    Content="暂存所选"
+                    Content="{Translate {x:Static loc:LanguageManager+Keys.S032}}"
                     FontSize="12"
                     Height="26"
                     Margin="4,0,0,0"
@@ -133,7 +134,7 @@
                     Grid.Column="4"
                     Classes="Primary"
                     Command="{Binding AddAllCommand}"
-                    Content="全部暂存"
+                    Content="{Translate {x:Static loc:LanguageManager+Keys.S033}}"
                     FontSize="12"
                     Height="26"
                     Margin="4,0,0,0"
@@ -149,7 +150,7 @@
                   ItemsSource="{Binding UnstagedFiles}"
                   SelectionMode="Single">
                 <TableView.Columns>
-                  <TableViewColumn Header="选择" Width="64">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S034}}" Width="76">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <CheckBox
@@ -159,7 +160,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="文件" Width="*">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S035}}" Width="*">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <TextBlock
@@ -171,7 +172,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="状态" Width="76">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S036}}" Width="76">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <Border
@@ -184,7 +185,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="本地" Width="88">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S037}}" Width="88">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <TextBlock
@@ -196,7 +197,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="服务端" Width="88">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S038}}" Width="88">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <TextBlock
@@ -217,7 +218,7 @@
                             CommandParameter="{Binding}"
                             Height="24"
                             Padding="0"
-                            ToolTip.Tip="打开所在位置"
+                            ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S039}}"
                             Width="24">
                           <materialIcons:MaterialIcon Height="12" Kind="FolderOpen" Width="12" />
                         </Button>
@@ -239,8 +240,8 @@
                     HorizontalAlignment="Center"
                     Kind="CheckCircleOutline"
                     Width="24" />
-                <TextBlock Classes="emptyTitle" Text="没有未暂存的变更" />
-                <TextBlock Classes="emptyHint" Text="构建产物发生变化后，点击刷新即可看到差异。" />
+                <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S040}}" />
+                <TextBlock Classes="emptyHint" Text="{Translate {x:Static loc:LanguageManager+Keys.S041}}" />
               </StackPanel>
             </Grid>
           </Grid>
@@ -266,7 +267,7 @@
                       Kind="FileCheckOutline"
                       Width="14" />
                   <TextBlock FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center">
-                    <Run Text="已暂存 " />
+                    <Run Text="{Translate {x:Static loc:LanguageManager+Keys.S042}}" />
                     <Run Text="{Binding StagedFiles.Count}" />
                   </TextBlock>
                 </StackPanel>
@@ -280,7 +281,7 @@
                 <Button
                     Grid.Column="3"
                     Command="{Binding ResetSelectedCommand}"
-                    Content="取消暂存"
+                    Content="{Translate {x:Static loc:LanguageManager+Keys.S043}}"
                     FontSize="12"
                     Height="26"
                     Margin="4,0,0,0"
@@ -289,7 +290,7 @@
                     Grid.Column="4"
                     Classes="Danger"
                     Command="{Binding ResetAllCommand}"
-                    Content="清空"
+                    Content="{Translate {x:Static loc:LanguageManager+Keys.S044}}"
                     FontSize="12"
                     Height="26"
                     Margin="4,0,0,0"
@@ -305,7 +306,7 @@
                   ItemsSource="{Binding StagedFiles}"
                   SelectionMode="Single">
                 <TableView.Columns>
-                  <TableViewColumn Header="选择" Width="64">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S034}}" Width="76">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <CheckBox
@@ -315,7 +316,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="文件" Width="*">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S035}}" Width="*">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <TextBlock
@@ -327,7 +328,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="状态" Width="76">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S036}}" Width="76">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <Border
@@ -340,7 +341,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="本地" Width="88">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S037}}" Width="88">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <TextBlock
@@ -352,7 +353,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="服务端" Width="88">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S038}}" Width="88">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="local:FileItem">
                         <TextBlock
@@ -373,7 +374,7 @@
                             CommandParameter="{Binding}"
                             Height="24"
                             Padding="0"
-                            ToolTip.Tip="打开所在位置"
+                            ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S039}}"
                             Width="24">
                           <materialIcons:MaterialIcon Height="12" Kind="FolderOpen" Width="12" />
                         </Button>
@@ -395,8 +396,8 @@
                     HorizontalAlignment="Center"
                     Kind="InboxArrowDownOutline"
                     Width="24" />
-                <TextBlock Classes="emptyTitle" Text="暂存区为空" />
-                <TextBlock Classes="emptyHint" Text="在左侧勾选文件后点击“暂存所选”，或直接“全部暂存”。" />
+                <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S045}}" />
+                <TextBlock Classes="emptyHint" Text="{Translate {x:Static loc:LanguageManager+Keys.S046}}" />
               </StackPanel>
             </Grid>
           </Grid>
@@ -420,7 +421,7 @@
             <TextBlock
                 Classes="caption"
                 HorizontalAlignment="Center"
-                Text="正在读取项目状态…" />
+                Text="{Translate {x:Static loc:LanguageManager+Keys.S047}}" />
           </StackPanel>
         </Border>
       </Grid>
@@ -443,7 +444,7 @@
           Padding="14,10">
         <StackPanel Spacing="8">
           <Grid ColumnDefinitions="Auto,*,Auto">
-            <TextBlock Classes="sectionTitle" Text="发布" VerticalAlignment="Center" />
+            <TextBlock Classes="sectionTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S048}}" VerticalAlignment="Center" />
             <Border
                 Classes="pill"
                 Grid.Column="2"
@@ -457,37 +458,37 @@
           </Grid>
 
           <Grid ColumnDefinitions="Auto,*,Auto">
-            <TextBlock Classes="fieldLabel" Text="版本号" VerticalAlignment="Center" />
+            <TextBlock Classes="fieldLabel" Text="{Translate {x:Static loc:LanguageManager+Keys.S049}}" VerticalAlignment="Center" />
             <TextBox
                 Grid.Column="1"
                 Margin="10,0,0,0"
-                PlaceholderText="例如 V1.0.2"
+                PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S050}}"
                 Text="{Binding NewVersion}" />
             <Button
                 Grid.Column="2"
                 Command="{Binding SuggestVersionCommand}"
-                Content="下一版本"
+                Content="{Translate {x:Static loc:LanguageManager+Keys.S051}}"
                 Height="32"
                 Margin="8,0,0,0"
                 Padding="10,0"
-                ToolTip.Tip="基于当前版本号自动 +1" />
+                ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S052}}" />
           </Grid>
 
           <TextBox
               AcceptsReturn="True"
               MinHeight="48"
-              PlaceholderText="本次发布的变更说明（必填）"
+              PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S053}}"
               Text="{Binding CommitMessage}"
               TextWrapping="Wrap" />
 
-          <Expander Header="高级选项" HorizontalAlignment="Stretch">
+          <Expander Header="{Translate {x:Static loc:LanguageManager+Keys.S054}}" HorizontalAlignment="Stretch">
             <StackPanel Margin="0,8,0,0" Spacing="8">
-              <TextBlock Classes="fieldLabel" Text="更新后执行的脚本（可选，相对于应用目录）" />
+              <TextBlock Classes="fieldLabel" Text="{Translate {x:Static loc:LanguageManager+Keys.S055}}" />
               <TextBox
-                  PlaceholderText="例如 update.bat"
+                  PlaceholderText="{Translate {x:Static loc:LanguageManager+Keys.S056}}"
                   Text="{Binding AfterApplyUpdateScript}" />
               <CheckBox
-                  Content="强制更新（客户端不再询问，直接更新）"
+                  Content="{Translate {x:Static loc:LanguageManager+Keys.S057}}"
                   FontSize="12"
                   Foreground="{DynamicResource SemiColorWarning}"
                   IsChecked="{Binding SetForceUpdate}" />
@@ -534,7 +535,7 @@
                 <Button
                     Grid.Column="1"
                     Command="{Binding PublishCancelCommand}"
-                    Content="取消"
+                    Content="{Translate {x:Static loc:LanguageManager+Keys.S058}}"
                     FontSize="11"
                     Height="22"
                     Padding="8,0" />
@@ -552,7 +553,7 @@
                   MaxHeight="150"
                   SelectionMode="Single">
                 <TableView.Columns>
-                  <TableViewColumn Header="文件" Width="*">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S035}}" Width="*">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="cli:UploadProgress">
                         <TextBlock
@@ -563,7 +564,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="大小" Width="72">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S059}}" Width="72">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="cli:UploadProgress">
                         <TextBlock
@@ -573,7 +574,7 @@
                       </DataTemplate>
                     </TableViewColumn.CellTemplate>
                   </TableViewColumn>
-                  <TableViewColumn Header="状态" Width="140">
+                  <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S036}}" Width="140">
                     <TableViewColumn.CellTemplate>
                       <DataTemplate x:DataType="cli:UploadProgress">
                         <Border
@@ -611,20 +612,20 @@
                   Classes="sectionTitle"
                   Grid.Column="1"
                   Margin="6,0,0,0"
-                  Text="版本历史"
+                  Text="{Translate {x:Static loc:LanguageManager+Keys.S060}}"
                   VerticalAlignment="Center" />
               <TextBlock
                   Classes="caption"
                   Grid.Column="2"
                   Margin="0,0,6,0"
-                  Text="最近 20 条"
+                  Text="{Translate {x:Static loc:LanguageManager+Keys.S061}}"
                   VerticalAlignment="Center" />
               <Button
                   Grid.Column="3"
                   Command="{Binding RefreshCommand}"
                   Height="24"
                   Padding="6,0"
-                  ToolTip.Tip="刷新历史">
+                  ToolTip.Tip="{Translate {x:Static loc:LanguageManager+Keys.S062}}">
                 <materialIcons:MaterialIcon Height="12" Kind="Refresh" Width="12" />
               </Button>
             </Grid>
@@ -636,7 +637,7 @@
                     HorizontalAlignment="Stretch"
                     SelectionMode="Single">
               <TableView.Columns>
-                <TableViewColumn Header="版本" Width="96">
+                <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S063}}" Width="96">
                   <TableViewColumn.CellTemplate>
                     <DataTemplate x:DataType="cli:ChangeLog">
                       <Border
@@ -652,7 +653,7 @@
                     </DataTemplate>
                   </TableViewColumn.CellTemplate>
                 </TableViewColumn>
-                <TableViewColumn Header="时间" Width="130">
+                <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S064}}" Width="130">
                   <TableViewColumn.CellTemplate>
                     <DataTemplate x:DataType="cli:ChangeLog">
                       <TextBlock
@@ -663,7 +664,7 @@
                     </DataTemplate>
                   </TableViewColumn.CellTemplate>
                 </TableViewColumn>
-                <TableViewColumn Header="变更说明" Width="*">
+                <TableViewColumn Header="{Translate {x:Static loc:LanguageManager+Keys.S065}}" Width="*">
                   <TableViewColumn.CellTemplate>
                     <DataTemplate x:DataType="cli:ChangeLog">
                       <ItemsControl ItemsSource="{Binding Logs}">
@@ -695,8 +696,8 @@
                   HorizontalAlignment="Center"
                   Kind="History"
                   Width="28" />
-              <TextBlock Classes="emptyTitle" Text="暂无发布记录" />
-              <TextBlock Classes="emptyHint" Text="第一次发布成功后，版本历史会显示在这里。" />
+              <TextBlock Classes="emptyTitle" Text="{Translate {x:Static loc:LanguageManager+Keys.S066}}" />
+              <TextBlock Classes="emptyHint" Text="{Translate {x:Static loc:LanguageManager+Keys.S067}}" />
             </StackPanel>
           </Grid>
         </Grid>
