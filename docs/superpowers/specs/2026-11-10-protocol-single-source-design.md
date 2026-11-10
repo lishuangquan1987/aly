@@ -287,7 +287,8 @@ go run . -root <repo>      # 显式指定仓库根（默认从模块目录向上
    `Go field "<Struct>.<Field>" (json:"<tag>") is missing from schema`。
 3. 必填/可选一致：
    - `required` 含该属性 → Go 字段不得带 `omitempty`，不得为指针；
-   - 不在 `required` → Go 字段必须带 `omitempty` 或为指针（`*bool` 等）。
+   - 不在 `required` → Go 字段必须带 `omitempty`（指针也必须配 `omitempty`，否则会输出 `null`，
+     与 schema 的类型约束冲突）。
 4. 类型兼容：`boolean↔bool/*bool`、`string↔string`、`integer↔int/int32/int64`、
    `array<string>↔[]string`、`array<$ref>↔[]Struct`、无 `type`（`data`）↔`interface{}`、
    `string enum↔string`。
