@@ -14,7 +14,8 @@
       "namespace": "AlyClient.CSharpSDK",
       "visibility": "public"
     },
-    "ListRollbackData": {
+    "RollbackListData": {
+      "name": "ListRollbackData",
       "namespace": "AlyClient.CSharpSDK",
       "visibility": "public"
     },
@@ -26,14 +27,14 @@
       "namespace": "AlyClient.CSharpSDK.Models",
       "visibility": "public"
     },
-    "DownloadProgressData": {
+    "DownloadProgress": {
       "name": "DownloadProgressData",
       "namespace": "AlyClient.CSharpSDK",
       "visibility": "internal"
     }
   },
   "properties": {
-    "DownloadProgressData.file_size": {
+    "DownloadProgress.file_size": {
       "type": "double"
     }
   },
@@ -44,7 +45,7 @@
       "CheckDiffData": "CheckDiffData",
       "DiffFileItem": "DiffFileItem",
       "DownloadUpdateData": "DownloadUpdateData",
-      "DownloadProgressData": "DownloadProgress",
+      "DownloadProgress": "DownloadProgress",
       "RollbackListData": "RollbackListData",
       "RollbackData": "RollbackData",
       "SelfUpdateData": "SelfUpdateData",

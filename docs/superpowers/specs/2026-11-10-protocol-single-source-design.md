@@ -227,17 +227,17 @@ go run . -root <repo>      # 显式指定仓库根（默认从模块目录向上
     },
     "CheckUpdateData": { "namespace": "AlyClient.CSharpSDK", "visibility": "public" },
     "CheckSelfUpdateData": { "namespace": "AlyClient.CSharpSDK", "visibility": "public" },
-    "ListRollbackData": { "namespace": "AlyClient.CSharpSDK", "visibility": "public" },
+    "RollbackListData": { "name": "ListRollbackData", "namespace": "AlyClient.CSharpSDK", "visibility": "public" },
     "RollbackData": { "namespace": "AlyClient.CSharpSDK", "visibility": "public" },
     "SelfUpdateData": { "namespace": "AlyClient.CSharpSDK.Models", "visibility": "public" },
-    "DownloadProgressData": {
+    "DownloadProgress": {
       "name": "DownloadProgressData",
       "namespace": "AlyClient.CSharpSDK",
       "visibility": "internal"
     }
   },
   "properties": {
-    "DownloadProgressData.file_size": { "type": "double" }
+    "DownloadProgress.file_size": { "type": "double" }
   },
   "go": {
     "structs": {
