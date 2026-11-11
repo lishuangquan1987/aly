@@ -254,7 +254,7 @@ Release 工作流会构建并上传 **4 个 GUI 资产**（见 `.github/workflow
 
 发布 CLI 与终端更新器**不再作为独立资产上传**：它们只随 GUI 安装包分发（用户装一个包就够）。
 
-payload 的铺装由 `publish/publish-gui/installer/stage-payload.ps1` 完成：按工作流下载的各平台产物铺成上面那份布局，拷入对应平台的 `payload.json`，并断言 9 个 payload 文件全部到位（缺任一即构建失败）。本地开发用同一个脚本的 `-FromLocal` 分支（见 [deploy-publish.bat](/publish/deploy-publish.bat)）。
+payload 的铺装由 `publish/publish-gui/installer/stage-payload.ps1` 完成：按工作流下载的各平台产物铺成上面那份布局，拷入对应平台的 `payload.json`，并断言 9 个 payload 文件全部到位（缺任一即构建失败）。本地开发用同一个脚本的 `-FromLocal` 分支（`publish/deploy-publish.bat` 在用它）。
 
 从源码构建：
 
