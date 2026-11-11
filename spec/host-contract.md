@@ -302,3 +302,25 @@ PackageFolder/
 | `check_self_update` | `CheckSelfUpdateData` | 单行 | |
 | `self_update` | `SelfUpdateData` | 单行 | |
 | `clean` | `CleanData` | 单行 | 运维/计划任务用 |
+
+---
+
+## 15. 宿主生命周期（宿主退出后跟随退出）
+
+`aly-client` / `aly-client-ui` 都是**宿主拉起的子进程**。宿主退出后，它们不应该变成孤儿：
+
+| 场景 | 要求 |
+|---|---|
+| 普通命令（`check_update` / `download_update` / `rollback` / `clean` / `*self_update` …）与 UI 常规运行 | 宿主退出后**必须**跟随退出 |
+| `apply_update` 阶段（命令级 `apply_update`，或 `version.json` 的 `version_status == applying` 的崩溃恢复窗口） | **不得**跟随退出：更新器要关闭宿主、替换主目录并重启主程序，宿主本来就会（也必须）消失 |
+
+规则：
+
+1. 「宿主」指**拉起了本进程的那个进程**（父进程）。UI 与更新器各自的父进程就是它们的宿主。
+2. 两个例外**取或**：命令级（当前命令是 `apply_update`）或状态级（`version_status == applying`）。
+   状态级覆盖「崩溃恢复」——那次没有 `apply_update` 命令在跑，但主目录可能已丢失，同样必须续跑。
+3. 退出走**优雅收尾**：先写日志（UI/更新器各自写自己的日志或 stderr 诊断），再以 0 退出。
+4. 父 PID 拿不到时**不得**跟随退出（宁可不退，也不能因为拿不到父进程就把自己结束掉）。
+5. 更新锁不必显式释放：锁文件按「持有者进程已退出」判陈旧（`cmd/lock.go` 的 `cleanStaleLock`），
+   本进程退出后残留锁会被下一次运行当陈旧清理掉。
+6. 宿主退出**不代表**已下载产物可以丢弃；已下载内容与 `version.json` 一律保持原样（同 §4 规则 4）。

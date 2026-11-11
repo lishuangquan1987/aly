@@ -23,6 +23,10 @@ func main() {
 	project := flag.String("project-name", "", "window title override (default: .updator/shared.json project_name)")
 	flag.Parse()
 
+	// 宿主生命周期（规范见 spec/host-contract.md §15）：宿主退出后 UI 跟随退出；
+	// 例外是 version_status == applying 的 apply 窗口。
+	app.WatchHostExit()
+
 	os.Exit(app.Run(app.Options{
 		Mode:        *mode,
 		Lang:        *lang,

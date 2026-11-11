@@ -27,6 +27,10 @@ func main() {
 	projectOverride := fs.String("project-name", "", "window title override")
 	_ = fs.Parse(os.Args[1:])
 
+	// 宿主生命周期（规范见 spec/host-contract.md §15）：宿主退出后 UI 跟随退出；
+	// 例外是 version_status == applying 的 apply 窗口。
+	WatchHostExit()
+
 	m := normalizeMode(*mode)
 	lng := normalizeLang(*lang)
 
