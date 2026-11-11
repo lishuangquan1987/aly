@@ -26,7 +26,6 @@ public static class AppConstants
     public const string ConfigFileName = "config.json";
     public const string LogDirectoryName = "logs";
     public const string LogFileName = "log.log";
-    public const string CliExecutableName = "aly-publish.exe";
     public const string JsonOutputArgument = "--json";
 
     public static IReadOnlyList<string> IgnoreFolderSuggestions { get; } =

@@ -16,7 +16,7 @@
       "Redetect": "重新检测",
       "OpenFolder": "打开程序目录",
       "Hint": "aly-publish：{0}",
-      "MissingHint": "未找到 aly-publish.exe。请将其放在本程序目录，或点击“重新检测”。"
+      "MissingHint": "未找到 aly-publish。安装包的 publish-cli/ 目录里没有本平台的构建，请重新安装 AlyPublish；或把 aly-publish(.exe) 放到本程序目录后点“重新检测”。"
     },
     "ProjectList": {
       "Title": "项目 ",
@@ -46,7 +46,7 @@
     "Message": {
       "Removed": "项目 “{0}” 已移除",
       "FoundCli": "已找到 aly-publish",
-      "StillNoCli": "仍未找到 aly-publish.exe，请检查程序目录",
+      "StillNoCli": "仍未找到 aly-publish：请检查安装包的 publish-cli/ 目录（重新安装 AlyPublish），或本程序目录",
       "Added": "项目 “{0}” 已添加",
       "SettingsSaved": "项目设置已保存",
       "DirectoryMissing": "目录不存在：{0}",
@@ -361,7 +361,7 @@
       "Failed": "aly-publish 执行失败",
       "NoOutput": "aly-publish 未返回输出",
       "Unparsable": "aly-publish 返回了无法解析的输出",
-      "NotFound": "未找到 aly-publish.exe，请确认它与本程序位于同一目录",
+      "NotFound": "未找到 aly-publish：安装包的 publish-cli/ 目录里没有本平台的构建，请重新安装 AlyPublish",
       "NoResult": "aly-publish 未返回有效结果"
     },
     "ProjectConfig": {
@@ -385,7 +385,7 @@
     },
     "UpdateFolder": {
       "ParentMissing": "无法获取项目目录的上级目录",
-      "FileMissing": "未找到 {0}",
+      "FileMissing": "{0} 未找到：安装包的 client/ 目录里没有本平台的构建，请重新安装 AlyPublish",
       "CopyFailed": "复制 {0} 失败：{1}",
       "SameDisk": "主程序必须与 UpdateFolder 位于同一磁盘",
       "Incomplete": "UpdateFolder 不完整：{0}"

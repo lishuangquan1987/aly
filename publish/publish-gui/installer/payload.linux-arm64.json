@@ -1,0 +1,6 @@
+{
+  "host_rid": "linux-arm64",
+  "cli_rid": "linux-arm64",
+  "client_rid": "linux-arm64",
+  "payload_rids": ["windows-amd64", "linux-amd64", "linux-arm64", "windows-x86"]
+}

@@ -11,12 +11,17 @@ The package is **not published to NuGet.org**. Add a project reference, or put t
 <PackageReference Include="AlyClient.CSharpSDK" Version="1.0.0" />
 ```
 
-With the package referenced, the following files are automatically copied to `..\UpdateFolder\` relative to your project's output directory on build:
+Build targets only prepare the folder: `..\UpdateFolder\` is created next to your project's output
+directory, and a default `client.json` is written there when missing. The updater executables are
+**not** downloaded by the SDK any more — take them from the AlyPublish package
+(`client/<rid>/aly-client` + `client/<rid>/aly-client-ui`), which the publish GUI also copies into the
+sibling `UpdateFolder/` when it initializes a project:
 
 ```
 ..\UpdateFolder\
-├── aly-client.exe      # CLI updater (Go 1.10, 32-bit, XP compatible)
-└── client.json          # Main exe path + process names to close
+├── aly-client(.exe)     # CLI updater (Go 1.10, 32-bit, XP compatible) — from the package
+├── aly-client-ui(.exe)  # optional GUI front-end                — from the package
+└── client.json          # Main exe path + process names to close — written by the targets
 ```
 
 Edit `..\UpdateFolder\client.json` to match your application's structure:
@@ -101,7 +106,7 @@ Notes:
   handles the request interactively. `Launch` returns success either way.
 - After `apply_update` the UI relaunches your main executable (see `client.json`
   `main_exe_relative_path` / `must_close_process_name`), so the host does not need to restart itself.
-- Deployed next to `aly-client.exe` by the SDK build targets; set `AlyIncludeClientUi=false` to skip it.
+- Comes from the AlyPublish package (`client/<rid>/aly-client-ui`), next to `aly-client` in `UpdateFolder/`.
 
 ## Update Lifecycle
 
@@ -164,7 +169,6 @@ await AlyApi.RollbackAsync(exePath, "1.0.0");
 ## Prerequisites
 
 - `.NET Framework 4.0+` or `.NET Standard 2.0+`
-- `..\UpdateFolder\aly-client.exe` (deployed by SDK build targets)
-- `..\UpdateFolder\aly-client-ui.exe` (optional GUI front-end, deployed by the same targets;
-  required by `AlyUpdateUIClient`)
+- `..\UpdateFolder\aly-client(.exe)` — taken from the AlyPublish package (the SDK targets only create the folder)
+- `..\UpdateFolder\aly-client-ui(.exe)` — optional GUI front-end from the same package
 - A Aly server running and configured in `..\UpdateFolder\.updator\shared.json` (or passed via CLI args to `aly-client.exe`)

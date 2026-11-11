@@ -16,7 +16,7 @@
       "Redetect": "Detect again",
       "OpenFolder": "Open app folder",
       "Hint": "aly-publish: {0}",
-      "MissingHint": "aly-publish.exe was not found. Put it next to this app, or click “Detect again”."
+      "MissingHint": "aly-publish was not found. The package folder publish-cli/ has no build for this platform — reinstall AlyPublish, or drop aly-publish(.exe) next to this app and click “Detect again”."
     },
     "ProjectList": {
       "Title": "Projects ",
@@ -46,7 +46,7 @@
     "Message": {
       "Removed": "Project “{0}” removed",
       "FoundCli": "aly-publish found",
-      "StillNoCli": "aly-publish.exe is still missing; check the app folder",
+      "StillNoCli": "aly-publish is still missing: check the package folder publish-cli/ (reinstall AlyPublish) or the app folder",
       "Added": "Project “{0}” added",
       "SettingsSaved": "Project settings saved",
       "DirectoryMissing": "Directory not found: {0}",
@@ -361,7 +361,7 @@
       "Failed": "aly-publish failed",
       "NoOutput": "aly-publish produced no output",
       "Unparsable": "aly-publish returned unparsable output",
-      "NotFound": "aly-publish.exe not found; put it next to this app",
+      "NotFound": "aly-publish was not found; the package folder publish-cli/ has no build for this platform — reinstall AlyPublish",
       "NoResult": "aly-publish returned no result"
     },
     "ProjectConfig": {
@@ -385,7 +385,7 @@
     },
     "UpdateFolder": {
       "ParentMissing": "Could not resolve the project folder's parent directory",
-      "FileMissing": "{0} was not found",
+      "FileMissing": "{0} was not found: the package folder client/ has no build for this platform — reinstall AlyPublish",
       "CopyFailed": "Could not copy {0}: {1}",
       "SameDisk": "The main executable must be on the same drive as UpdateFolder",
       "Incomplete": "UpdateFolder is incomplete: {0}"

@@ -28,11 +28,25 @@ import (
 	"testing"
 )
 
-// guiConfigServicePath 返回 publish-gui 的 ConfigService.cs 路径（初始化产出 UpdateFolder 的唯一入口）。
+// guiConfigServicePath 返回 publish-gui 里产出 UpdateFolder 那个源文件。
 // 目录不在时 Skip：本用例只对 C# 源码，缺了没有可断言的对象。
+//
+// 说明（2026-11 复查）：这段逻辑原先写在 Services/ConfigService.cs，后来移到
+// Services/UpdateFolderService.cs；安装包化之后又改成“从包内 client/<rid>/ 取更新器”。
+// 本用例跟着指向真正的归属文件，并钉当前契约（意图不变：三件套齐全、与主程序目录同级）。
 func guiConfigServicePath(t *testing.T) string {
 	path := filepath.Join(RepoRoot, "publish", "publish-gui",
-		"src", "AlyPublish", "Services", "ConfigService.cs")
+		"src", "AlyPublish", "Services", "UpdateFolderService.cs")
+	if _, err := os.Stat(path); err != nil {
+		t.Skip("publish-gui 源码不存在，跳过")
+	}
+	return path
+}
+
+// guiFileWriteHelperPath 返回 publish-gui 里原子写的归属文件（用例 127 用）。
+func guiFileWriteHelperPath(t *testing.T) string {
+	path := filepath.Join(RepoRoot, "publish", "publish-gui",
+		"src", "AlyPublish", "Helpers", "FileWriteHelper.cs")
 	if _, err := os.Stat(path); err != nil {
 		t.Skip("publish-gui 源码不存在，跳过")
 	}
@@ -56,23 +70,22 @@ func guiConfigServicePath(t *testing.T) string {
 func TestCase125(t *testing.T) {
 	svc := ReadText(guiConfigServicePath(t))
 
-	Contains(t, svc, "CreateUpdateFolder", "初始化后产出 UpdateFolder 的入口")
+	Contains(t, svc, "public static string? Create(", "初始化后产出 UpdateFolder 的入口")
 
 	// ① 归一化：去掉结尾分隔符
-	Contains(t, svc, "NormalizeDirectoryPath(projectPath)", "必须先把 projectPath 归一化")
-	Contains(t, svc, "TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)",
-		"归一化 = 去掉结尾分隔符（浏览对话框返回的路径带结尾 '\\'）")
+	Contains(t, svc, "Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectPath))",
+		"必须先把 projectPath 归一化（浏览对话框返回的路径带结尾 '\\'）")
 
 	// ② 上级目录必须取自归一化后的值
-	Contains(t, svc, "Path.GetDirectoryName(projectDir)",
-		"上级目录必须取自归一化后的主程序目录")
+	Contains(t, svc, "Path.GetDirectoryName(projectDirectory)",
+		"上级目录必须取自归一化后的项目目录")
 	NotContains(t, svc, "Path.GetDirectoryName(Path.GetFullPath(projectPath))",
 		"历史 bug 形态：带尾分隔符的路径会让 GetDirectoryName 回退成目录自身")
 
-	// ③ 同级：UpdateFolder 挂在主程序目录的上级目录下
-	Contains(t, svc, `Path.Combine(parentDir, "UpdateFolder")`,
-		"UpdateFolder 必须挂在主程序目录的上级目录下（与主程序目录同级）")
-	NotContains(t, svc, `Path.Combine(projectDir, "UpdateFolder")`,
+	// ③ 同级：UpdateFolder 挂在项目目录的上级目录下
+	Contains(t, svc, `Path.Combine(parentDirectory, "UpdateFolder")`,
+		"UpdateFolder 必须挂在项目目录的上级目录下（与主程序目录同级）")
+	NotContains(t, svc, `Path.Combine(projectDirectory, "UpdateFolder")`,
 		"❌ 放进主程序目录内：apply/rollback 给主目录改名会把更新器与 .updator 一起卷走")
 }
 
@@ -93,12 +106,14 @@ func TestCase126(t *testing.T) {
 	e.PutFile(t, proj, "WinFormsApp1.exe", "app-100")
 	True(t, e.Publish(t, proj, "1.0.0", []string{"初始"}, "", "").IsSuccess, "发布 1.0.0 失败")
 
-	// ── ① 源码契约（GUI 侧三件套 + 相对路径基准）──
+	// ── ① 源码契约（GUI 侧三件套 + 相对路径基准 + 更新器来自安装包 payload）──
 	svc := ReadText(guiConfigServicePath(t))
-	Contains(t, svc, `CopyClientExecutable(updateFolder, projectDir, "aly-client")`,
-		"必须复制 aly-client（更新器）")
-	Contains(t, svc, `CopyClientExecutable(updateFolder, projectDir, "aly-client-ui")`,
-		"必须复制 aly-client-ui（图形前端，必须与更新器同在 UpdateFolder）")
+	Contains(t, svc, "PkHelper.FindUp(",
+		"更新器必须从安装包 payload（client/<rid>/）取，调用方不再自带二进制")
+	Contains(t, svc, "HostHelper.UpBaseNames",
+		"两个更新器走同一循环：aly-client 与 aly-client-ui 必须同进同退")
+	Contains(t, svc, `Path.Combine(updateFolder, fileName)`,
+		"必须复制到 UpdateFolder 下的同名文件（两件套同名不同名都不许错位）")
 	Contains(t, svc, `Path.Combine(updateFolder, "client.json")`,
 		"client.json 的目标必须是 UpdateFolder/client.json（不得带临时后缀）")
 	Contains(t, svc, "GetRelativePath(updateFolder, mainExeFullPath)",
@@ -157,15 +172,18 @@ func TestCase126(t *testing.T) {
 //    明确失败并把原因指向 client.json —— 这种现场对用户来说就是"更新器不可用"。
 // ────────────────────────────────────────────────────────────────
 func TestCase127(t *testing.T) {
-	// ── ① 源码契约：目标不存在时不能 Replace ──
-	svc := ReadText(guiConfigServicePath(t))
-	Contains(t, svc, `var tmpPath = path + ".tmp"`, "原子写先写 .tmp")
-	Contains(t, svc, "if (!File.Exists(path))", "必须先判目标是否存在")
-	Contains(t, svc, "File.Move(tmpPath, path)",
-		"目标不存在 → 改名（ReplaceFile 要求目标已存在，首次写必抛）")
-	Contains(t, svc, "File.Replace(tmpPath, path, null)", "目标存在 → 原子替换")
-	Contains(t, svc, "PlatformNotSupportedException",
-		"非 Windows 平台不支持原子替换 → 删目标 + 改名回退")
+	// ── ① 源码契约：先写 .tmp、再一步落位，失败不留 .tmp ──
+	// 实现已从 ConfigService.cs 移到 Helpers/FileWriteHelper.cs；落位用 Move(overwrite) 同时
+	// 覆盖“目标不存在/已存在”，比“先判存在再 Move/Replace”少一个竞态窗口。
+	svc := ReadText(guiFileWriteHelperPath(t))
+	Contains(t, svc, `var temporaryPath = path + ".tmp"`, "原子写先写 .tmp")
+	Contains(t, svc, "File.WriteAllText(temporaryPath, content)", "临时文件先落内容")
+	Contains(t, svc, "File.Move(temporaryPath, path, overwrite: true)",
+		"落位必须用 Move(overwrite)：目标不存在与已存在都要能成，首次写不得只留 .tmp")
+	Contains(t, svc, "TryDeleteTemporaryFile(temporaryPath)",
+		"落位失败必须清掉 .tmp（用户可见后果：目录里只剩 client.json.tmp）")
+	NotContains(t, svc, "File.Replace(",
+		"❌ 历史形态：无条件 Replace 要求目标已存在，首次写必抛 → 磁盘只剩 .tmp")
 
 	// ── ② 消费侧：只有 .tmp 的现场不可用（用户可见后果）──
 	e := NewEnv(t, true, 0)

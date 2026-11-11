@@ -1,84 +1,35 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
   <!--
-    AlyClient.CSharpSDK: deploy runtime files to ../UpdateFolder/
+    AlyClient.CSharpSDK: 准备 ../UpdateFolder/
 
-    更新器与图形前端都在首次构建时从 GitHub Releases 下载：
-      Windows：aly-client.exe / aly-client-ui.exe
-      Linux  ：aly-client-linux-<rid> / aly-client-ui-linux-<rid>（落盘改名 aly-client / aly-client-ui）
+    更新器与图形前端不再由 SDK 下载或复制：
+      - 正式渠道是 AlyPublish 安装包（包内 client/<rid>/aly-client(.exe)）：
+        GUI 在“初始化项目 / 项目设置”时按本包平台把它复制进项目同级的 UpdateFolder/；
+      - 手工放置同样可用：把 aly-client.exe 与 aly-client-ui.exe 放进 ../UpdateFolder/。
 
-    落盘文件名与客户端 config.UpdaterFileName() 的平台约定一致。
-    client.json 不存在时用默认模板生成。
-
-    aly-client-ui 是可选的图形前端；设置 AlyIncludeClientUi=false 可跳过，
-    下载失败也只警告（不会让已有项目的构建失败）。
+    本 targets 只做两件事：建 UpdateFolder/ 目录、在缺失时生成默认 client.json，
+    这样没有 GUI 的宿主仍能用。
 
     平台判断使用 $(OS)（Windows 上为 Windows_NT）：这是所有 MSBuild 版本
     （含 VS2013/2015 的 net40 构建）都支持的写法，不依赖属性函数。
-    Linux arm64 宿主请传 -p:AlyRid=arm64（默认 amd64）。
   -->
 
   <PropertyGroup>
     <AlyUpdateFolder Condition="'$(AlyUpdateFolder)' == '' AND '$(OS)' == 'Windows_NT'">$(OutDir)..\UpdateFolder\</AlyUpdateFolder>
     <AlyUpdateFolder Condition="'$(AlyUpdateFolder)' == '' AND '$(OS)' != 'Windows_NT'">$(OutDir)../UpdateFolder/</AlyUpdateFolder>
-    <AlyClientVersion Condition="'$(AlyClientVersion)' == ''">ALY_CLIENT_VERSION_PLACEHOLDER</AlyClientVersion>
-    <AlyIncludeClientUi Condition="'$(AlyIncludeClientUi)' == ''">true</AlyIncludeClientUi>
-    <AlyExeSuffix Condition="'$(OS)' == 'Windows_NT'">.exe</AlyExeSuffix>
-    <AlyExeSuffix Condition="'$(OS)' != 'Windows_NT'"></AlyExeSuffix>
-    <!-- GitHub Releases 附件的架构段（仅 Linux 附件名含）：amd64 | arm64 -->
-    <AlyRid Condition="'$(AlyRid)' == ''">amd64</AlyRid>
-    <AlyClientDownloadUrl Condition="'$(AlyClientDownloadUrl)' == '' AND '$(OS)' == 'Windows_NT'">https://github.com/lishuangquan1987/aly/releases/download/v$(AlyClientVersion)/aly-client.exe</AlyClientDownloadUrl>
-    <AlyClientDownloadUrl Condition="'$(AlyClientDownloadUrl)' == '' AND '$(OS)' != 'Windows_NT'">https://github.com/lishuangquan1987/aly/releases/download/v$(AlyClientVersion)/aly-client-linux-$(AlyRid)</AlyClientDownloadUrl>
-    <AlyClientUiDownloadUrl Condition="'$(AlyClientUiDownloadUrl)' == '' AND '$(OS)' == 'Windows_NT'">https://github.com/lishuangquan1987/aly/releases/download/v$(AlyClientVersion)/aly-client-ui.exe</AlyClientUiDownloadUrl>
-    <AlyClientUiDownloadUrl Condition="'$(AlyClientUiDownloadUrl)' == '' AND '$(OS)' != 'Windows_NT'">https://github.com/lishuangquan1987/aly/releases/download/v$(AlyClientVersion)/aly-client-ui-linux-$(AlyRid)</AlyClientUiDownloadUrl>
   </PropertyGroup>
 
   <Target Name="AlyDeployToUpdateFolder" BeforeTargets="Build">
 
     <MakeDir Directories="$(AlyUpdateFolder)" />
 
-    <!-- Download aly-client from GitHub Releases if not present.
-         下载失败只警告：更新器是运行时可选组件，不能因为它（网络/仓库不可达）阻断宿主构建。
-         Linux 侧 curl 失败自动回退 wget；成功后 chmod 保证可执行位。 -->
-    <Exec Condition="'$(OS)' == 'Windows_NT' AND !Exists('$(AlyUpdateFolder)aly-client.exe')"
-          ContinueOnError="WarnAndContinue"
-          Command="powershell -NoProfile -Command &quot;
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
-try {
-  Invoke-WebRequest -Uri '$(AlyClientDownloadUrl)' -OutFile '$(AlyUpdateFolder)aly-client.exe' -ErrorAction Stop;
-  Write-Host 'Downloaded aly-client.exe v$(AlyClientVersion) successfully';
-} catch {
-  Write-Error &quot;Failed to download aly-client.exe: $PSItem.Exception.Message&quot;;
-  exit 1;
-}&quot;" />
-
-    <Exec Condition="'$(OS)' != 'Windows_NT' AND !Exists('$(AlyUpdateFolder)aly-client')"
-          ContinueOnError="WarnAndContinue"
-          Command="sh -c 'U=&quot;$(AlyClientDownloadUrl)&quot;; T=&quot;$(AlyUpdateFolder)aly-client&quot;; { curl -fsSL --connect-timeout 10 -o &quot;$T&quot; &quot;$U&quot; || wget -q --timeout=30 -O &quot;$T&quot; &quot;$U&quot;; } &amp;&amp; chmod 0755 &quot;$T&quot; &amp;&amp; echo &quot;Downloaded aly-client v$(AlyClientVersion) successfully&quot; || { echo &quot;Failed to download aly-client: $U&quot; &gt;&amp;2; exit 1; }'" />
-
     <!-- Generate default client.json if missing -->
     <WriteLinesToFile Condition="!Exists('$(AlyUpdateFolder)client.json')"
                       File="$(AlyUpdateFolder)client.json"
                       Lines="{&quot;main_exe_relative_path&quot;: &quot;../ApplicationFolder/YourApp.exe&quot;,&quot;must_close_process_name&quot;: [&quot;YourApp&quot;]}"
                       Overwrite="true" />
-
-    <!-- Download aly-client-ui (optional GUI front-end) from GitHub Releases if not present.
-         失败只警告：UI 是可选组件，不能因为它缺失就中断宿主项目的构建。 -->
-    <Exec Condition="'$(AlyIncludeClientUi)' == 'true' AND '$(OS)' == 'Windows_NT' AND !Exists('$(AlyUpdateFolder)aly-client-ui.exe')"
-          ContinueOnError="true"
-          Command="powershell -NoProfile -Command &quot;
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
-try {
-  Invoke-WebRequest -Uri '$(AlyClientUiDownloadUrl)' -OutFile '$(AlyUpdateFolder)aly-client-ui.exe' -ErrorAction Stop;
-  Write-Host 'Downloaded aly-client-ui.exe v$(AlyClientVersion) successfully';
-} catch {
-  Write-Warning &quot;aly-client-ui.exe not downloaded (optional GUI front-end): $PSItem.Exception.Message&quot;;
-}&quot;" />
-
-    <Exec Condition="'$(AlyIncludeClientUi)' == 'true' AND '$(OS)' != 'Windows_NT' AND !Exists('$(AlyUpdateFolder)aly-client-ui')"
-          ContinueOnError="true"
-          Command="sh -c 'U=&quot;$(AlyClientUiDownloadUrl)&quot;; T=&quot;$(AlyUpdateFolder)aly-client-ui&quot;; { curl -fsSL --connect-timeout 10 -o &quot;$T&quot; &quot;$U&quot; || wget -q --timeout=30 -O &quot;$T&quot; &quot;$U&quot;; } &amp;&amp; chmod 0755 &quot;$T&quot; &amp;&amp; echo &quot;Downloaded aly-client-ui v$(AlyClientVersion) successfully&quot; || echo &quot;aly-client-ui not downloaded (optional GUI front-end): $U&quot; &gt;&amp;2'" />
 
   </Target>
 

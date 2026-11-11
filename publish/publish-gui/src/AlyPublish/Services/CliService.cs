@@ -1,5 +1,6 @@
-using System.Globalization;
+﻿using System.Globalization;
 using AlyPublish.Constants;
+using AlyPublish.Helpers;
 using AlyPublish.Localization;
 using AlyPublish.Models.Cli;
 using Newtonsoft.Json;
@@ -365,27 +366,28 @@ public sealed class CliService
 
     private static string FindExecutable()
     {
-        var fileName = OperatingSystem.IsWindows() ? AppConstants.CliExecutableName : "aly-publish";
         var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        var candidates = new[]
-        {
-            Path.Combine(baseDirectory, fileName),
-            Path.GetFullPath(Path.Combine(
-                baseDirectory, "..", "..", "..", "..", "..", "..", "publish-cli", fileName))
-        };
+        var candidates = PkHelper.PubProbes(baseDirectory, string.Empty, PkHelper.PubRids(baseDirectory));
 
         foreach (var candidate in candidates)
         {
-            if (!File.Exists(candidate))
+            if (!File.Exists(candidate.FullName))
             {
                 continue;
             }
 
-            Log.Debug("找到 aly-publish: {Path}", candidate);
-            return candidate;
+            Log.Information("找到 aly-publish: {Path} (rid={Rid})", candidate.FullName, candidate.Rid);
+            return candidate.FullName;
         }
 
-        Log.Warning("未找到 aly-publish，请把它放在程序目录: {Directory}", baseDirectory);
+        var missing = PkHelper.ListMissing(baseDirectory);
+        Log.Warning(
+            "未找到 aly-publish（安装包缺少 {Folder}/ 目录，或未放在程序目录）: {Directory}；payload 缺失 {Count} 项: {List}",
+            PkHelper.PubFolderName,
+            baseDirectory,
+            missing.Count,
+            string.Join(';', missing));
         return string.Empty;
     }
 }
+

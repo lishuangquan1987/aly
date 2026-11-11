@@ -1,4 +1,4 @@
-name: Release Build
+﻿name: Release Build
 
 on:
   release:
@@ -99,12 +99,11 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        goos: [windows, linux, darwin]
+        # darwin 已出范围：安装包不带 macOS payload，也不再有独立 CLI 资产。
+        goos: [windows, linux]
         goarch: [amd64]
         include:
           - goos: linux
-            goarch: arm64
-          - goos: darwin
             goarch: arm64
 
     steps:
@@ -308,10 +307,10 @@ jobs:
             aly-client-linux-arm64/aly-client-linux-arm64
             aly-client-linux-arm64/aly-client-ui-linux-arm64
 
-  build-publish-gui:
-    name: Build AlyPublish (Windows x64 installer + portable zip)
+  build-publish-gui-windows:
+    name: Build AlyPublish for Windows (installer + portable zip)
     runs-on: windows-latest
-    needs: [resolve-version, build-aly-publish]
+    needs: [resolve-version, build-aly-publish, build-aly-client, build-aly-client-linux]
 
     steps:
       - name: Checkout
@@ -346,23 +345,41 @@ jobs:
             -p:Version=$env:ALY_VERSION `
             --output $out
 
-      - name: Download publisher CLI
+      # 客户端与发布 CLI 不再作为独立发布资产：全部打进 GUI 安装包，用户只装一个包。
+      - name: Download payload artifacts
         uses: actions/download-artifact@v4
         with:
           name: aly-publish-windows-amd64
-          path: publish/publish-gui/artifacts
+          path: publish/publish-gui/artifacts/staging
 
-      - name: Bundle aly-publish.exe
+      - name: Download linux amd64 publish CLI
+        uses: actions/download-artifact@v4
+        with:
+          name: aly-publish-linux-amd64
+          path: publish/publish-gui/artifacts/staging
+
+      - name: Download linux arm64 publish CLI
+        uses: actions/download-artifact@v4
+        with:
+          name: aly-publish-linux-arm64
+          path: publish/publish-gui/artifacts/staging
+
+      - name: Download Windows updater
+        uses: actions/download-artifact@v4
+        with:
+          name: aly-client-win-xp
+          path: publish/publish-gui/artifacts/staging
+
+      - name: Download Linux updater
+        uses: actions/download-artifact@v4
+        with:
+          name: aly-client-linux
+          path: publish/publish-gui/artifacts/staging
+
+      # 铺 payload 布局 + 写 payload.json + 断言 9 个文件都在（缺了就 fail-fast）。
+      - name: Stage the package payload
         shell: pwsh
-        run: |
-          $cli = Get-ChildItem "publish\publish-gui\artifacts" -Recurse -Filter "aly-publish-windows-amd64.exe" | Select-Object -First 1
-          if (-not $cli) { throw "aly-publish-windows-amd64.exe artifact not found" }
-          Copy-Item $cli.FullName "publish\publish-gui\artifacts\app\aly-publish.exe" -Force
-          $app = "publish\publish-gui\artifacts\app"
-          if (-not (Test-Path "$app\AlyPublish.exe")) { throw "AlyPublish.exe missing from publish output" }
-          if (-not (Test-Path "$app\aly-publish.exe")) { throw "aly-publish.exe missing from bundle" }
-          Get-ChildItem $app -Filter *.pdb -Recurse | Remove-Item -Force
-          Get-ChildItem $app | Select-Object Name, Length
+        run: publish/publish-gui/installer/stage-payload.ps1 -Staging publish/publish-gui/artifacts/staging -App publish/publish-gui/artifacts/app -Manifest payload.json -AssetCli windows-amd64 -AssetUp windows-x86
 
       - name: Install Inno Setup
         shell: pwsh
@@ -392,6 +409,100 @@ jobs:
           path: |
             publish/publish-gui/artifacts/AlyPublish-Setup.exe
             publish/publish-gui/artifacts/AlyPublish-win-x64.zip
+
+  build-publish-gui-linux:
+    # 与 Windows 包同一个 windows-latest 工具链：linux-x64 / linux-arm64 的 Avalonia 产物来自
+    # 包里的 runtimes/linux-*/native，交叉发布不需要 Linux 宿主；pwsh 与 ps1 也都在。
+    name: Build AlyPublish for Linux (${{ matrix.rid }})
+    runs-on: windows-latest
+    needs: [resolve-version, build-aly-publish, build-aly-client, build-aly-client-linux]
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [linux-x64, linux-arm64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Resolve version
+        shell: pwsh
+        run: '"ALY_VERSION=${{ needs.resolve-version.outputs.version }}" | Out-File -FilePath $env:GITHUB_ENV -Append'
+
+      - name: Test publish GUI
+        shell: pwsh
+        run: dotnet test publish/publish-gui/tests/AlyPublish.Tests/AlyPublish.Tests.csproj --configuration Release --nologo
+
+      - name: Publish publish GUI for Linux
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:GITHUB_WORKSPACE "publish\publish-gui\artifacts\app"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          dotnet publish publish/publish-gui/src/AlyPublish/AlyPublish.csproj `
+            --configuration Release `
+            --runtime ${{ matrix.rid }} `
+            --self-contained true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -p:Version=$env:ALY_VERSION `
+            --output $out
+
+      - name: Download payload artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: aly-publish-windows-amd64
+          path: publish/publish-gui/artifacts/staging
+
+      - name: Download linux amd64 publish CLI
+        uses: actions/download-artifact@v4
+        with:
+          name: aly-publish-linux-amd64
+          path: publish/publish-gui/artifacts/staging
+
+      - name: Download linux arm64 publish CLI
+        uses: actions/download-artifact@v4
+        with:
+          name: aly-publish-linux-arm64
+          path: publish/publish-gui/artifacts/staging
+
+      - name: Download Windows updater
+        uses: actions/download-artifact@v4
+        with:
+          name: aly-client-win-xp
+          path: publish/publish-gui/artifacts/staging
+
+      - name: Download Linux updater
+        uses: actions/download-artifact@v4
+        with:
+          name: aly-client-linux
+          path: publish/publish-gui/artifacts/staging
+
+      - name: Stage the package payload
+        shell: pwsh
+        run: publish/publish-gui/installer/stage-payload.ps1 -Staging publish/publish-gui/artifacts/staging -App publish/publish-gui/artifacts/app -Manifest payload.${{ matrix.rid }}.json -AssetCli ${{ matrix.rid }} -AssetUp ${{ matrix.rid }}
+
+      - name: Add the Linux installer scripts
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:GITHUB_WORKSPACE "publish\publish-gui\artifacts\app"
+          Copy-Item "publish\publish-gui\installer\linux\install.sh" $app -Force
+          Copy-Item "publish\publish-gui\installer\linux\uninstall.sh" $app -Force
+
+      - name: Compress the Linux package
+        shell: pwsh
+        run: Compress-Archive -Path "publish\publish-gui\artifacts\app\*" -DestinationPath "publish\publish-gui\artifacts\AlyPublish-${{ matrix.rid }}.zip" -Force
+
+      - name: Upload the Linux package
+        uses: actions/upload-artifact@v4
+        with:
+          name: aly-publish-gui-${{ matrix.rid }}
+          path: publish/publish-gui/artifacts/AlyPublish-${{ matrix.rid }}.zip
 
   build-csharp-sdk:
     name: Build AlyClient.CSharpSDK nupkg
@@ -437,13 +548,6 @@ jobs:
         run: |
           $fake = Join-Path $env:RUNNER_TEMP "fake-aly-client.exe"
           & "client\aly-client-sdk\AlyClient.CSharpSDK\AlySdkConformance\bin\Release\net40\AlySdkConformance.exe" $fake "spec\fixtures\scenarios"
-
-      - name: Inject version into .targets
-        shell: bash
-        run: |
-          TARGETS="client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/AlyClient.CSharpSDK.targets"
-          sed -i "s/ALY_CLIENT_VERSION_PLACEHOLDER/${ALY_VERSION}/g" "$TARGETS"
-          echo "Injected $ALY_VERSION into $TARGETS"
 
       - name: Pack SDK
         shell: pwsh
@@ -551,7 +655,7 @@ jobs:
     name: Upload to Release
     # release 事件 = 正式发布；手动触发仅在勾选 upload_to_release 时上传
     if: github.event_name == 'release' || inputs.upload_to_release == true
-    needs: [resolve-version, build-server, build-aly-publish, build-aly-client, build-aly-client-linux, build-publish-gui, build-csharp-sdk, build-sdk-packages]
+    needs: [resolve-version, build-server, build-publish-gui-windows, build-publish-gui-linux, build-csharp-sdk, build-sdk-packages]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -587,3 +691,4 @@ jobs:
             gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
           fi
           gh release upload "$TAG" "${files[@]}" --clobber
+

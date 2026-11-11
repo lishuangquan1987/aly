@@ -4,13 +4,9 @@ chcp 65001 >nul
 
 setlocal
 
-
-
 set SCRIPT_DIR=%~dp0
 
-
-
-echo ===== 编译 publish-cli =====
+echo ===== 编译 publish-cli（windows/amd64）====
 
 cd /d "%SCRIPT_DIR%publish-cli"
 
@@ -26,67 +22,41 @@ if %ERRORLEVEL% neq 0 (
 
 echo [成功] publish-cli 编译完成
 
+echo ===== 交叉编译 publish-cli（linux/amd64、linux/arm64）====
 
+set CGO_ENABLED=0
 
-echo ===== 复制 aly-publish.exe 到 publish-gui 输出目录 =====
+set GOOS=linux
 
-copy /y "%SCRIPT_DIR%publish-cli\aly-publish.exe" "%SCRIPT_DIR%publish-gui\src\AlyPublish\bin\Debug\net8.0\" >nul
+set GOARCH=amd64
+
+go build -o aly-publish-linux-amd64 .
+
+if %ERRORLEVEL% neq 0 ( echo [失败] linux/amd64 编译失败 & exit /b %ERRORLEVEL% )
+
+set GOARCH=arm64
+
+go build -o aly-publish-linux-arm64 .
+
+if %ERRORLEVEL% neq 0 ( echo [失败] linux/arm64 编译失败 & exit /b %ERRORLEVEL% )
+
+echo [成功] 三个平台的发布 CLI 就绪
+
+echo ===== 铺 payload 到 publish-gui 输出目录（含 payload.json）====
+
+REM 本机产物来源：publish-cli 的三个 CLI + client/aly-client 与 client/aly-client-ui 的
+REM 现成 exe + client/aly-client-ui/dist/linux-* 的 Linux 更新器。
+REM 与 CI 同一个脚本，包内布局与收尾断言完全一致（缺文件即失败）。
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%publish-gui\installer\stage-payload.ps1" -FromLocal -App "%SCRIPT_DIR%publish-gui\src\AlyPublish\bin\Debug\net8.0"
 
 if %ERRORLEVEL% neq 0 (
 
-    echo [失败] 复制 aly-publish.exe 失败
+    echo [失败] payload 铺装失败
 
     exit /b %ERRORLEVEL%
 
 )
-
-echo [成功] 已复制到 publish-gui 输出目录
-
-
-
-echo ===== 复制 aly-client.exe / aly-client-ui.exe 到 publish-gui 输出目录 =====
-
-REM 两个 exe 由仓库根的 deploy-client.bat（WSL + Go 1.10）编译并回拷到仓库根
-REM client\aly-client\，需先运行 deploy-client.bat。publish-gui 初始化项目时
-REM FindClientExecutable 优先从 GUI 同目录取副本，复制过去后即可直接从程序目录复制。
-
-if not exist "%SCRIPT_DIR%..\client\aly-client\aly-client.exe" (
-    echo [警告] 未找到仓库根 client\aly-client\aly-client.exe，请先运行仓库根的 deploy-client.bat
-    goto copy_client_done
-)
-
-copy /y "%SCRIPT_DIR%..\client\aly-client\aly-client.exe" "%SCRIPT_DIR%publish-gui\src\AlyPublish\bin\Debug\net8.0\" >nul
-
-if %ERRORLEVEL% neq 0 (
-
-    echo [失败] 复制 aly-client.exe 失败
-
-    exit /b %ERRORLEVEL%
-
-)
-
-echo [成功] 已复制 aly-client.exe
-
-if not exist "%SCRIPT_DIR%..\client\aly-client\aly-client-ui.exe" (
-    echo [警告] 未找到仓库根 client\aly-client\aly-client-ui.exe，请先运行仓库根的 deploy-client.bat
-    goto copy_client_done
-)
-
-copy /y "%SCRIPT_DIR%..\client\aly-client\aly-client-ui.exe" "%SCRIPT_DIR%publish-gui\src\AlyPublish\bin\Debug\net8.0\" >nul
-
-if %ERRORLEVEL% neq 0 (
-
-    echo [失败] 复制 aly-client-ui.exe 失败
-
-    exit /b %ERRORLEVEL%
-
-)
-
-echo [成功] 已复制 aly-client-ui.exe
-
-:copy_client_done
-
-
 
 echo ===== 编译 publish-gui =====
 
@@ -104,9 +74,11 @@ if %ERRORLEVEL% neq 0 (
 
 echo [成功] publish-gui 编译完成
 
+echo ===== 全部完成 ====
 
-
-echo ===== 全部完成 =====
+echo   GUI:      见 publish-gui\src\AlyPublish\bin\Debug\net8.0\AlyPublish.exe
+echo   CLI:      同目录 publish-cli\ 下按平台分目录
+echo   更新器:   同目录 client\ 下按平台分目录
+echo   清单:     同目录 payload.json
 
 endlocal
-

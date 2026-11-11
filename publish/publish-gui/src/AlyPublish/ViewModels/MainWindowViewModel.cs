@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using AlyPublish.Constants;
+using AlyPublish.Helpers;
 using AlyPublish.Localization;
 using AlyPublish.Models.Local;
 using AlyPublish.Services;
@@ -259,6 +260,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (added)
         {
             Notify.Success(LanguageManager.F(LanguageManager.Instance.MainWindow_Message_Added, project.DisplayName));
+            RefreshUpdaters(project);
         }
     }
 
@@ -283,6 +285,76 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (completed && saved)
         {
             Notify.Success(LanguageManager.T(LanguageManager.Instance.MainWindow_Message_SettingsSaved));
+            EnsureUpdaters(project);
+        }
+    }
+
+    /// <summary>
+    /// When the project settings supply a main executable and the sibling <c>UpdateFolder</c> does not exist
+    /// yet, build the updater package right now — the same code path the initialization wizard uses. A
+    /// failure is reported as a warning: the bookmarked settings are already saved either way.
+    /// </summary>
+    private void EnsureUpdaters(ProjectConfig project)
+    {
+        if (string.IsNullOrWhiteSpace(project.MainExePath))
+        {
+            return;
+        }
+
+        var projectDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(project.ProjectPath));
+        var parentDirectory = Path.GetDirectoryName(projectDirectory);
+        if (string.IsNullOrWhiteSpace(parentDirectory)
+            || Directory.Exists(Path.Combine(parentDirectory, "UpdateFolder")))
+        {
+            return;
+        }
+
+        var mainExeFullPath = ProjectInputHelper.ResolveMainExePath(project.ProjectPath, project.MainExePath);
+        if (!File.Exists(mainExeFullPath))
+        {
+            Log.Warning("主程序不存在，跳过 UpdateFolder 创建: {Path}", mainExeFullPath);
+            return;
+        }
+
+        try
+        {
+            var warning = UpdateFolderService.Create(
+                project.ProjectPath,
+                mainExeFullPath,
+                Path.GetFileNameWithoutExtension(mainExeFullPath),
+                AppDomain.CurrentDomain.BaseDirectory);
+            if (warning is not null)
+            {
+                Notify.Warning(warning);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Log.Warning(ex, "创建 UpdateFolder 失败: {Path}", project.ProjectPath);
+            Notify.Warning(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// An added project gets its updater executables refressed from the packaged payload when a sibling
+    /// <c>UpdateFolder</c> already exists. A missing payload is reported, never fatal, and
+    /// <c>client.json</c> is left alone.
+    /// </summary>
+    private void RefreshUpdaters(ProjectConfig project)
+    {
+        try
+        {
+            var warning = UpdateFolderService.RefrshUpdaters(
+                project.ProjectPath,
+                AppDomain.CurrentDomain.BaseDirectory);
+            if (warning is not null)
+            {
+                Notify.Warning(warning);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning(ex, "刷新更新器失败: {Path}", project.ProjectPath);
         }
     }
 

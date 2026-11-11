@@ -111,3 +111,9 @@ client/aly-client-sdk/AlyClient.CppSDK/out/
 client/aly-client-sdk/AlyClient.PascalSDK/out/
 client/aly-client-sdk/AlyClient.PascalSDK/src/*.o
 client/aly-client-sdk/AlyClient.PascalSDK/src/*.ppu
+
+# publish-gui package artifacts and the local payload layout (CI and deploy-publish.bat)
+publish/publish-gui/artifacts/
+publish/publish-cli/aly-publish-linux-amd64
+publish/publish-cli/aly-publish-linux-arm64
+
