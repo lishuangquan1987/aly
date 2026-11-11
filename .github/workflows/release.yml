@@ -1,4 +1,4 @@
-﻿name: Release Build
+name: Release Build
 
 on:
   release:
@@ -377,9 +377,60 @@ jobs:
           path: publish/publish-gui/artifacts/staging
 
       # 铺 payload 布局 + 写 payload.json + 断言 9 个文件都在（缺了就 fail-fast）。
+      # 铺 payload 布局 + 拷 payload.json + 断言 10 项全在（缺一即失败）。
+      # 注意：铺装写成内联 pwsh，不用 .ps1 文件——脚本宿主对 .ps1 文件的解析能力有限
+      # （if-表达式赋值会得到空值、Test-Path 不能包在 (-not (...)) 里），而内联 pwsh 宿主已验证可用。
       - name: Stage the package payload
         shell: pwsh
-        run: publish/publish-gui/installer/stage-payload.ps1 -Staging publish/publish-gui/artifacts/staging -App publish/publish-gui/artifacts/app -Manifest payload.json -AssetCli windows-amd64 -AssetUp windows-x86
+        run: |
+          $app = "publish\publish-gui\artifacts\app"
+          $stg = "publish\publish-gui\artifacts\staging"
+          foreach ($d in @('publish-cli\windows-amd64', 'publish-cli\linux-amd64', 'publish-cli\linux-arm64', 'client\windows-x86', 'client\linux-amd64', 'client\linux-arm64')) {
+            New-Item -ItemType Directory -Force -Path (Join-Path $app $d) | Out-Null
+          }
+          $src = Join-Path (Join-Path $stg "aly-publish-windows-amd64") "aly-publish-windows-amd64.exe"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-publish-windows-amd64.exe" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-publish-windows-amd64.exe" }
+          Copy-Item $src (Join-Path $app "publish-cli\windows-amd64\aly-publish.exe") -Force
+          $src = $stg + "\aly-publish-linux-amd64"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-publish-linux-amd64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-publish-linux-amd64" }
+          Copy-Item $src (Join-Path $app "publish-cli\linux-amd64\aly-publish") -Force
+          $src = $stg + "\aly-publish-linux-arm64"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-publish-linux-arm64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-publish-linux-arm64" }
+          Copy-Item $src (Join-Path $app "publish-cli\linux-arm64\aly-publish") -Force
+          $src = $stg + "\aly-client.exe"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client.exe" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-client.exe" }
+          Copy-Item $src (Join-Path $app "client\windows-x86\aly-client.exe") -Force
+          $src = $stg + "\aly-client-ui.exe"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client-ui.exe" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-client-ui.exe" }
+          Copy-Item $src (Join-Path $app "client\windows-x86\aly-client-ui.exe") -Force
+          $src = $stg + "\aly-client-linux-amd64\aly-client-linux-amd64"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client-linux-amd64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-client-linux-amd64" }
+          Copy-Item $src (Join-Path $app "client\linux-amd64\aly-client") -Force
+          $src = $stg + "\aly-client-linux-amd64\aly-client-ui-linux-amd64"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client-ui-linux-amd64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-client-ui-linux-amd64" }
+          Copy-Item $src (Join-Path $app "client\linux-amd64\aly-client-ui") -Force
+          $src = $stg + "\aly-client-linux-arm64\aly-client-linux-arm64"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client-linux-arm64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-client-linux-arm64" }
+          Copy-Item $src (Join-Path $app "client\linux-arm64\aly-client") -Force
+          $src = $stg + "\aly-client-linux-arm64\aly-client-ui-linux-arm64"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client-ui-linux-arm64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-client-ui-linux-arm64" }
+          Copy-Item $src (Join-Path $app "client\linux-arm64\aly-client-ui") -Force
+          Copy-Item "publish\publish-gui\installer\payload.json" (Join-Path $app "payload.json") -Force
+          Get-ChildItem $app -Recurse -Filter *.pdb -ErrorAction SilentlyContinue | Remove-Item -Force
+          $need = @('publish-cli\windows-amd64\aly-publish.exe', 'publish-cli\linux-amd64\aly-publish', 'publish-cli\linux-arm64\aly-publish', 'client\windows-x86\aly-client.exe', 'client\windows-x86\aly-client-ui.exe', 'client\linux-amd64\aly-client', 'client\linux-amd64\aly-client-ui', 'client\linux-arm64\aly-client', 'client\linux-arm64\aly-client-ui', 'payload.json')
+          $miss = 0
+          foreach ($rel in $need) { if (-not (Test-Path (Join-Path $app $rel))) { Write-Error ("MISSING {0}" -f $rel); $miss = $miss + 1 } }
+          if ($miss -gt 0) { throw ("package incomplete: {0} file(s) missing" -f $miss) }
+          Get-ChildItem $app -Recurse | Select-Object FullName, Length
 
       - name: Install Inno Setup
         shell: pwsh
@@ -483,9 +534,58 @@ jobs:
           name: aly-client-linux
           path: publish/publish-gui/artifacts/staging
 
+      # 与 Windows 包同一套 payload（9 文件 + 本平台的 payload.json），铺装同样内联成 pwsh。
       - name: Stage the package payload
         shell: pwsh
-        run: publish/publish-gui/installer/stage-payload.ps1 -Staging publish/publish-gui/artifacts/staging -App publish/publish-gui/artifacts/app -Manifest payload.${{ matrix.rid }}.json -AssetCli ${{ matrix.rid }} -AssetUp ${{ matrix.rid }}
+        run: |
+          $app = "publish\publish-gui\artifacts\app"
+          $stg = "publish\publish-gui\artifacts\staging"
+          foreach ($d in @('publish-cli\windows-amd64', 'publish-cli\linux-amd64', 'publish-cli\linux-arm64', 'client\windows-x86', 'client\linux-amd64', 'client\linux-arm64')) {
+            New-Item -ItemType Directory -Force -Path (Join-Path $app $d) | Out-Null
+          }
+          $src = Join-Path (Join-Path $stg "aly-publish-windows-amd64") "aly-publish-windows-amd64.exe"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-publish-windows-amd64.exe" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-publish-windows-amd64.exe" }
+          Copy-Item $src (Join-Path $app "publish-cli\windows-amd64\aly-publish.exe") -Force
+          $src = $stg + "\aly-publish-linux-amd64"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-publish-linux-amd64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-publish-linux-amd64" }
+          Copy-Item $src (Join-Path $app "publish-cli\linux-amd64\aly-publish") -Force
+          $src = $stg + "\aly-publish-linux-arm64"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-publish-linux-arm64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-publish-linux-arm64" }
+          Copy-Item $src (Join-Path $app "publish-cli\linux-arm64\aly-publish") -Force
+          $src = $stg + "\aly-client.exe"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client.exe" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-client.exe" }
+          Copy-Item $src (Join-Path $app "client\windows-x86\aly-client.exe") -Force
+          $src = $stg + "\aly-client-ui.exe"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client-ui.exe" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-client-ui.exe" }
+          Copy-Item $src (Join-Path $app "client\windows-x86\aly-client-ui.exe") -Force
+          $src = $stg + "\aly-client-linux-amd64\aly-client-linux-amd64"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client-linux-amd64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-client-linux-amd64" }
+          Copy-Item $src (Join-Path $app "client\linux-amd64\aly-client") -Force
+          $src = $stg + "\aly-client-linux-amd64\aly-client-ui-linux-amd64"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client-ui-linux-amd64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-client-ui-linux-amd64" }
+          Copy-Item $src (Join-Path $app "client\linux-amd64\aly-client-ui") -Force
+          $src = $stg + "\aly-client-linux-arm64\aly-client-linux-arm64"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client-linux-arm64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-client-linux-arm64" }
+          Copy-Item $src (Join-Path $app "client\linux-arm64\aly-client") -Force
+          $src = $stg + "\aly-client-linux-arm64\aly-client-ui-linux-arm64"
+          if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client-ui-linux-arm64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
+          if (-not (Test-Path $src)) { throw "payload source missing: aly-client-ui-linux-arm64" }
+          Copy-Item $src (Join-Path $app "client\linux-arm64\aly-client-ui") -Force
+          Copy-Item (Join-Path "publish\publish-gui\installer" "payload.${{ matrix.rid }}.json") (Join-Path $app "payload.json") -Force
+          Get-ChildItem $app -Recurse -Filter *.pdb -ErrorAction SilentlyContinue | Remove-Item -Force
+          $need = @('publish-cli\windows-amd64\aly-publish.exe', 'publish-cli\linux-amd64\aly-publish', 'publish-cli\linux-arm64\aly-publish', 'client\windows-x86\aly-client.exe', 'client\windows-x86\aly-client-ui.exe', 'client\linux-amd64\aly-client', 'client\linux-amd64\aly-client-ui', 'client\linux-arm64\aly-client', 'client\linux-arm64\aly-client-ui', 'payload.json')
+          $miss = 0
+          foreach ($rel in $need) { if (-not (Test-Path (Join-Path $app $rel))) { Write-Error ("MISSING {0}" -f $rel); $miss = $miss + 1 } }
+          if ($miss -gt 0) { throw ("package incomplete: {0} file(s) missing" -f $miss) }
+          Get-ChildItem $app -Recurse | Select-Object FullName, Length
 
       - name: Add the Linux installer scripts
         shell: pwsh
@@ -691,4 +791,5 @@ jobs:
             gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
           fi
           gh release upload "$TAG" "${files[@]}" --clobber
+
 

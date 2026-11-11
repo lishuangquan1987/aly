@@ -42,13 +42,35 @@ if %ERRORLEVEL% neq 0 ( echo [失败] linux/arm64 编译失败 & exit /b %ERRORL
 
 echo [成功] 三个平台的发布 CLI 就绪
 
-echo ===== 铺 payload 到 publish-gui 输出目录（含 payload.json）====
+echo ===== 铺 payload 到 publish-gui 输出目录 ====
 
-REM 本机产物来源：publish-cli 的三个 CLI + client/aly-client 与 client/aly-client-ui 的
-REM 现成 exe + client/aly-client-ui/dist/linux-* 的 Linux 更新器。
-REM 与 CI 同一个脚本，包内布局与收尾断言完全一致（缺文件即失败）。
+REM 包内布局：publish-cli/<rid>/aly-publish 与 client/<rid>/aly-client(-ui)，再由 payload.json 指平台。
+REM 更新器来源是本机现成产物：client\aly-client\aly-client.exe、
+REM client\aly-client-ui\aly-client-winui\aly-client-ui.exe、client\aly-client-ui\dist\linux-*。
+REM 与 CI 内联铺装同一套 9 个文件名与两份清单内容（CI 用内联 pwsh，本机用 copy）。
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%publish-gui\installer\stage-payload.ps1" -FromLocal -App "%SCRIPT_DIR%publish-gui\src\AlyPublish\bin\Debug\net8.0"
+set PAYLOAD_DIR=%SCRIPT_DIR%publish-gui\src\AlyPublish\bin\Debug\net8.0
+
+mkdyr "%PAYLOAD_DIR%\publish-cli\windows-amd64"
+mkdyr "%PAYLOAD_DIR%\publish-cli\linux-amd64"
+mkdyr "%PAYLOAD_DIR%\publish-cli\linux-arm64"
+mkdyr "%PAYLOAD_DIR%\client\windows-x86"
+mkdyr "%PAYLOAD_DIR%\client\linux-amd64"
+mkdyr "%PAYLOAD_DIR%\client\linux-arm64"
+
+copy /y "%SCRIPT_DIR%publish-cli\aly-publish.exe" "%PAYLOAD_DIR%\publish-cli\windows-amd64\aly-publish.exe" >nul
+copy /y "%SCRIPT_DIR%publish-cli\aly-publish-linux-amd64" "%PAYLOAD_DIR%\publish-cli\linux-amd64\aly-publish" >nul
+copy /y "%SCRIPT_DIR%publish-cli\aly-publish-linux-arm64" "%PAYLOAD_DIR%\publish-cli\linux-arm64\aly-publish" >nul
+
+copy /y "%SCRIPT_DIR%..\client\aly-client\aly-client.exe" "%PAYLOAD_DIR%\client\windows-x86\aly-client.exe" >nul
+copy /y "%SCRIPT_DIR%..\client\aly-client-ui\aly-client-winui\aly-client-ui.exe" "%PAYLOAD_DIR%\client\windows-x86\aly-client-ui.exe" >nul
+
+copy /y "%SCRIPT_DIR%..\client\aly-client-ui\dist\linux-amd64\aly-client" "%PAYLOAD_DIR%\client\linux-amd64\aly-client" >nul
+copy /y "%SCRIPT_DIR%..\client\aly-client-ui\dist\linux-amd64\aly-client-ui" "%PAYLOAD_DIR%\client\linux-amd64\aly-client-ui" >nul
+copy /y "%SCRIPT_DIR%..\client\aly-client-ui\dist\linux-arm64\aly-client" "%PAYLOAD_DIR%\client\linux-arm64\aly-client" >nul
+copy /y "%SCRIPT_DIR%..\client\aly-client-ui\dist\linux-arm64\aly-client-ui" "%PAYLOAD_DIR%\client\linux-arm64\aly-client-ui" >nul
+
+copy /y "%SCRIPT_DIR%publish-gui\installer\payload.json" "%PAYLOAD_DIR%\payload.json" >nul
 
 if %ERRORLEVEL% neq 0 (
 
@@ -57,6 +79,8 @@ if %ERRORLEVEL% neq 0 (
     exit /b %ERRORLEVEL%
 
 )
+
+echo [成功] payload 铺装完成（10 项：9 个二进制 + payload.json）
 
 echo ===== 编译 publish-gui =====
 
