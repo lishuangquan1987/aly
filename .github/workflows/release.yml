@@ -765,14 +765,26 @@ jobs:
         uses: actions/checkout@v4
 
       # download-artifact@v4 不指定 path 时会下载到 <artifact名>/ 子目录，
-      # 这里统一收拢到 artifacts/ 目录，供后续 find 扫描上传。
+      # 这里统一收拢到 artifacts/ 目录，供后续扫描上传。
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: List downloaded artifacts
-        run: ls -laR artifacts
+      # 本次发布只保留三类资产：GUI 安装包/便携包、服务端各平台单文件、各语言 SDK 包。
+      # 客户端与发布 CLI 不再单独发布——它们打进 AlyPublish 安装包，由包内 payload.json 索引；
+      # 不这样拦一道，批量下载会把它们当普通 artifact 一起传上来。
+      - name: Keep only the assets this release ships
+        run: |
+          before=$(find artifacts -type f | wc -l)
+          find artifacts -type f ! \( \
+              -name 'AlyPublish-*' -o \
+              -name 'aly-server-*' -o \
+              -name 'AlyClient*' \
+            \) -print -delete
+          after=$(find artifacts -type f | wc -l)
+          printf 'Assets kept: %s of %s\n' "$after" "$before"
+          find artifacts -type f | sort
 
       - name: Upload to Release
         env:
