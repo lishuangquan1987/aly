@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,15 +22,41 @@ import (
 type Client struct {
 	ServerURL string
 	hc        *http.Client
+	chunkSize int64
 }
 
-// NewClient 创建客户端
+// NewClient 创建客户端。
+//
+// 上传用"每请求一条新连接"的 http client（DisableKeepAlives），与客户端下载侧同款策略：
+// 中间的安全设备/代理把连接强制掐断时（实测报 `wsarecv: ... forcibly closed by the remote host`），
+// 若复用连接池，5 次重试会全部撞在同一条死连接上；每次新建连接重试才真正有意义。
+// 连接级超时（拨号/TLS/响应头）保证单次请求不会无限挂着，整体 Timeout 留足上传窗口。
 func NewClient(serverURL string) *Client {
-	return &Client{
+	c := &Client{
 		// 去掉末尾 "/"，避免拼出 "http://host//api/..." 双斜杠路径
 		ServerURL: strings.TrimRight(serverURL, "/"),
-		hc:        &http.Client{Timeout: 500 * time.Second},
+		hc: &http.Client{
+			Timeout: 600 * time.Second,
+			Transport: &http.Transport{
+				Dial: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).Dial,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ResponseHeaderTimeout: 60 * time.Second,
+				DisableKeepAlives:     true,
+			},
+		},
+		chunkSize: resolveChunkSize(),
 	}
+	c.printTransferSetup()
+	return c
+}
+
+// printTransferSetup 把生效的上传参数写到 stderr（GUI 会收进日志）。
+// 排查"上传被中间设备断链"时，第一件事就是确认实际用的分片大小与连接策略。
+func (c *Client) printTransferSetup() {
+	fmt.Fprintf(os.Stderr, "upload setup: chunk=%d bytes, keep-alives=off, dial=30s, resp-head=60s\n", c.chunkSize)
 }
 
 // ─── 通用方法 ──────────────────────────────────────────────────────────
@@ -192,7 +220,36 @@ func (c *Client) GetAllFiles(projectName string) ([]models.FileInfo, error) {
 
 // ─── 分片上传常量 ──────────────────────────────────────────────────────
 
-const chunkSize = 1024 * 1024 // 1 MiB（#14 注释修正：旧注释"50 KiB"与实际值不符）
+// defaultChunkSize 默认分片大小：128 KiB。
+// 分片越小，单次请求越容易穿过中间的安全设备/代理（实测环境里大请求容易被强制断链）；
+// 分片越大，请求数越少。可用环境变量 ALY_CHUNK_SIZE（字节数）覆盖，生效值会写进上传日志。
+const defaultChunkSize = 128 * 1024
+
+// chunckSizeEnviron 覆盖分片大小的环境变量名（值为字节数；非法值退回默认值）。
+const chunckSizeEnviron = "ALY_CHUNK_SIZE"
+
+// resolveChunkSize 解析生效的分片大小：环境变量优先，取不到或非法就用默认值。
+func resolveChunkSize() int64 {
+	raw := envar(chunckSizeEnviron)
+	if raw == "" {
+		return defaultChunkSize
+	}
+	if n, err := strconv.Atoi(strings.TrimSpace(raw)); err == nil && n > 0 {
+		return int64(n)
+	}
+	return defaultChunkSize
+}
+
+// envar 返回环境变量 name 的值（取不到返回空串）。
+func envar(name string) string {
+	prefix := name + "="
+	for _, kv := range os.Environ() {
+		if len(kv) > len(prefix) && kv[:len(prefix)] == prefix {
+			return kv[len(prefix):]
+		}
+	}
+	return ""
+}
 
 // ─── 上传重试 ──────────────────────────────────────────────────────────
 
@@ -234,7 +291,7 @@ func (c *Client) UploadFile(localPath, projectName, relativeFileName string) err
 	if err != nil {
 		return fmt.Errorf("stat file: %w", err)
 	}
-	if fi.Size() <= chunkSize {
+	if fi.Size() <= c.chunkSize {
 		return c.uploadFileDirect(localPath, projectName, relativeFileName)
 	}
 	return c.uploadFileChunked(localPath, projectName, relativeFileName, fi.Size())
@@ -266,7 +323,7 @@ func (c *Client) uploadFileDirect(localPath, projectName, relativeFileName strin
 		}
 		lastErr = err
 	}
-	return fmt.Errorf("upload file failed after %d retries: %w", maxUploadRetries, lastErr)
+	return fmt.Errorf("upload file failed after %d retries (chunk=%d bytes): %w; hint: set ALY_CHUNK_SIZE to try a smaller chunk", maxUploadRetries, c.chunkSize, lastErr)
 }
 
 // uploadFileOnce 单次直传（内存缓冲，无 io.Pipe）
@@ -287,7 +344,7 @@ func (c *Client) uploadFileOnce(data []byte, fileName, projectName, relativeFile
 
 // uploadFileChunked 分片上传大文件
 func (c *Client) uploadFileChunked(localPath, projectName, relativeFileName string, fileSize int64) error {
-	totalChunks := int((fileSize + chunkSize - 1) / chunkSize)
+	totalChunks := int((fileSize + c.chunkSize - 1) / c.chunkSize)
 
 	file, err := os.Open(localPath)
 	if err != nil {
@@ -297,10 +354,10 @@ func (c *Client) uploadFileChunked(localPath, projectName, relativeFileName stri
 
 	// 顺序上传分片（每个分片有独立重试）
 	for i := 0; i < totalChunks; i++ {
-		offset := int64(i) * chunkSize
+		offset := int64(i) * c.chunkSize
 		remaining := fileSize - offset
-		chunkLen := chunkSize
-		if remaining < int64(chunkSize) {
+		chunkLen := int(c.chunkSize)
+		if remaining < int64(c.chunkSize) {
 			chunkLen = int(remaining)
 		}
 		if chunkLen <= 0 {
@@ -354,7 +411,7 @@ func (c *Client) uploadChunkWithRetry(data []byte, projectName, relativeFileName
 		}
 		lastErr = err
 	}
-	return fmt.Errorf("chunk %d/%d failed after %d retries: %w", chunkIndex, totalChunks, maxUploadRetries, lastErr)
+	return fmt.Errorf("chunk %d/%d failed after %d retries (chunk=%d bytes): %w; hint: set ALY_CHUNK_SIZE to try a smaller chunk", chunkIndex, totalChunks, maxUploadRetries, c.chunkSize, lastErr)
 }
 
 // uploadChunkOnce 单次上传分片（内存缓冲，无 io.Pipe）
