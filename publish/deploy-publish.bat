@@ -34,6 +34,8 @@ set MISS=
 
 set GUIFAIL=
 
+set WINFAIL=
+
 setlocal
 
 set SCRIPT_DIR=%~dp0
@@ -81,17 +83,17 @@ set PAYLOAD_DIR=%SCRIPT_DIR%publish-gui\src\AlyPublish\bin\Debug\net8.0
 
 set STAGING_DIR=%SCRIPT_DIR%publish-gui\artifacts\staging
 
-mkdyr "%PAYLOAD_DIR%\publish-cli\windows-amd64"
+mkdir "%PAYLOAD_DIR%\publish-cli\windows-amd64"
 
-mkdyr "%PAYLOAD_DIR%\publish-cli\linux-amd64"
+mkdir "%PAYLOAD_DIR%\publish-cli\linux-amd64"
 
-mkdyr "%PAYLOAD_DIR%\publish-cli\linux-arm64"
+mkdir "%PAYLOAD_DIR%\publish-cli\linux-arm64"
 
-mkdyr "%PAYLOAD_DIR%\client\windows-x86"
+mkdir "%PAYLOAD_DIR%\client\windows-x86"
 
-mkdyr "%PAYLOAD_DIR%\client\linux-amd64"
+mkdir "%PAYLOAD_DIR%\client\linux-amd64"
 
-mkdyr "%PAYLOAD_DIR%\client\linux-arm64"
+mkdir "%PAYLOAD_DIR%\client\linux-arm64"
 
 rem ── 发布 CLI ──
 
@@ -200,6 +202,21 @@ if exist "%PAYLOAD_DIR%\payload.json" echo   OK payload.json
 if not exist "%PAYLOAD_DIR%\payload.json" set MISS=1
 
 if not exist "%PAYLOAD_DIR%\payload.json" echo   缺 payload.json
+
+rem windows 项缺即失败：GUI 就是靠 publish-cli\windows-amd64\、client\windows-x86\
+rem 与 payload.json 找发布 CLI 和更新器的。
+
+if not exist "%PAYLOAD_DIR%\publish-cli\windows-amd64\aly-publish.exe" set WINFAIL=1
+
+if not exist "%PAYLOAD_DIR%\client\windows-x86\aly-client.exe" set WINFAIL=1
+
+if not exist "%PAYLOAD_DIR%\client\windows-x86\aly-client-ui.exe" set WINFAIL=1
+
+if not exist "%PAYLOAD_DIR%\payload.json" set WINFAIL=1
+
+if defined WINFAIL echo [失败] windows 平台 payload 缺失（见上面缺失项）
+
+if defined WINFAIL exit /b 1
 
 if defined MISS echo [警告] payload 不完整（见上面缺失项）：windows 平台可用；linux 发布 CLI 需从 CI 取到 %STAGING_DIR% 后重跑本脚本。
 
