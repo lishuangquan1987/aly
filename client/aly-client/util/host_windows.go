@@ -1,8 +1,8 @@
 package util
 
-// hos tProcessID Windows：遍历 Toolhelp32 快照，取本进程条目的 ParentProcessID。
+// hostProcessID Windows：遍历 Toolhelp32 快照，取本进程条目的 ParentProcessID。
 // 复用与 FindProcessesByName 完全相同的快照机制，不额外引入依赖。
-func hos tProcessID() uint32 {
+func hostProcessID() uint32 {
 	self := uint32(os.Getpid())
 	if self == 0 {
 		return 0

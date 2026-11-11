@@ -4,33 +4,33 @@ import (
 	"testing"
 )
 
-// hos tCase 是宿主跟随退出决策表的一行。
-type hos tCase struct {
-	isApp lyCommand bool
-	app lying       bool
+// hostCase 是宿主跟随退出决策表的一行。
+type hostCase struct {
+	isApplyCommand bool
+	applying       bool
 	want            bool
 }
 
-// TestShouldExitOnHos tGone 决策表：只有「宿主已退出 且 不在 apply 例外窗口」才退。
+// TestShouldExitOnHostGone 决策表：只有「宿主已退出 且 不在 apply 例外窗口」才退。
 // 两个例外（命令级 apply_update、状态级 applying）取或，任一成立都不退。
-func TestShouldExitOnHos tGone(t *testing.T) {
-	cases := []hos tCase{
-		{isApp lyCommand: false, app lying: false, want: true},
-		{isApp lyCommand: false, app lying: true, want: false},
-		{isApp lyCommand: true, app lying: false, want: false},
-		{isApp lyCommand: true, app lying: true, want: false},
+func TestShouldExitOnHostGone(t *testing.T) {
+	cases := []hostCase{
+		{isApplyCommand: false, applying: false, want: true},
+		{isApplyCommand: false, applying: true, want: false},
+		{isApplyCommand: true, applying: false, want: false},
+		{isApplyCommand: true, applying: true, want: false},
 	}
 	for _, c := range cases {
-		got := ShouldExitOnHos tGone(c.isApp lyCommand, c.app lying)
+		got := ShouldExitOnHostGone(c.isApplyCommand, c.applying)
 		if got != c.want {
-			t.Errorf("isApp lyCommand=%v app lying=%v: got %v, want %v",
-				c.isApp lyCommand, c.app lying, got, c.want)
+			t.Errorf("isApplyCommand=%v applying=%v: got %v, want %v",
+				c.isApplyCommand, c.applying, got, c.want)
 		}
 	}
 }
 
-// TestHos tProcessIDNoPanic 宿主 PID 查询必须可调用、不 panic。
+// TestHostProcessIDNoPanic 宿主 PID 查询必须可调用、不 panic。
 // 拿不到时返回 0 是合法结果（调用方据此不做跟随退出）。
-func TestHos tProcessIDNoPanic(t *testing.T) {
-	_ = Hos tProcessID()
+func TestHostProcessIDNoPanic(t *testing.T) {
+	_ = HostProcessID()
 }

@@ -20,8 +20,8 @@ func main() {
 	// 宿主生命周期（规范见 spec/host-contract.md §15）：宿主退出后普通命令跟随退出；
 	// 例外是 apply_update 阶段——命令级 apply_update，或 version.json 的
 	// version_status == applying（崩溃恢复窗口），两者取或。
-	util.WatchHos tExit(command == "apply_update", app lyingNow, func() {
-		fmt.Fprintf(os.Stderr, "hos t process exited; updater exits (command=%s)\n", command)
+	util.WatchHostExit(command == "apply_update", applyingNow, func() {
+		fmt.Fprintf(os.Stderr, "host process exited; updater exits (command=%s)\n", command)
 	})
 
 	switch command {
@@ -50,9 +50,9 @@ func main() {
 	}
 }
 
-// app lyingNow 读工作目录（UpdateFolder/）的 version.json，判断是否处在 apply 例外窗口。
+// applyingNow 读工作目录（UpdateFolder/）的 version.json，判断是否处在 apply 例外窗口。
 // 读不到 / 解析失败都按 false 处理：状态不明时不做例外，宿主退出后照常跟随退出。
-func app lyingNow() bool {
+func applyingNow() bool {
 	vi, err := config.ReadVersion()
 	if err != nil {
 		return false

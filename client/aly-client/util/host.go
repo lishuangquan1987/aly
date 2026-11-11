@@ -17,50 +17,50 @@ package util
 // 更新锁不必显式释放：锁文件按「持有者进程已退出」判陈旧（见 cmd/lock.go 的 cleanStaleLock），
 // 本进程退出后残留锁会被下一次运行当陈旧清理掉。
 
-// hos tPollInterval 宿主存活轮询间隔。取 1 秒：宿主退出后最多 1 秒内跟随退出，
+// hostPollInterval 宿主存活轮询间隔。取 1 秒：宿主退出后最多 1 秒内跟随退出，
 // 又不至于把 CPU 唤醒得太频繁。
-const hos tPollInterval = 1 * time.Second
+const hostPollInterval = 1 * time.Second
 
-// ShouldExitOnHos tGone 是纯决策函数：宿主已不在时，本进程是否应该退出。
+// ShouldExitOnHostGone 是纯决策函数：宿主已不在时，本进程是否应该退出。
 // 两个例外取或，任一成立就不退。
-func ShouldExitOnHos tGone(isApp lyCommand bool, app lying bool) bool {
-	if isApp lyCommand || app lying {
+func ShouldExitOnHostGone(isApplyCommand bool, applying bool) bool {
+	if isApplyCommand || applying {
 		return false
 	}
 	return true
 }
 
-// Hos tProcessID 返回拉起了本进程的宿主 PID；拿不到时返回 0（此时不做跟随退出，
+// HostProcessID 返回拉起了本进程的宿主 PID；拿不到时返回 0（此时不做跟随退出，
 // 宁可不退，也不能因为拿不到父进程就把更新器自己结束掉）。
-func Hos tProcessID() uint32 {
-	return hos tProcessID()
+func HostProcessID() uint32 {
+	return hostProcessID()
 }
 
-// WatchHos tExit 起守护协程跟随宿主：
+// WatchHostExit 起守护协程跟随宿主：
 //
-//	time.Sleep(hos tPollInterval)
+//	time.Sleep(hostPollInterval)
 //	  宿主还活着 → 继续等；
 //	  宿主已退出且在 apply 例外窗口 → 不再管宿主（更新器自己把更新做完）；
 //	  宿主已退出且不在例外窗口 → onExit() 收尾，然后 os.Exit(0)。
 //
-// isApp lyCommand 是命令级例外；app lying 是状态级例外的取值函数（可为 nil，视为不在 applying）；
+// isApplyCommand 是命令级例外；applying 是状态级例外的取值函数（可为 nil，视为不在 applying）；
 // onExit 可为 nil。父 PID 拿不到时本函数直接返回。
-func WatchHos tExit(isApp lyCommand bool, app lying func() bool, onExit func()) {
-	host := Hos tProcessID()
+func WatchHostExit(isApplyCommand bool, applying func() bool, onExit func()) {
+	host := HostProcessID()
 	if host == 0 {
 		return
 	}
 	go func() {
 		for {
-			time.Sleep(hos tPollInterval)
+			time.Sleep(hostPollInterval)
 			if IsProcessAlive(host) {
 				continue
 			}
-			inApp ly := false
-			if app lying != nil {
-				inApp ly = app lying()
+			inApply := false
+			if applying != nil {
+				inApply = applying()
 			}
-			if !ShouldExitOnHos tGone(isApp lyCommand, inApp ly) {
+			if !ShouldExitOnHostGone(isApplyCommand, inApply) {
 				return
 			}
 			if onExit != nil {
