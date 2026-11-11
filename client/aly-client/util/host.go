@@ -1,5 +1,10 @@
 package util
 
+import (
+	"os"
+	"time"
+)
+
 // 宿主生命周期（规范见 spec/host-contract.md §15）。
 //
 // aly-client 是宿主（SDK 宿住 / aly-client-ui）按「一次进程一个子命令」拉起的子进程。

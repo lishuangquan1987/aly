@@ -1,4 +1,10 @@
+// +build unix
+
 package util
+
+import (
+	"os"
+)
 
 // hostProcessID Unix：父 PID 直接问系统（与 FilterKillablePIDs 用的是同一个来源）。
 func hostProcessID() uint32 {
