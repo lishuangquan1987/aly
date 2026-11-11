@@ -1,5 +1,10 @@
 # CI 复查：release v0.1.8 的失败与修复（2026-11-11）
 
+> **更正（同日晚收尾）**：拿到 job 日志后，真实报错是
+> `payload source missing: ...\staging\aly-publish-windows-amd64\aly-publish-windows-amd64.exe`
+> ——即**下载产物不是脚本假设的「资产名子目录」形态**，而栈里 `Join-Path` 三参问题只是同一次执行中的次要缺陷。
+> 最终修法与全绿证据见 [aly-CI-收尾-全绿-20261111.md](aly-CI-收尾-全绿-20261111.md)。
+
 > 触发：发布 v0.1.8 后 Actions 有失败；按要求自行爬取（Actions 页面是 JS 渲染，本地无 `gh`/`curl`，
 > 改用 in-world 的 REST 接口）并修到「文档同步」绿、「安装包铺装」在内联 pwsh 下本地复现通过。
 
