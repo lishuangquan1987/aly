@@ -17,8 +17,8 @@ description: aly-publish 的职责、CLI 与 GUI 的分工、全局参数、命�
 | 适用场景 | CI、脚本、批量发布 | 人工日常发版 |
 | 配置 | 直接读写当前目录的 `.updator/` | 调用 CLI，读写同一份配置 |
 | 输出 | human 文本或 `--json` | 解析 CLI 的 `--json` 输出并展示进度 |
-| 依赖 | 无 | 必须与 `aly-publish.exe` 放在同一目录 |
-| 发布资产 | Windows / Linux / macOS 预构建 | 仓库发布工作流未构建，需从源码构建 |
+| 依赖 | 无（CLI 自己就是包内 `publish-cli/<rid>/` 那一份） | 必须能找到同一安装包内的 `publish-cli/<cli_rid>/aly-publish(.exe)` |
+| 获取方式 | 随 AlyPublish 安装包分发（`publish-cli/<rid>/`）；不再有独立单文件资产 | 装 AlyPublish 安装包（Windows 安装包/压缩包；Linux 压缩包） |
 
 GUI 的细节见[发布 GUI](/docs/publish/gui)。两者可以混用：GUI 只是 CLI 的调用方，`.updator/` 配置与暂存区完全一致。
 

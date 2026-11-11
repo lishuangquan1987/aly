@@ -76,10 +76,10 @@ export const quickStartCopy: Record<'zh' | 'en', QuickStartCopy> = {
   }
 }
 
-function publishAsset(os: QuickStartOs, arch: QuickStartArch): string {
-  if (os === 'windows') return 'aly-publish-windows-amd64.exe'
-  const platform = os === 'macos' ? 'darwin' : 'linux'
-  return `aly-publish-${platform}-${arch}`
+function pakageAsset(os: QuickStartOs, arch: QuickStartArch): string {
+  // macOS 没有 GUI 安装包：按文档从 Linux 包里取 publish-cli / client 目录。
+  if (os === 'windows') return 'AlyPublish-Setup.exe'
+  return `AlyPublish-linux-${arch === 'arm64' ? 'arm64' : 'x64'}.zip`
 }
 
 function serverAsset(os: QuickStartOs, arch: QuickStartArch): string {
@@ -96,56 +96,62 @@ function shDownload(asset: string, out: string): string {
   return `curl -fL -o ${out} "${RELEASE}/${asset}"\nchmod +x ${out}`
 }
 
-function publishBinary(os: QuickStartOs): string {
-  return os === 'windows' ? '.\\aly-publish.exe' : './aly-publish'
+function publishBinary(os: QuickStartOs, arch: QuickStartArch): string {
+  const rid = os === 'windows' ? 'windows-amd64' : `linux-${arch === 'arm64' ? 'arm64' : 'amd64'}`
+  return os === 'windows' ? `.\\publish-cli\\${rid}\\aly-publish.exe` : `./publish-cli/${rid}/aly-publish`
 }
 
 function serverBinary(os: QuickStartOs): string {
   return os === 'windows' ? '.\\aly-server.exe' : './aly-server'
 }
 
-function clientBinary(os: QuickStartOs): string {
-  return os === 'windows' ? '.\\aly-client.exe' : './aly-client'
+function clientBinary(os: QuickStartOs, arch: QuickStartArch): string {
+  const rid = os === 'windows' ? 'windows-x86' : `linux-${arch === 'arm64' ? 'arm64' : 'amd64'}`
+  return os === 'windows' ? `.\\client\\${rid}\\aly-client.exe` : `./client/${rid}/aly-client`
 }
 
 function buildPublishSteps(isEn: boolean, os: QuickStartOs, arch: QuickStartArch): QuickStartStep[] {
-  const asset = publishAsset(os, arch)
-  const bin = publishBinary(os)
+  const asset = pakageAsset(os, arch)
+  const bin = publishBinary(os, arch)
+  const copy = quickStartCopy[isEn ? 'en' : 'zh']
   return [
     {
-      title: isEn ? 'Download the publisher' : '下载发布工具',
+      title: isEn ? 'Install AlyPublish (one package)' : '安装 AlyPublish（一个包）',
       body: isEn
-        ? 'A single static binary. Put it anywhere; add it to PATH if you like.'
-        : '单文件静态二进制。放到任意目录即可，建议加入 PATH。',
-      code: os === 'windows' ? psDownload(asset, 'aly-publish.exe') : shDownload(asset, 'aly-publish'),
+        ? 'The installer carries the GUI, the publish CLI and the terminal updater. Windows: run the setup, or unzip the portable zip. Linux: unzip the package and run install.sh.'
+        : '安装包里同时有发布 GUI、发布 CLI 与终端更新器。Windows：运行安装包，或解压便携 zip；Linux：解压后运行 install.sh。',
+      code:
+        os === 'windows'
+          ? `${psDownload(asset, 'AlyPublish-Setup.exe')}\nStart-Process ".\\AlyPublish-Setup.exe"`
+          : `curl -fL -o ${asset} "${RELEASE}/${asset}"\nunzip ${asset}\ncd AlyPublish-${arch === 'arm64' ? 'arm64' : 'x64'}\n./install.sh`,
       note:
         os === 'macos'
-          ? quickStartCopy[isEn ? 'en' : 'zh'].macNote
+          ? copy.macNote
           : isEn
-            ? 'Run it with `aly-publish` (or `aly-publish.exe` on Windows).'
-            : 'Windows 下用 `aly-publish.exe`，Linux/macOS 下用 `aly-publish`。',
-      link: { text: isEn ? 'Download matrix' : '完整下载矩阵', to: '/docs/download' }
+            ? 'After install the folder holds AlyPublish, payload.json, publish-cli/<rid>/ and client/<rid>/.'
+            : '装好后目录里有 AlyPublish、payload.json、publish-cli/<rid>/ 与 client/<rid>/。',
+      link: { text: isEn ? 'Download & install' : '下载与安装', to: '/docs/download' }
     },
     {
-      title: isEn ? 'Initialize the release directory' : '初始化发布目录',
+      title: isEn ? 'Initialize the project in the GUI' : '在 GUI 里初始化项目',
       body: isEn
-        ? 'Enter the directory you ship to users (for example `dist`) and create `.updator/` with the server URL and project name.'
-        : '进入要分发给用户的产物目录（例如 `dist`），生成 `.updator/` 配置并写入服务端地址与项目名。',
-      code: `${bin} config init --server http://127.0.0.1:2000 --project myapp`,
+        ? 'Start AlyPublish → “Initialize project” → pick the server project and the local release folder → set the main executable. The GUI writes .updator/, creates the sibling UpdateFolder/ and copies the packaged updater into it.'
+        : '启动 AlyPublish → “初始化项目” → 选服务端项目与本地产物目录 → 填主程序。GUI 会写好 .updator/、在同级建出 UpdateFolder/ 并把包内更新器复制进去。',
+      code: 'AlyPublish(.exe)',
       note: isEn
-        ? 'The server must already be running. The next step registers the project.'
-        : '服务端需已启动；下一步会在服务端注册同名项目。',
-      link: { text: isEn ? 'Server deployment' : '服务端部署', to: '/docs/server/deploy' }
+        ? 'The server must already be running. A new server project starts at V1.0.0, so the first push must be higher.'
+        : '服务端需已启动；新服务端项目初始版本是 V1.0.0，所以首次发布必须更高。',
+      link: { text: isEn ? 'Publish GUI' : '发布 GUI', to: '/docs/publish/gui' }
     },
     {
-      title: isEn ? 'Stage and push' : '暂存并推送',
+      title: isEn ? 'Stage and publish' : '暂存并发布',
       body: isEn
-        ? 'Register the project once, then `status` → `add --all` → `push`. A new server project starts at V1.0.0, so the first push must be higher (V1.0.1).'
-        : '先在服务端注册项目，再 `status` → `add --all` → `push`。新项目的初始版本是 V1.0.0，因此首次推送要更高（V1.0.1）。',
-      code: `${bin} project create --server http://127.0.0.1:2000 --name myapp --title "My App"\n${bin} status\n${bin} add --all\n${bin} push --version V1.0.1 --message "${isEn ? 'First release' : '首个版本'}"`,
+        ? 'Refresh → “Stage all” → fill the version and the change note → Publish. The same steps through the packaged CLI:'
+        : '刷新 → “全部暂存” → 填版本号与变更说明 → 发布。等价的命令行（用包内 CLI）：',
+      code: `${bin} config init --server http://127.0.0.1:2000 --project myapp\n${bin} project create --server http://127.0.0.1:2000 --name myapp --title "My App"\n${bin} status\n${bin} add --all\n${bin} push --version V1.0.1 --message "${isEn ? 'First release' : '首个版本'}"`,
       note: isEn
-        ? 'Every later release repeats these three commands. Large files use chunked upload automatically.'
-        : '之后每次发版重复这三条命令即可；大文件会自动走分片上传。',
+        ? 'Every later release repeats status → add → push. Large files use chunked upload automatically.'
+        : '之后每次发版重复 status → add → push 即可；大文件会自动走分片上传。',
       link: { text: isEn ? 'Publish commands' : '发布命令参考', to: '/docs/publish' }
     }
   ]
@@ -154,7 +160,7 @@ function buildPublishSteps(isEn: boolean, os: QuickStartOs, arch: QuickStartArch
 function buildServerSteps(isEn: boolean, os: QuickStartOs, arch: QuickStartArch): QuickStartStep[] {
   const asset = serverAsset(os, arch)
   const bin = serverBinary(os)
-  const publishBin = publishBinary(os)
+  const publishBin = publishBinary(os, arch)
   return [
     {
       title: isEn ? 'Download the server' : '下载服务端',
@@ -193,14 +199,14 @@ function buildServerSteps(isEn: boolean, os: QuickStartOs, arch: QuickStartArch)
 function buildIntegrateCSharpSteps(isEn: boolean, os: QuickStartOs): QuickStartStep[] {
   return [
     {
-      title: isEn ? 'Reference the SDK and place the updater' : '引用 SDK 并放置更新器',
+      title: isEn ? 'Reference the SDK and take the updater from the package' : '引用 SDK，并从安装包取更新器',
       body: isEn
-        ? 'The SDK targets net40 and netstandard2.0. It is not on the public NuGet feed yet, so use a project reference. Copy `aly-client.exe` and `aly-client-ui.exe` from Releases into `../UpdateFolder/`.'
-        : 'SDK 同时支持 net40 与 netstandard2.0，当前未上架公共 NuGet，使用项目引用即可。再到 Releases 下载 `aly-client.exe` 与 `aly-client-ui.exe`，放进 `../UpdateFolder/`。',
+        ? 'The SDK targets net40 and netstandard2.0 and is not on the public NuGet feed yet, so use a project reference. The updater is no longer downloaded by the SDK: the AlyPublish GUI writes UpdateFolder/ (or copy client/<rid>/ out of the package by hand).'
+        : 'SDK 同时支持 net40 与 netstandard2.0，当前未上架公共 NuGet，用项目引用即可。更新器不再由 SDK 下载：AlyPublish GUI 会生成 UpdateFolder/，也可以从包里直接取 client/<rid>/ 手工放。',
       code: `dotnet add reference client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/AlyClient.CSharpSDK.csproj`,
       note: isEn
-        ? 'CI-built nupkg packages inject the updater version and can download both binaries at build time; a local pack keeps the version placeholder, so manual placement is simpler.'
-        : '流水线产出的 nupkg 会注入更新器版本并在构建时自动下载；本地打包会保留版本占位符，因此快速开始建议手动放置两个二进制。',
+        ? 'The SDK targets only create ../UpdateFolder/ and a default client.json now; the binaries come from the package.'
+        : 'SDK 的 targets 现在只建 ../UpdateFolder/ 与默认 client.json，二进制来自安装包。',
       link: { text: isEn ? 'SDK integration' : 'SDK 集成指南', to: '/docs/sdk' }
     },
     {

@@ -15,17 +15,21 @@ description: AlyPublish.exe 的运行条件、项目书签、初始化与本地�
 
 | 条件 | 说明 |
 |---|---|
-| 可执行文件 | `AlyPublish.exe` |
-| 必需依赖 | 同目录下的 `aly-publish.exe`（非 Windows 平台为 `aly-publish`） |
-| 运行时 | Release 安装包/便携包为自包含 .NET 8；源码 `dotnet build` 为框架依赖 |
+| 可执行文件 | `AlyPublish(.exe)` |
+| 必需依赖 | 安装包内的 `publish-cli/<cli_rid>/aly-publish(.exe)`；`cli_rid` 由包内 `payload.json` 给出 |
+| 运行时 | Release 安装包/压缩包为自包含 .NET 8；源码 `dotnet build` 为框架依赖 |
 | 最小窗口 | 1080 × 640，默认 1320 × 840 |
 
-CLI 的查找顺序：
+包内 payload 与平台选择见[下载与安装](/docs/download)。CLI 的查找顺序：
 
-1. `AlyPublish.exe` 所在目录；
-2. 开发树中的 `publish/publish-cli/aly-publish.exe`（从构建输出目录向上回溯，仅用于本地开发）。
+1. `payload.json` 指定的 `publish-cli/<cli_rid>/aly-publish(.exe)`；
+2. 包里其它平台目录（按 `payload_rids` 顺序兜底，命中非本包平台时会告警）；
+3. `AlyPublish` 同目录的 `aly-publish(.exe)`（旧的手工放法仍然可用）；
+4. 项目目录、以及开发树的 `publish/publish-cli/`（仅本地开发用）。
 
-找不到时，窗口顶部出现“未找到 aly-publish.exe”横幅，提供“重新检测”和“打开程序目录”两个按钮；找到后右上角显示绿色的“CLI 就绪”标记。所有依赖 CLI 的操作（刷新、暂存、发布、项目设置）在缺失时都会失败，项目初始化也无法完成。
+`payload.json` 缺失或损坏时回退平台探测（Windows 取 `windows-amd64`，Linux 取 `linux-amd64` / `linux-arm64`），日志里会记一行原因。
+
+找不到时，窗口顶部出现“未找到 aly-publish”横幅，提供“重新检测”和“打开程序目录”两个按钮；找到后右上角显示绿色的“CLI 就绪”标记。所有依赖 CLI 的操作（刷新、暂存、发布、项目设置）在缺失时都会失败，项目初始化也无法完成。
 
 GUI 调用 CLI 时的工作目录是**项目目录**，参数固定包含 `--json`。各操作的超时：状态刷新 120 秒，普通操作 60 秒，发布 300 秒。
 
@@ -95,9 +99,10 @@ aly-publish config init --server <地址> --project <名称> \
 
 若填写了主程序，还会在项目目录的**同级**创建 `UpdateFolder/`：
 
-- 从 GUI 目录、项目目录或开发树中查找并复制 `aly-client.exe` / `aly-client-ui.exe`；
+- 更新器取自**安装包 payload** 的 `client/<client_rid>/`（平台由包内 `payload.json` 决定），无条件覆盖写入；
 - 写入 `client.json`，包含主程序相对路径与需要关闭的进程名；
-- 找不到更新器时只给警告，不阻断初始化；跨盘会导致主程序相对路径无法计算而失败。
+- 找不到更新器时只给警告，不阻断初始化；跨盘会导致主程序相对路径无法计算而失败；
+- 要在别的平台交付更新器时，直接从包内其它 `client/<rid>/` 取（见[下载与安装](/docs/download)）。
 
 初始化完成后，项目会加入左侧书签并被选中。它**不会**上传任何文件，也不会自动创建服务端项目。
 
@@ -112,7 +117,8 @@ aly-publish config init --server <地址> --project <名称> \
 - 目录中必须已有 `.updator/shared.json`；
 - 读取后显示服务端地址、项目名、忽略规则条数；
 - 显示名称默认取服务端项目名，否则取文件夹名；
-- 只保存书签，不复制文件、不修改 `.updator/`，也不调用 CLI。
+- 只保存书签，不复制文件、不修改 `.updator/`，也不调用 CLI；
+- 若项目同级**已有** `UpdateFolder/`，会顺手把里面两个更新器刷新成安装包 payload 的同名文件（不动 `client.json`）；没有 `UpdateFolder/` 时什么都不做。
 
 同一个目录不能重复添加；已在书签中的目录会提示“该项目已在左侧列表中”。
 
@@ -131,6 +137,7 @@ aly-publish config init --server <地址> --project <名称> \
 - 只要 `shared.json` 有至少一项变化，就会把本地忽略规则同步到服务端项目，同时保留服务端的标题与强制更新标记；同步失败只警告，不阻断本地保存。
 - 修改项目名不会重命名服务端项目，只会让客户端按新名称连接；必须确保服务端已有同名项目。
 - 服务端地址或项目名为空时无法保存。
+- 保存时若填了主程序、且项目同级还没有 `UpdateFolder/`，会顺手建出它（与初始化同一条代码路径：从安装包 payload 复制更新器 + 写 `client.json`）；已有 `UpdateFolder/` 则不动，避免覆盖用户配置。
 
 ## 审阅变更
 
@@ -227,7 +234,9 @@ GUI 用 Serilog 写文件日志。文件位于 `logs/` 目录，按天滚动，�
 
 | 现象 | 可能原因与处理 |
 |---|---|
-| 顶部提示未找到 `aly-publish.exe` | 把 CLI 放到 GUI 同目录，点“重新检测” |
+| 顶部提示未找到 `aly-publish` | 安装包的 `publish-cli/<rid>/` 缺失或 `payload.json` 不匹配：重新安装 AlyPublish，再点“重新检测”；旧布局下把 CLI 放到 GUI 同目录也能被识别 |
+| 初始化后 `UpdateFolder` 里没有更新器 | 安装包缺少 `client/<rid>/`（重新安装）；若主程序与项目目录跨盘，`main_exe_relative_path` 算不出来，会直接失败 |
+| Linux 下从包里取的 CLI/更新器不能执行 | zip 不保留可执行位：`chmod 0755`；用 `install.sh` 安装时它已经代劳 |
 | 目录已初始化，无法继续初始化 | 改用“添加本地项目” |
 | 服务端项目列表为空 | 先“新建服务端项目”，或检查服务端地址 |
 | 发布被拒绝：版本不大于最新版本 | 使用更高版本号；首次发布至少 V1.0.1 |
@@ -237,12 +246,15 @@ GUI 用 Serilog 写文件日志。文件位于 `logs/` 目录，按天滚动，�
 
 ## 构建与分发
 
-Release 工作流会构建并上传两个 GUI 资产（见 `.github/workflows/release.yml`）：
+Release 工作流会构建并上传 **4 个 GUI 资产**（见 `.github/workflows/release.yml`）：
 
-- `AlyPublish-Setup.exe`：Windows x64 安装包，自包含 .NET 8，内含 `aly-publish.exe`；
-- `AlyPublish-win-x64.zip`：便携版，解压即可运行。
+- `AlyPublish-Setup.exe`：Windows x64 安装包，自包含 .NET 8，内含 `publish-cli/`、`client/`、`payload.json`；
+- `AlyPublish-win-x64.zip`：Windows 便携包，解压即用；
+- `AlyPublish-linux-x64.zip`、`AlyPublish-linux-arm64.zip`：Linux 压缩包（安装包），包内另有 `install.sh` / `uninstall.sh`；解压后先 `chmod +x install.sh`（zip 不保留可执行位）再 `./install.sh` 装到 `/opt/aly/AlyPublish`（`--prefix` 可改；`install.sh` 会替 payload 里的可执行文件补齐 0755）。
 
-安装包由 Inno Setup 生成，安装到 `Program Files\AlyPublish`，创建开始菜单与可选桌面快捷方式。安装包和 zip 都**不需要**目标机另外安装 .NET 运行时。
+发布 CLI 与终端更新器**不再作为独立资产上传**：它们只随 GUI 安装包分发（用户装一个包就够）。
+
+payload 的铺装由 `publish/publish-gui/installer/stage-payload.ps1` 完成：按工作流下载的各平台产物铺成上面那份布局，拷入对应平台的 `payload.json`，并断言 9 个 payload 文件全部到位（缺任一即构建失败）。本地开发用同一个脚本的 `-FromLocal` 分支（见 [deploy-publish.bat](/publish/deploy-publish.bat)）。
 
 从源码构建：
 
@@ -255,9 +267,15 @@ dotnet publish publish/publish-gui/src/AlyPublish/AlyPublish.csproj \
   -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
   -o publish/publish-gui/artifacts/app
+
+# Linux 包（同一个工程，换 runtime；CI 在此之上再加 install.sh 并压 zip）
+dotnet publish publish/publish-gui/src/AlyPublish/AlyPublish.csproj \
+  -c Release -r linux-x64 --self-contained true \
+  -p:IncludeNativeLibrariesForSelfExtract=true \
+  -o publish/publish-gui/artifacts/app
 ```
 
-手工分发时，把 `AlyPublish.exe` 与 `aly-publish.exe` 放在同一目录；如需初始化向导自动生成 `UpdateFolder`，再把 `aly-client.exe` / `aly-client-ui.exe` 放在 GUI 同目录（或项目目录）。
+手工分发时，把 GUI 本体与 `payload.json`、`publish-cli/`、`client/` 放在同一目录即可（初始化向导就是按这个布局取更新器的）。
 
 ## 下一步
 

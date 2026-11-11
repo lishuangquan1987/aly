@@ -64,17 +64,25 @@ the packaging entry point is [tools/package-sdks](tools/package-sdks/README.md).
 
 First run auto-creates a SQLite database (`aly.db`). The server stores project info and uploaded files under `data/{project_name}/`.
 
-### 2. Publish a New Version
+### 2. Publish a New Version (one package does it all)
+
+Install **AlyPublish** — one package with the publish GUI, the `aly-publish` CLI and the
+`aly-client` / `aly-client-ui` updaters inside `publish-cli/<rid>/` and `client/<rid>/`:
+
+| Platform | Asset |
+|---|---|
+| Windows x64 | `AlyPublish-Setup.exe` (installer) · `AlyPublish-win-x64.zip` (portable) |
+| Linux x64 / arm64 | `AlyPublish-linux-x64.zip` · `AlyPublish-linux-arm64.zip` (unzip, then `./install.sh`) |
+
+Then either click through the GUI (`AlyPublish` → Initialize project → Stage all → Publish; it also
+builds the sibling `UpdateFolder/` from the packaged updater and writes `client.json`), or call the
+packaged CLI:
 
 ```bash
-# Initialize project config (creates .updator/ directory)
+# the CLI lives in the package at publish-cli/<rid>/aly-publish(.exe)
 cd ./dist
 aly-publish config init --server http://localhost:2000 --project myapp
-
-# Check what files changed
 aly-publish status
-
-# Stage all changes and push
 aly-publish add --all
 aly-publish push --version V1.0.1 --message "Fixed login bug"
 ```

@@ -76,14 +76,11 @@ dotnet pack -c Release -o nupkg -p:Version=1.0.0
 
 产物 `AlyClient.CSharpSDK.1.0.0.nupkg` 放进本地源（`NuGet.config` 里 `<add key="local" value="D:\nuget-local" />`）后即可用 `<PackageReference Include="AlyClient.CSharpSDK" Version="1.0.0" />`。
 
-::: warning 本地 pack 会保留版本占位符
-`AlyClient.CSharpSDK.targets` 里 `AlyClientVersion` 的默认值是字面量 `ALY_CLIENT_VERSION_PLACEHOLDER`。release 流水线在打包前会把这个字符串替换成真实版本号，**本地 `dotnet pack` 不会**。此时宿主构建出的下载地址是 `.../releases/download/vALY_CLIENT_VERSION_PLACEHOLDER/aly-client.exe`，下载必然失败（只警告，不中断构建），`UpdateFolder` 里不会出现 `aly-client.exe`。
-
-两种补救方式：
-
-- 宿主构建时覆盖属性：`dotnet build -p:AlyClientVersion=1.0.0`，或在宿主 csproj 里写 `<AlyClientVersion>1.0.0</AlyClientVersion>`；
-- 或者打包前手动把 `.targets` 中的占位符替换成版本号，与 release 流水线保持一致。
-:::
+::: tip 更新器二进制由安装包提供
+`AlyClient.CSharpSDK.targets` 现在只做两件事：建 `..\UpdateFolder\`、在缺失时生成默认 `client.json`。
+`aly-client` / `aly-client-ui` 来自 **AlyPublish 安装包**的 `client/<rid>/`：GUI 初始化项目时会把它们
+复制进同级 `UpdateFolder/`，也可以手工从包里取（Linux 取出后记得 `chmod 0755`）。见[下载与安装](/docs/download)。
+::::
 
 ## 部署布局：UpdateFolder
 
@@ -391,38 +388,27 @@ class Direct
 
 超时与失败形态（默认 30 秒、回滚 600 秒、下载停流 1800 秒）见 [API 参考](/docs/sdk/api#超时与失败形态)。
 
-## 构建期自动部署 targets
+## 构建期 targets：只准备 UpdateFolder
 
-SDK 包里的 `AlyClient.CSharpSDK.targets` 在宿主构建时执行 `AlyDeployToUpdateFolder`（`BeforeTargets="Build"`），把更新器与 GUI 下载到 `UpdateFolder`。所有属性都可覆盖：
+SDK 包里的 `AlyClient.CSharpSDK.targets` 在宿主构建时执行 `AlyDeployToUpdateFolder`（`BeforeTargets="Build"`）。它**只做两件事**：建出落盘目录、在缺失时写默认 `client.json`。更新器二进制来自 AlyPublish 安装包（GUI 会复制进同级 `UpdateFolder/`），SDK 不再下载任何东西。
 
 | MSBuild 属性 | 默认值 | 说明 |
 |---|---|---|
 | `AlyUpdateFolder` | Windows：`$(OutDir)..\UpdateFolder\`；其他平台：`$(OutDir)../UpdateFolder/` | 落盘目录 |
-| `AlyClientVersion` | `ALY_CLIENT_VERSION_PLACEHOLDER` | 拼进下载 URL 的版本号（`v$(AlyClientVersion)`）；本地 pack 时就是占位符 |
-| `AlyClientDownloadUrl` | `https://github.com/lishuangquan1987/aly/releases/download/v$(AlyClientVersion)/aly-client.exe` | 更新器下载地址（Linux 附件名为 `aly-client-linux-$(AlyRid)`） |
-| `AlyClientUiDownloadUrl` | 同一路径下的 `aly-client-ui.exe`（Linux 为 `aly-client-ui-linux-$(AlyRid)`） | GUI 下载地址 |
-| `AlyIncludeClientUi` | `true` | 是否下载 GUI；设为 `false` 可跳过 |
-| `AlyRid` | `amd64` | 仅 Linux 生效：`amd64` / `arm64` |
 
 行为：
 
-- 目标文件已存在则跳过下载（幂等），不会覆盖手改过的 `client.json`，也不会覆盖已部署的更新器。
-- 下载失败只警告（`ContinueOnError`），**不让宿主构建失败**。也就是说「构建成功」不等于「更新器已就位」，请自己确认 `UpdateFolder/aly-client.exe` 存在。
-- `client.json` 缺失时写入默认模板（`main_exe_relative_path` 为 `../ApplicationFolder/YourApp.exe`，`must_close_process_name` 为 `["YourApp"]`），必须按实际目录结构改。
-- Windows 用 PowerShell（显式设置 TLS 1.2）下载；Linux 用 `curl`（失败回退 `wget`），落盘改名为 `aly-client` / `aly-client-ui` 并 `chmod 0755`——与 `config.UpdaterFileName()` 的平台命名约定一致。
+- `client.json` 缺失时写入默认模板（`main_exe_relative_path` 为 `../ApplicationFolder/YourApp.exe`，`must_close_process_name` 为 `["YourApp"]`），必须按实际目录结构改；已存在时不动，不会覆盖手改过的配置。
+- 更新器与 GUI 不放进来：它们由 AlyPublish 安装包与 GUI 提供（见[下载与安装](/docs/download)）。手工放置仍然可用：把包内 `client/<rid>/aly-client(.exe)` 与 `aly-client-ui(.exe)` 放进 `UpdateFolder/`。
 - 平台判断用 `$(OS)`，兼容 VS2013/2015 在 net40 上的构建。
 
-Linux 交叉部署示例：
-
-```bash
-dotnet build -p:AlyRid=arm64 -p:AlyClientVersion=1.0.0
-```
+需要别的平台的更新器时，从包里取对应 `client/<rid>/` 目录即可（Windows 是 `client/windows-x86/`，Linux 是 `client/linux-amd64/` 或 `client/linux-arm64/`）。
 
 ## 常见坑
 
 | 现象 | 原因与处理 |
 |---|---|
-| 构建成功但 `UpdateFolder` 里没有 `aly-client.exe` | 下载失败只警告。多半是 `AlyClientVersion` 还是占位符、或网络不可达 GitHub Releases；用 `-p:AlyClientVersion=<版本>` 覆盖后重试 |
+| 构建成功但 `UpdateFolder` 里没有 `aly-client.exe` | SDK 不再下载更新器：用 AlyPublish 安装包（GUI 初始化项目时会复制），或手工从包内 `client/<rid>/` 取一份（Linux 取出后 `chmod 0755`） |
 | `check_update` 一直 `has_update=false`，服务器上明明有新版本 | 宿主机离线时客户端会返回 `has_update=false`（无法与服务端核对就不上报），联网后自动继续；先确认 `.updator/shared.json` 的 `server_url` 可达 |
 | 更新后主程序没启动 | `client.json` 的 `main_exe_relative_path` 少写了 `../`，或指向的 exe 名与实际不符。按上文「client.json 的相对路径」中的对照表核对 |
 | 应用被直接杀掉，没机会保存设置 | 没设置 `MustCloseProcessNames`。更新器在替换阶段探测到目录被占用会强杀；设为 `Process.GetCurrentProcess().ProcessName`（不带 `.exe`） |
@@ -432,7 +418,7 @@ dotnet build -p:AlyRid=arm64 -p:AlyClientVersion=1.0.0
 | 在 UI 线程 `.Result` 后界面假死 | `check_update` 默认最多等 30 秒，`download_update` 可能更久。放到后台线程调用 |
 | `apply` 之后宿主还在收尾，结果进程突然消失 | `ApplyUpdateAsync` 是拉起独立进程后立即返回，`apply_update` 会关闭当前进程。不要在它之后做清理工作，把清理放到退出钩子里 |
 | Linux 上找不到更新器 | 默认路径是 Windows 形式的 `..\UpdateFolder\aly-client.exe`，Linux 上没有 `.exe` 且反斜杠不是分隔符。显式传路径：`new AlyUpdateClient("/opt/app/UpdateFolder/aly-client")` |
-| `LaunchAuto` 返回失败说找不到 `aly-client-ui.exe` | GUI 未被部署（`AlyIncludeClientUi=false`，或下载失败）。补部署，或改用 `AlyUpdateClient` |
+| `LaunchAuto` 返回失败说找不到 `aly-client-ui.exe` | `UpdateFolder` 里没有 GUI 前端：从安装包取 `client/<rid>/aly-client-ui(.exe)` 放进 `UpdateFolder/`，或改用 `AlyUpdateClient` |
 | 两个更新窗口同时出现 | 一个宿主里同时启用了 `AlyUpdateUIClient` 与 `AlyUpdateClient`。只保留一种 |
 | 关闭宿主时卡住几秒 | `Dispose` 会等后台循环退出，最长 5 秒；轮询睡眠本身是可中断的，不会睡满一个空闲周期 |
 
