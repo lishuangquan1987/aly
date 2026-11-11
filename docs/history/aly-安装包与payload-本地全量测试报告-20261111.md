@@ -46,9 +46,10 @@
 | 1 | `go test ./... -count=1`（未设 `ALY_GO126`） | 全 135 条 0.00s 速败「Go 工具链缺失」（环境问题，非代码） |
 | 2 | 设 `$env:ALY_GO126`/`ALY_GO1108` 后单条冒烟：`-run TestCase125`、`-run TestCase01` | 双双**通过**（case01 47.2s，含服务端起动 + 客户端构建 + 发布链路） |
 | 3 | `go test ./... -count=1`（Go 缺省 10 分钟超时） | 10 分钟到点被 Go 掐断（**套件本身约 41 分钟**，基线 [\_regress_full.log](/test/tc/_regress_full.log) 2470s） |
-| 4 | `go test ./... -count=1 -timeout 90m` | 见下节「结果」 |
+| 4 | `go test ./... -count=1 -timeout 90m` | 77 分钟仍在跑。同期我在跑 GUI 构建/单测，抢占 CPU；更关键的是疑有被掐断那一轮残留的 `aly-server` 占着 23000，令某条用例在 `StartServer` 的 HTTP GET 上等不到服务端（第 3 次掐断的栈就是这里）。**已掐断，不采信** |
+| 5 | 清场后重跑 `go test ./... -count=1 -timeout 80m` | 见下节「结果」 |
 
-**结果**：第 4 次运行在报告定稿时仍在进行；完事数字与逐用例对照直接补在本行下方，且以 [aly测试用例文档.md](/aly测试用例文档.md) 的「实测状态」一行为准（本报告不改那份文件的数字）。
+**结果**：第 5 次（清场重跑）在报告定稿时仍在进行；完事数字与逐用例对照直接补在本行下方，且以 [aly测试用例文档.md](/aly测试用例文档.md) 的「实测状态」一行为准（本报告不改那份文件的数字）。可采信的最小集是第 2 次的两条冒烟（case125 通过、case01 47.2s 通过），它们已覆盖「服务端起动 + 客户端构建 + 发布链路 + 源码契约」。
 
 ### 基线偏差（与本改动无关，须区分）
 
@@ -64,7 +65,7 @@
 |---|---|---|
 | Linux 更新器重编（`build-linux.sh`） | 本机 WSL 无发行版 | CI `build-aly-client-linux`（ubuntu-latest）+ gui 包 staging |
 | `client/aly-client-ui/aly-client-linuxui` 单测 | 需 Linux + MyGo | CI（该 module 不在 `test/tc` 135 条内） |
-| GUI 窗口冒烟（启动 `AlyPublish.exe` 看日志里的 payload 路径） | 本会话不能可靠拉起桌面窗口 | CI 的 GUI 测试步骤 + 安装后人工确认；GUI 侧选择逻辑已用 54 条单测与清单契约测覆盖 |
+| GUI 窗口冒烟（启动 `AlyPublish.exe` 看日志里的 payload 路径） | **试过了**：把 GUI 输出目录 + payload 铺成一个真包根（`payload ready`），再启动 `AlyPublish.exe`——进程能起、`logs/log20261111.log` 写出了启动行，但本会话没有可用的桌面会话，进程随即退出，**没走到主窗口/CLI 解析那一步**，日志里没有 `找到 aly-publish` 行 | 安装后人工确认 + CI；GUI 侧的选择逻辑由 54 条单测 + 清单键契约测覆盖 |
 | 真实服务端的「GUI 点完一整套」 | 同上（窗口不可用） | CI + 用例 125–127 的②段（用真实 client 消费 GUI 形状的布局） |
 
 ## 六、与计划的偏差（诚实清单）

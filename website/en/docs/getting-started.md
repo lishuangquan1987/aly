@@ -1,64 +1,91 @@
 ---
 title: Quick Start
-description: Pick your OS and integration path, then run the shortest working route for server, publish and client updates.
+description: Run Aly in three steps — install one AlyPublish package, initialize and publish from the GUI, then let the terminal machines update themselves.
 ---
 
 # Quick Start
 
-::: tip Check the server first
-The “Publish a release” and “Integrate the updater” paths assume the server is already running. If it is not, choose “Deploy the server”, or start it in step 1 of the manual flow below.
-:::
+The goal is the **shortest working path**: install one package, click through the GUI to ship your first
+version, then let the terminal machines update themselves. Equivalent CLI commands are given per step.
+
+::: tip Prerequisite: the server must be running
+Both “publish a release” and “integrate the updater” assume a running server. If you do not have one yet,
+start it as in [Server deployment](/en/docs/server/deploy), or look at step 0 below.
+::
 
 <QuickStartWizard />
 
-## Full flow (manual)
-
-### 1. Start the server
+## 0. Start the server (once)
 
 ```bash
 ./aly-server -p 2000
 ```
 
-The first run creates `aly.db` and `data/` next to the executable. On Linux use `./aly-server-linux-amd64`, on Windows `.\aly-server.exe`; `-db` changes the database path.
+The first run creates `aly.db` and `data/` next to the executable; uploaded files always live in
+`data/{project}/`. On Linux use `./aly-server-linux-amd64`, on Windows `.\aly-server.exe`; `-db` moves the
+database file.
 
-### 2. Create the server project
+## 1. Install AlyPublish: one package with GUI + CLI + updater
 
-A new project starts at **V1.0.0**, so the first `push` must use a higher version (for example V1.0.1).
+On Windows run `AlyPublish-Setup.exe`, or unzip `AlyPublish-win-x64.zip` and use it in place; on Linux unzip
+`AlyPublish-linux-x64.zip` and run `./install.sh`. The full download table and the package layout are in
+[Download & Install](/en/docs/download).
 
-```bash
-# In the release directory (e.g. dist), initialize the client config
-./aly-publish config init --server http://127.0.0.1:2000 --project myapp
+What you get:
 
-# Register the same project on the server (once)
-./aly-publish project create --server http://127.0.0.1:2000 --name myapp --title "My App"
+```text
+AlyPublish(.exe)                        # publish GUI
+publish-cli/<rid>/aly-publish(.exe)     # publish CLI (the GUI drives it)
+client/<rid>/aly-client(-ui)            # terminal updater (the GUI copies it into UpdateFolder/)
+payload.json                            # the GUI picks its builds from it
 ```
 
-### 3. Publish the first release
+## 2. Initialize and publish from the GUI (recommended)
+
+1. Start `AlyPublish` and click **Initialize project**;
+2. Step one picks the server project: fill the server URL (for example `http://127.0.0.1:2000`) → fetch the
+   list → select it; when the server has no project yet, click **Create server project**;
+3. Step two takes the local folder (the product directory you ship, for example `dist`), the display name and
+   the **main executable** (optional, but it is what prepares the terminal update);
+4. On confirm the GUI calls `aly-publish config init ...`, writes `.updator/`, and creates the **sibling**
+   `UpdateFolder/`: it copies `aly-client` and `aly-client-ui` from `client/<rid>/` of the package and writes
+   `client.json`;
+5. Back in the main window: **Refresh** → **Stage all** → fill the version and the change note → **Publish**.
+
+::: warning First version number
+Creating the server project already occupies `V1.0.0`, so the first push must be `V1.0.1` or higher;
+otherwise the downgrade guard rejects it.
+::
+
+The equivalent CLI path (inside the product directory):
 
 ```bash
-./aly-publish status
-./aly-publish add --all
-./aly-publish push --version V1.0.1 --message "First release"
+aly-publish config init --server http://127.0.0.1:2000 --project myapp
+aly-publish project create --server http://127.0.0.1:2000 --name myapp --title "My App"
+aly-publish status
+aly-publish add --all
+aly-publish push --version V1.0.1 --message "First release"
 ```
 
-`status` shows new/modified/deleted files; `add --all` stages new and modified files; `push` uploads them and records a changelog. Large files use chunked upload automatically.
+The `aly-publish` you call is the one inside the package at `publish-cli/<rid>/` (on Linux `chmod 0755` it
+after taking it out).
 
-### 4. End-user layout
+## 3. The layout on a terminal machine
 
 ```text
 PackageFolder/
-├── ApplicationFolder/              # active app
+├── ApplicationFolder/              # the app that is currently live
 │   ├── YourApp.exe
 │   └── .updator/shared.json        # server_url, project_name, ignore rules
-├── ApplicationFolder_V1.0.0/       # previous snapshot (rollback)
+├── ApplicationFolder_V1.0.0/       # previous version snapshot (for rollback)
 └── UpdateFolder/
-    ├── aly-client(.exe)            # updater
-    ├── aly-client-ui(.exe)         # optional GUI
-    ├── client.json                 # main exe path + processes to close
-    └── version.json                # state machine (automatic)
+    ├── aly-client(.exe)            # the updater
+    ├── aly-client-ui(.exe)         # optional GUI front-end
+    ├── client.json                 # main exe path and processes to close
+    └── version.json                # version state machine (kept automatically)
 ```
 
-`main_exe_relative_path` is resolved **relative to `UpdateFolder/`**:
+`main_exe_relative_path` in `client.json` is resolved **relative to `UpdateFolder/`**:
 
 ```json
 {
@@ -67,40 +94,34 @@ PackageFolder/
 }
 ```
 
-### 5. Check and apply on the client
+## 4. The client checks and applies
 
 ```bash
-# Step 1 — check
-aly-client check_update
-# → {"isSuccess":true,"data":{"has_update":true,"need_download_update":true,
-#    "new_version":"1.0.2","force_update":false,"release_notes":["..."]}}
-
-# Step 2 — download changed files (MD5 + SHA256 verified)
-aly-client download_update
-
-# Step 3 — apply (close processes → atomic replace → restart)
-aly-client apply_update
+aly-client check_update      # is there a new version: has_update / new_version / force_update
+aly-client download_update   # downloads only changed files, MD5 + SHA256 verified
+aly-client apply_update      # closes the app, replaces atomically, restarts it
 ```
 
-Business failures may still exit 0; use `isSuccess` in the JSON. See the [command reference](/en/docs/commands).
+A business failure usually still exits 0; rely on `isSuccess` in the JSON. Every field is in the
+[command reference](/en/docs/commands).
 
-### 6. C# host: skip the orchestration
+## 5. Hosts: no orchestration needed (optional)
 
-> Other languages: see the [Language SDK overview](/en/docs/sdk/languages).
+A C# host hands the whole update chain to the packaged window with one line:
 
 ```csharp
 using AlyClient.CSharpSDK;
 
-// Requires UpdateFolder/aly-client-ui.exe and aly-client.exe
-var ui = new AlyUpdateUIClient();
-ui.LaunchAuto();   // silent check at startup; window appears only on update
+var ui = new AlyUpdateUIClient();   // defaults to ..\UpdateFolder\aly-client-ui.exe
+ui.LaunchAuto();                    // silent check at startup; the window only shows when needed
 ```
 
-The SDK is not on public NuGet yet; use a project reference or a CI-built nupkg. See [C# SDK integration](/en/docs/sdk).
+The updater comes from the package (or the GUI), so the SDK no longer downloads it. Other hosts:
+[language SDKs](/en/docs/sdk/languages).
 
-## Next steps
+## Next
 
-- Every flag and return field: [aly-client command reference](/en/docs/commands)
+- Every client command and its fields: [aly-client command reference](/en/docs/commands)
+- GUI fields, shortcuts and troubleshooting: [Publish GUI](/en/docs/publish/gui)
 - Crash safety and the state machine: [Core concepts](/en/docs/concepts)
-- CI or scripted publishing: [aly-publish](/en/docs/publish)
-- Troubleshooting: [FAQ](/en/docs/faq)
+- When something breaks: [FAQ](/en/docs/faq)
