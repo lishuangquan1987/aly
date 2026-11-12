@@ -473,7 +473,7 @@ REM 两个 exe 由deploy 目录下的 deploy-client.bat（WSL + Go 1.10）编译
 
 
 
-REM client\aly-client\，需先运行 deploy-client.bat。publish-gui 初始化项目时
+REM client\aly-client\ 与 client\aly-client-ui\aly-client-winui\，需先运行 deploy-client.bat。publish-gui 初始化项目时
 
 
 
@@ -633,7 +633,7 @@ echo [成功] 已复制 aly-client.exe
 
 
 
-if not exist "%SCRIPT_DIR%..\client\aly-client\aly-client-ui.exe" (
+if not exist "%SCRIPT_DIR%..\client\aly-client-ui\aly-client-winui\aly-client-ui.exe" (
 
 
 
@@ -641,7 +641,7 @@ if not exist "%SCRIPT_DIR%..\client\aly-client\aly-client-ui.exe" (
 
 
 
-    echo [警告] 未找到仓库根 client\aly-client\aly-client-ui.exe，请先运行deploy 目录下的 deploy-client.bat
+    echo [警告] 未找到仓库根 client\aly-client-ui\aly-client-winui\aly-client-ui.exe，请先运行deploy 目录下的 deploy-client.bat
 
 
 
@@ -673,7 +673,7 @@ if not exist "%SCRIPT_DIR%..\client\aly-client\aly-client-ui.exe" (
 
 
 
-copy /y "%SCRIPT_DIR%..\client\aly-client\aly-client-ui.exe" "%SCRIPT_DIR%publish-gui\src\AlyPublish\bin\Debug\net8.0\" >nul
+copy /y "%SCRIPT_DIR%..\client\aly-client-ui\aly-client-winui\aly-client-ui.exe" "%SCRIPT_DIR%publish-gui\src\AlyPublish\bin\Debug\net8.0\" >nul
 
 
 
