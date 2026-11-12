@@ -113,7 +113,7 @@ pub struct RollbackData {
     pub version: String,
 }
 
-/// self_update 命令的 data：更新器自更新结果。源缺失或已是最新同样视为成功。
+/// self_update 命令的 data：更新器自更新结果（updated/reason/old_path）与可选的图形前端补齐结果（ui_*，仅 --include-ui 时出现）。源缺失或已是最新同样视为成功。
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct SelfUpdateData {
     /// 是否真的替换了更新器本体。
@@ -123,6 +123,22 @@ pub struct SelfUpdateData {
     /// updated=true 时被替换下来的旧版备份路径（.old）。
     #[serde(default)]
     pub old_path: Option<String>,
+    /// 仅 --include-ui 时出现：是否真的落位了图形前端副本（aly-client-ui(.exe)）。
+    #[serde(default)]
+    pub ui_updated: Option<bool>,
+    /// 仅 --include-ui 时出现：图形前端副本的补齐口径。replaced 从主程序目录落位（目标缺失或零字节时才会发生）；existing_kepped 目标已存在（命令不替换可能正在运行的 UI 镜像，落后副本由 UI 自己的启动自更新收敛）；pending_inflight 已有收尾进程在途；source_missing 主程序目录没有该副本。
+    #[serde(default)]
+    pub ui_reason: Option<String>,
+    /// 仅 --include-ui 时出现且 ui_updated=true 时携带的旧版备份路径（补齐路径通常为空，因为目标本不存在）。
+    #[serde(default)]
+    pub ui_old_path: Option<String>,
+}
+
+impl SelfUpdateData {
+    pub const UI_REASON_REPLACED: &'static str = "replaced";
+    pub const UI_REASON_EXISTING_KEPPED: &'static str = "existing_kepped";
+    pub const UI_REASON_PENDING_INFLIGHT: &'static str = "pending_inflight";
+    pub const UI_REASON_SOURCE_MISSING: &'static str = "source_missing";
 }
 
 /// check_self_update 命令的 data：更新器自身副本是否需要更新。只检测，不替换。

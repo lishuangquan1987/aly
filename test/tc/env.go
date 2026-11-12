@@ -334,12 +334,17 @@ func (e *Env) goBuild(t *testing.T, goBin, srcDir, out, pkg string,
 
 // cleanEnv 继承当前环境，但剔除会干扰子进程的变量：
 //   - 代理变量（注册表可能存在大小写两份，子进程环境块构建会冲突）
-//   - Go 相关变量（避免继承到错误的 GOOS/GOARCH/GOPATH）
+//   - Go 相关变量（避免继承到错误的 GOOS/GOARCH/GOPATH/GOROOT）
+//
+// GOROOT 必须一起剔：本机测试用 1.27.3 工具链编译 test/tc 自身，而子进程要用
+// 1.10.8（XP 轨）构建 aly-client / aly-client-ui。GOROOT 一旦泄漏，1.10.8 的 go
+// 会去编 1.27.3 的 stdlib，报一堆 "found packages ... and main" 后构建失败——
+// 那条链路与被测对象无关，却会把 UI 相关用例全部染红。
 func cleanEnv(extra map[string]string) []string {
 	drop := map[string]bool{
 		"HTTP_PROXY": true, "HTTPS_PROXY": true, "NO_PROXY": true,
 		"http_proxy": true, "https_proxy": true, "no_proxy": true,
-		"GOPATH": true, "GO111MODULE": true, "GOOS": true, "GOARCH": true,
+		"GOPATH": true, "GOROOT": true, "GO111MODULE": true, "GOOS": true, "GOARCH": true,
 		"CGO_ENABLED": true, "GOFLAGS": true,
 	}
 	var out []string
@@ -1204,11 +1209,15 @@ type SelfUpdateData struct {
 	NeedUpdate bool `json:"need_update"`
 }
 
-// SelfUpdateExecData self_update 命令的 data（用例 130–132）。
+// SelfUpdateExecData self_update 命令的 data（用例 130–132、136）。
+// ui_* 三个字段是协议 1.1.0 起对 --include-ui 的补充（不带旗标时缺省）。
 type SelfUpdateExecData struct {
-	Updated bool   `json:"updated"`
-	Reason  string `json:"reason"`
-	OldPath string `json:"old_path,omitempty"`
+	Updated   bool   `json:"updated"`
+	Reason    string `json:"reason"`
+	OldPath   string `json:"old_path,omitempty"`
+	UIUpdated bool   `json:"ui_updated,omitempty"`
+	UIReason  string `json:"ui_reason,omitempty"`
+	UIOldPath string `json:"ui_old_path,omitempty"`
 }
 
 // ────────────────────────────────────────────────────────────────

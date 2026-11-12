@@ -94,9 +94,13 @@ ALY_FAKE_SCENARIO="<repo>/spec/fixtures/scenarios/update_available.json" ./fake-
 
 | 变更 | 版本位 | 例子 |
 |---|---|---|
-| 新增可选字段、新增命令 | MINOR | 新增 `release_notes` |
+| 新增可选字段、新增命令 | MINOR | 新增 `release_notes`；（1.1.0）`SelfUpdateData` 新增 `ui_updated` / `ui_reason` / `ui_old_path` |
 | 删除字段、改名、改类型、改语义 | MAJOR | `data` 从对象改成数组 |
 | 只改描述/文档 | PATCH | 修错别字 |
+
+当前协议版本 **1.1.0**：1.0.0 → 1.1.0 只新增了 `SelfUpdateData` 的三个可选字段，
+用于 `self_update --include-ui` 报告图形前端副本的补齐结果（见 `host-contract.md` §8.6）。
+旧版 SDK 反序列化会忽略它们；旧版更新器不认识该旗标，调用方按其兜底规则处理。
 
 方向性约定：
 

@@ -3,7 +3,7 @@
   "$id": "https://github.com/lishuangquan1987/aly/blob/master/spec/aly-protocol.schema.json",
   "title": "Aly client protocol",
   "description": "aly-client 命令行输出协议的唯一真源。所有命令输出单行 JSON 信封；download_update 额外先输出多行进度（同样是信封）。本 schema 对客户端严格（additionalProperties=false），用于在 CI 中拦截协议漂移；宿主/SDK 反序列化必须忽略未知字段，以保证前向兼容。字段语义、超时、状态机与错误处理见同目录 host-contract.md。",
-  "x-protocol-version": "1.0.0",
+  "x-protocol-version": "1.1.0",
   "$defs": {
     "Output": {
       "type": "object",
@@ -250,7 +250,7 @@
     },
     "SelfUpdateData": {
       "type": "object",
-      "description": "self_update 命令的 data：更新器自更新结果。源缺失或已是最新同样视为成功。",
+      "description": "self_update 命令的 data：更新器自更新结果（updated/reason/old_path）与可选的图形前端补齐结果（ui_*，仅 --include-ui 时出现）。源缺失或已是最新同样视为成功。",
       "additionalProperties": false,
       "required": [
         "updated",
@@ -268,6 +268,24 @@
         "old_path": {
           "type": "string",
           "description": "updated=true 时被替换下来的旧版备份路径（.old）。"
+        },
+        "ui_updated": {
+          "type": "boolean",
+          "description": "仅 --include-ui 时出现：是否真的落位了图形前端副本（aly-client-ui(.exe)）。"
+        },
+        "ui_reason": {
+          "type": "string",
+          "description": "仅 --include-ui 时出现：图形前端副本的补齐口径。replaced 从主程序目录落位（目标缺失或零字节时才会发生）；existing_kepped 目标已存在（命令不替换可能正在运行的 UI 镜像，落后副本由 UI 自己的启动自更新收敛）；pending_inflight 已有收尾进程在途；source_missing 主程序目录没有该副本。",
+          "enum": [
+            "replaced",
+            "existing_kepped",
+            "pending_inflight",
+            "source_missing"
+          ]
+        },
+        "ui_old_path": {
+          "type": "string",
+          "description": "仅 --include-ui 时出现且 ui_updated=true 时携带的旧版备份路径（补齐路径通常为空，因为目标本不存在）。"
         }
       }
     },

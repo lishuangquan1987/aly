@@ -205,141 +205,32 @@ namespace AlyClient.CSharpSDK
         }
 
         /// <summary>
-        /// 直接替换更新器（fallback）：临时文件 + SHA256 校验 + 原子替换
-        /// （File.Replace / File.Move），目标被占用时重试 3 次（间隔 1s）。
+        /// 直接替换更新器（fallback）：与 `AlyUpdateUIClient` 的 UI 副本落位共用
+        /// `UpdaterPayloadHelper` 的"临时文件 + SHA256 校验 + 原子替换"原语
+        /// （重试 3 次、非 Windows 回退改名式事务），本类只负责日志口径。
+        ///
         /// 只在 self_update 命令不可用或目标缺失时使用；正常路径不再走这里。
         ///
         /// 失败不静默（#8）：更新器损坏会破坏后续所有更新，必须留痕并保留
-        /// 旧更新器（不清空目标）。非 Windows 的 File.Replace 回退仍走
-        /// MoveWithRollback（2026-11-09 修复：不提前删 tmp；目标消失窗口）。
+        /// 旧更新器（不清空目标）。
         /// </summary>
         private static void ReplaceUpdaterDirect(string src, string target)
         {
-            if (!File.Exists(src))
+            var err = UpdaterPayloadHelper.ReplaceDirect(src, target);
+            if (err == null)
             {
-                LogError("self-update fallback: source missing: " + src);
-                return;
+                LogError("self-update OK (direct fallback): " + target);
             }
-            string tmp = target + ".new";
-            Exception lastErr = null;
-            for (int i = 0; i < 3; i++)
+            else
             {
-                try
-                {
-                    File.Copy(src, tmp, true);
-                    // 校验副本与源一致（防止复制截断）。源的完整性由主更新链路保证：
-                    // 随版本下发的 aly-client.exe 在 download_update 时已按服务端
-                    // MD5+SHA256 校验通过（server/get_all_files 提供可信哈希）。
-                    if (ComputeSha256(tmp) != ComputeSha256(src))
-                    {
-                        throw new IOException("self-update checksum mismatch");
-                    }
-                    if (File.Exists(target))
-                    {
-                        // 目标存在：原子替换（要求目标未被占用）
-                        File.Replace(tmp, target, null);
-                    }
-                    else
-                    {
-                        // 目标缺失（首次部署/崩溃现场）：直接改名
-                        File.Move(tmp, target);
-                    }
-                    LogError("self-update OK (direct fallback): " + target);
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    lastErr = ex;
-                    // 非 Windows 平台（netstandard2.0/Mono 等）File.Replace 抛
-                    // PlatformNotSupportedException。此时 tmp 仍在，走事务式回退
-                    // MoveWithRollback（备份改名 → 落位 → 失败回滚）：
-                    // 任何时刻目标要么是旧版、要么是新版。
-                    var pns = ex as PlatformNotSupportedException;
-                    if (pns != null)
-                    {
-                        try
-                        {
-                            MoveWithRollback(tmp, target);
-                            LogError("self-update OK (move fallback): " + target);
-                            return;
-                        }
-                        catch (Exception ex2)
-                        {
-                            lastErr = ex2;
-                            try { File.Delete(tmp); } catch { }
-                            // 目标被占用等瞬时故障：等待后重试
-                            Thread.Sleep(1000);
-                            continue;
-                        }
-                    }
-                    // Windows 正常路径失败（如上一更新进程尚未完全退出占用目标）：
-                    // 清理 tmp 后等待重试
-                    try { File.Delete(tmp); } catch { }
-                    Thread.Sleep(1000);
-                }
-            }
-            LogError("self-update fallback failed: " + (lastErr != null ? lastErr.Message : "unknown"));
-        }
-
-        /// <summary>
-        /// 事务式改名落位（非 Windows 平台的 File.Replace 回退）：
-        /// 目标改名到 .bak（原子） → tmp 改名到目标（原子） → 失败则把 .bak 改回目标。
-        /// 与 Windows 的 File.Replace（原子替换、失败保留目标）语义对齐。
-        /// .bak 残留与"目标缺失 + .bak 存在"的异常现场，均由下一次调用开头恢复。
-        /// </summary>
-        private static void MoveWithRollback(string tmp, string target)
-        {
-            string bak = target + ".bak";
-            // 异常现场恢复：目标缺失但 .bak 存在（上次"备份成功、落位失败且回滚
-            // 也失败"遗留的现场）——先把 .bak 还原为目标，再走正常替换流程。
-            if (!File.Exists(target) && File.Exists(bak))
-            {
-                File.Move(bak, target);
-            }
-            bool movedToBak = false;
-            if (File.Exists(target))
-            {
-                if (File.Exists(bak)) File.Delete(bak);
-                File.Move(target, bak);
-                movedToBak = true;
-            }
-            try
-            {
-                File.Move(tmp, target);
-            }
-            catch
-            {
-                // 回滚：把 .bak 改回目标，保证目标始终存在
-                if (movedToBak && !File.Exists(target))
-                {
-                    try { File.Move(bak, target); } catch { }
-                }
-                throw;
-            }
-            if (movedToBak)
-            {
-                File.Delete(bak);
+                LogError("self-update fallback failed: " + (err.Message ?? "unknown"));
             }
         }
 
-        private static string ComputeSha256(string path)
-        {
-            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))
-            using (var sha = System.Security.Cryptography.SHA256.Create())
-            {
-                byte[] hash = sha.ComputeHash(fs);
-                return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-            }
-        }
-
+        /// <summary>写 SDK 诊断日志（失败静默）。</summary>
         private static void LogError(string msg)
         {
-            try
-            {
-                string log = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "aly-client-sdk.log");
-                File.AppendAllText(log, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + msg + Environment.NewLine);
-            }
-            catch { }
+            SdkLogHelper.Write(msg);
         }
 
         /// <summary>Cancel and release resources. 见上（已前移至 Cancel 旁，等待主循环退出）。</summary>

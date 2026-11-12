@@ -229,6 +229,118 @@ func ReplaceRunningSelf(selfPath, srcPath string, opts Options) (oldPath string,
 }
 
 // ────────────────────────────────────────────────────────────────
+// 两件套同步（self_update --include-ui）
+// ────────────────────────────────────────────────────────────────
+
+// SyncReason 取值（SyncResult.Reason）：更新器本体沿用 source_missing /
+// already_up_to_date / replaced 三个既有口径，图形前端另有两个"不动"口径。
+// 与 spec/aly-protocol.schema.json 里 SelfUpdateData 的 reason/ui_reason
+// 描述一一对应。
+const (
+	ReasonSourceMissing   = "source_missing"
+	ReasonAlreadyUpToDate = "already_up_to_date"
+	ReasonExistingKepped  = "existing_kepped"
+	ReasonPendingInFlight = "pending_inflight"
+	ReasonReplaced        = "replaced"
+)
+
+// SyncResult 是单件套（更新器本体 / 图形前端）一次的同步结果。
+type SyncResult struct {
+	Name    string
+	Updated bool
+	Reason  string
+	OldPath string
+}
+
+// SyncPolicy 控制 SyncFile 的两个语义分支，对应两种真实调用方：
+//
+//   - 更新器本体（BootstrapOnly=false、DstMissingIsError=true）：正在运行的
+//     更新器副本不可能是缺失的，缺失属异常现场，报错而不是静默落位；
+//   - 图形前端（BootstrapOnly=true）：已存在的副本由 UI 自己的启动自更新
+//     （UpdateSelfUI + -finish-self-update 收尾进程）收敛，命令**不得**替换
+//     可能正在运行的 UI 镜像；只有"缺失/零字节"（首次部署、被杀软吃掉、
+//     崩溃现场）才从主程序目录落位。
+type SyncPolicy struct {
+	BootstrapOnly     bool
+	DstMissingIsError bool
+}
+
+// SyncFile 把 src 同步到 dst（一次一件套）。两平台同一路径、无平台分支。
+//
+// 判定顺序：
+//  1. src 缺失                             → source_missing（不算错误，副本不动）
+//  2. dst 读不到（权限等非"不存在"错误）   → 报错（不猜）
+//  3. dst 缺失且 policy.DstMissingIsError  → 报错（异常现场，不静默落位）
+//  4. dst 存在且非 0 字节：
+//     a. <dst>.selfupdate.json 的 pending=true → pending_inflight（有收尾进程在途，不插队）
+//     b. policy.BootstrapOnly                 → existing_kepped
+//     c. 内容一致（SHA256）                   → 清残留 + already_up_to_date
+//     d. 内容不同                             → 先备后换舞步（ReplaceRunningSelf）
+//  5. dst 缺失或零字节                     → 从 src 落位（replaced，无 .old）
+//
+// 0 字节的 dst 视同缺失：中断写下（断电/磁盘满）留下的空文件不是可用副本，
+// 而重试一次的复制是幂等的。
+func SyncFile(src, dst string, policy SyncPolicy, opts Options) (SyncResult, error) {
+	res := SyncResult{Name: filepath.Base(dst)}
+
+	if _, err := os.Stat(src); os.IsNotExist(err) {
+		res.Reason = ReasonSourceMissing
+		return res, nil
+	}
+
+	dstInfo, dstErr := os.Stat(dst)
+	dstExists := dstErr == nil
+	if !dstExists && !os.IsNotExist(dstErr) {
+		return res, fmt.Errorf("stat %s: %v", dst, dstErr)
+	}
+	if !dstExists && policy.DstMissingIsError {
+		// 既有口径（单测 TestRunSelfUpdateSelfMissing）：正在运行的更新器副本
+		// 缺失是异常现场，必须报错——不静默"更新"一个不存在的文件。
+		return res, fmt.Errorf("compare self vs source: %s is missing (cannot update a nonexistent file)", dst)
+	}
+	dstEmpty := dstExists && !dstInfo.IsDir() && dstInfo.Size() == 0
+
+	if dstExists && !dstEmpty {
+		// 有收尾进程在途（已交出替换、结果未知）时让位：插队会与它的 .new
+		// 中转/改名互相覆盖。只有 UI 自己的自更新会落这个标记。
+		if LoadJournal(JournalPath(dst)).Pending {
+			res.Reason = ReasonPendingInFlight
+			return res, nil
+		}
+		if policy.BootstrapOnly {
+			res.Reason = ReasonExistingKepped
+			return res, nil
+		}
+
+		same, err := SameFile(src, dst)
+		if err != nil {
+			return res, fmt.Errorf("compare self vs source: %v", err)
+		}
+		if same {
+			CleanArtifacts(dst)
+			res.Reason = ReasonAlreadyUpToDate
+			return res, nil
+		}
+
+		oldPath, err := ReplaceRunningSelf(dst, src, opts)
+		if err != nil {
+			return res, fmt.Errorf("replace %s: %v", dst, err)
+		}
+		res.Updated = true
+		res.Reason = ReasonReplaced
+		res.OldPath = oldPath
+		return res, nil
+	}
+
+	if err := ReplaceFromFile(src, dst, opts); err != nil {
+		return res, fmt.Errorf("replace %s: %v", dst, err)
+	}
+	res.Updated = true
+	res.Reason = ReasonReplaced
+	return res, nil
+}
+
+// ────────────────────────────────────────────────────────────────
 // 残留清理
 // ────────────────────────────────────────────────────────────────
 

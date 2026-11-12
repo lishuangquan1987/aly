@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using AlyClient.CSharpSDK.Models;
@@ -70,12 +70,36 @@ namespace AlyClient.CSharpSDK
         private bool _disposed;
 
         private string _uiExePath;
+        private string _updatorExePath;
+
+        /// <summary>
+        /// 本次实例内是否已经尝试过"两件套就位"（成功或失败都算）。
+        /// 宿主若把 Launch 放在定时器里反复调，失败时会每次派一个更新器进程 +
+        /// 一遍复制；这里只试一次，避免进程/IO 风暴（新建实例即重置）。
+        /// 0=未尝试，1=已尝试（Interlocked 访问：Launch 可能被多线程调用，
+        /// 而 EnsurePayloadDeployed 在 _sync 之外执行——锁内做会拖住 Exited 回调）。
+        /// </summary>
+        private int _ensureAttempted;
 
         /// <summary>aly-client-ui.exe 的绝对路径。赋值时自动转绝对路径。</summary>
         public string UiExePath
         {
             get { return _uiExePath; }
             set { _uiExePath = string.IsNullOrEmpty(value) ? value : Path.GetFullPath(value); }
+        }
+
+        /// <summary>
+        /// aly-client(.exe) 的绝对路径（两件套同放 UpdateFolder，默认取
+        /// <c>&lt;UiExePath 所在目录&gt;\aly-client.exe</c>）。
+        ///
+        /// 用途：拉起 UI 前先把两件套补齐——更新器副本缺失时从主程序目录落位，
+        /// 再委派 <c>self_update --include-ui</c>。非 Windows 上没有 <c>.exe</c>，
+        /// 如同 UiExePath，调用方需要显式传入实际路径。
+        /// </summary>
+        public string UpdatorExePath
+        {
+            get { return _updatorExePath; }
+            set { _updatorExePath = string.IsNullOrEmpty(value) ? value : Path.GetFullPath(value); }
         }
 
         /// <summary>界面语言：zh-CN / en-US。</summary>
@@ -115,7 +139,159 @@ namespace AlyClient.CSharpSDK
             UiExePath = string.IsNullOrEmpty(uiExePath)
                 ? Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\UpdateFolder\aly-client-ui.exe"))
                 : Path.GetFullPath(uiExePath);
+            // 两件套同目录：更新器默认取 UI 同目录的 aly-client.exe（非 Windows 上
+            // 调用方显式设 UpdatorExePath）。
+            UpdatorExePath = string.IsNullOrEmpty(UiExePath)
+                ? null
+                : Path.Combine(Path.GetDirectoryName(UiExePath), "aly-client.exe");
             Language = string.IsNullOrWhiteSpace(language) ? DefaultLanguage : language;
+        }
+
+        /// <summary>
+        /// 拉起 UI 前保证两件套就位（现场故障的正面修复：发布包把 aly-client /
+        /// aly-client-ui 投放到主程序目录后，UpdateFolder 缺副本时自动补齐）。
+        ///
+        /// 规则（与 self_update --include-ui 的 Go 侧语义一致）：
+        /// <list type="number">
+        /// <item>更新器副本缺失 → 用主程序目录的同名副本直接落位（否则命令起不来）；
+        /// 这一步与 UI 状态无关；</item>
+        /// <item>UI 副本与主程序目录的同名副本一致（SHA256）→ 什么都不做，
+        /// 不派进程（正常路径的零开销）；</item>
+        /// <item>UI 副本缺失/不可读/落后 → 委派 <c>self_update --include-ui</c>；
+        /// **已存在且非零字节的副本不会被替换**（可能正在运行；落后副本由 UI
+        /// 自己的启动自更新收敛）；</item>
+        /// <item>委派后 UI 仍缺 → 用主程序目录的同名副本直接落位兜底（旧版更新器
+        /// 不认识旗标 / client.json 指向别处 / 在途收尾让位等情形）；</item>
+        /// <item>本实例内只尝试一次，失败只写日志，由 Launch 的存在性检查给出 NG。</item>
+        /// </list>
+        /// </summary>
+        private void EnsurePayloadDeployed()
+        {
+            // 只试一次的守门必须是原子的：Launch 可能被宿主多线程/定时器并发调，
+            // 而 EnsurePayloadDeployed 在 _sync 之外跑（锁内做会拖住 Exited 回调）。
+            if (System.Threading.Interlocked.CompareExchange(ref _ensureAttempted, 1, 0) != 0)
+            {
+                return;
+            }
+
+            string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            string uiName = Sha256Helper.FileNameOf(UiExePath);
+            string uiSrc = string.IsNullOrEmpty(uiName) ? null : Path.Combine(baseDirectory, uiName);
+            bool uiExists = File.Exists(UiExePath);
+
+            // ① 更新器副本缺失：命令起不来，先用主程序目录的同名副本落位。
+            //    这一步与 UI 的状态无关——UI 存在时它自己的启动自更新也会补更新器，
+            //    但那条路径要等 UI 真的起来，宿主在这里补是更短的收敛路径。
+            //    **锁被占用时不补**（host-contract §8.4 不得绕锁）：另一更新流程正在
+            //    换文件，此时落位会与它抢同一批文件；UI 自己会回落到主程序目录的更新器。
+            string updaterName = Sha256Helper.FileNameOf(UpdatorExePath);
+            if (!string.IsNullOrEmpty(UpdatorExePath) && !File.Exists(UpdatorExePath))
+            {
+                string lockPath = Path.Combine(Path.GetDirectoryName(UpdatorExePath) ?? "", ".aly.lock");
+                if (File.Exists(lockPath))
+                {
+                    LogError("ensure payload: skipped updater bootstrap, another update holds " + lockPath);
+                }
+                else
+                {
+                    string updaterSrc = string.IsNullOrEmpty(updaterName)
+                        ? null
+                        : Path.Combine(baseDirectory, updaterName);
+                    if (updaterSrc != null && File.Exists(updaterSrc))
+                    {
+                        ReplaceFileDirect(updaterSrc, UpdatorExePath);
+                    }
+                }
+            }
+
+            // ② 已一致：不派进程（Launch 的高频调用路径必须零开销）
+            if (uiExists && Sha256Helper.Same(UiExePath, uiSrc))
+            {
+                return;
+            }
+            // ③ 已存在且主程序目录没有同名副本、内容可读：无从判断"落后"，不动
+            //（开发/测试布局里 BaseDirectory 可能与 client.json 的主目录不同）。
+            if (uiExists && !File.Exists(uiSrc) && Sha256Helper.Of(UiExePath) != null)
+            {
+                return;
+            }
+
+            // ④ 委派统一入口：更新器本体收敛 + UI 副本补齐（只在缺失/零字节时落位）
+            if (!string.IsNullOrEmpty(UpdatorExePath) && File.Exists(UpdatorExePath))
+            {
+                var result = AlyApi.SelfUpdateAsync(UpdatorExePath, true).Result;
+                if (result != null && result.IsSuccess)
+                {
+                    LogError("ensure payload: self_update --include-ui OK"
+                        + (result.Data == null ? "" : " ui_reason=" + result.Data.UiReason));
+                }
+                else
+                {
+                    LogError("ensure payload: self_update --include-ui failed: "
+                        + (result != null && !string.IsNullOrEmpty(result.ErrorMsg) ? result.ErrorMsg : "unknown"));
+                }
+            }
+
+            // ⑤ 后检兜底：命令返回成功但副本仍缺（旧版更新器/指向别处/在途收尾
+            //   让位）也必须补齐，否则宿主界面永远打不开。
+            if (!File.Exists(UiExePath))
+            {
+                if (uiSrc != null && File.Exists(uiSrc))
+                {
+                    ReplaceFileDirect(uiSrc, UiExePath);
+                }
+                else
+                {
+                    LogError("ensure payload: ui still missing and no same-named copy in the main folder: "
+                        + UiExePath);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 落位兜底（命令不可用 / 目标缺失时）：共享原语 + 本类日志。
+        /// </summary>
+        private static void ReplaceFileDirect(string src, string target)
+        {
+            if (!File.Exists(src))
+            {
+                LogError("payload fallback: source missing: " + src);
+                return;
+            }
+            var err = UpdaterPayloadHelper.ReplaceDirect(src, target);
+            if (err == null)
+            {
+                LogError("payload fallback OK: " + target);
+            }
+            else
+            {
+                LogError("payload fallback failed: " + target + ": " + err.Message);
+            }
+        }
+
+        /// <summary>NG 文案的诊断后缀：主程序目录有没有同名副本（现场唯一能自查的两件事之一）。</summary>
+        private string MissingPayloadHint()
+        {
+            string uiName = Sha256Helper.FileNameOf(UiExePath);
+            if (string.IsNullOrEmpty(uiName))
+            {
+                return "";
+            }
+            string src = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, uiName);
+            if (File.Exists(src))
+            {
+                return "（主程序目录里有同名的 " + uiName + "，但自动落位没成功："
+                    + "请查 <UpdateFolder>/aly-client-sdk.log 与 <UpdateFolder>/update.log，"
+                    + "并确认 UpdateFolder/client.json 的 main_exe_relative_path 指向主程序目录）";
+            }
+            return "（主程序目录里也没有 " + uiName + "：请确认发布包把 aly-client 两件套投放到主程序目录，"
+                + "并确认 UpdateFolder/client.json 的 main_exe_relative_path 指向该目录）";
+        }
+
+        /// <summary>写 SDK 诊断日志（失败静默）。</summary>
+        private static void LogError(string msg)
+        {
+            SdkLogHelper.Write(msg);
         }
 
         /// <summary>按指定模式拉起 aly-client-ui。非阻塞，立即返回。</summary>
@@ -124,10 +300,20 @@ namespace AlyClient.CSharpSDK
             if (_disposed)
                 return AlyResponse.NG("AlyUpdateUIClient has been disposed.");
 
+            // 拉起前保证两件套就位：UpdateFolder 缺 aly-client-ui(.exe) 时自动从
+            // 主程序目录补齐（发布包已把两件套投放到主程序目录）。失败不抛异常，
+            // 由下面的存在性检查给出可诊断的 NG。
+            try
+            {
+                EnsurePayloadDeployed();
+            }
+            catch (Exception ex)
+            {
+                LogError("ensure payload threw: " + ex.Message);
+            }
+
             if (!File.Exists(UiExePath))
-                return AlyResponse.NG("aly-client-ui.exe not found: " + UiExePath
-                    + "（请确认 UpdateFolder 已部署：GUI 初始化项目时会从 AlyPublish 包复制，"
-                    + "或按 client/<rid>/ 布局手工放置 aly-client-ui.exe）");
+                return AlyResponse.NG("aly-client-ui.exe not found: " + UiExePath + MissingPayloadHint());
 
             lock (_sync)
             {

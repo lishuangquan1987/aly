@@ -1,0 +1,11 @@
+{
+  "name": "self_update_include_ui",
+  "description": "self_update --include-ui：更新器本体已是最新（updated=false），图形前端副本缺失由命令从主程序目录补齐（ui_reason=replaced，ui_updated=true）。门住 SelfUpdateData 的 ui_* 可选字段反序列化。",
+  "commands": {
+    "self_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"updated": false, "reason": "already_up_to_date", "ui_updated": true, "ui_reason": "replaced"}}
+      ]
+    }
+  }
+}

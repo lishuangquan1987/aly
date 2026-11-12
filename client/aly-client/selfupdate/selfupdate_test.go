@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -19,8 +20,16 @@ func mkTmp(t *testing.T) (string, func()) {
 	return dir, func() { os.RemoveAll(dir) }
 }
 
+// writeF 写文件；父目录缺失时先建出来（两件套测试的目标都在 UpdateFolder/
+// 子目录下，逐个用例重复 mkdir 没有意义）。
 func writeF(t *testing.T, path, content string) {
 	t.Helper()
+	dir := filepath.Dir(path)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
 	if err := ioutil.WriteFile(path, []byte(content), 0755); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
@@ -278,6 +287,222 @@ func TestReplaceRunningSelfPrepareFailureKeepsSelf(t *testing.T) {
 		if _, statErr := os.Stat(p); !os.IsNotExist(statErr) {
 			t.Fatalf("%s must not be created on prepare failure (err=%v)", p, statErr)
 		}
+	}
+}
+
+// ────────────────────────────────────────────────────────────────
+// SyncFile：两件套同步（self_update --include-ui 的执行层）
+//
+// 覆盖矩阵：
+//	源缺失        → source_missing（不算错误，副本不动）
+//	补齐：缺目标  → 从源落位（无 .old）
+//	补齐：零字节  → 同上（中断写下不是可用副本）
+//	补齐：已存在  → existing_kepped（不替换可能正在运行的 UI 镜像）
+//	收尾在途      → pending_inflight（journal pending 让位）
+//	收敛：差异    → 先备后换 + .old 备份 + 幂等回归
+//	收敛：缺目标  → 报错（更新器本体的异常现场口径）
+// ────────────────────────────────────────────────────────────────
+
+func TestSyncFileSourceMissing(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	src := filepath.Join(dir, "aly-client-ui.exe")
+	dst := filepath.Join(dir, "UpdateFolder", "aly-client-ui.exe")
+	writeF(t, dst, "running")
+
+	res, err := SyncFile(src, dst, SyncPolicy{BootstrapOnly: true}, Options{Retries: 1, Delay: time.Millisecond})
+	if err != nil {
+		t.Fatalf("source missing must not be an error: %v", err)
+	}
+	if res.Reason != ReasonSourceMissing || res.Updated {
+		t.Fatalf("res = %+v; want reason=source_missing updated=false", res)
+	}
+	if got := readF(t, dst); got != "running" {
+		t.Fatalf("dst must be untouched, got %q", got)
+	}
+}
+
+func TestSyncFileBootstrapMissingDst(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	src := filepath.Join(dir, "aly-client-ui.exe")
+	dst := filepath.Join(dir, "UpdateFolder", "aly-client-ui.exe")
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	writeF(t, src, "ui-v2")
+
+	res, err := SyncFile(src, dst, SyncPolicy{BootstrapOnly: true}, Options{Retries: 1, Delay: time.Millisecond})
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	if !res.Updated || res.Reason != ReasonReplaced {
+		t.Fatalf("res = %+v; want updated=true reason=replaced", res)
+	}
+	if res.OldPath != "" {
+		t.Fatalf("bootstrap must not produce .old, got %q", res.OldPath)
+	}
+	if got := readF(t, dst); got != "ui-v2" {
+		t.Fatalf("dst = %q; want ui-v2", got)
+	}
+	if res.Name != "aly-client-ui.exe" {
+		t.Fatalf("res.Name = %q; want the base name of the target", res.Name)
+	}
+	// 可执行位（非 Windows；Windows 的 Chmod 只映射只读位）
+	if runtime.GOOS != "windows" {
+		fi, statErr := os.Stat(dst)
+		if statErr != nil {
+			t.Fatalf("stat dst: %v", statErr)
+		}
+		if fi.Mode()&0100 == 0 {
+			t.Fatalf("exec bit lost on bootstrap: %v", fi.Mode())
+		}
+	}
+}
+
+func TestSyncFileZeroByteDstBootstraps(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	src := filepath.Join(dir, "aly-client-ui.exe")
+	dst := filepath.Join(dir, "UpdateFolder", "aly-client-ui.exe")
+	writeF(t, src, "ui-v2")
+	writeF(t, dst, "")
+
+	res, err := SyncFile(src, dst, SyncPolicy{BootstrapOnly: true}, Options{Retries: 1, Delay: time.Millisecond})
+	if err != nil {
+		t.Fatalf("zero-byte dst: %v", err)
+	}
+	if !res.Updated || res.Reason != ReasonReplaced {
+		t.Fatalf("res = %+v; want bootstrap of a zero-byte dst", res)
+	}
+	if got := readF(t, dst); got != "ui-v2" {
+		t.Fatalf("dst = %q; want ui-v2", got)
+	}
+}
+
+func TestSyncFileExistingIsKeppedInBootstrapOnly(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	src := filepath.Join(dir, "aly-client-ui.exe")
+	dst := filepath.Join(dir, "UpdateFolder", "aly-client-ui.exe")
+	writeF(t, src, "ui-v2")
+	// 目标已存在但落后（可能正在运行）：补齐语义下必须原样不动
+	writeF(t, dst, "ui-v1")
+
+	res, err := SyncFile(src, dst, SyncPolicy{BootstrapOnly: true}, Options{Retries: 1, Delay: time.Millisecond})
+	if err != nil {
+		t.Fatalf("existing dst: %v", err)
+	}
+	if res.Updated || res.Reason != ReasonExistingKepped {
+		t.Fatalf("res = %+v; want reason=existing_kepped updated=false", res)
+	}
+	if got := readF(t, dst); got != "ui-v1" {
+		t.Fatalf("dst must be kept as-is, got %q", got)
+	}
+}
+
+func TestSyncFilePendingJournalSkips(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	src := filepath.Join(dir, "aly-client-ui.exe")
+	dst := filepath.Join(dir, "UpdateFolder", "aly-client-ui.exe")
+	writeF(t, src, "ui-v2")
+	writeF(t, dst, "ui-v1")
+	SaveJournal(JournalPath(dst), Journal{Pending: true, Count: 1})
+
+	res, err := SyncFile(src, dst, SyncPolicy{BootstrapOnly: true}, Options{Retries: 1, Delay: time.Millisecond})
+	if err != nil {
+		t.Fatalf("pending journal: %v", err)
+	}
+	if res.Reason != ReasonPendingInFlight || res.Updated {
+		t.Fatalf("res = %+v; want reason=pending_inflight (an in-flight finisher must not be queued)", res)
+	}
+	if got := readF(t, dst); got != "ui-v1" {
+		t.Fatalf("dst must be untouched while a finisher is in flight, got %q", got)
+	}
+}
+
+func TestSyncFileNonBootstrapReplacesAndKeepsOld(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	src := filepath.Join(dir, "aly-client.exe")
+	dst := filepath.Join(dir, "UpdateFolder", "aly-client.exe")
+	writeF(t, src, "V2-from-package")
+	writeF(t, dst, "V1-running")
+
+	res, err := SyncFile(src, dst, SyncPolicy{BootstrapOnly: false}, Options{Retries: 1, Delay: time.Millisecond})
+	if err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+	if !res.Updated || res.Reason != ReasonReplaced || res.OldPath == "" {
+		t.Fatalf("res = %+v; want updated=true reason=replaced with old_path", res)
+	}
+	if got := readF(t, dst); got != "V2-from-package" {
+		t.Fatalf("dst = %q; want the new version", got)
+	}
+	if got := readF(t, res.OldPath); got != "V1-running" {
+		t.Fatalf(".old = %q; want the previous version", got)
+	}
+
+	// 幂等回归：再调 → 一致跳过并清理 .old
+	res2, err := SyncFile(src, dst, SyncPolicy{BootstrapOnly: false}, Options{Retries: 1, Delay: time.Millisecond})
+	if err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	if res2.Updated || res2.Reason != ReasonAlreadyUpToDate {
+		t.Fatalf("res2 = %+v; want already_up_to_date", res2)
+	}
+	if _, err := os.Stat(res.OldPath); !os.IsNotExist(err) {
+		t.Fatalf(".old should be cleaned in the up-to-date path (err=%v)", err)
+	}
+}
+
+func TestSyncFileNonBootstrapMissingDstIsError(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	src := filepath.Join(dir, "aly-client.exe")
+	dst := filepath.Join(dir, "UpdateFolder", "aly-client.exe")
+	writeF(t, src, "V2")
+
+	_, err := SyncFile(src, dst, SyncPolicy{BootstrapOnly: false, DstMissingIsError: true},
+		Options{Retries: 1, Delay: time.Millisecond})
+	if err == nil {
+		t.Fatal("missing dst must be an error in the non-bootstrap policy")
+	}
+	// 既有口径：错误文案必须含 compare 阶段标识（运维日志与单测都据此判定）
+	if !strings.Contains(err.Error(), "compare self vs source") {
+		t.Fatalf("error = %v; want compare stage failure", err)
+	}
+	if _, err := os.Stat(dst); !os.IsNotExist(err) {
+		t.Fatalf("nothing must be created on the error path (err=%v)", err)
+	}
+}
+
+func TestSyncFilePosixNameIsSupported(t *testing.T) {
+	dir, cleanup := mkTmp(t)
+	defer cleanup()
+
+	// Linux 形态：无扩展名。名字只是文件名，落位逻辑不得依赖扩展名。
+	src := filepath.Join(dir, "aly-client-ui")
+	dst := filepath.Join(dir, "UpdateFolder", "aly-client-ui")
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	writeF(t, src, "ui")
+
+	res, err := SyncFile(src, dst, SyncPolicy{BootstrapOnly: true}, Options{Retries: 1, Delay: time.Millisecond})
+	if err != nil {
+		t.Fatalf("posix name: %v", err)
+	}
+	if !res.Updated || res.Name != "aly-client-ui" {
+		t.Fatalf("res = %+v; want a landed copy named aly-client-ui", res)
 	}
 }
 

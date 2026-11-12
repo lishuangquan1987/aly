@@ -39,7 +39,7 @@ aly-client.exe <命令> [选项]
 | `rollback` | 回滚到指定版本 |
 | `clean` | 清理历史版本快照与临时文件 |
 | `check_self_update` | 检查更新程序自身是否需要更新 |
-| `self_update` | 用主程序目录的新版更新器替换自身（自更新执行） |
+| `self_update` | 用主程序目录的新版更新器替换自身（自更新执行）；`--include-ui` 顺带补齐图形前端副本 |
 
 ---
 
@@ -565,10 +565,32 @@ aly-client.exe check_self_update --main-exe-path ../MyApp/MyApp.exe
 **用法**：
 
 ```bash
-aly-client.exe self_update [--main-exe-path <路径>]
+aly-client.exe self_update [--main-exe-path <路径>] [--include-ui]
 ```
 
-**参数**：同 `check_self_update`（`--main-exe-path` 可选）。
+**参数**：同 `check_self_update`（`--main-exe-path` 可选），另有：
+
+| 参数 | 语义 |
+|---|---|
+| `--include-ui` | 顺带**补齐图形前端副本**：`<主程序目录>/aly-client-ui(.exe)` → `UpdateFolder` 同名副本，**只在 UpdateFolder 里缺失或为 0 字节时**落位。副本已存在时一律不动（它可能正在运行；落后副本由 UI 自己的启动自更新收敛）。结果写入 data 的 `ui_updated` / `ui_reason` / `ui_old_path`（协议 1.1.0 新增的可选字段） |
+
+**`--include-ui` 的四种口径**：
+
+| `ui_reason` | 含义 |
+|---|---|
+| `replaced` | 副本缺失/0 字节 → 从主程序目录落位（`ui_updated=true`，不产生 `.old`） |
+| `existing_kepped` | 副本已存在 → 一律不动（不替换运行中的 UI 镜像） |
+| `pending_inflight` | `<ui>.selfupdate.json` 的 `pending=true`（UI 收尾进程在途）→ 让位，不插队 |
+| `source_missing` | 主程序目录没有该副本 → 跳过，不算错误 |
+
+> **为什么只补齐不替换**：`--include-ui` 的目标场景是“UI 还缺着”（首次部署、
+> 被杀软吃掉、崩溃现场）。已存在但落后的副本由 UI 自己的启动自更新
+> （`UpdateSelfUI` + `-finish-self-update`）收敛，命令不碰它——于是这条路径
+> 永远不会替换正在运行的 UI 镜像，也不需要（也无法跨平台廉价地）判断“UI 是否在跑”。
+>
+> **谁调用**：C# SDK 的 `AlyUpdateUIClient.Launch*` 在拉起 UI 前委派本命令；
+> winui/linuxui 自己的启动自更新**不带**本旗标（它们只同步更新器本体，UI 自身
+> 走收尾路径）；运维/裸控制台部署可在首次 `check_update` 前手工调一次。
 
 **实现逻辑**：
 
@@ -599,6 +621,12 @@ aly-client.exe self_update [--main-exe-path <路径>]
 
 // 主程序目录没有更新器（首次部署，跳过不算错误）
 {"isSuccess":true,"errorMsg":"","data":{"updated":false,"reason":"source_missing"}}
+
+// --include-ui：更新器本体已是最新，图形前端副本缺失 → 从主程序目录补齐
+{"isSuccess":true,"errorMsg":"","data":{"updated":false,"reason":"already_up_to_date","ui_updated":true,"ui_reason":"replaced"}}
+
+// --include-ui：图形前端副本已存在（落后也不动，交给 UI 自己的启动自更新）
+{"isSuccess":true,"errorMsg":"","data":{"updated":false,"reason":"already_up_to_date","ui_updated":false,"ui_reason":"existing_kepped"}}
 
 // 另一更新（apply/download/rollback）持锁：宿主记录后下次启动再试，不要当启动失败
 {"isSuccess":false,"errorMsg":"另一更新正在进行中，请稍后重试","data":null}

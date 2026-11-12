@@ -125,9 +125,13 @@ Checks whether the updater's own copy is behind the copy in the main application
 
 ```csharp
 public static Task<AlyResponse<SelfUpdateData>> SelfUpdateAsync(string alyExePath)
+
+public static Task<AlyResponse<SelfUpdateData>> SelfUpdateAsync(string alyExePath, bool includeUi)
 ```
 
 Performs the updater self-update: after comparing SHA256, replaces the running copy in `UpdateFolder` with the `aly-client.exe` distributed with the version in the main application directory. Idempotent; a missing source or an already up-to-date copy also returns `IsSuccess=true`, with `SelfUpdateData.Reason` being `source_missing` or `already_up_to_date`.
+
+`includeUi: true` (equivalent to the command line `self_update --include-ui`) also **bootstraps the GUI front-end copy**: `aly-client-ui(.exe)` is placed from the main application directory **only when it is missing or 0 bytes** in `UpdateFolder`; an existing copy is never touched (it may be running, and an outdated copy is converged by the UI's own startup self-update). The result lands in the optional `SelfUpdateData` properties `UiUpdated` / `UiReason` / `UiOldPath`, with `UiReason` being `replaced` / `existing_kepped` / `pending_inflight` / `source_missing`. Available since protocol 1.1.0 (older SDKs ignore unknown fields when deserializing).
 
 #### `CheckUpdateAsync`
 

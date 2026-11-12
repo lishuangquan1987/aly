@@ -180,16 +180,35 @@ None ──check: has_update && need_download──▶ DiscoveredUpdate
 
 ---
 
-## 8. 自更新（更新器自身）
+## 8. 自更新（更新器两件套）
 
 1. SDK/UI 启动时**应该**先执行 `check_self_update`，再按需委派 `self_update`。
-2. `self_update` 是统一执行入口：取 `.aly.lock`，用主程序目录中的新副本替换 `UpdateFolder`
-   中的运行副本。
+2. `self_update` 是更新器本体的统一执行入口：取 `.aly.lock`，用主程序目录中的新副本替换
+   `UpdateFolder` 中的运行副本。
 3. 回退规则：仅当主程序目录中的源副本缺失，或 `self_update` 命令失败且 `.aly.lock` **不存在**时，
    SDK 才可以做“临时文件 + SHA256 校验 + 原子替换”的本地兜底。
 4. 锁被占用时**不得**走兜底（否则绕过更新锁，与另一更新流程互相破坏）。
 5. `self_update` 幂等：已是最新或源缺失都返回 `isSuccess=true`，用 `reason` 区分
    （`already_up_to_date` / `source_missing`）。重复调用只多一次进程创建。
+6. **两件套补齐**：`self_update --include-ui` 是“更新器本体收敛 + 图形前端副本补齐”的
+   唯一入口。图形前端（`aly-client-ui.exe` / Linux `aly-client-ui`）**只在 `UpdateFolder`
+   中缺失或为 0 字节时**从主程序目录落位，`ui_reason=replaced`；副本已存在时一律
+   `ui_reason=existing_kepped`（不替换可能正在运行的 UI 镜像——已存在但落后的副本由 UI 自己的
+   启动自更新 `UpdateSelfUI` + `-finish-self-update` 收敛）；`<ui>.selfupdate.json` 的
+   `pending=true`（收尾进程在途）时 `ui_reason=pending_inflight`（不得插队）；
+   主程序目录没有该副本时 `ui_reason=source_missing`（不算错误）。UI 侧落位的**硬失败**是命令失败
+   （`isSuccess=false`），不得把“两件套不齐”报成成功。
+7. **需要 UI 的调用方**（如 C# SDK 的 `AlyUpdateUIClient`）在拉起 UI 前**必须**保证
+   `UpdateFolder` 内的 UI 副本存在：优先委派 `self_update --include-ui`，命令不可用或返回后副本
+   仍缺时，才允许“临时文件 + SHA256 校验 + 落位”的本地兜底。UI 文件的这道兜底**不受
+   `.aly.lock` 阻止**（UI 副本不属于版本载荷，落位幂等且带校验）；更新器本体的兜底仍严守第 3/4 条。
+   同一进程内**不得**无界地重复尝试补齐（应只试一次，失败按 NG 上报）。
+8. **首次部署边界**：`UpdateFolder` 里连一个可运行更新器都没有时（全新机器），先由安装包 /
+   发布 GUI（`UpdateFolderService.Create/RefrshUpdaters`）或调用方的本地兜底完成首次落位；
+   `self_update` 的工作目录是 `UpdateFolder`，不是“从零引导”的工具。
+9. 主程序目录与 `UpdateFolder` 中的两件套副本**同名**（Windows `aly-client.exe` /
+   `aly-client-ui.exe`；Linux `aly-client` / `aly-client-ui`），这是“按目标副本名推导源副本名”
+   的跨平台依据。
 
 ---
 
@@ -300,7 +319,7 @@ PackageFolder/
 | `rollback` | `RollbackData` | 单行 | 崩溃恢复分支可能 `data:null` |
 | `list_rollback_versions` | `RollbackListData` | 单行 | |
 | `check_self_update` | `CheckSelfUpdateData` | 单行 | |
-| `self_update` | `SelfUpdateData` | 单行 | |
+| `self_update` | `SelfUpdateData` | 单行 | `--include-ui` 时 data 另带 `ui_updated` / `ui_reason` / `ui_old_path`（可选，见 §8.6） |
 | `clean` | `CleanData` | 单行 | 运维/计划任务用 |
 
 ---

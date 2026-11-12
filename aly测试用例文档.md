@@ -9,11 +9,15 @@
 > - 新增：**130–135**（自更新统一：`self_update` 执行命令、UI/SDK 委派与兜底、
 >   UI 防循环、UI 自身 `-finish-self-update` 收尾，2026-11-09 加入并已在 Windows
 >   实机执行；见 §十一·补五）
+> - 新增：**136–137**（两件套补齐：`self_update --include-ui` 的四种口径 +
+>   SDK `AlyUpdateUIClient.Launch` 拉起前自动落位，2026-11-12 加入并在 Windows
+>   实机执行；见 §十一·补六）
 > - 编号：**连续 1..N**，无分组前缀，无优先级列
 > - 每条用例自带完整的 **前置条件 → 步骤 → 期望结果 → 失败判定**，只看单条即可独立复现
 > - 全部代码示例使用 **Go**（测试驱动框架见 §〇）
 > - 实测状态：**131 PASS / 0 FAIL / 1 SKIP / 3 未执行**（135 条；2026-11-09 定点回归
->   130–135 + 42/94，明细见附录 B）
+>   130–135 + 42/94，明细见附录 B）；2026-11-12 追加 **136–137 2/2 PASS** 与
+>   124 / 130–135 定点回归 **7/7 PASS**（明细见附录 B）
 
 ---
 
@@ -395,6 +399,8 @@ func TestCase01(t *testing.T) {
 | 133 | UI 防循环 + 委派更新器 | 自更新 | journal 连续 3 次未收敛跳过 UI 自身替换；同时委派 `self_update` 同步 `aly-client.exe`（`.old` 为证） |
 | 134 | SDK 委派 self_update | 自更新 | `AlyUpdateClient` 构造函数同步 `aly-client.exe`（`.old` 为证） |
 | 135 | UI 自身收尾替换 | 自更新 | `-finish-self-update` 等旧进程退出 + `.old` 备份 + 重启 |
+| 136 | `self_update --include-ui` 两件套 | 自更新 | 缺 UI 副本→`replaced`；已存在→`existing_kepped`（不替换运行中的镜像）；收尾在途→`pending_inflight`；源缺失→`source_missing`；不带旗标→`ui_*` 缺省 |
+| 137 | SDK 拉起前自动落位 | SDK | 现场故障：UpdateFolder 缺 UI、主程序目录有 → `LauchAuto` 自动落位且 SHA 收敛；两处都缺 → NG 不抛异常；同一实例内不重复尝试 |
 
 ---
 
@@ -8010,6 +8016,92 @@ journal `count=0`。
 
 ---
 
+## 十一·补六、两件套补齐（136–137）
+
+> 背景（现场故障）：发布包把 `aly-client` / `aly-client-ui` 两件套投放到**主程序目录**
+> （`ApplicationFolder/`，`deploy-client.go`、publish GUI 的 `UpdateFolderService`、
+> `deploy-client-linux.sh` 都按“同名两件套”布局），但 `UpdateFolder` 里没有 UI 副本时，
+> 宿主调 `AlyUpdateUIClient.LaunchAuto()` 只会拿到
+> `aly-client-ui.exe not found: <UpdateFolder>\aly-client-ui.exe`（车间现场截图现象）。
+> 修复分两层：`self_update --include-ui`（Go 侧补齐，只在缺失/0 字节时落位）与
+> SDK `AlyUpdateUIClient.Launch` 的“拉起前保证两件套就位”。实现见
+> `test/tc/cases_136_137_test.go`、`client/aly-client/{cmd/self_update.go,selfupdate/selfupdate.go}`、
+> `client/aly-client-sdk/AlyClient.CSharpSDK/AlyClient.CSharpSDK/{AlyApi.cs,AlyUpdateUIClient.cs,UpdaterPayloadHelper.cs}`。
+
+### 用例 136 — `self_update --include-ui`：图形前端补齐的四种口径
+
+**前置条件**
+
+1. 客户端现场：`UpdateFolder/` 内有 `aly-client.exe`（随测试构建的真实更新器）+ `client.json`
+   + `version.json`；`ApplicationFolder/app.exe` 内容 `app-100`。
+2. 主程序目录放一份与 `UpdateFolder` 一致的 `aly-client.exe`（本体走一致跳过分支），
+   以及一份 UI 副本（任意可读文件充当，本用例只钉落位语义）。
+3. `UpdateFolder` 里**没有** `aly-client-ui.exe`（现场故障形态）。
+
+**步骤**
+
+1. `aly-client.exe self_update --include-ui` → ① 落位；
+2. 主目录 UI 副本换成更新内容，重跑 → ② 已存在口径；
+3. 预置 `<ui>.selfupdate.json` 的 `pending=true`，重跑 → ③ 收尾在途口径；
+4. 删掉主目录 UI 副本，重跑 → ④ 源缺失口径；
+5. 不带旗标重跑 → ⑤ 回归。
+
+**期望结果**
+
+- ① `ui_updated=true`、`ui_reason=replaced`、落位副本与主目录副本 SHA256 一致、无 `.old`；
+- ② `ui_reason=existing_kepped` 且副本内容原样（**不替换可能正在运行的 UI 镜像**）；
+- ③ `ui_reason=pending_inflight`，副本原样；
+- ④ `ui_reason=source_missing`，`isSuccess=true`（源缺失不算错误）；
+- ⑤ `ui_updated=false` 且 `ui_reason` / `ui_old_path` 缺省（既有行为逐字节不变）。
+
+**失败判定**
+
+- 已存在的副本被改写 → FAIL（会与运行中的 UI 镜像/在途收尾进程打架）；
+- 源缺失被当命令失败 → FAIL（首次部署会刷错误日志）；
+- 不带旗标却出现 `ui_*` → FAIL（既有调用方行为被改）。
+
+执行结果：**PASS（5.70s）**；单元层 `selfupdate` 新增 8 个 `SyncFile` 测试、
+`cmd` 新增 6 个 `--include-ui` 测试同轮 PASS。
+
+### 用例 137 — SDK `AlyUpdateUIClient.Launch` 拉起前自动落位（sd17）
+
+**前置条件**
+
+1. 客户端现场同用例 136（`UpdateFolder` 无 UI 副本）。
+2. 主程序目录有同名 `aly-client-ui.exe`（用非可执行文件充当：启动失败属预期，
+   本用例只钉**落位与失败路径**，不复现窗口；启动成功路径由用例 94 覆盖）。
+3. `AlySdkSmoke` 以 `sd17` 驱动，环境变量 `ALY_EXPECT_UI_SHA` 传主目录副本的 SHA256。
+
+**步骤**
+
+1. `e.RunSmokeEnv(t, smoke, "sd17", c, {"ALY_EXPECT_UI_SHA": expected})`。
+
+**期望结果**
+
+- sd17 `FAIL=0` 且输出含 `SD17`，以下断言逐条 PASS：
+  ① 缺 UI 副本时 `LauchAuto` 自动从主程序目录落位且 SHA256 一致；
+  ② 两处都缺 → NG + 可诊断 `errorMsg`（含 `not found`/`aly-client-ui`），不抛异常、不触发 `Started`；
+  ③ 同一实例内不重复尝试补齐（失败后再造同名源也不落位 → 防宿主定时重试造成进程/IO 风暴）；
+  ④ 副本已一致时 `Launch` 不改写它；
+- e2e 侧独立复核：`UpdateFolder/aly-client-ui.exe` 的 SHA256 == 主目录副本。
+
+**失败判定**
+
+- 缺副本时仍只返回 `not found`（没有落位）→ FAIL（现场故障未修复）；
+- 落位后 SHA256 不一致 → FAIL（副本损坏会被反复拉起失败）；
+- 失败路径抛异常 / 触发 `Started` → FAIL（宿主界面会崩或误判"窗口已开"）；
+- 第二次 `Launch` 重复落位 → FAIL（拒绝服务式重试）。
+
+执行结果：**PASS（14.35s）**；sd17 `SUMMARY: PASS=8 FAIL=0`。
+同轮定点回归：**124 PASS（12.19s）、130 PASS（5.55s）、131 PASS（8.24s）、
+132 PASS（4.19s）、133 PASS（44.20s）、134 PASS（9.16s）、135 PASS（29.00s）**。
+
+> **测试基础设施修正（同轮）**：`test/tc/env.go` 的 `cleanEnv` 原来漏剔 `GOROOT`，
+> 导致用 1.27.3 工具链跑 `test/tc` 时，子进程的 1.10.8（XP 轨）构建会去编 1.27.3 的
+> stdlib，`BuildUI` 直接失败 → 133/135 假红。加进剔除表后 133/135 恢复 PASS。
+
+---
+
 ## 附录 A：故障注入手法速查
 
 > 用例 18–25、36–39、116–124 大量依赖"制造异常现场"。这些手法都在 `test/tc/` 里有现成函数，**不要自己发明 sleep 猜时序**。
@@ -8212,6 +8304,9 @@ journal `count=0`。
 | 133 | UI 防循环 + 委派更新器 | PASS | 43.61s | 2026-11-09 新增；journal count=3 跳过 UI 自身替换；同时 `UpdateUpdater` 委派 `self_update` 同步 `aly-client.exe`（`.old` 为证）；`RunUIModeAuto` 点掉项目名模态框 |
 | 134 | SDK 委派 self_update | PASS | 32.56s | 2026-11-09 新增；sd16 `PASS=1 FAIL=0`；构造函数同步更新器且 `.old` 存在 |
 | 135 | UI 自身收尾替换 | PASS | 36.86s | 2026-11-09 新增；`-finish-self-update` 等旧进程退出/防 PID 复用/改名 `.old`/重启；日志含 `finish OK`、journal 清零 |
+| 136 | `self_update --include-ui` 两件套 | PASS | 5.70s | 2026-11-12 新增；Windows 实跑。单元层：`selfupdate` 新增 8 个 `SyncFile` 测试、`cmd` 新增 6 个 `--include-ui` 测试（含不带旗标 `ui_*` 缺省）同轮 PASS |
+| 137 | SDK 拉起前自动落位（sd17） | PASS | 14.35s | 2026-11-12 新增；现场故障复现：UpdateFolder 缺 UI、主程序目录有 → `LauchAuto` 自动落位且 SHA256 一致；两处都缺 → NG 不抛异常/不 Started；同实例不重复尝试；sd17 `PASS=8 FAIL=0` |
+| — | 同轮定点回归（124+130–135） | PASS | 7/7 | 2026-11-12；124 12.19s / 130 5.55s / 131 8.24s / 132 4.19s / 133 44.20s / 134 9.16s / 135 29.00s。测试基础设施修正：`test/tc/env.go` 的 `cleanEnv` 补剔 `GOROOT`（否则 1.10.8 子构建会去编 1.27.3 stdlib，133/135 假红） |
 
 **汇总**
 

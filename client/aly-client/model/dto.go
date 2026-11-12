@@ -121,11 +121,18 @@ type RollbackData struct {
 
 // SelfUpdateData 是 self_update 命令 data 字段：
 //   - updated=false 时 reason 说明跳过原因（source_missing / already_up_to_date）；
-//   - updated=true 时 old_path 携带被替换下来的旧版备份路径（.old）。
+//   - updated=true 时 old_path 携带被替换下来的旧版备份路径（.old）；
+//   - 带 --include-ui 时 ui_* 描述图形前端副本（aly-client-ui(.exe)）的补齐结果：
+//     只在目标缺失/零字节时落位（ui_reason=replaced），已存在时 existing_kepped，
+//     有收尾进程在途时 pending_inflight，源缺失时 source_missing。不带该旗标时
+//     三个字段缺省（omitempty）。
 type SelfUpdateData struct {
-	Updated bool   `json:"updated"`
-	Reason  string `json:"reason"`
-	OldPath string `json:"old_path,omitempty"`
+	Updated   bool   `json:"updated"`
+	Reason    string `json:"reason"`
+	OldPath   string `json:"old_path,omitempty"`
+	UIUpdated bool   `json:"ui_updated,omitempty"`
+	UIReason  string `json:"ui_reason,omitempty"`
+	UIOldPath string `json:"ui_old_path,omitempty"`
 }
 
 // CheckSelfUpdateData 是 check_self_update 命令 data 字段

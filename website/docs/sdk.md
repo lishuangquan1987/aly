@@ -229,7 +229,7 @@ class Program
 
 - `Launch` 是非阻塞的，只负责拉起进程；下载、应用、关闭并重启主程序都在 UI 里完成。
 - **单实例**：本对象持有的进程还活着时再次 `Launch`，SDK 直接返回 `IsSuccess=true`，不会再拉起第二个进程。若窗口不是由本对象拉起的（例如用户从开始菜单打开，或另一处代码拉过），`Launch` 仍会启动新进程，该进程通过命名事件把「手动检查请求」转发给既有实例，然后以退出码 0 结束——这是正常路径，宿主不需要区分「新窗口」和「既有实例接管」。
-- `aly-client-ui.exe` 必须存在：缺失时 `Launch` 返回 `IsSuccess=false`，`ErrorMsg` 为 `aly-client-ui.exe not found: <路径>`。
+- `aly-client-ui.exe` 必须存在：缺失时 `Launch` 返回 `IsSuccess=false`，`ErrorMsg` 为 `aly-client-ui.exe not found: <路径>`。**注意**：`Launch*` 会先做一次“两件套就位”（主程序目录有同名副本时自动补齐到 `UpdateFolder`，同一实例内只尝试一次），所以“缺副本”的失败通常意味着主程序目录里也没有该副本、或 `client.json` 的 `main_exe_relative_path` 指向别处。
 - `apply_update` 之后 UI 会按 `client.json` 关闭并重启主程序，宿主不需要自己重启。
 - `Dispose` 只释放 `Process` 句柄、退订事件，**不会结束**已经在运行的 UI 窗口。
 - 不需要自绘界面以外的窗口时，改用下面的 `AlyUpdateClient`；更新器与 GUI 都由 AlyPublish 安装包提供，构建期 targets 不再下载任何东西。
@@ -418,7 +418,7 @@ SDK 包里的 `AlyClient.CSharpSDK.targets` 在宿主构建时执行 `AlyDeployT
 | 在 UI 线程 `.Result` 后界面假死 | `check_update` 默认最多等 30 秒，`download_update` 可能更久。放到后台线程调用 |
 | `apply` 之后宿主还在收尾，结果进程突然消失 | `ApplyUpdateAsync` 是拉起独立进程后立即返回，`apply_update` 会关闭当前进程。不要在它之后做清理工作，把清理放到退出钩子里 |
 | Linux 上找不到更新器 | 默认路径是 Windows 形式的 `..\UpdateFolder\aly-client.exe`，Linux 上没有 `.exe` 且反斜杠不是分隔符。显式传路径：`new AlyUpdateClient("/opt/app/UpdateFolder/aly-client")` |
-| `LaunchAuto` 返回失败说找不到 `aly-client-ui.exe` | `UpdateFolder` 里没有 GUI 前端：从安装包取 `client/<rid>/aly-client-ui(.exe)` 放进 `UpdateFolder/`，或改用 `AlyUpdateClient` |
+| `LaunchAuto` 返回失败说找不到 `aly-client-ui.exe` | 先看主程序目录（`AppDomain.BaseDirectory`）里有没有同名的 `aly-client-ui(.exe)`：有但没落位 → 查 `<UpdateFolder>/aly-client-sdk.log` 与 `update.log`，并确认 `UpdateFolder/client.json` 的 `main_exe_relative_path` 指向主程序目录；主程序目录里也没有 → 发布包没有把两件套投放到主程序目录（从安装包取 `client/<rid>/aly-client-ui(.exe)` 补上），或改用 `AlyUpdateClient` |
 | 两个更新窗口同时出现 | 一个宿主里同时启用了 `AlyUpdateUIClient` 与 `AlyUpdateClient`。只保留一种 |
 | 关闭宿主时卡住几秒 | `Dispose` 会等后台循环退出，最长 5 秒；轮询睡眠本身是可中断的，不会睡满一个空闲周期 |
 

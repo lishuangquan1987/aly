@@ -23,10 +23,22 @@ namespace AlyClient.CSharpSDK
         /// <summary>
         /// 执行更新器自更新（self_update）：按 SHA256 比较后，用主程序目录随版本
         /// 分发的 aly-client.exe 替换 UpdateFolder 中正在运行的副本。幂等；源缺失/
-        /// 已是最新都返回 isSuccess=true。
+        /// 已是最新都返回 isSuccess=true。不触碰图形前端副本。
         /// </summary>
         public static Task<AlyResponse<SelfUpdateData>> SelfUpdateAsync(string alyExePath)
-            => RunAsync<SelfUpdateData>("self_update", alyExePath);
+            => SelfUpdateAsync(alyExePath, false);
+
+        /// <summary>
+        /// 执行更新器自更新并顺带补齐图形前端副本（self_update --include-ui）：
+        /// 更新器本体按 SHA256 收敛；aly-client-ui(.exe) **只在 UpdateFolder 中
+        /// 缺失/零字节时**从主程序目录落位。已存在的副本一律不动（它可能正在
+        /// 运行，落后副本由 UI 自己的启动自更新收敛），因此带该旗标的调用是
+        /// 安全的：不会替换运行中的 UI 镜像，也不会与在途的收尾进程插队。
+        /// data 里的 UiReason 说明 UI 侧口径（replaced / existing_kepped /
+        /// pending_inflight / source_missing）。幂等；源缺失仍 isSuccess=true。
+        /// </summary>
+        public static Task<AlyResponse<SelfUpdateData>> SelfUpdateAsync(string alyExePath, bool includeUi)
+            => RunAsync<SelfUpdateData>(includeUi ? "self_update --include-ui" : "self_update", alyExePath);
 
         /// <summary>
         /// 检查应用是否有新版本可更新。服务器不可达时返回 has_update=false

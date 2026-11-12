@@ -172,6 +172,20 @@ func UpdaterFileName() string {
 	return "aly-client"
 }
 
+// UIFileName 返回当前平台的图形前端文件名：
+// Windows 为 aly-client-ui.exe，Linux/其他 Unix 为 aly-client-ui。
+//
+// 与 UpdaterFileName 同款。两件套遵守"主程序目录与 UpdateFolder 中的副本同名"
+// 的约定（deploy/deploy-client.go、client/aly-client-ui/deploy-client-linux.sh、
+// publish-gui 的 CopyUpdaters 都按同名复制），因此"按目标副本名推导源副本名"
+// 在两个平台上都成立——这是 self_update --include-ui 无需平台分支的依据。
+func UIFileName() string {
+	if runtime.GOOS == "windows" {
+		return "aly-client-ui.exe"
+	}
+	return "aly-client-ui"
+}
+
 // CheckUpdaterPath 返回 ApplicationFolder/<UpdaterFileName> 的绝对路径
 func (c *Config) CheckUpdaterPath() (string, error) {
 	mainFolder, err := c.MainExeFolderPath()

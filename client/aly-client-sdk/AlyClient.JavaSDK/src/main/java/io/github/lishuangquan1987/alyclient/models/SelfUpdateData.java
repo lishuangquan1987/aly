@@ -7,20 +7,34 @@ import io.github.lishuangquan1987.alyclient.Json;
 import java.util.List;
 import java.util.Map;
 
-/** self_update 命令的 data：更新器自更新结果。源缺失或已是最新同样视为成功。 */
+/** self_update 命令的 data：更新器自更新结果（updated/reason/old_path）与可选的图形前端补齐结果（ui_*，仅 --include-ui 时出现）。源缺失或已是最新同样视为成功。 */
 public final class SelfUpdateData {
+    public static final String UI_REASON_REPLACED = "replaced";
+    public static final String UI_REASON_EXISTING_KEPPED = "existing_kepped";
+    public static final String UI_REASON_PENDING_INFLIGHT = "pending_inflight";
+    public static final String UI_REASON_SOURCE_MISSING = "source_missing";
+
     // 是否真的替换了更新器本体。
     public boolean updated;
     // updated=false 时的跳过原因：source_missing 或 already_up_to_date；updated=true 时为空串。
     public String reason;
     // updated=true 时被替换下来的旧版备份路径（.old）。
     public String oldPath;
+    // 仅 --include-ui 时出现：是否真的落位了图形前端副本（aly-client-ui(.exe)）。
+    public Boolean uiUpdated;
+    // 仅 --include-ui 时出现：图形前端副本的补齐口径。replaced 从主程序目录落位（目标缺失或零字节时才会发生）；existing_kepped 目标已存在（命令不替换可能正在运行的 UI 镜像，落后副本由 UI 自己的启动自更新收敛）；pending_inflight 已有收尾进程在途；source_missing 主程序目录没有该副本。
+    public String uiReason;
+    // 仅 --include-ui 时出现且 ui_updated=true 时携带的旧版备份路径（补齐路径通常为空，因为目标本不存在）。
+    public String uiOldPath;
 
     public static SelfUpdateData fromMap(Map<String, Object> data) {
         SelfUpdateData value = new SelfUpdateData();
         value.updated = Json.bool(data, "updated", false);
         value.reason = Json.str(data, "reason");
         value.oldPath = Json.optStr(data, "old_path");
+        value.uiUpdated = Json.optBool(data, "ui_updated");
+        value.uiReason = Json.optStr(data, "ui_reason");
+        value.uiOldPath = Json.optStr(data, "ui_old_path");
         return value;
     }
 }

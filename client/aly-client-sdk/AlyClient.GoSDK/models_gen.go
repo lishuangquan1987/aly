@@ -100,7 +100,16 @@ type RollbackData struct {
 	Version string `json:"version"`
 }
 
-// self_update 命令的 data：更新器自更新结果。源缺失或已是最新同样视为成功。
+type SelfUpdateDataUiReason string
+
+const (
+	SelfUpdateDataUiReasonReplaced         SelfUpdateDataUiReason = "replaced"
+	SelfUpdateDataUiReasonExisting_kepped  SelfUpdateDataUiReason = "existing_kepped"
+	SelfUpdateDataUiReasonPending_inflight SelfUpdateDataUiReason = "pending_inflight"
+	SelfUpdateDataUiReasonSource_missing   SelfUpdateDataUiReason = "source_missing"
+)
+
+// self_update 命令的 data：更新器自更新结果（updated/reason/old_path）与可选的图形前端补齐结果（ui_*，仅 --include-ui 时出现）。源缺失或已是最新同样视为成功。
 type SelfUpdateData struct {
 	// 是否真的替换了更新器本体。
 	Updated bool `json:"updated"`
@@ -108,6 +117,12 @@ type SelfUpdateData struct {
 	Reason string `json:"reason"`
 	// updated=true 时被替换下来的旧版备份路径（.old）。
 	OldPath string `json:"old_path"`
+	// 仅 --include-ui 时出现：是否真的落位了图形前端副本（aly-client-ui(.exe)）。
+	UiUpdated bool `json:"ui_updated"`
+	// 仅 --include-ui 时出现：图形前端副本的补齐口径。replaced 从主程序目录落位（目标缺失或零字节时才会发生）；existing_kepped 目标已存在（命令不替换可能正在运行的 UI 镜像，落后副本由 UI 自己的启动自更新收敛）；pending_inflight 已有收尾进程在途；source_missing 主程序目录没有该副本。
+	UiReason SelfUpdateDataUiReason `json:"ui_reason"`
+	// 仅 --include-ui 时出现且 ui_updated=true 时携带的旧版备份路径（补齐路径通常为空，因为目标本不存在）。
+	UiOldPath string `json:"ui_old_path"`
 }
 
 // check_self_update 命令的 data：更新器自身副本是否需要更新。只检测，不替换。

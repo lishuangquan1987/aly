@@ -29,6 +29,47 @@
 - 残留的 `.new`/`.old` 文件在启动时自动清理；
 - **失败计数 Journal**：30 分钟窗口内连续失败 ≥3 次则跳过自更新——根治"替换失败 → 重启 → 再失败"的无限循环。
 
+## 两件套：`aly-client` 与 `aly-client-ui` 一起收敛
+
+更新器目录里实际上是**两件套**：`aly-client(.exe)`（真正执行下载/替换）与
+`aly-client-ui(.exe)`（图形前端）。发布包把两件套都投放到主程序目录（`deploy` 脚本、
+publish GUI 的 `UpdateFolderService`、`deploy-client-linux.sh` 都按“同名两件套”布局），
+但 `UpdateFolder` 里的副本各有各的收敛路径：
+
+| 副本 | 收敛者 | 语义 |
+|---|---|---|
+| `aly-client(.exe)` | `self_update`（更新器本体） | 按 SHA256 收敛：无差异跳过、有差异走改名舞步替换、源缺失跳过 |
+| `aly-client-ui(.exe)` | **UI 自己的启动自更新**（`UpdateSelfUI` + `-finish-self-update`） | 有差异时复制 `.new` 并派生收尾进程：等旧 UI 退出 → 旧 exe 改名 `.old` → `.new` 落位 → 原参数拉起新 UI |
+| `aly-client-ui(.exe)`（**缺失时**） | `self_update --include-ui` | 只在 `UpdateFolder` 里缺失或为 0 字节时从主程序目录落位（补齐），已存在的一律不碰 |
+
+为什么 UI 副本要分两条路：替换**正在运行的 UI 镜像**必须由 UI 自己收尾（它得先退出、
+再落位、再把自己拉起来），而“UI 副本根本不在”时没有任何进程能执行这件事——后者就是
+现场故障：宿主调 `AlyUpdateUIClient.LaunchAuto()` 只拿到 `aly-client-ui.exe not found`。
+`--include-ui` 专治这条路：
+
+- 目标缺失/0 字节 → `ui_reason=replaced`（从主程序目录落位，不产生 `.old`）；
+- 目标已存在 → `ui_reason=existing_kepped`（**不替换可能正在运行的镜像**）；
+- `<ui>.selfupdate.json` 的 `pending=true`（收尾进程在途）→ `ui_reason=pending_inflight`（让位，不插队）；
+- 主程序目录没有该副本 → `ui_reason=source_missing`（不算错误）。
+
+两个平台的副本**同名**（Windows `aly-client-ui.exe`，Linux `aly-client-ui`），源名由目标名
+推导，因此这条路径没有平台分支；落位复用 `selfupdate` 包的“临时文件 + SHA256 校验 +
+原子落位（失败保留旧目标）”，Linux 上保留可执行位。
+
+## 宿主侧：拉起 UI 之前先保证副本就位
+
+C# SDK 的 `AlyUpdateUIClient` 在 `Launch*` 里先做一次“两件套就位”：
+
+1. UI 副本与主程序目录副本 SHA256 一致 → 什么都不做（不派进程）；
+2. 更新器副本缺失 → 直接用主程序目录副本落位（否则命令起不来）；
+3. UI 副本缺失/不可读/落后 → 委派 `self_update --include-ui`；
+4. 命令不可用或返回后副本仍缺 → 用主程序目录副本直接落位兜底；
+5. 同一实例内只尝试一次，失败返回可诊断的 NG（不抛异常）。
+
+**不会造成循环**：`--include-ui` 从不重启任何进程，且只做“缺失补齐”，收敛后必然
+`existing_kepped`/一致跳过；UI 自身的替换循环仍由它自己的 Journal（30 分钟窗口内连续
+3 次未收敛即跳过）兜住。
+
 ## Linux UI 的收尾进程
 
 替换**正在运行的 GUI 自身**在 Linux 上由 `-finish-self-update` 收尾模式完成：
@@ -47,6 +88,8 @@ aly-client-ui -finish-self-update \
 
 自更新链路的行为契约由三层测试钉住（详见[测试体系](/docs/testing)）：
 
-- `selfupdate` 包 14 个单元测试（哈希比对、替换编排、改名舞步、回滚、Journal）；
-- `cmd` 包 `self_update` 命令 4 个测试（JSON 协议、锁语义）；
-- tc 端到端用例 130–135（统一执行路径委派、UI 防循环、收尾进程全流程）。
+- `selfupdate` 包单元测试（哈希比对、替换编排、改名舞步、回滚、Journal，以及
+  `SyncFile` 两件套补齐：缺失落位 / 已存在让位 / 收尾在途 / 源缺失 / 可执行位）；
+- `cmd` 包 `self_update` 命令测试（JSON 协议、锁语义、`--include-ui` 的四种补齐口径）；
+- tc 端到端用例 130–137（统一执行路径委派、UI 防循环、收尾进程全流程、
+  两件套补齐 `--include-ui`、SDK 拉起 UI 前自动落位 sd17）。

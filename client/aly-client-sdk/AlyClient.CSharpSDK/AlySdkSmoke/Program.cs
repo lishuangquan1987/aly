@@ -98,6 +98,8 @@ namespace AlySdkSmoke
                 { "15", Sd15 }, { "sd15", Sd15 },
                 // sd16 是用例 134 的驱动入口：AlyUpdateClient 构造函数委派 self_update
                 { "16", Sd16 }, { "sd16", Sd16 },
+                // sd17 是用例 137 的驱动入口：AlyUpdateUIClient 拉起前自动补齐两件套
+                { "17", Sd17 }, { "sd17", Sd17 },
             };
 
             if (selector == "all")
@@ -551,6 +553,101 @@ namespace AlySdkSmoke
             {
                 Ok("SD16 AlyUpdateClient 构造完成（未提供 ALY_EXPECT_UPDATER_SHA，不做收敛断言）");
             }
+        }
+
+        /// <summary>
+        /// SD17 拉起 UI 前自动补齐两件套（用例 137）：现场故障形态——发布包把
+        /// aly-client / aly-client-ui 投放到主程序目录，但 UpdateFolder 里没有 UI
+        /// 副本，宿主调 LaunchAuto 曾经只会拿到 "aly-client-ui.exe not found"。
+        ///
+        /// 断言（全部不依赖真的打开窗口；UI 副本用非可执行文件充当，启动失败属预期）：
+        ///   ① 副本落位：Launch 之后 UpdateFolder/aly-client-ui.exe 存在，且 SHA256
+        ///      与 ALY_EXPECT_UI_SHA（主程序目录同名副本）一致；
+        ///   ② 两处都缺 → NG + errorMsg 含 not found/aly-client-ui，不抛异常、
+        ///      不触发 Started；
+        ///   ③ 单实例内只尝试一次：②之后在可读位置造一个同名"源副本"再 Launch，
+        ///      副本仍不得出现（否则宿主定时重试会变成进程/IO 风暴）；
+        ///   ④ 已一致：再 Launch 不得改写副本（SHA256 不变）。
+        /// </summary>
+        private static void Sd17()
+        {
+            string expected = Environment.GetEnvironmentVariable("ALY_EXPECT_UI_SHA");
+            string uiDst = Path.Combine(Path.GetDirectoryName(_exePath), "aly-client-ui.exe");
+
+            // ① 副本缺失 + 主程序目录有 → Launch 必须先把副本落位
+            var ui = new AlyUpdateUIClient(uiDst, "zh-CN");
+            bool started = false;
+            ui.Started += _ => { started = true; };
+            try
+            {
+                var r = ui.Launch(AlyUpdateUiMode.Auto);
+                // UI 副本是"非可执行文件"充当 → 启动失败返回 NG 属预期；落位才是断言对象。
+                Console.WriteLine("  info: sd17 ① launchIsSuccess=" + (r != null && r.IsSuccess)
+                    + " errorMsg=" + (r == null ? "<null>" : r.ErrorMsg));
+            }
+            catch (Exception ex)
+            {
+                Bad("SD17 ① Launch 抛异常（补齐路径不得把异常穿透到宿主界面）: " + ex.GetType().Name + ": " + ex.Message);
+                return;
+            }
+
+            Assert(File.Exists(uiDst),
+                "SD17 ① UpdateFolder 缺 UI 副本时 Launch 必须自动从主程序目录落位",
+                "SD17 ① Launch 之后 UI 副本仍不存在: " + uiDst);
+            if (!string.IsNullOrEmpty(expected))
+            {
+                Assert(string.Equals(TryComputeSha256(uiDst), expected, StringComparison.OrdinalIgnoreCase),
+                    "SD17 ① 落位的 UI 副本必须与主程序目录副本一致（SHA256）",
+                    "SD17 ① 落位副本 SHA256 与主程序目录副本不一致");
+            }
+
+            // ② 两处都缺 → NG（不抛异常、不触发 Started）
+            string missingDst = Path.Combine(Path.GetDirectoryName(_exePath), "sd17-missing-ui.exe");
+            var ui2 = new AlyUpdateUIClient(missingDst, "zh-CN");
+            bool started2 = false;
+            ui2.Started += _ => { started2 = true; };
+            AlyResponse r2 = null;
+            try
+            {
+                r2 = ui2.Launch(AlyUpdateUiMode.Auto);
+            }
+            catch (Exception ex)
+            {
+                Bad("SD17 ② 两处都缺时 Launch 抛异常（应返回 NG）: " + ex.GetType().Name + ": " + ex.Message);
+                return;
+            }
+            Assert(r2 != null && !r2.IsSuccess,
+                "SD17 ② 两处都没有 UI 副本时 Launch 必须返回 NG",
+                "SD17 ② 两处都缺却返回 OK（宿主会以为界面已打开）");
+            Assert(!string.IsNullOrEmpty(r2.ErrorMsg) && (r2.ErrorMsg.IndexOf("not found", StringComparison.OrdinalIgnoreCase) >= 0
+                    || r2.ErrorMsg.IndexOf("aly-client-ui", StringComparison.OrdinalIgnoreCase) >= 0),
+                "SD17 ② NG 必须带可诊断的 errorMsg（含 not found / aly-client-ui）",
+                "SD17 ② errorMsg 不可诊断: " + (r2 == null ? "<null>" : r2.ErrorMsg));
+            Assert(!started2, "SD17 ② 失败路径不得触发 Started", "SD17 ② 失败却触发了 Started");
+
+            // ③ 单实例内只尝试一次：在自身目录造一个同名的"源副本"后，副本仍不得
+            //    出现（②已经尝试过；若还会重试，宿主定时器会把进程/IO 打满）。
+            //    源用本机可读文件冒充（_exePath 是真实更新器 = 可读），与主程序目录无关。
+            string srcForMissing = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sd17-missing-ui.exe");
+            try { File.Delete(srcForMissing); } catch { }
+            File.Copy(_exePath, srcForMissing, true);
+            Assert(File.Exists(srcForMissing), "SD17 ③ 前置：同名源副本已就位", "SD17 ③ 造源副本失败: " + srcForMissing);
+            ui2.Launch(AlyUpdateUiMode.Auto);
+            Assert(!File.Exists(missingDst),
+                "SD17 ③ 同一实例内不重复尝试补齐（失败后不再派进程）",
+                "SD17 ③ 第二次 Launch 仍然尝试了补齐（副本被落位）: " + missingDst);
+            try { File.Delete(srcForMissing); } catch { }
+
+            // ④ 已一致：再 Launch 不得改写副本
+            string shaBefore = TryComputeSha256(uiDst);
+            try { ui.Launch(AlyUpdateUiMode.Auto); } catch { }
+            Assert(!string.IsNullOrEmpty(shaBefore)
+                    && string.Equals(TryComputeSha256(uiDst), shaBefore, StringComparison.OrdinalIgnoreCase),
+                "SD17 ④ 副本已一致时 Launch 不得改写它",
+                "SD17 ④ 一致路径改写了副本（SHA256 变化）");
+
+            try { ui.Dispose(); } catch { }
+            try { ui2.Dispose(); } catch { }
         }
 
         /// <summary>尽力计算文件 SHA256；文件正被替换时返回 null（调用方轮询重试）。</summary>

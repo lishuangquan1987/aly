@@ -125,9 +125,13 @@ public static Task<AlyResponse<CheckSelfUpdateData>> CheckSelfUpdateAsync(string
 
 ```csharp
 public static Task<AlyResponse<SelfUpdateData>> SelfUpdateAsync(string alyExePath)
+
+public static Task<AlyResponse<SelfUpdateData>> SelfUpdateAsync(string alyExePath, bool includeUi)
 ```
 
 执行更新器自更新：按 SHA256 比较后，用主程序目录中随版本分发的 `aly-client.exe` 替换 `UpdateFolder` 中正在运行的副本。幂等；源缺失或已是最新同样返回 `IsSuccess=true`，此时 `SelfUpdateData.Reason` 为 `source_missing` 或 `already_up_to_date`。
+
+`includeUi: true`（等价命令行 `self_update --include-ui`）时顺带**补齐图形前端副本**：`aly-client-ui(.exe)` 只在 `UpdateFolder` 里缺失或为 0 字节时从主程序目录落位，已存在的一律不动（可能正在运行；落后副本由 UI 自己的启动自更新收敛）。结果在 `SelfUpdateData` 的 `UiUpdated` / `UiReason` / `UiOldPath` 三个可选属性里，`UiReason` 取值 `replaced` / `existing_kepped` / `pending_inflight` / `source_missing`。协议 1.1.0 起提供（旧版 SDK 反序列化会忽略未知字段）。
 
 #### `CheckUpdateAsync`
 
@@ -264,6 +268,7 @@ public AlyUpdateUIClient(string uiExePath = null, string language = DefaultLangu
 | 成员 | 类型 | 访问 | 说明 |
 |---|---|---|---|
 | `UiExePath` | `string` | 读写 | UI 可执行文件绝对路径，赋值时自动转绝对路径 |
+| `UpdatorExePath` | `string` | 读写 | `aly-client(.exe)` 绝对路径；默认为 `<UiExePath 所在目录>\aly-client.exe`（两件套同放 `UpdateFolder`）。补齐全流程用它委派 `self_update --include-ui`。非 Windows 上没有 `.exe`，需显式传入（与 `UiExePath` 同款） |
 | `Language` | `string` | 读写 | 界面语言，拼进命令行 `-lang` |
 | `IsRunning` | `bool` | 只读 | 本对象最近一次拉起的进程是否仍在运行（`HasExited` 异常时按已退出处理） |
 | `LastExitCode` | `int?` | 只读 | 上次运行的退出码；本次运行尚未结束时为 `null`，进程一退出就写入 |
@@ -284,10 +289,17 @@ public AlyUpdateUIClient(string uiExePath = null, string language = DefaultLangu
 `Launch` 的执行顺序：
 
 1. 已 `Dispose` → 返回 `NG("AlyUpdateUIClient has been disposed.")`。
-2. `UiExePath` 不存在 → 返回 `NG("aly-client-ui.exe not found: <路径>（请确认 UpdateFolder 已部署：GUI 初始化项目时会从 AlyPublish 包复制，或按 client/<rid>/ 布局手工放置 aly-client-ui.exe）")`（部署方式见下节）。
-3. 本对象持有的进程仍在运行 → 直接返回 `OK()`，不再拉起。
-4. 释放上一次的进程句柄，用 `Arguments = "-mode <mode> -lang <lang>"`、`WorkingDirectory = UI 所在目录`、`CreateNoWindow = true` 启动；成功后重置 `LastExitCode = null` 并触发 `Started(pid)`。
-5. `Process.Start()` 返回 `false` → 释放刚创建的句柄并返回 `NG("failed to start aly-client-ui.exe")`；抛异常 → 返回 `NG(ex)`。
+2. **两件套就位**（先做一次，同一实例内只尝试一次，失败只写 `aly-client-sdk.log`）：
+   ① UI 副本与主程序目录的同名副本 SHA256 一致 → 不动（不派进程）；
+   ② 更新器副本缺失 → 用主程序目录的同名副本直接落位；
+   ③ UI 副本缺失/不可读/落后 → 委派 `self_update --include-ui`（**已存在的副本一律不被替换**：可能正在运行，落后副本由 UI 自己的启动自更新收敛）；
+   ④ 命令不可用或返回后副本仍缺 → 用主程序目录的同名副本直接落位兜底；
+   ⑤ 全部失败也只是日志，由下一步的存在性检查给出可诊断的 NG（不抛异常）。
+3. `UiExePath` 不存在 → 返回 `NG("aly-client-ui.exe not found: <路径>（主程序目录里有/没有同名的 aly-client-ui.exe…）")`
+   —— 诊断后缀会指明主程序目录里有没有同名副本，以及该去查哪些日志与哪些配置（`UpdateFolder/client.json` 的 `main_exe_relative_path`）。
+4. 本对象持有的进程仍在运行 → 直接返回 `OK()`，不再拉起。
+5. 释放上一次的进程句柄，用 `Arguments = "-mode <mode> -lang <lang>"`、`WorkingDirectory = UI 所在目录`、`CreateNoWindow = true` 启动；成功后重置 `LastExitCode = null` 并触发 `Started(pid)`。
+6. `Process.Start()` 返回 `false` → 释放刚创建的句柄并返回 `NG("failed to start aly-client-ui.exe")`；抛异常 → 返回 `NG(ex)`。
 
 ### 事件
 

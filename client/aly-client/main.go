@@ -72,7 +72,9 @@ func printUsage() {
 	fmt.Println("  rollback                  版本回滚")
 	fmt.Println("  clean                     清理历史版本快照与临时文件")
 	fmt.Println("  check_self_update         自更新检查")
-	fmt.Println("  self_update               用主程序目录的新版更新器替换自身")
+	fmt.Println("  self_update [--include-ui]")
+	fmt.Println("                            用主程序目录的新版更新器替换自身")
+	fmt.Println("                            --include-ui：同时补齐 aly-client-ui 副本（仅在缺失时落位）")
 	fmt.Println()
 	fmt.Println("使用 -h 查看各命令的选项")
 }

@@ -29,6 +29,49 @@ The replacement itself is implemented in the portable `selfupdate` package (shar
 - Leftover `.new`/`.old` files are cleaned at startup;
 - **Failure-count journal**: ≥3 consecutive failures within a 30-minute window skip self-update — killing the "fail → restart → fail again" loop at the root.
 
+## The Two-Piece Set: `aly-client` and `aly-client-ui` Converge Together
+
+The updater folder really holds a **pair**: `aly-client(.exe)` (it performs the download/replace) and
+`aly-client-ui(.exe)` (the GUI front-end). The release puts both into the main application folder
+(the `deploy` scripts, the publish GUI's `UpdateFolderService` and `deploy-client-linux.sh` all use
+that "same-named pair" layout), yet the copies in `UpdateFolder` converge through different paths:
+
+| Copy | Who converges it | Semantics |
+|---|---|---|
+| `aly-client(.exe)` | `self_update` (the updater itself) | SHA256 convergence: identical → skip, different → rename dance, source missing → skip |
+| `aly-client-ui(.exe)` | **The UI's own startup self-update** (`UpdateSelfUI` + `-finish-self-update`) | On a difference it copies `.new` and spawns the finisher: wait for the old UI to exit → rename the old exe to `.old` → place `.new` → restart the new UI |
+| `aly-client-ui(.exe)` (**when missing**) | `self_update --include-ui` | Places it from the main folder **only when it is missing or 0 bytes** (bootstrap); an existing copy is never touched |
+
+Why two paths for the UI copy: replacing a **running UI image** must be finished by the UI itself
+(it has to exit, be replaced, and restarted), while "the UI copy is not there at all" has no process
+able to do that — and that is exactly the field failure: the host's
+`AlyUpdateUIClient.LaunchAuto()` only got `aly-client-ui.exe not found`. `--include-ui` exists for
+that path:
+
+- target missing/0 bytes → `ui_reason=replaced` (placed from the main folder, no `.old`);
+- target exists → `ui_reason=existing_kepped` (**never replaces a possibly running image**);
+- `<ui>.selfupdate.json` with `pending=true` (a finisher in flight) → `ui_reason=pending_inflight` (give way, do not queu);
+- no such copy in the main folder → `ui_reason=source_missing` (not an error).
+
+Both platforms use the **same names** (Windows `aly-client-ui.exe`, Linux `aly-client-ui`); the
+source name is derived from the target name, so this path has no platform branch, and placement
+reuses the `selfupdate` package's "staging file + SHA256 verify + atomic place (old target kept on
+failure)" primitives — including the executable bit on Linux.
+
+## Host Side: Make the Pair Present Before Launching the UI
+
+The C# SDK's `AlyUpdateUIClient` performs one "pair deployment" step inside `Launch*`:
+
+1. the UI copy already hashes identically to the main-folder copy → do nothing (no process spawned);
+2. the updater copy is missing → place it from the main folder (otherwise the command cannot run);
+3. the UI copy is missing/unreadable/outdated → delegate to `self_update --include-ui`;
+4. the command is unusable, or the copy is still missing after it → place the main-folder copy directly;
+5. at most one attempt per instance; failures return a diagnosable NG (never an exception).
+
+**No loop can form**: `--include-ui` never restarts anything and only bootstraps a missing copy, so
+convergence is a fixpoint (`existing_kepped`/identical afterwards); the UI's own replacement loop is
+still guared by its journal (≥3 non-converging attempts within 30 minutes → skip).
+
 ## The Linux UI Finisher Process
 
 Replacing a **running GUI** on Linux is handled by the `-finish-self-update` finisher mode:
@@ -47,6 +90,9 @@ Flow: detach from the session (setsid) → verify the target process identity (`
 
 The behavior contract of the self-update chain is pinned by three test layers (see [Testing](/en/docs/testing)):
 
-- 14 unit tests in the `selfupdate` package (hash comparison, replacement orchestration, rename dance, rollback, journal);
-- 4 tests for the `self_update` command in `cmd` (JSON protocol, lock semantics);
-- tc end-to-end cases 130–135 (unified execution path, UI loop-guard, full finisher flow).
+- unit tests in the `selfupdate` package (hash comparison, replacement orchestration, rename dance,
+  rollback, journal, and `SyncFile` pair deployment: missing-copy bootstrap / existing-copy kepp /
+  finisher in flight / source missing / executable bit);
+- `self_update` command tests in `cmd` (JSON protocol, lock semantics, the four `--include-ui` reasons);
+- tc end-to-end cases 130–137 (unified execution path, UI loop-guard, full finisher flow,
+  `--include-ui` pair deployment, and the SDK's auto-deployment before launching the UI, sd17).

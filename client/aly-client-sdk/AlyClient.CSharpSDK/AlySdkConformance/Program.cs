@@ -50,6 +50,7 @@ namespace AlySdkConformance
             Case("download_update: 停流看门狗", DownloadStall);
             Case("apply_update: 拉起即返回", ApplyReturnsImmediately);
             Case("self_update: 检测与替换", SelfUpdateFlow);
+            Case("self_update: --include-ui 的 ui_* 可选字段", SelfUpdateIncludeUiFlow);
             Case("rollback: 列表与回滚", RollbackFlow);
             Case("缺失更新器: 返回失败而不是抛异常", MissingExecutable);
 
@@ -147,6 +148,26 @@ namespace AlySdkConformance
             if (!updated.IsSuccess) return "self_update NG: " + updated.ErrorMsg;
             if (!updated.Data.Updated) return "updated=false（期望 true）";
             if (updated.Data.OldPath != "aly-client.exe.old") return "old_path=" + updated.Data.OldPath;
+            return null;
+        }
+
+        /// <summary>
+        /// self_update --include-ui：ui_* 三个可选字段（协议 1.1.0 MINOR 新增）必须
+        /// 能被反序列化，且不破坏既有字段口径。假客户端按命令名回放场景，旗标被忽略，
+        /// 因此这里同时覆盖了"带旗标的调用能把命令行拼对"（拼错会让假客户端找不到命令
+        /// 而退出码非 0 → NG）。
+        /// </summary>
+        private static string SelfUpdateIncludeUiFlow()
+        {
+            UseScenario("self_update_include_ui");
+            AlyResponse<SelfUpdateData> r = AlyApi.SelfUpdateAsync(_fake, true).Result;
+            if (!r.IsSuccess) return "NG: " + r.ErrorMsg;
+            if (r.Data == null) return "data=null";
+            if (r.Data.Updated) return "updated=true（场景为已是最新）";
+            if (r.Data.Reason != "already_up_to_date") return "reason=" + r.Data.Reason;
+            if (!r.Data.UiUpdated) return "ui_updated=false（期望 true）";
+            if (r.Data.UiReason != "replaced") return "ui_reason=" + r.Data.UiReason;
+            if (!string.IsNullOrEmpty(r.Data.UiOldPath)) return "ui_old_path=" + r.Data.UiOldPath;
             return null;
         }
 

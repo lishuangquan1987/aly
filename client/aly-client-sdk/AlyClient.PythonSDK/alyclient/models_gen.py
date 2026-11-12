@@ -13,6 +13,11 @@ DOWNLOAD_PROGRESS_STATUS_DONE = "DONE"
 DOWNLOAD_PROGRESS_STATUS_SKIP = "SKIP"
 DOWNLOAD_PROGRESS_STATUS_FAIL = "FAIL"
 
+SELF_UPDATE_DATA_UI_REASON_REPLACED = "replaced"
+SELF_UPDATE_DATA_UI_REASON_EXISTING_KEPPED = "existing_kepped"
+SELF_UPDATE_DATA_UI_REASON_PENDING_INFLIGHT = "pending_inflight"
+SELF_UPDATE_DATA_UI_REASON_SOURCE_MISSING = "source_missing"
+
 CLEAN_DATA_MODE_KEEP = "keep"
 CLEAN_DATA_MODE_ALL = "all"
 
@@ -168,13 +173,19 @@ class RollbackData:
 
 @dataclass
 class SelfUpdateData:
-    """self_update 命令的 data：更新器自更新结果。源缺失或已是最新同样视为成功。"""
+    """self_update 命令的 data：更新器自更新结果（updated/reason/old_path）与可选的图形前端补齐结果（ui_*，仅 --include-ui 时出现）。源缺失或已是最新同样视为成功。"""
     # 是否真的替换了更新器本体。
     updated: bool
     # updated=false 时的跳过原因：source_missing 或 already_up_to_date；updated=true 时为空串。
     reason: str
     # updated=true 时被替换下来的旧版备份路径（.old）。
     old_path: Optional[str] = None
+    # 仅 --include-ui 时出现：是否真的落位了图形前端副本（aly-client-ui(.exe)）。
+    ui_updated: Optional[bool] = None
+    # 仅 --include-ui 时出现：图形前端副本的补齐口径。replaced 从主程序目录落位（目标缺失或零字节时才会发生）；existing_kepped 目标已存在（命令不替换可能正在运行的 UI 镜像，落后副本由 UI 自己的启动自更新收敛）；pending_inflight 已有收尾进程在途；source_missing 主程序目录没有该副本。
+    ui_reason: Optional[str] = None
+    # 仅 --include-ui 时出现且 ui_updated=true 时携带的旧版备份路径（补齐路径通常为空，因为目标本不存在）。
+    ui_old_path: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "SelfUpdateData":
@@ -182,6 +193,9 @@ class SelfUpdateData:
             updated=bool(data.get("updated", False)),
             reason=str(data.get("reason", "")),
             old_path=str(data["old_path"]) if data.get("old_path") is not None else None,
+            ui_updated=bool(data["ui_updated"]) if data.get("ui_updated") is not None else None,
+            ui_reason=str(data.get("ui_reason")) if data.get("ui_reason") is not None else None,
+            ui_old_path=str(data["ui_old_path"]) if data.get("ui_old_path") is not None else None,
         )
 
 @dataclass
