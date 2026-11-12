@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using AlyPublish.Constants;
 using AlyPublish.Helpers;
 using AlyPublish.Localization;
@@ -190,6 +190,10 @@ public sealed class CliService
             arguments.Add(afterApplyUpdateScript);
         }
 
+        Log.Information("CLI 输入: {Executable} {Arguments} (工作目录={WorkingDirectory})",
+            ExecutablePath, string.Join(' ', arguments),
+            string.IsNullOrWhiteSpace(projectPath) ? "(当前目录)" : projectPath);
+
         string? failureMessage = null;
         var hasResult = false;
         var processResult = await ProcessService.RunWithProgressAsync(
@@ -197,6 +201,7 @@ public sealed class CliService
             arguments,
             line =>
             {
+                Log.Information("CLI 输出: {Line}", line);
                 var parsed = PushResultParser.Parse(line);
                 if (parsed.Kind == PushLineKind.Progress && parsed.Progress is not null)
                 {
@@ -216,6 +221,9 @@ public sealed class CliService
             string.IsNullOrWhiteSpace(projectPath) ? null : projectPath,
             PushTimeoutMilliseconds,
             cancellationToken);
+
+        Log.Information("CLI 结果: 成功={Success}", processResult.Success);
+        Log.Information("CLI 标准错误: {Error}", processResult.StandardError);
 
         if (processResult.Canceled)
         {
@@ -272,8 +280,8 @@ public sealed class CliService
         fullArguments.AddRange(arguments);
         var workingDirectory = string.IsNullOrWhiteSpace(projectPath) ? null : projectPath;
 
-        Log.Debug("执行 CLI: {Arguments} (工作目录={WorkingDirectory})",
-            string.Join(' ', fullArguments), workingDirectory ?? "(当前目录)");
+        Log.Information("CLI 输入: {Executable} {Arguments} (工作目录={WorkingDirectory})",
+            ExecutablePath, string.Join(' ', fullArguments), workingDirectory ?? "(当前目录)");
 
         var result = await ProcessService.RunAsync(
             ExecutablePath,
@@ -281,6 +289,17 @@ public sealed class CliService
             workingDirectory,
             timeoutMilliseconds,
             cancellationToken);
+
+        Log.Information("CLI 结果: 成功={Success}; 工作目录={WorkingDirectory}", result.Success, workingDirectory ?? "(当前目录)");
+        foreach (var line in (result.StandardOutput ?? string.Empty).Split('\n'))
+        {
+            Log.Information("CLI 标准输出: {Line}", line);
+        }
+
+        foreach (var line in (result.StandardError ?? string.Empty).Split('\n'))
+        {
+            Log.Information("CLI 标准错误: {Line}", line);
+        }
 
         if (result.Canceled)
         {
