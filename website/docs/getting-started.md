@@ -19,11 +19,11 @@ description: 三步跑通 Aly：装一个 AlyPublish 安装包 → 用 GUI 初�
 ./aly-server -p 2000
 ```
 
-首次运行在程序旁创建 `aly.db` 与 `data/`；上传的文件固定放在 `data/{项目}/`。Linux 用 `./aly-server-linux-amd64`，Windows 用 `.\aly-server.exe`；`-db` 可改数据库文件路径。
+首次运行在程序旁创建 `aly.db` 与 `data/`；上传的文件固定放在 `data/{项目}/`。Linux 下载 <ReleaseLink asset="aly-server-linux-amd64" />，Windows 下载 <ReleaseLink asset="aly-server-windows-amd64.exe" />（改名为 `aly-server.exe` 后启动）；`-db` 可改数据库文件路径。全平台清单见[下载与安装](/docs/download)。
 
 ## 1. 装 AlyPublish：一个包拿到 GUI + CLI + 更新器
 
-Windows 下运行 `AlyPublish-Setup.exe`，或解压 `AlyPublish-win-x64.zip` 直接用；Linux 下解压 `AlyPublish-linux-x64.zip` 后运行 `./install.sh`。完整下载表与包内结构见[下载与安装](/docs/download)。
+Windows 下运行 <ReleaseLink asset="AlyPublish-Setup.exe" />，或解压 <ReleaseLink asset="AlyPublish-win-x64.zip" /> 直接用；Linux 下解压 <ReleaseLink asset="AlyPublish-linux-x64.zip" />（arm64 用 <ReleaseLink asset="AlyPublish-linux-arm64.zip" />）后运行 `./install.sh`。完整下载表与包内结构见[下载与安装](/docs/download)。
 
 装好后就绪的东西：
 

@@ -6,21 +6,9 @@ Aly 的协议是语言无关的：`aly-client` 只输出统一的 JSON，SDK 负
 
 ## 发布资产
 
-Release 工作流会为每个 SDK 构建一个版本化 zip（`<version>` 为 Release 版本号）：
+Release 工作流会为每个 SDK 构建一个版本化 zip。下表由最新 Release 生成，点击文件名即可下载；每次发版自动更新：
 
-| 语言 | 资产 | 内容 |
-|---|---|---|
-| C# | `AlyClient.CSharpSDK-<version>.zip`（另有 `.nupkg`） | net40 + netstandard2.0 包 |
-| TypeScript | `AlyClient.TypeScriptSDK-<version>.zip` | `dist` + 类型声明 + 源码 |
-| Go | `AlyClient.GoSDK-<version>.zip` | Go module 源码 |
-| Python | `AlyClient.PythonSDK-<version>.zip` | wheel + 源码 |
-| Java | `AlyClient.JavaSDK-<version>.zip` | jar + 源码 |
-| Rust | `AlyClient.RustSDK-<version>.zip` | `.crate` + 源码 |
-| C++ | `AlyClient.CppSDK-<version>.zip` | 头文件 + 源码（Windows XP 方向） |
-| Pascal | `AlyClient.PascalSDK-<version>.zip` | Free Pascal / Delphi mode 源码 |
-| VB.NET | `AlyClient.VbNetSample-<version>.zip` | 示例工程 + 编译产物 |
-| F# | `AlyClient.FSharpSample-<version>.zip` | 示例工程 + 编译产物 |
-| COM | `AlyClient.Com-<version>.zip` | 32 位 DLL + 注册脚本（VB6/易语言） |
+<ReleaseDownloads group="sdk" />
 
 > 目前资产只发布到 GitHub Releases。npm / PyPI / Maven Central / crates.io / NuGet
 > 的上架需在各平台配置凭据后再接入；zip 内已包含对应包格式（wheel、jar、`.crate`、

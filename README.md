@@ -17,7 +17,7 @@ aly/
 │   └── aly-client-sdk/      # C# / TypeScript / Go / Python / Java / Rust / C++ / Pascal + VB.NET/F#/COM samples
 ├── publish/
 │   ├── publish-cli/      # CLI publish engine (Go, cobra)
-│   └── publish-gui/  # Desktop GUI (Avalonia 11.3, .NET 8)
+│   └── publish-gui/      # Desktop GUI (Avalonia 12.1, .NET 8)
 └── README.md
 ```
 
@@ -58,7 +58,12 @@ the packaging entry point is [tools/package-sdks](tools/package-sdks/README.md).
 
 ### 1. Start the Server
 
+Download the server binary for your platform from [GitHub Releases](https://github.com/lishuangquan1987/aly/releases/latest)
+(the [download page](https://lishuangquan1987.github.io/aly/docs/download) has the full matrix):
+
 ```bash
+curl -fL -o aly-server "https://github.com/lishuangquan1987/aly/releases/latest/download/aly-server-linux-amd64"
+chmod +x aly-server
 ./aly-server -p 2000
 ```
 
@@ -69,10 +74,13 @@ First run auto-creates a SQLite database (`aly.db`). The server stores project i
 Install **AlyPublish** — one package with the publish GUI, the `aly-publish` CLI and the
 `aly-client` / `aly-client-ui` updaters inside `publish-cli/<rid>/` and `client/<rid>/`:
 
-| Platform | Asset |
+| Platform | Asset (click to download) |
 |---|---|
-| Windows x64 | `AlyPublish-Setup.exe` (installer) · `AlyPublish-win-x64.zip` (portable) |
-| Linux x64 / arm64 | `AlyPublish-linux-x64.zip` · `AlyPublish-linux-arm64.zip` (unzip, then `./install.sh`) |
+| Windows x64 | [AlyPublish-Setup.exe](https://github.com/lishuangquan1987/aly/releases/latest/download/AlyPublish-Setup.exe) (installer) · [AlyPublish-win-x64.zip](https://github.com/lishuangquan1987/aly/releases/latest/download/AlyPublish-win-x64.zip) (portable) |
+| Linux x64 / arm64 | [AlyPublish-linux-x64.zip](https://github.com/lishuangquan1987/aly/releases/latest/download/AlyPublish-linux-x64.zip) · [AlyPublish-linux-arm64.zip](https://github.com/lishuangquan1987/aly/releases/latest/download/AlyPublish-linux-arm64.zip) (unzip into a folder of your own — the zip has no top-level folder — then `chmod +x install.sh && ./install.sh`) |
+
+All assets are listed on the [download page](https://lishuangquan1987.github.io/aly/docs/download); its links
+are regenerated from the latest release on every publish.
 
 Then either click through the GUI (`AlyPublish` → Initialize project → Stage all → Publish; it also
 builds the sibling `UpdateFolder/` from the packaged updater and writes `client.json`), or call the
@@ -91,7 +99,11 @@ This scans the directory, uploads new/changed files to the server, and creates a
 
 ### 3. Client: Check & Apply Updates
 
-On the end-user's machine, your application invokes `aly-client.exe` (located in `UpdateFolder/`):
+On the end-user's machine, your application invokes `aly-client.exe` (located in `UpdateFolder/`).
+The updater binaries are **not** published as standalone release assets: the AlyPublish package ships them
+under `client/<rid>/` (`windows-x86`, `linux-amd64`, `linux-arm64`), and the GUI copies them into the sibling
+`UpdateFolder/` when you initialize a project. See [Download & Install](https://lishuangquan1987.github.io/aly/docs/download)
+for the in-package payload layout.
 
 ```bash
 # Step 1 — Check for updates

@@ -13,3 +13,9 @@ description: "Enter Aly by role: publish a release, integrate the updater, deplo
 - Server deployment and REST API: [Deployment](/en/docs/server/deploy) · [API overview](/en/docs/api)
 - Multi-language host integration: [Language SDKs](/en/docs/sdk/languages) · [C# SDK](/en/docs/sdk) · [C# API](/en/docs/sdk/api)
 - Understand reliability first: [Core concepts](/en/docs/concepts) · [Architecture](/en/docs/architecture)
+
+## Direct downloads
+
+<ReleaseDownloads group="package" compact :show-latest-hint="false" :show-version="false" />
+
+The full matrix (server binaries and language SDKs) is on [Download & Install](/en/docs/download).

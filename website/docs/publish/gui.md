@@ -20,6 +20,10 @@ description: AlyPublish.exe 的运行条件、项目书签、初始化与本地�
 | 运行时 | Release 安装包/压缩包为自包含 .NET 8；源码 `dotnet build` 为框架依赖 |
 | 最小窗口 | 1080 × 640，默认 1320 × 840 |
 
+获取安装包（点击文件名下载）：
+
+<ReleaseDownloads group="package" compact :show-latest-hint="false" :show-version="false" />
+
 包内 payload 与平台选择见[下载与安装](/docs/download)。CLI 的查找顺序：
 
 1. `payload.json` 指定的 `publish-cli/<cli_rid>/aly-publish(.exe)`；

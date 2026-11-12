@@ -7,21 +7,10 @@ SDK is tested against `spec/fixtures/scenarios` with a fake client.
 
 ## Release assets
 
-The release workflow builds a versioned zip per SDK (`<version>` is the release version):
+The release workflow builds a versioned zip per SDK. The table below is generated from the latest
+release — click a file name to download; it refreshes on every publish:
 
-| Language | Asset | Contents |
-|---|---|---|
-| C# | `AlyClient.CSharpSDK-<version>.zip` (plus `.nupkg`) | net40 + netstandard2.0 package |
-| TypeScript | `AlyClient.TypeScriptSDK-<version>.zip` | `dist` + type declarations + source |
-| Go | `AlyClient.GoSDK-<version>.zip` | Go module source |
-| Python | `AlyClient.PythonSDK-<version>.zip` | wheel + source |
-| Java | `AlyClient.JavaSDK-<version>.zip` | jar + source |
-| Rust | `AlyClient.RustSDK-<version>.zip` | `.crate` + source |
-| C++ | `AlyClient.CppSDK-<version>.zip` | headers + source (Windows XP direction) |
-| Pascal | `AlyClient.PascalSDK-<version>.zip` | Free Pascal / Delphi-mode source |
-| VB.NET | `AlyClient.VbNetSample-<version>.zip` | sample project + build output |
-| F# | `AlyClient.FSharpSample-<version>.zip` | sample project + build output |
-| COM | `AlyClient.Com-<version>.zip` | 32-bit DLL + registration scripts (VB6 / EPL) |
+<ReleaseDownloads group="sdk" />
 
 > Assets currently go to GitHub Releases only. Publishing to npm / PyPI / Maven Central /
 > crates.io / NuGet requires platform credentials; the zips already contain the native

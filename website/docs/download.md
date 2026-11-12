@@ -7,20 +7,13 @@ description: 装一个 AlyPublish 安装包就拿到发布 GUI、发布 CLI 与�
 
 Aly 的客户端与发布 CLI 都打进 **AlyPublish 安装包**：装一个包，发布 GUI、`aly-publish`、`aly-client`、`aly-client-ui` 全部就绪。服务端单独下载。
 
-所有资产都在 GitHub Releases，下面链接始终指向最新版本：
+所有资产都在 GitHub Releases。下表由**最新 Release 自动生成**，点击文件名即可下载；每次发版或手动触发文档同步后，链接与版本号会自动更新。
 
-```text
-https://github.com/lishuangquan1987/aly/releases/latest/download/<asset>
-```
+<ReleaseDownloads group="all" />
 
 ## 第一步：装 AlyPublish（一个包搞定）
 
-| 平台 | 资产 | 说明 |
-|---|---|---|
-| Windows x64 | `AlyPublish-Setup.exe` | 安装包：开始菜单入口，自包含 .NET 8，装到 `Program Files\AlyPublish` |
-| Windows x64 | `AlyPublish-win-x64.zip` | 便携包：解压即用，绿色无安装 |
-| Linux x64 | `AlyPublish-linux-x64.zip` | Linux 安装包（压缩包）：解压后运行 `install.sh` |
-| Linux arm64 | `AlyPublish-linux-arm64.zip` | 同上，arm64 |
+Windows 下载 <ReleaseLink asset="AlyPublish-Setup.exe" />（安装包：开始菜单入口，自包含 .NET 8，装到 `Program Files\AlyPublish`）或 <ReleaseLink asset="AlyPublish-win-x64.zip" />（便携包：解压即用）；Linux 下载 <ReleaseLink asset="AlyPublish-linux-x64.zip" />（x64）或 <ReleaseLink asset="AlyPublish-linux-arm64.zip" />（arm64）。完整清单与文件大小见上表。
 
 ```powershell [Windows]
 Invoke-WebRequest -Uri "https://github.com/lishuangquan1987/aly/releases/latest/download/AlyPublish-Setup.exe" -OutFile "AlyPublish-Setup.exe"
@@ -29,22 +22,19 @@ Start-Process ".\AlyPublish-Setup.exe"
 
 ```bash [Linux]
 curl -fL -o AlyPublish-linux-x64.zip "https://github.com/lishuangquan1987/aly/releases/latest/download/AlyPublish-linux-x64.zip"
-unzip AlyPublish-linux-x64.zip
+mkdir -p AlyPublish-linux-x64
+unzip -q AlyPublish-linux-x64.zip -d AlyPublish-linux-x64   # zip 内没有顶层目录，自己建一个
 cd AlyPublish-linux-x64
 chmod +x install.sh                                 # zip 不保留可执行位
 ./install.sh                                        # 默认装到 /opt/aly/AlyPublish（需要写权限）
-./install.sh --prefix $HOME/.local/lib/AlyPublish    # 无 root 时用这种
+# 无 root 时改用：./install.sh --prefix $HOME/.local/lib/AlyPublish
 ```
 
 装好后启动 `AlyPublish`（Linux 装在前缀目录里的 `AlyPublish`，`install.sh` 也会在 `$HOME/.local/bin` 写一个启动器），接着走[快速开始](/docs/getting-started)。
 
 ## 第二步：装服务端
 
-| 平台 | 资产 |
-|---|---|
-| Windows | `aly-server-windows-amd64.exe` |
-| Linux | `aly-server-linux-amd64` · `aly-server-linux-arm64` |
-| macOS | `aly-server-darwin-amd64` · `aly-server-darwin-arm64` |
+服务端按 `aly-server-{goos}-{goarch}` 命名，Windows 用 <ReleaseLink asset="aly-server-windows-amd64.exe" />，Linux 用 <ReleaseLink asset="aly-server-linux-amd64" /> / <ReleaseLink asset="aly-server-linux-arm64" />，macOS 用 <ReleaseLink asset="aly-server-darwin-amd64" /> / <ReleaseLink asset="aly-server-darwin-arm64" />。全部可点击链接见上表。
 
 ```bash [Linux]
 curl -fL -o aly-server "https://github.com/lishuangquan1987/aly/releases/latest/download/aly-server-linux-amd64"
@@ -77,10 +67,7 @@ install.sh  uninstall.sh                # 仅 Linux 包
 
 ## 语言 SDK
 
-| 组件 | 资产 | 说明 |
-|---|---|---|
-| C# SDK | `AlyClient.CSharpSDK.*.nupkg` · `AlyClient.CSharpSDK-<version>.zip` | 未上架公共 NuGet，从 Release 或源码获取 |
-| 其它语言 SDK | `AlyClient.*SDK-<version>.zip` | 每个语言一个版本化 zip（wheel / jar / `.crate` / 源码等） |
+上表的「多语言 SDK」分组里，每个 zip 都可以直接点击下载。C# SDK 另有 `.nupkg`（未上架公共 NuGet），其余语言每个版本一个 zip（wheel / jar / `.crate` / 源码等）：
 
 ```bash
 gh release download --pattern 'AlyClient.*SDK-*.zip'
@@ -92,6 +79,7 @@ SDK 不再负责更新器二进制的下载与复制：`UpdateFolder/` 由 AlyPu
 
 - 发布资产没有单独的 checksum 文件；下载后可用 `Get-FileHash` / `sha256sum` 与 Release 页面核对。
 - 版本号即 Git tag（如 `v1.2.3`）；服务端、发布工具与客户端不要求版本号一致，但客户端只认“严格更高”的服务端版本。
+- 本站下载链接的生成时机与当前对应版本见[文档版本](/docs/versions)。
 
 ## 下一步
 

@@ -22,13 +22,14 @@ start it as in [Server deployment](/en/docs/server/deploy), or look at step 0 be
 ```
 
 The first run creates `aly.db` and `data/` next to the executable; uploaded files always live in
-`data/{project}/`. On Linux use `./aly-server-linux-amd64`, on Windows `.\aly-server.exe`; `-db` moves the
-database file.
+`data/{project}/`. On Linux download <ReleaseLink asset="aly-server-linux-amd64" />, on Windows download
+<ReleaseLink asset="aly-server-windows-amd64.exe" /> (rename it to `aly-server.exe` to run); `-db` moves the
+database file. See [Download & Install](/en/docs/download) for the full matrix.
 
 ## 1. Install AlyPublish: one package with GUI + CLI + updater
 
-On Windows run `AlyPublish-Setup.exe`, or unzip `AlyPublish-win-x64.zip` and use it in place; on Linux unzip
-`AlyPublish-linux-x64.zip` and run `./install.sh`. The full download table and the package layout are in
+On Windows run <ReleaseLink asset="AlyPublish-Setup.exe" />, or unzip <ReleaseLink asset="AlyPublish-win-x64.zip" /> and use it in place; on Linux unzip
+<ReleaseLink asset="AlyPublish-linux-x64.zip" /> (or <ReleaseLink asset="AlyPublish-linux-arm64.zip" /> for arm64) and run `./install.sh`. The full download table and the package layout are in
 [Download & Install](/en/docs/download).
 
 What you get:

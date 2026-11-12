@@ -76,10 +76,19 @@ export const quickStartCopy: Record<'zh' | 'en', QuickStartCopy> = {
   }
 }
 
-function pakageAsset(os: QuickStartOs, arch: QuickStartArch): string {
+function packageAsset(os: QuickStartOs, arch: QuickStartArch): string {
   // macOS 没有 GUI 安装包：按文档从 Linux 包里取 publish-cli / client 目录。
   if (os === 'windows') return 'AlyPublish-Setup.exe'
   return `AlyPublish-linux-${arch === 'arm64' ? 'arm64' : 'x64'}.zip`
+}
+
+/** Linux 包内没有顶层目录，解压时自己建一个。 */
+function packageDir(arch: QuickStartArch): string {
+  return `AlyPublish-linux-${arch === 'arm64' ? 'arm64' : 'x64'}`
+}
+
+function portableAsset(): string {
+  return 'AlyPublish-win-x64.zip'
 }
 
 function serverAsset(os: QuickStartOs, arch: QuickStartArch): string {
@@ -105,13 +114,14 @@ function serverBinary(os: QuickStartOs): string {
   return os === 'windows' ? '.\\aly-server.exe' : './aly-server'
 }
 
-function clientBinary(os: QuickStartOs, arch: QuickStartArch): string {
-  const rid = os === 'windows' ? 'windows-x86' : `linux-${arch === 'arm64' ? 'arm64' : 'amd64'}`
-  return os === 'windows' ? `.\\client\\${rid}\\aly-client.exe` : `./client/${rid}/aly-client`
+function clientBinary(os: QuickStartOs): string {
+  // 更新器已放进 UpdateFolder/，命令在该目录内执行。
+  return os === 'windows' ? '.\\aly-client.exe' : './aly-client'
 }
 
 function buildPublishSteps(isEn: boolean, os: QuickStartOs, arch: QuickStartArch): QuickStartStep[] {
-  const asset = pakageAsset(os, arch)
+  const asset = packageAsset(os, arch)
+  const dir = packageDir(arch)
   const bin = publishBinary(os, arch)
   const copy = quickStartCopy[isEn ? 'en' : 'zh']
   return [
@@ -123,7 +133,7 @@ function buildPublishSteps(isEn: boolean, os: QuickStartOs, arch: QuickStartArch
       code:
         os === 'windows'
           ? `${psDownload(asset, 'AlyPublish-Setup.exe')}\nStart-Process ".\\AlyPublish-Setup.exe"`
-          : `curl -fL -o ${asset} "${RELEASE}/${asset}"\nunzip ${asset}\ncd AlyPublish-${arch === 'arm64' ? 'arm64' : 'x64'}\n./install.sh`,
+          : `curl -fL -o ${asset} "${RELEASE}/${asset}"\nmkdir -p ${dir}\nunzip -q ${asset} -d ${dir}       # zip 内没有顶层目录\ncd ${dir}\nchmod +x install.sh\n./install.sh`,
       note:
         os === 'macos'
           ? copy.macNote
@@ -239,16 +249,20 @@ ui.LaunchAuto();                  // silent unless an update is available`,
 
 function buildIntegrateCliSteps(isEn: boolean, os: QuickStartOs, arch: QuickStartArch): QuickStartStep[] {
   const bin = clientBinary(os)
+  const rid = os === 'windows' ? 'windows-x86' : `linux-${arch === 'arm64' ? 'arm64' : 'amd64'}`
+  const pkg = os === 'windows' ? portableAsset() : packageAsset(os, arch)
+  const dir = packageDir(arch)
+  // 更新器不再作为独立 Release 资产发布：从 AlyPublish 包的 client/<rid>/ 里取。
   const download =
     os === 'windows'
-      ? `${psDownload('aly-client.exe', 'aly-client.exe')}\n${psDownload('aly-client-ui.exe', 'aly-client-ui.exe')}`
-      : `curl -fL -o aly-client "${RELEASE}/aly-client-linux-${arch}"\ncurl -fL -o aly-client-ui "${RELEASE}/aly-client-ui-linux-${arch}"\nchmod +x aly-client aly-client-ui`
+      ? `# 更新器在 AlyPublish 便携包的 client\\windows-x86\\ 里\n${psDownload(pkg, portableAsset())}\nExpand-Archive -Path ${portableAsset()} -DestinationPath AlyPublish -Force\nCopy-Item "AlyPublish\\client\\windows-x86\\aly-client*.exe" "UpdateFolder\\" -Force`
+      : `# 更新器在 AlyPublish 包的 client/${rid}/ 里\ncurl -fL -o ${pkg} "${RELEASE}/${pkg}"\nmkdir -p ${dir}\nunzip -q ${pkg} -d ${dir}\ncp ${dir}/client/${rid}/aly-client* UpdateFolder/\nchmod 0755 UpdateFolder/aly-client*`
   return [
     {
-      title: isEn ? 'Download the updater' : '下载更新器',
+      title: isEn ? 'Take the updater from the AlyPublish package' : '从 AlyPublish 包里取更新器',
       body: isEn
-        ? 'Put both binaries in `UpdateFolder/`. The Windows build is 32-bit and XP-compatible; the Linux build is arch-specific.'
-        : '两个可执行文件都放进 `UpdateFolder/`。Windows 构建为 32 位、兼容 XP；Linux 按架构选择。',
+        ? `Standalone updater binaries are no longer published as Release assets. Download the AlyPublish package and copy both files from \`client/${rid}/\` into \`UpdateFolder/\`. The Windows build is 32-bit and XP-compatible; the Linux build is arch-specific.`
+        : `更新器不再作为独立 Release 资产发布。下载 AlyPublish 安装包，把 \`client/${rid}/\` 里的两个文件复制进 \`UpdateFolder/\`。Windows 构建为 32 位、兼容 XP；Linux 按架构选择。`,
       code: download,
       note: isEn ? quickStartCopy.en.windowsXpNote : quickStartCopy.zh.windowsXpNote,
       link: { text: isEn ? 'Download matrix' : '完整下载矩阵', to: '/docs/download' }
@@ -271,8 +285,8 @@ function buildIntegrateCliSteps(isEn: boolean, os: QuickStartOs, arch: QuickStar
       title: isEn ? 'Run the three commands' : '调用三条命令',
       code: `${bin} check_update\n${bin} download_update\n${bin} apply_update`,
       note: isEn
-        ? 'A business failure can still exit 0; rely on `isSuccess` in the JSON. `apply_update` closes the listed processes, replaces the folder and restarts the app.'
-        : '业务失败仍可能退出码 0，请以 JSON 的 `isSuccess` 为准。`apply_update` 会关闭列出的进程、替换目录并拉起主程序。',
+        ? 'Run these inside `UpdateFolder/`. A business failure can still exit 0; rely on `isSuccess` in the JSON. `apply_update` closes the listed processes, replaces the folder and restarts the app.'
+        : '在 `UpdateFolder/` 目录里执行。业务失败仍可能退出码 0，请以 JSON 的 `isSuccess` 为准。`apply_update` 会关闭列出的进程、替换目录并拉起主程序。',
       link: { text: isEn ? 'Command reference' : '命令参考', to: '/docs/commands' }
     }
   ]

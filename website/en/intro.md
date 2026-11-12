@@ -38,6 +38,13 @@ A host application can either spawn a subprocess and parse the JSON, or integrat
 | Publishing tools | Windows amd64, Linux amd64/arm64, macOS amd64/arm64 | Other Go targets |
 | Publish GUI | Windows (.NET 8) | Desktop platforms supported by .NET 8 |
 
+## Download the Latest Release
+
+To try it out, download the installer or the server binary straight from the latest release. Links
+refresh on every publish; see [Download & Install](/en/docs/download) for the full guide.
+
+<ReleaseDownloads group="all" compact :show-latest-hint="false" />
+
 ## Design Principles
 
 - **Single file, zero dependencies**: the updater and the server are each a single executable; the Linux GUI only depends on the GTK3 preinstalled by the distribution.

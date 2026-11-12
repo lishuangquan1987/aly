@@ -759,6 +759,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
 
     steps:
       - name: Checkout
@@ -803,5 +804,19 @@ jobs:
             gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
           fi
           gh release upload "$TAG" "${files[@]}" --clobber
+
+      # 资产全部落盘后再让文档站重新拉一次清单，下载链接与版本号随即更新到本次发布。
+      # 失败只告警：Release 本身已经发布成功，可在 Actions 手动运行「文档同步」补救。
+      - name: Refresh website download links
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG="${{ needs.resolve-version.outputs.tag }}"
+          if gh workflow run website.yml --ref master -f release_tag="$TAG"; then
+            echo "已触发文档同步，网站下载链接将更新到 $TAG"
+          else
+            echo "::warning::自动触发文档同步失败，请在 Actions 手动运行「文档同步 (Deploy Website)」"
+          fi
 
 

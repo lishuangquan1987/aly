@@ -15,15 +15,23 @@ For the Chinese UI, see [publish-gui-overview-zh.webp](/images/publish-gui-overv
 
 | Requirement | Description |
 |---|---|
-| Executable | `AlyPublish.exe` |
-| Required dependency | `aly-publish.exe` in the same directory (`aly-publish` on non-Windows platforms) |
+| Executable | `AlyPublish(.exe)` |
+| Required dependency | `publish-cli/<cli_rid>/aly-publish(.exe)` inside the package; `cli_rid` comes from the package's `payload.json` |
 | Runtime | Release installer/portable zip is self-contained on .NET 8; a source `dotnet build` is framework-dependent |
 | Minimum window | 1080 × 640; default 1320 × 840 |
 
-CLI lookup order:
+Download the package (click a file name):
 
-1. The directory containing `AlyPublish.exe`;
-2. `publish/publish-cli/aly-publish.exe` in the development tree (walking up from the build output directory; local development only).
+<ReleaseDownloads group="package" compact :show-latest-hint="false" :show-version="false" />
+
+The in-package payload layout and platform selection are in [Download & Install](/en/docs/download). CLI lookup order:
+
+1. `publish-cli/<cli_rid>/aly-publish(.exe)` named by `payload.json`;
+2. The other platform directories in the package (fallback in `payload_rids` order; a warning is logged when a non-native build is used);
+3. `aly-publish(.exe)` next to `AlyPublish` (the old manual layout still works);
+4. The project directory, then the development tree's `publish/publish-cli/` (local development only).
+
+When `payload.json` is missing or invalid, the GUI falls back to platform detection (Windows → `windows-amd64`, Linux → `linux-amd64` / `linux-arm64`) and logs a line explaining why.
 
 When the CLI cannot be found, an "aly-publish.exe not found" banner appears at the top of the window and offers two buttons, "Detect again" and "Open app folder"; once it is found, a green "CLI ready" badge appears in the upper-right corner. Every CLI-dependent operation (refresh, staging, publishing, project settings) fails while it is missing, and project initialization cannot complete either.
 

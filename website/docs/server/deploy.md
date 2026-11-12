@@ -11,15 +11,9 @@ aly-server 是更新系统的服务端：保存项目与版本元数据、接收
 
 ## 获取二进制
 
-发布产物按 `aly-server-{goos}-{goarch}` 命名，从 GitHub Release 下载：
+发布产物按 `aly-server-{goos}-{goarch}` 命名，下表由最新 Release 生成，点击文件名即可下载（每次发版自动更新）：
 
-| 平台 | 资产名 |
-| --- | --- |
-| Windows x64 | `aly-server-windows-amd64.exe` |
-| Linux x64 | `aly-server-linux-amd64` |
-| Linux arm64 | `aly-server-linux-arm64` |
-| macOS x64 | `aly-server-darwin-amd64` |
-| macOS arm64 | `aly-server-darwin-arm64` |
+<ReleaseDownloads group="server" />
 
 也可以从源码构建（产物是纯静态二进制，`CGO_ENABLED=0`）：
 

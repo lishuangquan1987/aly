@@ -80,7 +80,7 @@ dotnet pack -c Release -o nupkg -p:Version=1.0.0
 `AlyClient.CSharpSDK.targets` 现在只做两件事：建 `..\UpdateFolder\`、在缺失时生成默认 `client.json`。
 `aly-client` / `aly-client-ui` 来自 **AlyPublish 安装包**的 `client/<rid>/`：GUI 初始化项目时会把它们
 复制进同级 `UpdateFolder/`，也可以手工从包里取（Linux 取出后记得 `chmod 0755`）。见[下载与安装](/docs/download)。
-::::
+:::
 
 ## 部署布局：UpdateFolder
 
@@ -232,7 +232,7 @@ class Program
 - `aly-client-ui.exe` 必须存在：缺失时 `Launch` 返回 `IsSuccess=false`，`ErrorMsg` 为 `aly-client-ui.exe not found: <路径>`。
 - `apply_update` 之后 UI 会按 `client.json` 关闭并重启主程序，宿主不需要自己重启。
 - `Dispose` 只释放 `Process` 句柄、退订事件，**不会结束**已经在运行的 UI 窗口。
-- 不需要 GUI 时把 `AlyIncludeClientUi` 设为 `false` 跳过部署，改用下面的 `AlyUpdateClient`。
+- 不需要自绘界面以外的窗口时，改用下面的 `AlyUpdateClient`；更新器与 GUI 都由 AlyPublish 安装包提供，构建期 targets 不再下载任何东西。
 
 ## 集成方式二：AlyUpdateClient 事件循环
 

@@ -1,0 +1,155 @@
+{
+  "tag": "v0.1.11",
+  "publishedAt": "2026-11-11T10:28:03Z",
+  "htmlUrl": "https://github.com/lishuangquan1987/aly/releases/tag/v0.1.11",
+  "generatedAt": "2026-11-11T23:45:15.842Z",
+  "assets": [
+    {
+      "name": "aly-server-darwin-amd64",
+      "size": 32169056,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/aly-server-darwin-amd64",
+      "downloadCount": 0,
+      "contentType": "application/octet-stream"
+    },
+    {
+      "name": "aly-server-darwin-arm64",
+      "size": 30240866,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/aly-server-darwin-arm64",
+      "downloadCount": 0,
+      "contentType": "application/octet-stream"
+    },
+    {
+      "name": "aly-server-linux-amd64",
+      "size": 31609016,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/aly-server-linux-amd64",
+      "downloadCount": 0,
+      "contentType": "application/octet-stream"
+    },
+    {
+      "name": "aly-server-linux-arm64",
+      "size": 29491384,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/aly-server-linux-arm64",
+      "downloadCount": 0,
+      "contentType": "application/octet-stream"
+    },
+    {
+      "name": "aly-server-windows-amd64.exe",
+      "size": 32040960,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/aly-server-windows-amd64.exe",
+      "downloadCount": 0,
+      "contentType": "application/octet-stream"
+    },
+    {
+      "name": "AlyClient.Com-0.1.11.zip",
+      "size": 264862,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyClient.Com-0.1.11.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    },
+    {
+      "name": "AlyClient.CppSDK-0.1.11.zip",
+      "size": 24498,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyClient.CppSDK-0.1.11.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    },
+    {
+      "name": "AlyClient.CSharpSDK-0.1.11.zip",
+      "size": 34824,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyClient.CSharpSDK-0.1.11.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    },
+    {
+      "name": "AlyClient.CSharpSDK.0.1.11.nupkg",
+      "size": 33611,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyClient.CSharpSDK.0.1.11.nupkg",
+      "downloadCount": 0,
+      "contentType": "application/octet-stream"
+    },
+    {
+      "name": "AlyClient.FSharpSample-0.1.11.zip",
+      "size": 1668090,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyClient.FSharpSample-0.1.11.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    },
+    {
+      "name": "AlyClient.GoSDK-0.1.11.zip",
+      "size": 15777,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyClient.GoSDK-0.1.11.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    },
+    {
+      "name": "AlyClient.JavaSDK-0.1.11.zip",
+      "size": 78320,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyClient.JavaSDK-0.1.11.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    },
+    {
+      "name": "AlyClient.PascalSDK-0.1.11.zip",
+      "size": 16461,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyClient.PascalSDK-0.1.11.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    },
+    {
+      "name": "AlyClient.PythonSDK-0.1.11.zip",
+      "size": 23653,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyClient.PythonSDK-0.1.11.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    },
+    {
+      "name": "AlyClient.RustSDK-0.1.11.zip",
+      "size": 27963,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyClient.RustSDK-0.1.11.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    },
+    {
+      "name": "AlyClient.TypeScriptSDK-0.1.11.zip",
+      "size": 28639,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyClient.TypeScriptSDK-0.1.11.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    },
+    {
+      "name": "AlyClient.VbNetSample-0.1.11.zip",
+      "size": 263162,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyClient.VbNetSample-0.1.11.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    },
+    {
+      "name": "AlyPublish-linux-arm64.zip",
+      "size": 76120323,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyPublish-linux-arm64.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    },
+    {
+      "name": "AlyPublish-linux-x64.zip",
+      "size": 77851795,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyPublish-linux-x64.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    },
+    {
+      "name": "AlyPublish-Setup.exe",
+      "size": 57224294,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyPublish-Setup.exe",
+      "downloadCount": 0,
+      "contentType": "application/octet-stream"
+    },
+    {
+      "name": "AlyPublish-win-x64.zip",
+      "size": 76993137,
+      "downloadUrl": "https://github.com/lishuangquan1987/aly/releases/download/v0.1.11/AlyPublish-win-x64.zip",
+      "downloadCount": 0,
+      "contentType": "application/zip"
+    }
+  ]
+}

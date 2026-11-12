@@ -284,7 +284,7 @@ public AlyUpdateUIClient(string uiExePath = null, string language = DefaultLangu
 `Launch` 的执行顺序：
 
 1. 已 `Dispose` → 返回 `NG("AlyUpdateUIClient has been disposed.")`。
-2. `UiExePath` 不存在 → 返回 `NG("aly-client-ui.exe not found: <路径>（请确认 UpdateFolder 已部署；构建时设置 AlyIncludeClientUi=true 自动下载）")`。
+2. `UiExePath` 不存在 → 返回 `NG("aly-client-ui.exe not found: <路径>（请确认 UpdateFolder 已部署；构建时设置 AlyIncludeClientUi=true 自动下载）")`（括注是旧版本遗留的提示文案，现状见下节）。
 3. 本对象持有的进程仍在运行 → 直接返回 `OK()`，不再拉起。
 4. 释放上一次的进程句柄，用 `Arguments = "-mode <mode> -lang <lang>"`、`WorkingDirectory = UI 所在目录`、`CreateNoWindow = true` 启动；成功后重置 `LastExitCode = null` 并触发 `Started(pid)`。
 5. `Process.Start()` 返回 `false` → 释放刚创建的句柄并返回 `NG("failed to start aly-client-ui.exe")`；抛异常 → 返回 `NG(ex)`。
@@ -300,7 +300,7 @@ public AlyUpdateUIClient(string uiExePath = null, string language = DefaultLangu
 
 `AlyUpdateUIClient` **必须**有 `aly-client-ui.exe`。它默认与 `aly-client.exe` 同目录（都在 `UpdateFolder/`）：UI 启动时先在同目录找更新器，找不到再回落到 `client.json` 里主程序目录下的 `aly-client.exe`。UI 是独立单实例程序，负责窗口、下载进度、回滚版本选择，并在 `apply_update` 后按 `client.json` 重启主程序。
 
-部署由 SDK 的 targets 完成：`AlyIncludeClientUi` 默认 `true`，构建时自动下载；设为 `false` 可跳过（此时不要使用 `AlyUpdateUIClient`）。下载失败只警告，不阻断构建。
+更新器与 GUI 由 **AlyPublish 安装包**提供：GUI 初始化项目时会把包内 `client/<rid>/` 的两个文件复制进同级 `UpdateFolder/`，也可以按[下载与安装](/docs/download)的 payload 布局手工放置。SDK 的 targets 现在只建目录、在缺失时写默认 `client.json`，**不再下载任何文件**；缺少 `aly-client-ui.exe` 时按上面的路径补一份即可。
 
 单实例转发：如果窗口已由其他途径启动（SDK 没有该进程句柄），`Launch` 仍会启动新进程；新进程通过命名事件把「手动检查请求」转发给既有实例，然后以退出码 0 立即结束——因此「窗口没变多」不是失败。仅 `check`/`update` 这类手动模式会转发并升级既有实例的交互状态，`auto`/`silent` 实例收到转发请求后按交互式语义处理。
 

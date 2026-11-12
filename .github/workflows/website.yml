@@ -6,7 +6,17 @@ on:
   push:
     branches: [master]
     paths: ['website/**', '.github/workflows/website.yml']
+  # 发布 Release 时立即重建一次；若此刻资产还在上传，生成脚本会沿用仓库内快照，
+  # 随后 Release Build 上传完成后会再触发一次带 tag 的同步，链接最终一定对齐。
+  release:
+    types: [published]
+  # 手动触发：可指定 tag，留空则取最新 Release
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '指定 Release tag（例如 v0.1.11；留空 = 最新）'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -32,6 +42,13 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: website/pnpm-lock.yaml
+      # 每次部署前拉取最新 Release 的资产清单，页面里的文件名/版本号/下载链接随之更新。
+      - name: Generate release download links
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ALY_RELEASE_TAG: ${{ inputs.release_tag || '' }}
+        run: node scripts/gen-release-assets.mjs
+        working-directory: website
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
         working-directory: website

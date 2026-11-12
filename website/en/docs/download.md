@@ -9,20 +9,19 @@ Both the updater and the publish CLI ship **inside the AlyPublish package**: ins
 have the publish GUI, `aly-publish`, `aly-client` and `aly-client-ui` ready. The server is a separate
 download.
 
-All assets live on GitHub Releases; these links always point at the latest version:
+All assets live on GitHub Releases. The table below is **generated from the latest release** — click any
+file name to download. Links and the version badge refresh automatically whenever a release is published
+or the docs are re-deployed manually.
 
-```text
-https://github.com/lishuangquan1987/aly/releases/latest/download/<asset>
-```
+<ReleaseDownloads group="all" />
 
 ## Step 1: install AlyPublish (one package)
 
-| Platform | Asset | Notes |
-|---|---|---|
-| Windows x64 | `AlyPublish-Setup.exe` | Installer: start-menu entry, self-contained .NET 8, installs to `Program Files\AlyPublish` |
-| Windows x64 | `AlyPublish-win-x64.zip` | Portable: unzip and run |
-| Linux x64 | `AlyPublish-linux-x64.zip` | Linux package: unzip, then run `install.sh` |
-| Linux arm64 | `AlyPublish-linux-arm64.zip` | Same, arm64 |
+On Windows download <ReleaseLink asset="AlyPublish-Setup.exe" /> (installer: start-menu entry,
+self-contained .NET 8, installs to `Program Files\AlyPublish`) or
+<ReleaseLink asset="AlyPublish-win-x64.zip" /> (portable: unzip and run). On Linux download
+<ReleaseLink asset="AlyPublish-linux-x64.zip" /> (x64) or
+<ReleaseLink asset="AlyPublish-linux-arm64.zip" /> (arm64). The full matrix with file sizes is above.
 
 ```powershell [Windows]
 Invoke-WebRequest -Uri "https://github.com/lishuangquan1987/aly/releases/latest/download/AlyPublish-Setup.exe" -OutFile "AlyPublish-Setup.exe"
@@ -31,11 +30,12 @@ Start-Process ".\AlyPublish-Setup.exe"
 
 ```bash [Linux]
 curl -fL -o AlyPublish-linux-x64.zip "https://github.com/lishuangquan1987/aly/releases/latest/download/AlyPublish-linux-x64.zip"
-unzip AlyPublish-linux-x64.zip
+mkdir -p AlyPublish-linux-x64
+unzip -q AlyPublish-linux-x64.zip -d AlyPublish-linux-x64   # the zip has no top-level folder
 cd AlyPublish-linux-x64
 chmod +x install.sh                                 # zip does not keep the exec bit
 ./install.sh                                        # installs to /opt/aly/AlyPublish (needs write access)
-./install.sh --prefix $HOME/.local/lib/AlyPublish    # use this without root
+# without root use: ./install.sh --prefix $HOME/.local/lib/AlyPublish
 ```
 
 Start `AlyPublish` after install (on Linux it is the `AlyPublish` file inside the prefix; `install.sh`
@@ -43,11 +43,11 @@ also writes a launcher into `$HOME/.local/bin`), then follow [Quick Start](/en/d
 
 ## Step 2: install the server
 
-| Platform | Asset |
-|---|---|
-| Windows | `aly-server-windows-amd64.exe` |
-| Linux | `aly-server-linux-amd64` · `aly-server-linux-arm64` |
-| macOS | `aly-server-darwin-amd64` · `aly-server-darwin-arm64` |
+Server assets are named `aly-server-{goos}-{goarch}`: Windows uses
+<ReleaseLink asset="aly-server-windows-amd64.exe" />, Linux uses
+<ReleaseLink asset="aly-server-linux-amd64" /> / <ReleaseLink asset="aly-server-linux-arm64" />,
+macOS uses <ReleaseLink asset="aly-server-darwin-amd64" /> /
+<ReleaseLink asset="aly-server-darwin-arm64" />. All clickable links are in the table above.
 
 ```bash [Linux]
 curl -fL -o aly-server "https://github.com/lishuangquan1987/aly/releases/latest/download/aly-server-linux-amd64"
@@ -86,10 +86,8 @@ the publish tool do have macOS prebuilds.
 
 ## Language SDKs
 
-| Component | Asset | Notes |
-|---|---|---|
-| C# SDK | `AlyClient.CSharpSDK.*.nupkg` · `AlyClient.CSharpSDK-<version>.zip` | Not on the public NuGet feed; take it from Releases or from source |
-| Other language SDKs | `AlyClient.*SDK-<version>.zip` | One versioned zip per language (wheel / jar / `.crate` / sources) |
+Every zip in the “Language SDKs” group above is a direct download link. C# also has a `.nupkg` (not on
+the public NuGet feed); each other language ships one versioned zip (wheel / jar / `.crate` / sources).
 
 ```bash
 gh release download --pattern 'AlyClient.*SDK-*.zip'
@@ -105,6 +103,7 @@ and [language SDKs](/en/docs/sdk/languages).
   Release page afterwards.
 - The version number is the Git tag (for example `v1.2.3`). The server, the publish tool and the client
   do not need matching versions, but a client only accepts a strictly higher server version.
+- See [Documentation Versions](/en/docs/versions) for when these links are regenerated.
 
 ## Next
 

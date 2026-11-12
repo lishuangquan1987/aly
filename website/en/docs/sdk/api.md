@@ -284,7 +284,7 @@ public AlyUpdateUIClient(string uiExePath = null, string language = DefaultLangu
 `Launch` execution order:
 
 1. Already disposed → returns `NG("AlyUpdateUIClient has been disposed.")`.
-2. `UiExePath` does not exist → returns `NG("aly-client-ui.exe not found: <path> (confirm that UpdateFolder is deployed; set AlyIncludeClientUi=true at build time to download it automatically)")`.
+2. `UiExePath` does not exist → returns `NG("aly-client-ui.exe not found: <path> (confirm that UpdateFolder is deployed; set AlyIncludeClientUi=true at build time to download it automatically)")` (the parenthetical is a legacy message from an older release; see the deployment note below).
 3. The process held by this object is still running → returns `OK()` directly without launching again.
 4. Releases the previous process handle and starts with `Arguments = "-mode <mode> -lang <lang>"`, `WorkingDirectory = directory containing the UI`, `CreateNoWindow = true`; on success resets `LastExitCode = null` and fires `Started(pid)`.
 5. `Process.Start()` returns `false` → disposes the newly created handle and returns `NG("failed to start aly-client-ui.exe")`; an exception is thrown → returns `NG(ex)`.
@@ -300,7 +300,11 @@ public AlyUpdateUIClient(string uiExePath = null, string language = DefaultLangu
 
 `AlyUpdateUIClient` **requires** `aly-client-ui.exe`. By default it lives in the same directory as `aly-client.exe` (both in `UpdateFolder/`): at startup the UI first looks for the updater in its own directory and, failing that, falls back to `aly-client.exe` in the main application directory recorded in `client.json`. The UI is a standalone single-instance program responsible for the window, download progress and rollback version selection, and it restarts the main program according to `client.json` after `apply_update`.
 
-Deployment is handled by the SDK targets: `AlyIncludeClientUi` defaults to `true` and the UI is downloaded at build time; set it to `false` to skip (in which case do not use `AlyUpdateUIClient`). Download failures only warn and never block the build.
+The binaries come from the **AlyPublish package**: when initializing a project the GUI copies both files
+from `client/<rid>/` into the sibling `UpdateFolder/`, or you can place them by hand following the payload
+layout in [Download & Install](/en/docs/download). The SDK targets now only create the directory and write a
+default `client.json` when missing — they **no longer download anything**. If `aly-client-ui.exe` is
+missing, add it from the package as described above.
 
 Single-instance forwarding: if the window was already started by another route (the SDK holds no handle to that process), `Launch` still starts a new process; the new process forwards the "manual check request" to the existing instance through a named event and then exits immediately with code 0 — so "the window count did not increase" is not a failure. Only manual modes such as `check`/`update` forward the request and upgrade the existing instance's interaction state; `auto`/`silent` instances handle a forwarded request with interactive semantics.
 

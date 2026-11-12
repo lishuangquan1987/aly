@@ -76,13 +76,12 @@ dotnet pack -c Release -o nupkg -p:Version=1.0.0
 
 Put the resulting `AlyClient.CSharpSDK.1.0.0.nupkg` into a local feed (for example `<add key="local" value="D:\nuget-local" />` in `NuGet.config`), after which you can use `<PackageReference Include="AlyClient.CSharpSDK" Version="1.0.0" />`.
 
-::: warning A local pack keeps the version placeholder
-The default value of `AlyClientVersion` in `AlyClient.CSharpSDK.targets` is the literal `ALY_CLIENT_VERSION_PLACEHOLDER`. The release pipeline replaces this string with the real version before packing; a **local `dotnet pack` does not**. The download URL the host builds is then `.../releases/download/vALY_CLIENT_VERSION_PLACEHOLDER/aly-client.exe`, the download inevitably fails (warning only, the build is not interrupted), and no `aly-client.exe` appears in `UpdateFolder`.
-
-Two remedies:
-
-- Override the property when building the host: `dotnet build -p:AlyClientVersion=1.0.0`, or put `<AlyClientVersion>1.0.0</AlyClientVersion>` in the host csproj.
-- Or replace the placeholder in the `.targets` file manually before packing, matching the release pipeline.
+::: tip Updater binaries come from the AlyPublish package
+`AlyClient.CSharpSDK.targets` now does only two things: creates `..\UpdateFolder\` and writes a default
+`client.json` when one is missing. `aly-client` / `aly-client-ui` come from `client/<rid>/` inside the
+**AlyPublish package**: the GUI copies them into the sibling `UpdateFolder/` when initializing a project,
+or you can take them out of the package by hand (`chmod 0755` on Linux). See
+[Download & Install](/en/docs/download).
 :::
 
 ## Deployment Layout: UpdateFolder
@@ -235,7 +234,7 @@ Key points:
 - `aly-client-ui.exe` must exist: when missing, `Launch` returns `IsSuccess=false` and `ErrorMsg` is `aly-client-ui.exe not found: <path>`.
 - After `apply_update` the UI closes and restarts the host according to `client.json`; the host does not restart itself.
 - `Dispose` only releases the `Process` handle and unsubscribes events; it **does not close** an already running UI window.
-- When no GUI is needed, set `AlyIncludeClientUi` to `false` to skip deployment and switch to `AlyUpdateClient` below.
+- When no GUI window is needed, switch to `AlyUpdateClient` below; both binaries come from the AlyPublish package and the build-time targets no longer download anything.
 
 ## Integration Style 2: AlyUpdateClient Event Loop
 
@@ -391,38 +390,36 @@ class Direct
 
 For timeouts and failure modes (30 seconds by default, 600 seconds for rollback, 1800 seconds for a stalled download) see [API Reference](/en/docs/sdk/api#timeouts-and-failure-modes).
 
-## Build-Time Auto-Deployment Targets
+## Build-Time Targets: Only Prepare UpdateFolder
 
-`AlyClient.CSharpSDK.targets` in the SDK package runs `AlyDeployToUpdateFolder` (`BeforeTargets="Build"`) during the host build, downloading the updater and GUI into `UpdateFolder`. Every property is overridable:
+`AlyClient.CSharpSDK.targets` in the SDK package runs `AlyDeployToUpdateFolder` (`BeforeTargets="Build"`)
+during the host build. It does **only two things**: creates the destination directory and writes a default
+`client.json` when one is missing. The updater binaries come from the AlyPublish package (the GUI copies
+them into the sibling `UpdateFolder/`); the SDK no longer downloads anything.
 
 | MSBuild property | Default | Description |
 |---|---|---|
 | `AlyUpdateFolder` | Windows: `$(OutDir)..\UpdateFolder\`; other platforms: `$(OutDir)../UpdateFolder/` | Destination directory |
-| `AlyClientVersion` | `ALY_CLIENT_VERSION_PLACEHOLDER` | Version number spliced into the download URL (`v$(AlyClientVersion)`); it is still the placeholder after a local pack |
-| `AlyClientDownloadUrl` | `https://github.com/lishuangquan1987/aly/releases/download/v$(AlyClientVersion)/aly-client.exe` | Updater download URL (the Linux asset is named `aly-client-linux-$(AlyRid)`) |
-| `AlyClientUiDownloadUrl` | `aly-client-ui.exe` under the same path (Linux: `aly-client-ui-linux-$(AlyRid)`) | GUI download URL |
-| `AlyIncludeClientUi` | `true` | Whether to download the GUI; set to `false` to skip |
-| `AlyRid` | `amd64` | Linux only: `amd64` / `arm64` |
 
 Behavior:
 
-- If the target file already exists the download is skipped (idempotent); a hand-edited `client.json` is not overwritten, nor is an already deployed updater.
-- Download failures only warn (`ContinueOnError`) and **never fail the host build**. In other words, "build succeeded" does not mean "the updater is in place"; verify for yourself that `UpdateFolder/aly-client.exe` exists.
-- When `client.json` is missing, a default template is written (`main_exe_relative_path` is `../ApplicationFolder/YourApp.exe`, `must_close_process_name` is `["YourApp"]`), and it must be adjusted to the actual directory structure.
-- Windows downloads with PowerShell (TLS 1.2 set explicitly); Linux uses `curl` (falling back to `wget`), renames the files to `aly-client` / `aly-client-ui` and runs `chmod 0755` — consistent with the platform naming convention of `config.UpdaterFileName()`.
-- Platform detection uses `$(OS)`, which is compatible with VS2013/2015 builds on net40.
+- When `client.json` is missing, a default template is written (`main_exe_relative_path` is
+  `../ApplicationFolder/YourApp.exe`, `must_close_process_name` is `["YourApp"]`); adjust it to the real
+  layout. An existing file is never overwritten, so hand-edited config is safe.
+- The updater and GUI are **not** placed here: they ship in the AlyPublish package and the GUI copies them
+  in (see [Download & Install](/en/docs/download)). Manual placement still works: take
+  `client/<rid>/aly-client(.exe)` and `aly-client-ui(.exe)` out of the package into `UpdateFolder/`
+  (`chmod 0755` on Linux).
+- Platform detection uses `$(OS)`, compatible with VS2013/2015 builds on net40.
 
-Linux cross-deployment example:
-
-```bash
-dotnet build -p:AlyRid=arm64 -p:AlyClientVersion=1.0.0
-```
+To deliver updaters for another platform, take the matching `client/<rid>/` directory from the package
+(Windows: `client/windows-x86/`; Linux: `client/linux-amd64/` or `client/linux-arm64/`).
 
 ## Common Pitfalls
 
 | Symptom | Cause and fix |
 |---|---|
-| The build succeeds but there is no `aly-client.exe` in `UpdateFolder` | Download failures only warn. Most likely `AlyClientVersion` is still the placeholder, or GitHub Releases is unreachable; retry after overriding it with `-p:AlyClientVersion=<version>` |
+| The build succeeds but there is no `aly-client.exe` in `UpdateFolder` | The SDK no longer downloads the updater: use the AlyPublish package (the GUI copies it when initializing a project), or take `client/<rid>/` out of the package by hand (`chmod 0755` on Linux) |
 | `check_update` keeps returning `has_update=false` although the server clearly has a new version | When the host machine is offline the client returns `has_update=false` (it reports nothing it cannot verify with the server) and resumes automatically once online; first confirm that `server_url` in `.updator/shared.json` is reachable |
 | The host does not start after an update | `main_exe_relative_path` in `client.json` is missing the leading `../`, or the exe name does not match the actual file. Check against the table under "Relative Paths in client.json" above |
 | The application is killed outright with no chance to save settings | `MustCloseProcessNames` is not set. The updater force-kills when it detects the directory is in use during the replacement phase; set it to `Process.GetCurrentProcess().ProcessName` (without `.exe`) |
@@ -432,7 +429,7 @@ dotnet build -p:AlyRid=arm64 -p:AlyClientVersion=1.0.0
 | The UI freezes after calling `.Result` on the UI thread | `check_update` waits up to 30 seconds by default and `download_update` can take longer. Call them from a background thread |
 | The host is still shutting down after `apply`, then the process suddenly disappears | `ApplyUpdateAsync` returns immediately after spawning a separate process, and `apply_update` closes the current process. Do not do cleanup after it; move cleanup into an exit hook |
 | The updater cannot be found on Linux | The default path is the Windows-style `..\UpdateFolder\aly-client.exe`; on Linux there is no `.exe` and backslash is not a separator. Pass the path explicitly: `new AlyUpdateClient("/opt/app/UpdateFolder/aly-client")` |
-| `LaunchAuto` fails saying `aly-client-ui.exe` was not found | The GUI was not deployed (`AlyIncludeClientUi=false`, or the download failed). Deploy it, or switch to `AlyUpdateClient` |
+| `LaunchAuto` fails saying `aly-client-ui.exe` was not found | There is no GUI front-end in `UpdateFolder`: take `client/<rid>/aly-client-ui(.exe)` from the package and place it there, or switch to `AlyUpdateClient` |
 | Two update windows appear at once | `AlyUpdateUIClient` and `AlyUpdateClient` are both enabled in one host. Keep only one |
 | Closing the host hangs for a few seconds | `Dispose` waits for the background loop to exit, up to 5 seconds; the polling sleep itself is interruptible and never sleeps a full idle period |
 

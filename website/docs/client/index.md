@@ -17,6 +17,10 @@ description: aly-client 的职责、部署布局、版本生命周期、宿主�
 | `aly-server` | 保存项目元数据与文件清单，提供 REST API |
 | `aly-publish` | 发布侧工具：扫描、暂存、上传并发布版本 |
 
+预构建的更新器不再单独发布：从 AlyPublish 安装包的 `client/<rid>/` 目录取（GUI 初始化项目时会自动复制进 `UpdateFolder/`）。点文件名下载安装包：
+
+<ReleaseDownloads group="package" compact :show-latest-hint="false" :show-version="false" />
+
 更新器只负责“把本机文件换成服务端发布的新版本”，不决定什么时候提示用户、是否强制更新。提示策略由宿主或 GUI 决定。
 
 ## 宿主生命周期：宿主退出就跟着退

@@ -19,9 +19,21 @@ For a given version, the authoritative CLI parameters and return fields are that
 
 ## Current version
 
-- Latest release: [GitHub Releases](https://github.com/lishuangquan1987/aly/releases/latest)
+<ReleaseVersion />
+
+The file links on the [Download & Install](/en/docs/download), [Server deployment](/en/docs/server/deploy)
+and [Language SDKs](/en/docs/sdk/languages) pages are generated from the latest release:
+
+- **On publish**: after the Release Build uploads all assets, the docs workflow is triggered automatically
+  and the asset list is regenerated;
+- **Manually**: run "文档同步 (Deploy Website)" in Actions, optionally pinning a tag (empty = latest);
+- **On website changes**: any push to `website/**` on `master` regenerates them too.
+
+Links are pinned to the version present at build time; you can also use
+`https://github.com/lishuangquan1987/aly/releases/latest/download/<asset>` to always fetch the newest file.
+
 - Docs source: [website/docs](https://github.com/lishuangquan1987/aly/tree/master/website/docs)
-- Chinese docs: [website/docs](https://github.com/lishuangquan1987/aly/tree/master/website/docs)
+- English docs: [website/en/docs](https://github.com/lishuangquan1987/aly/tree/master/website/en/docs)
 
 ::: tip Align versions before upgrading
 The server, publisher and client can be upgraded independently, but a client only accepts a **strictly higher** server version. Read the release notes for the target version before upgrading.

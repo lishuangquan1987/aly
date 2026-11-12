@@ -17,6 +17,12 @@ Optional components:
 | `aly-server` | Holds project metadata and file manifests, and serves the REST API |
 | `aly-publish` | Publisher-side tool: scan, stage, upload and publish versions |
 
+Prebuilt updaters are no longer published as standalone assets: take them from `client/<rid>/` inside the
+AlyPublish package (the GUI copies them into `UpdateFolder/` when initializing a project). Click a file
+name to download the package:
+
+<ReleaseDownloads group="package" compact :show-latest-hint="false" :show-version="false" />
+
 The updater is only responsible for turning the local files into the new version published by the server; it does not decide when to prompt the user or whether an update is forced. Prompting policy belongs to the host or the GUI.
 
 ## Deployment Layout

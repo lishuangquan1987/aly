@@ -11,15 +11,10 @@ aly-server is the server side of the update system: it stores project and versio
 
 ## Getting the binary
 
-Release artifacts are named `aly-server-{goos}-{goarch}` and downloaded from GitHub Releases:
+Release artifacts are named `aly-server-{goos}-{goarch}`. The table below is generated from the latest
+release — click a file name to download; it refreshes on every publish:
 
-| Platform | Asset name |
-| --- | --- |
-| Windows x64 | `aly-server-windows-amd64.exe` |
-| Linux x64 | `aly-server-linux-amd64` |
-| Linux arm64 | `aly-server-linux-arm64` |
-| macOS x64 | `aly-server-darwin-amd64` |
-| macOS arm64 | `aly-server-darwin-arm64` |
+<ReleaseDownloads group="server" />
 
 You can also build from source (the artifact is a pure static binary, `CGO_ENABLED=0`):
 

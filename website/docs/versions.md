@@ -19,7 +19,16 @@ CLI 的参数与返回字段以对应版本的 `COMMANDS.md` 和源码为准；�
 
 ## 当前版本
 
-- 最新发布：[GitHub Releases](https://github.com/lishuangquan1987/aly/releases/latest)
+<ReleaseVersion />
+
+网站[下载与安装](/docs/download)、[服务端部署](/docs/server/deploy)与[多语言 SDK](/docs/sdk/languages)页面里的文件链接由最新 Release 自动生成，生成时机：
+
+- **发布 Release**：Release Build 上传完资产后自动触发文档同步，重新拉取清单并部署；
+- **手动触发**：在 Actions 中手动运行「文档同步 (Deploy Website)」，可指定 tag 或留空取最新版；
+- **网站代码变更**：push 到 `master` 的 `website/**` 也会重新生成。
+
+链接固定到生成时的版本；也可以用 `https://github.com/lishuangquan1987/aly/releases/latest/download/<文件名>` 始终取最新版。
+
 - 文档源：[website/docs](https://github.com/lishuangquan1987/aly/tree/master/website/docs)
 - 英文文档：[website/en/docs](https://github.com/lishuangquan1987/aly/tree/master/website/en/docs)
 
