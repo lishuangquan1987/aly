@@ -7293,7 +7293,8 @@ tc.True(t, strings.Contains(ct, "boundary="), "③ 必须带 boundary")
 ```csharp
 if (!File.Exists(UiExePath))
     return AlyResponse.NG("aly-client-ui.exe not found: " + UiExePath
-        + "（请确认 UpdateFolder 已部署；构建时设置 AlyIncludeClientUi=true 自动下载）");
+        + "（请确认 UpdateFolder 已部署：GUI 初始化项目时会从 AlyPublish 包复制，"
+        + "或按 client/<rid>/ 布局手工放置 aly-client-ui.exe）");
 try { ... process.Start() ... }
 catch (Exception ex) { return AlyResponse.NG(ex); }
 ```

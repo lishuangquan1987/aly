@@ -284,7 +284,7 @@ public AlyUpdateUIClient(string uiExePath = null, string language = DefaultLangu
 `Launch` execution order:
 
 1. Already disposed → returns `NG("AlyUpdateUIClient has been disposed.")`.
-2. `UiExePath` does not exist → returns `NG("aly-client-ui.exe not found: <path> (confirm that UpdateFolder is deployed; set AlyIncludeClientUi=true at build time to download it automatically)")` (the parenthetical is a legacy message from an older release; see the deployment note below).
+2. `UiExePath` does not exist → returns `NG("aly-client-ui.exe not found: <path> (confirm that UpdateFolder is deployed: the GUI copies it from the AlyPublish package when initializing a project, or place aly-client-ui.exe by hand following the client/<rid>/ layout)")` (see the deployment note below).
 3. The process held by this object is still running → returns `OK()` directly without launching again.
 4. Releases the previous process handle and starts with `Arguments = "-mode <mode> -lang <lang>"`, `WorkingDirectory = directory containing the UI`, `CreateNoWindow = true`; on success resets `LastExitCode = null` and fires `Started(pid)`.
 5. `Process.Start()` returns `false` → disposes the newly created handle and returns `NG("failed to start aly-client-ui.exe")`; an exception is thrown → returns `NG(ex)`.

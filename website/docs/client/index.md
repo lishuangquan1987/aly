@@ -189,7 +189,7 @@ using (var p = Process.Start(psi))
 | `AlyApi` | 静态方法直调，每个方法对应一个 `aly-client` 命令；适合自己控制时序的宿主 |
 | `AlyUpdateUIClient` | 启动 `aly-client-ui`，把整个生命周期和重启交给 GUI |
 
-更新器二进制来自 **AlyPublish 安装包**的 `client/<rid>/`：GUI 初始化项目时会把它们复制进同级 `UpdateFolder/`；SDK 的 targets 只建目录并在缺失时写默认 `client.json`（不再下载二进质）。`AlyUpdateClient` 启动时还会委派 `self_update`，保证更新器副本不落后。
+更新器二进制来自 **AlyPublish 安装包**的 `client/<rid>/`：GUI 初始化项目时会把它们复制进同级 `UpdateFolder/`；SDK 的 targets 只建目录并在缺失时写默认 `client.json`（不再下载二进制）。`AlyUpdateClient` 启动时还会委派 `self_update`，保证更新器副本不落后。
 
 完整用法见 [C# SDK 集成](/docs/sdk)，方法级参数见 [SDK API 参考](/docs/sdk/api)。
 

@@ -284,7 +284,7 @@ public AlyUpdateUIClient(string uiExePath = null, string language = DefaultLangu
 `Launch` 的执行顺序：
 
 1. 已 `Dispose` → 返回 `NG("AlyUpdateUIClient has been disposed.")`。
-2. `UiExePath` 不存在 → 返回 `NG("aly-client-ui.exe not found: <路径>（请确认 UpdateFolder 已部署；构建时设置 AlyIncludeClientUi=true 自动下载）")`（括注是旧版本遗留的提示文案，现状见下节）。
+2. `UiExePath` 不存在 → 返回 `NG("aly-client-ui.exe not found: <路径>（请确认 UpdateFolder 已部署：GUI 初始化项目时会从 AlyPublish 包复制，或按 client/<rid>/ 布局手工放置 aly-client-ui.exe）")`（部署方式见下节）。
 3. 本对象持有的进程仍在运行 → 直接返回 `OK()`，不再拉起。
 4. 释放上一次的进程句柄，用 `Arguments = "-mode <mode> -lang <lang>"`、`WorkingDirectory = UI 所在目录`、`CreateNoWindow = true` 启动；成功后重置 `LastExitCode = null` 并触发 `Started(pid)`。
 5. `Process.Start()` 返回 `false` → 释放刚创建的句柄并返回 `NG("failed to start aly-client-ui.exe")`；抛异常 → 返回 `NG(ex)`。

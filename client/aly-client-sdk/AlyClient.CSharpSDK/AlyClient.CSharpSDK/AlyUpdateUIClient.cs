@@ -47,8 +47,10 @@ namespace AlyClient.CSharpSDK
     /// </list>
     ///
     /// 部署要求：aly-client-ui.exe 与 aly-client.exe 同目录，默认
-    /// <c>&lt;应用目录&gt;\..\UpdateFolder\</c>；由 AlyClient.CSharpSDK 的 NuGet targets 自动下载部署
-    /// （设置 <c>AlyIncludeClientUi=false</c> 可跳过 UI 下载）。
+    /// <c>&lt;应用目录&gt;\..\UpdateFolder\</c>。两个文件由 AlyPublish 安装包提供：
+    /// GUI 在「初始化项目 / 项目设置」时把包内 <c>client/&lt;rid&gt;/</c> 的副本复制进来，
+    /// 也可按该布局手工放置。SDK 的 NuGet targets 只建目录、在缺失时写默认
+    /// <c>client.json</c>，不再下载或复制任何二进制。
     ///
     /// <para>
     /// 说明：aly-client-ui 是单实例程序。重复拉起时后启动的进程会通过命名事件把
@@ -124,7 +126,8 @@ namespace AlyClient.CSharpSDK
 
             if (!File.Exists(UiExePath))
                 return AlyResponse.NG("aly-client-ui.exe not found: " + UiExePath
-                    + "（请确认 UpdateFolder 已部署；构建时设置 AlyIncludeClientUi=true 自动下载）");
+                    + "（请确认 UpdateFolder 已部署：GUI 初始化项目时会从 AlyPublish 包复制，"
+                    + "或按 client/<rid>/ 布局手工放置 aly-client-ui.exe）");
 
             lock (_sync)
             {
