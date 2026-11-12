@@ -27,6 +27,7 @@ func TestParseFinishArgsValid(t *testing.T) {
 		"--target", target,
 		"--pid", "1234",
 		"--created", "987654321",
+		"--host-pid", "4242",
 		"--new", newPath,
 		"--", "-mode", "check",
 	})
@@ -35,6 +36,9 @@ func TestParseFinishArgsValid(t *testing.T) {
 	}
 	if opt.target != target || opt.newPath != newPath || opt.pid != 1234 || opt.created != 987654321 {
 		t.Fatalf("bad parsed options: %+v", opt)
+	}
+	if opt.hostPID != 4242 {
+		t.Fatalf("hostPID = %d; want 4242", opt.hostPID)
 	}
 	if len(opt.restart) != 2 || opt.restart[0] != "-mode" || opt.restart[1] != "check" {
 		t.Fatalf("bad restart args: %#v", opt.restart)
@@ -96,6 +100,7 @@ func TestFinishSelfUpdateFlow(t *testing.T) {
 		"--target", target,
 		"--pid", strconv.Itoa(deadPID),
 		"--created", "0",
+		"--host-pid", "4242",
 		"--new", newPath,
 		"--", "-mode", "auto",
 	})
@@ -111,8 +116,11 @@ func TestFinishSelfUpdateFlow(t *testing.T) {
 	if startedTarget != target {
 		t.Fatalf("started %q; want %q", startedTarget, target)
 	}
-	if len(startedArgs) != 2 || startedArgs[0] != "-mode" || startedArgs[1] != "auto" {
-		t.Fatalf("restart args = %#v", startedArgs)
+	// 重启参数必须带上原始宿主 PID：新 UI 的父进程（收尾进程）马上就退出，
+	// 不传的话宿主跟随会在 1 秒后误判"宿主已退出"而自杀。
+	if len(startedArgs) != 4 || startedArgs[0] != "-mode" || startedArgs[1] != "auto" ||
+		startedArgs[2] != "--host-pid" || startedArgs[3] != "4242" {
+		t.Fatalf("restart args = %#v; want [-mode auto --host-pid 4242]", startedArgs)
 	}
 	logData, err := ioutil.ReadFile(target + ".update.log")
 	if err != nil {

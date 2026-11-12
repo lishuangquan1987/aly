@@ -78,11 +78,14 @@ C# SDK 的 `AlyUpdateUIClient` 在 `Launch*` 里先做一次“两件套就位�
 aly-client-ui -finish-self-update \
   --target /path/aly-client-ui \
   --pid 12345 --created <starttime> \
+  --host-pid <原始宿主 PID> \
   --new /path/aly-client-ui.new \
   -- <重启命令与参数...>
 ```
 
 流程：脱离当前会话（setsid）→ 校验目标进程身份（`/proc/<pid>/stat` 的 starttime 字段防 PID 复用）→ 等待其退出（最长 10 秒，超时 SIGKILL + 2 秒宽限）→ `.new` 原子落位 → 按参数重启新 UI。全程写日志到 `aly-client-ui.update.log`，且不依赖 GTK——可以在无图形环境的脚本里运行。
+
+`--host-pid` 是"宿主跟随"的关键：新 UI 的父进程是收尾进程（拉起新 UI 后立即退出），收尾链把最初拉起旧 UI 的宿主 PID 传下来，新 UI 才不会在约 1 秒后误判"宿主已退出"而自杀（2026-11-12 修复——修复前的表现正是"启动时确认有更新却不弹卡片"）。
 
 ## 测试口径
 

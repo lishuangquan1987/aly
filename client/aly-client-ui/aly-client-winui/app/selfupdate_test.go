@@ -322,16 +322,21 @@ func TestUpdateSelfUIReplacesAndSpawns(t *testing.T) {
 	if spawnedArgs[5] != "--created" || spawnedArgs[6] == "" {
 		t.Fatalf("bad --created: %#v", spawnedArgs[5:7])
 	}
-	if spawnedArgs[7] != "--new" || spawnedArgs[8] != newPath {
-		t.Fatalf("bad --new: %#v", spawnedArgs[7:9])
+	// 必须把原始宿主 PID 传给收尾链：新 UI 的父进程（收尾进程）拉起后即退出，
+	// 不传的话宿主跟随会让重启后的 UI 在 1 秒后自杀（auto 卡片弹不出来）。
+	if spawnedArgs[7] != "--host-pid" || spawnedArgs[8] != strconv.FormatUint(uint64(os.Getppid()), 10) {
+		t.Fatalf("bad --host-pid: %#v", spawnedArgs[7:9])
 	}
-	if spawnedArgs[9] != "--" {
+	if spawnedArgs[9] != "--new" || spawnedArgs[10] != newPath {
+		t.Fatalf("bad --new: %#v", spawnedArgs[9:11])
+	}
+	if spawnedArgs[11] != "--" {
 		t.Fatalf("helper args must contain -- separator: %#v", spawnedArgs)
 	}
 	restart := []string{"-mode", "check", "-lang", "zh-CN"}
 	for i, want := range restart {
-		if spawnedArgs[10+i] != want {
-			t.Fatalf("restart arg[%d] = %q; want %q", i, spawnedArgs[10+i], want)
+		if spawnedArgs[12+i] != want {
+			t.Fatalf("restart arg[%d] = %q; want %q", i, spawnedArgs[12+i], want)
 		}
 	}
 	// 已交给收尾进程：journal 必须是 pending（下一次启动据此判断收敛）

@@ -44,6 +44,7 @@ type finishOptions struct {
 	newPath string
 	pid     uint32
 	created uint64 // 旧进程创建时间（FILETIME），用于防 PID 复用；0=未知
+	hostPID uint32 // 原始宿主 PID（随收尾链传递，拉起新 UI 时继续下发）；0=未知
 	restart []string
 }
 
@@ -84,12 +85,33 @@ func FinishSelfUpdate(args []string) int {
 		finishLog(opt.target, "finish failed: %v", err)
 		return 1
 	}
+	// 新 UI 的父进程是本收尾进程（拉起新 UI 后立即退出）。把原始宿主 PID
+	// 下发进去，新 UI 的宿主跟随据此继续跟随真正的宿主，而不是在 1 秒后
+	// 误判"宿主已退出"自杀（2026-11-12 修复）。restartArgs 里可能残留
+	// 旧链路传来的 --host-pid（连续两次自更新），先剥掉再追加规范值。
+	if opt.hostPID > 0 {
+		opt.restart = append(stripHostPIDArgs(opt.restart),
+			"--host-pid", strconv.FormatUint(uint64(opt.hostPID), 10))
+	}
 	if err := startNewUIFn(opt.target, opt.restart); err != nil {
 		finishLog(opt.target, "start new UI failed: %v", err)
 		return 1
 	}
 	finishLog(opt.target, "finish OK")
 	return 0
+}
+
+// stripHostPIDArgs 去掉参数序列里的 --host-pid / -host-pid 及其值。
+func stripHostPIDArgs(args []string) []string {
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--host-pid" || args[i] == "-host-pid" {
+			i++ // 跳过它的值
+			continue
+		}
+		out = append(out, args[i])
+	}
+	return out
 }
 
 // parseFinishArgs 手工解析（不能用 flag 包：-- 之后是原样透传的 UI 参数）。
@@ -131,6 +153,16 @@ func parseFinishArgs(args []string) (finishOptions, error) {
 				return opt, fmt.Errorf("--created 非法: %q", args[i])
 			}
 			opt.created = n
+		case "--host-pid":
+			i++
+			if i >= len(args) {
+				return opt, fmt.Errorf("--host-pid 缺少值")
+			}
+			n, err := strconv.ParseUint(args[i], 10, 32)
+			if err != nil {
+				return opt, fmt.Errorf("--host-pid 非法: %q", args[i])
+			}
+			opt.hostPID = uint32(n)
 		case "--new":
 			i++
 			if i >= len(args) {

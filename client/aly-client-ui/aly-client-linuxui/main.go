@@ -25,6 +25,9 @@ func main() {
 	lang := fs.String("lang", "zh-CN", "zh-CN|en-US")
 	_ = fs.String("url", "", "reserved")
 	projectOverride := fs.String("project-name", "", "window title override")
+	// 收尾进程重启链传下来的原始宿主 PID：注册仅为让 flag.Parse 认识它
+	//（未知参数会 ExitOnError），真正的消费在 WatchHostExit 里扫 os.Args。
+	_ = fs.Uint64("host-pid", 0, "original host pid (passed down by -finish-self-update restart)")
 	_ = fs.Parse(os.Args[1:])
 
 	// 宿主生命周期（规范见 spec/host-contract.md §15）：宿主退出后 UI 跟随退出；

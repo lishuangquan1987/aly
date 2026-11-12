@@ -155,6 +155,7 @@ If it fails to converge 3 times within the 30-minute observation window, the UI 
 | `--target` | string | Yes | Absolute path of the old UI executable |
 | `--pid` | int | Yes | Process ID of the old UI |
 | `--created` | string | No | Identity check value for the old process: the decimal `FILETIME` creation time on Windows, the `starttime` from `/proc/<pid>/stat` on Linux; `0` or empty means unknown |
+| `--host-pid` | int | No | PID of the original host process. When launching the new UI, the finisher appends it to the new UI's arguments so its host-following keeps watching the real host — otherwise the new UI's parent (the finisher) exits immediately and the host-following misjudges "host exited" after about 1 second and kills itself, so the auto-mode update card never appears |
 | `--new` | string | Yes | Absolute path of the already-verified new UI file (usually `.new`) |
 | `--` | — | No | Everything after it is passed through verbatim to the restarted new UI |
 
@@ -162,7 +163,7 @@ Constraints:
 
 - `--target` and `--new` must be absolute paths and must differ; `--new` must exist.
 - If `--target`, `--new` or `--pid` is missing, or an unknown argument appears, the finisher process exits with code `2`.
-- Argument parsing does not use the `flag` package, because everything after `--` has to be passed through verbatim; only the four options above are accepted before `--`.
+- Argument parsing does not use the `flag` package, because everything after `--` has to be passed through verbatim; only the five options above are accepted before `--`.
 
 ### Flow
 
@@ -171,7 +172,7 @@ Constraints:
    - Linux: poll `/proc/<pid>`, detect PID reuse with `starttime`, and treat a zombie (`state=Z`) as exited; up to 10 seconds, then `SIGKILL` and wait 2 more seconds.
 2. **Abort when the old process state cannot be confirmed** (exit code `1`): better not to replace at all than to modify files while the old process still holds the lock and launch a new UI that would collide with the single-instance mutex.
 3. **Back up first, then replace**: if the target exists, rename it to `.old`; then rename `.new` to the target. Renames retry 20 times at 250 ms intervals, covering brief antivirus locks; if placement fails, rename `.old` back to the target.
-4. **Launch the new UI**: start the target with the original arguments after `--`, without going through `cmd.exe`, so there are no PATH, quoting or `%` expansion problems.
+4. **Launch the new UI**: start the target with the original arguments after `--` (the finisher appends `--host-pid <original host>` and strips any stale `--host-pid` left in the restart arguments), without going through `cmd.exe`, so there are no PATH, quoting or `%` expansion problems.
 5. **Write the log**: append to `<target>.update.log` — `aly-client-ui.exe.update.log` on Windows, `aly-client-ui.update.log` on Linux.
 6. Exit code `0` on success; exit code `1` if waiting, replacement or launching fails.
 
@@ -182,6 +183,7 @@ aly-client-ui.exe -finish-self-update ^
   --target C:\App\UpdateFolder\aly-client-ui.exe ^
   --pid 4321 ^
   --created 133456789012345678 ^
+  --host-pid 1234 ^
   --new C:\App\UpdateFolder\aly-client-ui.exe.new ^
   -- -mode check -lang zh-CN
 ```

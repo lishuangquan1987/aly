@@ -124,8 +124,18 @@ func TestUpdateSelfUISpawnsFinish(t *testing.T) {
 	if gotPath != target+".new" {
 		t.Fatalf("spawned %q", gotPath)
 	}
-	if len(gotArgs) < 11 || gotArgs[0] != "-finish-self-update" || gotArgs[9] != "--" {
+	// 必须把原始宿主 PID 传给收尾链：新 UI 的父进程（收尾进程）拉起后即退出，
+	// 不传的话宿主跟随会让重启后的 UI 在 1 秒后自杀（auto 卡片弹不出来）。
+	// helperArgs 形如 [-finish-self-update --target T --pid P --created C
+	//                --host-pid H --new N -- restartArgs...]（共 12+len 项）。
+	if len(gotArgs) < 13 || gotArgs[0] != "-finish-self-update" || gotArgs[11] != "--" {
 		t.Fatalf("args=%#v", gotArgs)
+	}
+	if gotArgs[7] != "--host-pid" || gotArgs[8] == "" || gotArgs[8] == "0" {
+		t.Fatalf("bad --host-pid: %#v", gotArgs[7:9])
+	}
+	if gotArgs[9] != "--new" || gotArgs[10] != target+".new" {
+		t.Fatalf("bad --new: %#v", gotArgs[9:11])
 	}
 	if got := readFile(t, target+".new"); got != "NEW" {
 		t.Fatalf(".new=%q", got)

@@ -8102,6 +8102,40 @@ journal `count=0`。
 
 ---
 
+## 十一·补七、收尾重启链的宿主跟随修复（135 增强）
+
+> 背景（现场回归，2026-11-12 修复）：`c816132`（2026-11-11）给 UI 加了"宿主退出即跟随退出"
+> （`WatchHostExit`，按 `Getppid()` 每 1s 轮询），与 11-09 的 UI 自更新收尾重启组合出一个
+> 死结——**重启后的新 UI 的父进程是收尾进程，而收尾进程拉起新 UI 后立即退出**，于是新 UI
+> 在启动约 1 秒后被看门狗误判"宿主已退出"而自杀。表现：宿主发新版后第一次启动，auto 模式
+> 确认有更新却**不弹卡片**（检查还没回来 UI 就没了）；手动点「检查更新」时 UI 副本已收敛
+> （不再走收尾重启）、父进程是真实宿主 → 弹窗正常。修复：收尾链把原始宿主 PID 经
+> `--host-pid` 传下去（旧 UI → 收尾进程 → 新 UI），新 UI 的宿主跟随优先使用它。
+> 改动：`app/host.go`（`hostPidFromArgs`）、`app/selfupdate.go`（派生参数带 `--host-pid`）、
+> `app/finish.go`（解析 + 剥旧追加新）、`main.go`（注册旗标防 ExitOnError）；linuxui 同构同修。
+> 用例 135 没拦住它的原因：原断言只看 SHA 收敛 / `finish OK` / journal 清零，全部发生在
+> 启动后 ~100ms 内，早于看门狗的 1s 心跳。
+
+### 用例 135（增强）— 重启后的新 UI 必须存活并展示更新卡片
+
+在原"收尾替换闭环"断言（SHA 收敛 / `finish OK` / journal 清零 / `.new` 改名）之上新增：
+
+1. **前置**：服务端预置一个未消费的更新（1.1.0）——重启后的新 UI（auto）检查到它就会
+   展示卡片、常驻等待用户操作，这是"新 UI 是否被误杀"的可观测信号。
+2. **观测**：`RunUIMode` 等的是旧 UI（派生收尾进程后退出 0）；重启后的新 UI 是分离进程，
+   按**映像名**（`tasklist /FI "IMAGENAME eq aly-client-ui.exe"`）观测：
+   - 等它出现（≤10s）；
+   - 再确认它**至少存活 3 秒**（误杀发生在新 UI 启动后约 1s，窗口足以区分）；
+   - 最后 `taskkill` 清理。
+3. **失败判定**：新 UI 进程消失 → FAIL（宿主跟随误杀重启后的 UI，`--host-pid` 链断了）。
+
+执行结果：**PASS（20.50s）**；winui `app` 包新增 `TestHostPidFromArgs` /
+`TestStripHostPIDArgs`、扩展 `TestFinishSelfUpdateFlow`（重启参数必须带 `--host-pid`）与
+`TestUpdateSelfUIReplacesAndSpawns`（派生参数必须带 `--host-pid`）同轮 PASS；
+linuxui 同构测试交叉编译验证（CI Ubuntu 实跑）。
+
+---
+
 ## 附录 A：故障注入手法速查
 
 > 用例 18–25、36–39、116–124 大量依赖"制造异常现场"。这些手法都在 `test/tc/` 里有现成函数，**不要自己发明 sleep 猜时序**。
@@ -8307,6 +8341,7 @@ journal `count=0`。
 | 136 | `self_update --include-ui` 两件套 | PASS | 5.70s | 2026-11-12 新增；Windows 实跑。单元层：`selfupdate` 新增 8 个 `SyncFile` 测试、`cmd` 新增 6 个 `--include-ui` 测试（含不带旗标 `ui_*` 缺省）同轮 PASS |
 | 137 | SDK 拉起前自动落位（sd17） | PASS | 14.35s | 2026-11-12 新增；现场故障复现：UpdateFolder 缺 UI、主程序目录有 → `LauchAuto` 自动落位且 SHA256 一致；两处都缺 → NG 不抛异常/不 Started；同实例不重复尝试；sd17 `PASS=8 FAIL=0` |
 | — | 同轮定点回归（124+130–135） | PASS | 7/7 | 2026-11-12；124 12.19s / 130 5.55s / 131 8.24s / 132 4.19s / 133 44.20s / 134 9.16s / 135 29.00s。测试基础设施修正：`test/tc/env.go` 的 `cleanEnv` 补剔 `GOROOT`（否则 1.10.8 子构建会去编 1.27.3 stdlib，133/135 假红） |
+| — | 135 增强：收尾重启链宿主跟随 | PASS | 20.50s | 2026-11-12；修复 `WatchHostExit`（Getppid）×收尾重启的组合回归——重启后的新 UI 被误判"宿主已退出"在约 1s 自杀，auto 卡片弹不出来（"启动有更新却无提示"）。收尾链经 `--host-pid` 传递原始宿主 PID；用例 135 新增"新 UI 按映像名观测存活 ≥3s"断言（需要服务端预置未消费更新） |
 
 **汇总**
 

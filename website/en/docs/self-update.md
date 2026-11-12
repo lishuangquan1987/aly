@@ -80,11 +80,14 @@ Replacing a **running GUI** on Linux is handled by the `-finish-self-update` fin
 aly-client-ui -finish-self-update \
   --target /path/aly-client-ui \
   --pid 12345 --created <starttime> \
+  --host-pid <original host pid> \
   --new /path/aly-client-ui.new \
   -- <restart command and args...>
 ```
 
 Flow: detach from the session (setsid) → verify the target process identity (`starttime` from `/proc/<pid>/stat`, guarding against PID reuse) → wait for it to exit (up to 10 s, then SIGKILL + 2 s grace) → place the `.new` file atomically → restart the new UI. Everything is logged to `aly-client-ui.update.log`, and GTK is not required — it runs in headless scripts.
+
+`--host-pid` is what keeps host-following correct: the new UI's parent is the finisher (which exits right after launching it), so the chain passes down the PID of the process that originally launched the old UI. Without it the restarted UI misjudges "host exited" after about one second and kills itself — before the 2026-11-12 fix that surfaced exactly as "an update is confirmed at startup but the card never appears".
 
 ## Testing Contract
 

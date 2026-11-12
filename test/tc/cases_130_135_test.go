@@ -33,6 +33,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -325,23 +326,29 @@ func TestCase134(t *testing.T) {
 // 用例 135 — UI 自身替换：-finish-self-update 等旧进程退出 + .old 备份 + 重启
 //
 // 现场：UpdateFolder/aly-client-ui.exe = 真实 UI；主目录 UI = 同长度、可执行、
-// 内容不同的新版；无 journal。
+// 内容不同的新版；服务端另有一个未消费的更新（1.1.0）。
 //
-// 步骤：以 -mode auto 启动旧 UI（无更新，不弹模态框）。旧 UI 复制 .new 后派生
-// .new 的隐藏收尾模式并退出；收尾进程持有旧 PID 句柄等待退出（最多 10s，超时
-// 强杀），把旧 exe 改名 .old、.new 落位，再以原参数拉起新 UI（auto 静默退出）。
+// 步骤：以 -mode auto 启动旧 UI。旧 UI 复制 .new 后派生 .new 的隐藏收尾模式并
+// 退出；收尾进程持有旧 PID 句柄等待退出（最多 10s，超时强杀），把旧 exe 改名
+// .old、.new 落位，再以原参数 + --host-pid 拉起新 UI。
 //
 // 期望结果
 //   - 旧 UI 退出码 0；
 //   - UpdateFolder UI 的 SHA256 收敛到主目录新版；
 //   - <ui>.update.log 存在且含 finish OK（证明走的是收尾进程，不是旧 cmd 脚本）；
 //   - journal 的 pending 被新 UI 的 same→MarkSuccess 清零；
-//   - .new 已被改名（不存在）。
+//   - .new 已被改名（不存在）；
+//   - **重启后的新 UI 必须存活并展示更新卡片**：新 UI 的父进程是收尾进程
+//     （拉起后即退出），宿主跟随若只看 Getppid 会在约 1s 后误判"宿主已退出"
+//     自杀——auto 卡片永远弹不出来（2026-11-12 修复的现场回归：启动时
+//     "有更新却无提示"，手动检查才有提示）。收尾链现在把原始宿主 PID 经
+//     --host-pid 传下去，新 UI 跟随真正的宿主。
 //
 // 失败判定
 //   - UI 未替换 / 20s 内未收敛 → FAIL；
 //   - 无 update.log 或无 finish OK → FAIL（没走收尾进程）；
-//   - journal 仍 pending → FAIL（新 UI 没起来/没收敛）。
+//   - journal 仍 pending → FAIL（新 UI 没起来/没收敛）；
+//   - 新 UI 进程消失 → FAIL（宿主跟随误杀重启后的 UI）。
 //
 // ────────────────────────────────────────────────────────────────
 func TestCase135(t *testing.T) {
@@ -353,6 +360,10 @@ func TestCase135(t *testing.T) {
 		Version: "1.0.0", Status: StatusApplied, Previous: "1.0.0",
 		Project: proj, MainFile: "app-100",
 	})
+	// 服务端放一个未消费的更新：重启后的新 UI（auto）检查到它就会展示卡片、
+	// 常驻等待用户操作——这是"新 UI 是否被宿主跟随误杀"的可观测信号。
+	e.PutFile(t, proj, "app.exe", "app-110")
+	e.Publish(t, proj, "1.1.0", []string{"case 135 card"}, "", "")
 
 	uiExe := e.BuildUI(t)
 	uiSelf := filepath.Join(c.Up(), "aly-client-ui.exe")
@@ -363,9 +374,19 @@ func TestCase135(t *testing.T) {
 	expected := SHA256Of(uiSrc)
 	True(t, expected != SHA256Of(uiSelf), "前置：主目录 UI 必须与副本内容不同")
 
-	// auto 模式无更新 → 旧 UI 派生收尾进程后立即退出；新 UI 起来后也静默退出。
+	// RunUIMode 等的是旧 UI：它派生收尾进程后立即退出 0。重启后的新 UI 是
+	// 分离进程，下面按映像名单独观测它的存活。
 	code, _ := e.RunUIMode(t, uiSelf, c, "auto", 40*time.Second)
 	Eq(t, "旧 UI 应正常退出", code, 0)
+
+	// 等重启后的新 UI 出现，再确认它至少存活 3 秒：宿主跟随误杀发生在
+	// 新 UI 启动后约 1s，这个窗口足以区分"被误杀"与"正常带卡片常驻"。
+	True(t, waitUIProcess(10*time.Second), "重启后的新 UI 进程应出现")
+	time.Sleep(3 * time.Second)
+	True(t, uiProcessRunning(),
+		"新 UI 必须存活并展示更新卡片（宿主跟随不得误杀重启后的 UI；"+
+			"若此处失败，说明 --host-pid 链断了，新 UI 被 Getppid 看门狗自杀）")
+	defer killUIProcesses()
 
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
@@ -399,4 +420,32 @@ func TestCase135(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 	}
 	Contains(t, ReadText(journal), `"count":0`, "新 UI 收敛后 journal count 应清零")
+}
+
+// uiProcessRunning 用 tasklist 按映像名查询是否有 aly-client-ui.exe 在运行。
+// 重启后的新 UI 是分离进程（旧 UI 已退出、收尾进程已退出），只能这样观测。
+func uiProcessRunning() bool {
+	out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq aly-client-ui.exe",
+		"/FO", "CSV", "/NH").Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToUpper(string(out)), "ALY-CLIENT-UI.EXE")
+}
+
+// waitUIProcess 轮询等待新 UI 进程出现。
+func waitUIProcess(timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if uiProcessRunning() {
+			return true
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return false
+}
+
+// killUIProcesses 清理常驻的新 UI（测试没有手点「稍后」，只能强杀）。
+func killUIProcesses() {
+	_ = exec.Command("taskkill", "/IM", "aly-client-ui.exe", "/F").Run()
 }

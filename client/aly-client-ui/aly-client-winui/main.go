@@ -21,6 +21,9 @@ func main() {
 	lang := flag.String("lang", "zh-CN", "zh-CN|en-US")
 	serverURL := flag.String("url", "", "server url override (currently unused; aly-client reads client.json)")
 	project := flag.String("project-name", "", "window title override (default: .updator/shared.json project_name)")
+	// 收尾进程重启链传下来的原始宿主 PID：注册仅为让 flag.Parse 认识它
+	//（未知参数会 ExitOnError），真正的消费在 app.WatchHostExit 里扫 os.Args。
+	_ = flag.Uint64("host-pid", 0, "original host pid (passed down by -finish-self-update restart)")
 	flag.Parse()
 
 	// 宿主生命周期（规范见 spec/host-contract.md §15）：宿主退出后 UI 跟随退出；

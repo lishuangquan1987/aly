@@ -47,10 +47,36 @@ func applyingNow() bool {
 	return strings.Contains(string(data), appliesMark)
 }
 
+// hostPidFromArgs 从命令行找 --host-pid（收尾进程重启链传下来的原始宿主 PID）。
+//
+// 为什么需要它：UI 自更新走"旧 UI 退出 → 收尾进程替换 → 拉起新 UI"的链路，
+// 新 UI 的父进程是**收尾进程**，而它在拉起新 UI 后立即退出。若此时按 Getppid
+// 跟随宿主，新 UI 会在启动约 1 秒后误判"宿主已退出"而自杀——auto 模式的更新
+// 卡片永远弹不出来（2026-11-12 修复的现场回归）。收尾链把最初拉起旧 UI 的
+// 宿主 PID 一路传下来，新 UI 据此继续跟随真正的宿主。
+//
+// 取最后一个匹配（重复传参时后面的生效）；缺失/非法/为 0 都返回 0（调用方回落 Getppid）。
+func hostPidFromArgs() uint32 {
+	host := uint32(0)
+	for i := 0; i < len(os.Args)-1; i++ {
+		if os.Args[i] != "--host-pid" && os.Args[i] != "-host-pid" {
+			continue
+		}
+		if n, err := strconv.ParseUint(os.Args[i+1], 10, 32); err == nil {
+			host = uint32(n)
+		}
+	}
+	return host
+}
+
 // WatchHostExit 起守护协程跟随宿主：宿主退出且不在 applying 窗口时写一行 stderr 诊断并以 0 退出。
-// 宿主 PID 拿不到时不动作（宁可不跟随，也不误退）。
+// 宿主 PID 优先取 --host-pid（收尾重启链传下来的原始宿主），否则取父进程；
+// 都拿不到时不动作（宁可不跟随，也不误退）。
 func WatchHostExit() {
-	host := uint32(os.Getppid())
+	host := hostPidFromArgs()
+	if host == 0 {
+		host = uint32(os.Getppid())
+	}
 	if host == 0 {
 		return
 	}

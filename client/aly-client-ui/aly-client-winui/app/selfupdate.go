@@ -203,11 +203,19 @@ func UpdateSelfUI(updateFolder, mainFolder string, restartArgs []string) (bool, 
 	// cmd.exe，因此没有 ping 固定延时、PATH、引号或 % 展开问题。
 	pid := os.Getpid()
 	created := processCreationTime(pid)
+	// 把原始宿主 PID 传给收尾链：新 UI 的父进程是收尾进程（拉起后即退出），
+	// 若不显式传 PID，新 UI 的宿主跟随会误判"宿主已退出"而自杀（2026-11-12 修复）。
+	// 当前 UI 自己若是被收尾进程重启的，则把收到的原始宿主继续往下传。
+	hostPID := hostPidFromArgs()
+	if hostPID == 0 {
+		hostPID = uint32(os.Getppid())
+	}
 	helperArgs := []string{
 		"-finish-self-update",
 		"--target", self,
 		"--pid", strconv.Itoa(pid),
 		"--created", strconv.FormatUint(created, 10),
+		"--host-pid", strconv.FormatUint(uint64(hostPID), 10),
 		"--new", newPath,
 		"--",
 	}

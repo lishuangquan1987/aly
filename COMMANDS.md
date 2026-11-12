@@ -647,7 +647,7 @@ aly-client.exe self_update
 
 | 部署形态 | 宿主启动时调用 | 自更新由谁触发 |
 |---|---|---|
-| **UI 部署**（推荐） | `..\UpdateFolder\aly-client-ui.exe -mode auto -lang zh-CN`，其余不管 | UI 自己：`UpdateUpdater` 委派本命令更新 `aly-client.exe`；`UpdateSelfUI` 处理 UI 自身——复制 `.new` 后派生 `.new` 的隐藏收尾模式 `-finish-self-update`：持有旧进程句柄等待退出（最多 10s，超时强杀）→ 旧 exe 改名 `.old` → `.new` 落位 → 原参数拉起新 UI。UI 换自身时当前进程立即退出 0 |
+| **UI 部署**（推荐） | `..\UpdateFolder\aly-client-ui.exe -mode auto -lang zh-CN`，其余不管 | UI 自己：`UpdateUpdater` 委派本命令更新 `aly-client.exe`；`UpdateSelfUI` 处理 UI 自身——复制 `.new` 后派生 `.new` 的隐藏收尾模式 `-finish-self-update`：持有旧进程句柄等待退出（最多 10s，超时强杀）→ 旧 exe 改名 `.old` → `.new` 落位 → 原参数 + `--host-pid <原始宿主>` 拉起新 UI（不传宿主 PID 的话，重启后的 UI 会被"宿主跟随"在约 1s 后误判宿主已退出而自杀，auto 卡片弹不出来）。UI 换自身时当前进程立即退出 0 |
 | **C# SDK 部署** | `new AlyUpdateClient(...)`（设置 `UpdatorExePath`、`MustCloseProcessNames`） | SDK 构造函数后台任务调本命令，在首次 `check_update` 之前完成；目标缺失/旧版更新器时直接替换兜底 |
 | **裸控制台部署** | 首次 `check_update` 前显式调用 `UpdateFolder\aly-client.exe self_update` | 宿主自己；幂等。看 stdout JSON 的 `isSuccess`，不要看退出码（逻辑失败也退出 0） |
 

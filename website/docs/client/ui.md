@@ -155,6 +155,7 @@ UI 启动时按顺序处理两个自更新，失败都不阻断本次启动：
 | `--target` | string | 是 | 旧 UI 可执行文件的绝对路径 |
 | `--pid` | int | 是 | 旧 UI 的进程 ID |
 | `--created` | string | 否 | 旧进程身份校验值：Windows 为十进制 `FILETIME` 创建时间，Linux 为 `/proc/<pid>/stat` 的 `starttime`；`0` 或空表示未知 |
+| `--host-pid` | int | 否 | 原始宿主进程 PID。收尾进程拉起新 UI 时会把它追加进新 UI 的参数，新 UI 的「宿主跟随」据此继续跟随真正的宿主——否则新 UI 的父进程（收尾进程）随即退出，宿主跟随会在约 1 秒后误判「宿主已退出」而自杀，auto 模式的更新卡片永远弹不出来 |
 | `--new` | string | 是 | 已校验的新 UI 文件绝对路径（通常为 `.new`） |
 | `--` | — | 否 | 其后所有参数原样透传给重启后的新 UI |
 
@@ -162,7 +163,7 @@ UI 启动时按顺序处理两个自更新，失败都不阻断本次启动：
 
 - `--target` 与 `--new` 必须是绝对路径且不相同；`--new` 必须存在。
 - 缺少 `--target`、`--new`、`--pid`，或出现未知参数，收尾进程以退出码 `2` 结束。
-- 参数解析不使用 `flag` 包，因为 `--` 之后要原样透传；`--` 之前只接受上述四个选项。
+- 参数解析不使用 `flag` 包，因为 `--` 之后要原样透传；`--` 之前只接受上述五个选项。
 
 ### 流程
 
@@ -171,7 +172,7 @@ UI 启动时按顺序处理两个自更新，失败都不阻断本次启动：
    - Linux：轮询 `/proc/<pid>`，用 `starttime` 校验 PID 复用，僵尸态（`state=Z`）视为已退出；最多 10 秒，超时 `SIGKILL`，再等 2 秒。
 2. **无法确认旧进程状态时中止**（退出码 `1`）：宁可不换，也不要在旧进程仍持锁时改文件并拉起一个会撞单实例互斥体的新 UI。
 3. **先备后换**：目标存在时改名为 `.old`；把 `.new` 改名到目标。rename 以 20 次 × 250 ms 重试，覆盖杀软短暂占用；落位失败则把 `.old` 改回目标。
-4. **拉起新 UI**：用 `--` 之后的原参数启动目标，不经过 `cmd.exe`，没有 PATH、引号、`%` 展开问题。
+4. **拉起新 UI**：用 `--` 之后的原参数启动目标（收尾进程会把 `--host-pid <原始宿主>` 追加进去，restart 参数里残留的旧 `--host-pid` 会被剥掉），不经过 `cmd.exe`，没有 PATH、引号、`%` 展开问题。
 5. **写日志**：追加到 `<target>.update.log`；Windows 为 `aly-client-ui.exe.update.log`，Linux 为 `aly-client-ui.update.log`。
 6. 成功退出码 `0`；等待/替换/启动失败退出码 `1`。
 
@@ -182,6 +183,7 @@ aly-client-ui.exe -finish-self-update ^
   --target C:\App\UpdateFolder\aly-client-ui.exe ^
   --pid 4321 ^
   --created 133456789012345678 ^
+  --host-pid 1234 ^
   --new C:\App\UpdateFolder\aly-client-ui.exe.new ^
   -- -mode check -lang zh-CN
 ```
