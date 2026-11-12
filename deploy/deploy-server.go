@@ -46,6 +46,16 @@ func mustInit() {
 		scriptDir = "."
 	}
 	scriptDir, _ = filepath.Abs(scriptDir)
+
+	// 本脚本位于仓库 deploy/ 子目录：当前目录找不到 server 时
+	// 回退一级到仓库根（与 deploy-client.go 同一处理，保持从任意工作目录运行均可用）。
+	if _, statErr := os.Stat(filepath.Join(scriptDir, "server")); os.IsNotExist(statErr) {
+		parent := filepath.Dir(scriptDir)
+		if _, pErr := os.Stat(filepath.Join(parent, "server")); pErr == nil {
+			scriptDir = parent
+		}
+	}
+
 	serverDir = filepath.Join(scriptDir, "server")
 	localPath = filepath.Join(serverDir, binary)
 }

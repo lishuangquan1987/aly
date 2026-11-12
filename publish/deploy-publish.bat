@@ -6,7 +6,23 @@
 
 
 
+
+
+
+
+
+
+
+
 chcp 65001 >nul
+
+
+
+
+
+
+
+
 
 
 
@@ -30,7 +46,31 @@ setlocal
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 set SCRIPT_DIR=%~dp0
+
+
+
+
+
+
+
+
 
 
 
@@ -44,7 +84,19 @@ rem GOROOT must point at the toolchain that actually compiles this machine:
 
 
 
+
+
+
+
+
+
 rem the local go is the 1.27.3 toolchain, so its root must be used (leaving the
+
+
+
+
+
+
 
 
 
@@ -56,19 +108,58 @@ rem 1.10.8 root makes its own compile report "-lang" per package).
 
 
 
+
+
+
+
+
+
 set GOROOT=D:\Install\go1.27.3
+
+
+
 
 
 rem GOPATH must hold the source trees the import paths resolve to
 
 
+
+
+
 rem (<GOPATH>\src\aly\publish-cli for aly/publish-cli, ...).
 
 
-set GOPATH=C:\Users\5001494\go
-rem publish-cli is a go.mod module (cobra/pflag): modules must stay enabled.
-rem The client build is the one that needs the GOPATH mode (GO111MODULE=off).*
+
+
+
+set GOPATH=C:\Users\5001494\go
+
+
+rem publish-cli is a go.mod module (cobra/pflag): modules must stay enabled.
+
+
+rem The client build is the one that needs the GOPATH mode (GO111MODULE=off).*
+
+
 set GO111MODULE=
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -94,7 +185,23 @@ echo ===== 编译 publish-cli =====
 
 
 
+
+
+
+
+
+
+
+
 cd /d "%SCRIPT_DIR%publish-cli"
+
+
+
+
+
+
+
+
 
 
 
@@ -110,7 +217,23 @@ go build -o aly-publish.exe .
 
 
 
+
+
+
+
+
+
+
+
 if %ERRORLEVEL% neq 0 (
+
+
+
+
+
+
+
+
 
 
 
@@ -126,6 +249,14 @@ if %ERRORLEVEL% neq 0 (
 
 
 
+
+
+
+
+
+
+
+
     exit /b %ERRORLEVEL%
 
 
@@ -134,7 +265,23 @@ if %ERRORLEVEL% neq 0 (
 
 
 
+
+
+
+
+
+
+
+
 )
+
+
+
+
+
+
+
+
 
 
 
@@ -158,7 +305,31 @@ echo [成功] publish-cli 编译完成
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 echo ===== 复制 aly-publish.exe 到 publish-gui 输出目录 =====
+
+
+
+
+
+
+
+
 
 
 
@@ -174,7 +345,23 @@ copy /y "%SCRIPT_DIR%publish-cli\aly-publish.exe" "%SCRIPT_DIR%publish-gui\src\A
 
 
 
+
+
+
+
+
+
+
+
 if %ERRORLEVEL% neq 0 (
+
+
+
+
+
+
+
+
 
 
 
@@ -190,6 +377,14 @@ if %ERRORLEVEL% neq 0 (
 
 
 
+
+
+
+
+
+
+
+
     exit /b %ERRORLEVEL%
 
 
@@ -198,7 +393,23 @@ if %ERRORLEVEL% neq 0 (
 
 
 
+
+
+
+
+
+
+
+
 )
+
+
+
+
+
+
+
+
 
 
 
@@ -222,6 +433,22 @@ echo [成功] 已复制到 publish-gui 输出目录
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 echo ===== 复制 aly-client.exe / aly-client-ui.exe 到 publish-gui 输出目录 =====
 
 
@@ -230,11 +457,27 @@ echo ===== 复制 aly-client.exe / aly-client-ui.exe 到 publish-gui 输出目�
 
 
 
-REM 两个 exe 由仓库根的 deploy-client.bat（WSL + Go 1.10）编译并回拷到仓库根
+
+
+
+
+
+
+
+
+REM 两个 exe 由deploy 目录下的 deploy-client.bat（WSL + Go 1.10）编译并回拷到仓库根
+
+
+
+
 
 
 
 REM client\aly-client\，需先运行 deploy-client.bat。publish-gui 初始化项目时
+
+
+
+
 
 
 
@@ -246,11 +489,27 @@ REM FindClientExecutable 优先从 GUI 同目录取副本，复制过去后即�
 
 
 
+
+
+
+
+
+
+
+
 if not exist "%SCRIPT_DIR%..\client\aly-client\aly-client.exe" (
 
 
 
-    echo [警告] 未找到仓库根 client\aly-client\aly-client.exe，请先运行仓库根的 deploy-client.bat
+
+
+
+
+    echo [警告] 未找到仓库根 client\aly-client\aly-client.exe，请先运行deploy 目录下的 deploy-client.bat
+
+
+
+
 
 
 
@@ -258,7 +517,19 @@ if not exist "%SCRIPT_DIR%..\client\aly-client\aly-client.exe" (
 
 
 
+
+
+
+
 )
+
+
+
+
+
+
+
+
 
 
 
@@ -274,7 +545,23 @@ copy /y "%SCRIPT_DIR%..\client\aly-client\aly-client.exe" "%SCRIPT_DIR%publish-g
 
 
 
+
+
+
+
+
+
+
+
 if %ERRORLEVEL% neq 0 (
+
+
+
+
+
+
+
+
 
 
 
@@ -290,6 +577,14 @@ if %ERRORLEVEL% neq 0 (
 
 
 
+
+
+
+
+
+
+
+
     exit /b %ERRORLEVEL%
 
 
@@ -298,7 +593,23 @@ if %ERRORLEVEL% neq 0 (
 
 
 
+
+
+
+
+
+
+
+
 )
+
+
+
+
+
+
+
+
 
 
 
@@ -314,11 +625,27 @@ echo [成功] 已复制 aly-client.exe
 
 
 
+
+
+
+
+
+
+
+
 if not exist "%SCRIPT_DIR%..\client\aly-client\aly-client-ui.exe" (
 
 
 
-    echo [警告] 未找到仓库根 client\aly-client\aly-client-ui.exe，请先运行仓库根的 deploy-client.bat
+
+
+
+
+    echo [警告] 未找到仓库根 client\aly-client\aly-client-ui.exe，请先运行deploy 目录下的 deploy-client.bat
+
+
+
+
 
 
 
@@ -326,7 +653,19 @@ if not exist "%SCRIPT_DIR%..\client\aly-client\aly-client-ui.exe" (
 
 
 
+
+
+
+
 )
+
+
+
+
+
+
+
+
 
 
 
@@ -342,7 +681,23 @@ copy /y "%SCRIPT_DIR%..\client\aly-client\aly-client-ui.exe" "%SCRIPT_DIR%publis
 
 
 
+
+
+
+
+
+
+
+
 if %ERRORLEVEL% neq 0 (
+
+
+
+
+
+
+
+
 
 
 
@@ -358,7 +713,23 @@ if %ERRORLEVEL% neq 0 (
 
 
 
+
+
+
+
+
+
+
+
     exit /b %ERRORLEVEL%
+
+
+
+
+
+
+
+
 
 
 
@@ -374,7 +745,23 @@ if %ERRORLEVEL% neq 0 (
 
 
 
+
+
+
+
+
+
+
+
 echo [成功] 已复制 aly-client-ui.exe
+
+
+
+
+
+
+
+
 
 
 
@@ -398,7 +785,31 @@ echo [成功] 已复制 aly-client-ui.exe
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 echo ===== 编译 publish-gui =====
+
+
+
+
+
+
+
+
 
 
 
@@ -414,7 +825,23 @@ cd /d "%SCRIPT_DIR%publish-gui\src\AlyPublish"
 
 
 
+
+
+
+
+
+
+
+
 dotnet build -c Debug --no-restore
+
+
+
+
+
+
+
+
 
 
 
@@ -430,7 +857,23 @@ if %ERRORLEVEL% neq 0 (
 
 
 
+
+
+
+
+
+
+
+
     echo [失败] publish-gui 编译失败
+
+
+
+
+
+
+
+
 
 
 
@@ -446,7 +889,23 @@ if %ERRORLEVEL% neq 0 (
 
 
 
+
+
+
+
+
+
+
+
 )
+
+
+
+
+
+
+
+
 
 
 
@@ -470,6 +929,22 @@ echo [成功] publish-gui 编译完成
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 echo ===== 全部完成 =====
 
 
@@ -478,7 +953,23 @@ echo ===== 全部完成 =====
 
 
 
+
+
+
+
+
+
+
+
 endlocal
+
+
+
+
+
+
+
+
 
 
 
