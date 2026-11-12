@@ -37,6 +37,23 @@ func processAlive(pid uint32) bool {
 	return true
 }
 
+// hostStillIs 校验"这个 PID 还是当初那个宿主"：除了进程存在，还要比对
+// /proc/<pid>/stat 的 starttime（进程身份）。
+//
+// 为什么需要它：只看 /proc/<pid> 是否存在会把 **PID 复用**误判成宿主存活——
+// 宿主退出后 PID 被系统分给别的进程，UI 就永远不跟随退出（2026-11-12 修复的
+// 现场"关闭宿主后右下角 UI 不退出"）。宿主身份（starttime）读不到时按存活
+// 处理（宁可不退，也不误退）。
+func hostStillIs(pid uint32, start string) bool {
+	if processGone(int(pid)) {
+		return false
+	}
+	if start == "" {
+		return true
+	}
+	return processStartTime(int(pid)) == start
+}
+
 // applyingNow 读工作目录的 version.json，判断是否处在 applying 例外窗口。
 // 读不到 / 格式不符都按 false 处理。
 func applyingNow() bool {
@@ -72,6 +89,7 @@ func hostPidFromArgs() uint32 {
 // WatchHostExit 起守护协程跟随宿主：宿主退出且不在 applying 窗口时写一行 stderr 诊断并以 0 退出。
 // 宿主 PID 优先取 --host-pid（收尾重启链传下来的原始宿主），否则取父进程；
 // 都拿不到时不动作（宁可不跟随，也不误退）。
+// 每次轮询都校验宿主身份（starttime），防止 PID 复用把"宿主已退"误判成存活。
 func WatchHostExit() {
 	host := hostPidFromArgs()
 	if host == 0 {
@@ -80,10 +98,11 @@ func WatchHostExit() {
 	if host == 0 {
 		return
 	}
+	hostStart := processStartTime(int(host))
 	go func() {
 		for {
 			time.Sleep(hostPollInterval)
-			if processAlive(host) {
+			if hostStillIs(host, hostStart) {
 				continue
 			}
 			if !ShouldExitOnHostGone(applyingNow()) {

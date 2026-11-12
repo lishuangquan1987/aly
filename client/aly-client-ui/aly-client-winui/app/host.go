@@ -94,6 +94,14 @@ func hostPidFromArgs() uint32 {
 // WatchHostExit 起守护协程跟随宿主：宿主退出且不在 applying 窗口时写一行 stderr 诊断并以 0 退出。
 // 宿主 PID 优先取 --host-pid（收尾重启链传下来的原始宿主），否则取父进程；
 // 都拿不到时不动作（宁可不跟随，也不误退）。
+//
+// 跟随机制分两档（2026-11-12 修复"关闭宿主后 UI 不退出"）：
+//  1. **首选等待宿主进程句柄**：启动时按 PID 打开 SYNCHRONIZE 句柄并阻塞等待。
+//     句柄精确指向打开时的那个进程——宿主退出立即触发，**不受 PID 复用影响**。
+//     之前按 PID 每 1s 轮询，宿主退出后 PID 一旦被系统复用给别的进程，
+//     processAlive 永远为真，UI 就一直留在屏幕上（现场报告的形态）。
+//  2. 句柄打不开（宿主已先退出 / 权限不足）→ 回落 PID 轮询（fail-open：复用
+//     场景宁可不退，也不误退）。
 func WatchHostExit() {
 	host := hostPidFromArgs()
 	if host == 0 {
@@ -102,17 +110,46 @@ func WatchHostExit() {
 	if host == 0 {
 		return
 	}
-	go func() {
-		for {
-			time.Sleep(hostPollInterval)
-			if processAlive(host) {
-				continue
-			}
-			if !ShouldExitOnHostGone(applyingNow()) {
-				return
-			}
-			fmt.Fprintf(os.Stderr, "host process exited; UI exits\n")
-			os.Exit(0)
+	if h, err := syscall.OpenProcess(finishSynchronize, false, host); err == nil {
+		go followHostByHandle(h)
+		return
+	}
+	go followHostByPID(host)
+}
+
+// followHostByHandle 等待宿主句柄触发（宿主退出）。句柄已 signal 后若命中
+// applying 例外，转为轮询 version.json——apply 结束（状态离开 applying）后退出。
+func followHostByHandle(h syscall.Handle) {
+	defer syscall.CloseHandle(h)
+	for {
+		event, err := syscall.WaitForSingleObject(h, finishMillis(hostPollInterval))
+		if err != nil {
+			// 等待失败（句柄失效等）：停止跟随，宁可不退也不误退。
+			return
 		}
-	}()
+		if event != finishWaitObject0 {
+			continue // 超时：宿主仍存活
+		}
+		if !ShouldExitOnHostGone(applyingNow()) {
+			time.Sleep(hostPollInterval)
+			continue // applying 窗口：继续等（句柄已 signal，此后等效轮询状态）
+		}
+		fmt.Fprintf(os.Stderr, "host process exited; UI exits\n")
+		os.Exit(0)
+	}
+}
+
+// followHostByPID 是句柄打不开时的回落：按 PID 轮询（存在 PID 复用误判的弱点）。
+func followHostByPID(host uint32) {
+	for {
+		time.Sleep(hostPollInterval)
+		if processAlive(host) {
+			continue
+		}
+		if !ShouldExitOnHostGone(applyingNow()) {
+			return
+		}
+		fmt.Fprintf(os.Stderr, "host process exited; UI exits\n")
+		os.Exit(0)
+	}
 }
