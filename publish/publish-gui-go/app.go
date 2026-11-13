@@ -90,15 +90,19 @@ type app struct {
 
 	status   string
 	toastMsg string
+	theme    string
 }
 
 func newApp() *app {
+	settings := loadSettings()
 	lang := "zh"
-	if strings.HasPrefix(strings.ToLower(loadSettings().Language), "en") {
+	if strings.HasPrefix(strings.ToLower(settings.Language), "en") {
 		lang = "en"
 	}
+	theme := normalizeTheme(settings.Theme)
 	a := &app{
 		lang:     lang,
+		theme:    theme,
 		projects: loadProjects(),
 		selected: -1,
 	}
@@ -121,6 +125,79 @@ func (a *app) tf(key string, pairs ...string) string {
 	return s
 }
 
+func normalizeTheme(value string) string {
+	switch value {
+	case "light", "dark", "system":
+		return value
+	default:
+		return "system"
+	}
+}
+
+func nextTheme(current string) string {
+	switch normalizeTheme(current) {
+	case "system":
+		return "light"
+	case "light":
+		return "dark"
+	default:
+		return "system"
+	}
+}
+
+func (a *app) themeSource() mygo.ThemeSource {
+	switch a.theme {
+	case "light":
+		return mygo.ThemeLight
+	case "dark":
+		return mygo.ThemeDark
+	default:
+		return mygo.ThemeSystem
+	}
+}
+
+func (a *app) applyTheme() {
+	mygo.Theme.SetSource(a.themeSource())
+}
+
+func (a *app) savePrefs() {
+	_ = saveSettings(appSettings{
+		Language: map[bool]string{true: "zh-CN", false: "en-US"}[a.lang == "zh"],
+		Theme:    a.theme,
+	})
+}
+
+func (a *app) cycleTheme() {
+	a.theme = nextTheme(a.theme)
+	a.applyTheme()
+	a.savePrefs()
+	if a.win != nil {
+		a.win.Update(func() {})
+	}
+}
+
+func (a *app) themeLabel() string {
+	switch normalizeTheme(a.theme) {
+	case "light":
+		return a.t("theme.light")
+	case "dark":
+		return a.t("theme.dark")
+	default:
+		return a.t("theme.system")
+	}
+}
+
+func (a *app) themeIcon() *ui.SVG {
+	switch normalizeTheme(a.theme) {
+	case "light":
+		return iconSun
+	case "dark":
+		return iconMoon
+	default:
+		return iconMonitor
+	}
+}
+
 func (a *app) localeTag() string {
 	if a.lang == "zh" {
 		return "zh-Hans"
@@ -135,7 +212,7 @@ func (a *app) toggleLang() {
 		a.lang = "zh"
 	}
 	mygo.App.SetLocale(a.localeTag())
-	_ = saveSettings(appSettings{Language: map[bool]string{true: "zh-CN", false: "en-US"}[a.lang == "zh"]})
+	a.savePrefs()
 	if a.win != nil {
 		a.win.SetTitle(a.t("app.title"))
 	}
@@ -819,12 +896,13 @@ func (a *app) editModal(c *ui.Context) {
 			return
 		}
 		ui.Column(c).Width(820).MaxHeight(680).Gap(12).Padding(18).
-			Background(t.Surface).Radius(10).Border(1, t.Border).Children(func() {
+			Background(t.Surface).Radius(12).Border(1, t.Border).
+			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.08)).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, iconSettings).FontSize(18).TextColor(t.Accent)
 				ui.Text(c, a.t("edit.title")).FontSize(16).Bold()
 				ui.Box(c).Grow(1)
-				if a.iconButton(c, a.t("edit.cancel"), iconX, e.busy) {
+				if a.ghostIconButton(c, a.t("edit.cancel"), iconX, e.busy) {
 					a.editOpen = false
 				}
 			})
@@ -915,11 +993,7 @@ func (a *app) editGroup(c *ui.Context, label string, list *[]string, input *stri
 				ui.Row(c).Gap(3).AlignItems(ui.Center).Padding(7, 3).Background(t.Background).
 					Border(1, t.Border).Radius(5).MaxWidth(320).Children(func() {
 					ui.Text(c, value).FontSize(11).SingleLine().Tooltip(value)
-					rm := ui.Button(c, "").Label(a.t("edit.remove")).Tooltip(a.t("edit.remove")).Width(22).Height(20)
-					rm.Children(func() {
-						ui.Icon(c, iconX).FontSize(12)
-					})
-					if rm.Clicked() {
+					if a.ghostIconButtonSize(c, a.t("edit.remove"), iconX, false, 20, 20) {
 						*list = removeValue(*list, value)
 					}
 				})

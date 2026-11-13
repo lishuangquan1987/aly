@@ -44,4 +44,6 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o build/linux-arm64/AlyPublish .
 - 只实现 add-local 项目；服务端项目创建/选择向导、UpdateFolder 生成、服务端 ignore 同步留到
   Phase 1。
 - 编辑项目保存本地书签与 `.updator/shared.json`（通过 CLI `config set*`），不主动改服务端项目信息。
-- 主题使用 MyGo 默认外观，不追求 Semi/Ursa 像素级一致。
+- 支持跟随系统/浅色/深色三态主题，选择写入 `settings.json`；视觉不追求 Semi/Ursa 像素级一致。
+- `go test ./...` 包含 `ui.NewTester` 无窗口视图测试（浅色/深色、最小窗口、编辑框 chips），
+  不依赖真实窗口或 CLI。

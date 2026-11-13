@@ -37,6 +37,7 @@ func main() {
 	mygo.App.OnWindowAllClosed(func() { mygo.App.Quit() })
 
 	mygo.App.WhenReady(func() {
+		a.applyTheme()
 		a.win = mygo.NewWindow(mygo.WindowOptions{
 			Title:           a.t("app.title"),
 			Width:           1440,

@@ -35,6 +35,7 @@ type SharedConfig struct {
 
 type appSettings struct {
 	Language string `json:"language"`
+	Theme    string `json:"theme,omitempty"`
 }
 
 func configDir() string {

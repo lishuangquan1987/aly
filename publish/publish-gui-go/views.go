@@ -28,12 +28,22 @@ func (a *app) actionButtonLabel(c *ui.Context, visible, tooltip string, ic *ui.S
 	return b.Clicked()
 }
 
-// iconButton is a compact icon-only action. It always gets a label and tooltip
-// so it remains usable with a screen reader.
-func (a *app) iconButton(c *ui.Context, label string, ic *ui.SVG, disabled bool) bool {
-	b := ui.Button(c, "").Label(label).Tooltip(label).Disabled(disabled).Width(30).Height(30)
+var cardShadow = ui.RGBA(0, 0, 0, 0.06)
+
+// ghostIconButton is the borderless variant for table rows, header utilities
+// and chips, where a full button face on every item looks heavy.
+func (a *app) ghostIconButton(c *ui.Context, label string, ic *ui.SVG, disabled bool) bool {
+	return a.ghostIconButtonSize(c, label, ic, disabled, 28, 28)
+}
+
+func (a *app) ghostIconButtonSize(c *ui.Context, label string, ic *ui.SVG, disabled bool, w, h float32) bool {
+	b := ui.ButtonBase(c).Label(label).Tooltip(label).Disabled(disabled).Width(w).Height(h)
+	size := float32(15)
+	if w < 24 {
+		size = 12
+	}
 	b.Children(func() {
-		ui.Icon(c, ic).FontSize(15)
+		ui.Icon(c, ic).FontSize(size)
 	})
 	return b.Clicked()
 }
@@ -162,12 +172,15 @@ func (a *app) toolbar(c *ui.Context) {
 			a.statusDot(c, col)
 			ui.Text(c, label).FontSize(10).TextColor(col)
 		})
+		if a.ghostIconButton(c, a.tf("theme.tooltip", "theme", a.themeLabel()), a.themeIcon(), false) {
+			a.cycleTheme()
+		}
 		a.toolbarSeparator(c)
 		langLabel := "EN"
 		if a.lang == "en" {
 			langLabel = "中文"
 		}
-		if a.actionButtonLabel(c, langLabel, a.t("toolbar.language"), iconGlobe, false, false) {
+		if a.actionButtonLabel(c, langLabel, a.t("toolbar.languageTip"), iconGlobe, false, false) {
 			a.toggleLang()
 		}
 	})
@@ -263,10 +276,11 @@ func (a *app) detailView(c *ui.Context, d *detailState) {
 			} else {
 				ui.Text(c, a.t("history.none")).FontSize(11).TextColor(t.TextMuted)
 			}
-			if a.iconButton(c, a.t("actions.folder"), iconFolder, false) {
+			ui.Box(c).Width(1).Height(18).Background(t.Border).Margin(2, 0)
+			if a.ghostIconButton(c, a.t("actions.folder"), iconFolder, false) {
 				a.openProjectFolder()
 			}
-			if a.iconButton(c, a.t("actions.launch"), iconPlay, false) {
+			if a.ghostIconButton(c, a.t("actions.launch"), iconPlay, false) {
 				a.launchMain()
 			}
 		})
@@ -286,7 +300,9 @@ func (a *app) detailView(c *ui.Context, d *detailState) {
 }
 
 func (a *app) changesView(c *ui.Context, d *detailState) {
-	ui.Column(c).Grow(1).FillHeight().Children(func() {
+	t := c.Theme()
+	ui.Column(c).Grow(1).FillHeight().Background(t.Surface).Border(1, t.Border).
+		Radius(10).Shadow(0, 1, 3, 0, cardShadow).Children(func() {
 		ui.SplitVerticalPercent(c, &d.splitPercent,
 			func() { a.filesPanel(c, d, false) },
 			func() { a.filesPanel(c, d, true) },
@@ -308,8 +324,7 @@ func (a *app) filesPanel(c *ui.Context, d *detailState, staged bool) {
 	}
 	disabled := d.busy || d.uploading || len(files) == 0
 	hasSelected := len(selectedFiles(files)) > 0
-	ui.Column(c).Grow(1).FillHeight().Gap(8).Padding(12).Background(t.Surface).
-		Border(1, t.Border).Radius(8).Children(func() {
+	ui.Column(c).Grow(1).FillHeight().Gap(8).Padding(12).Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			a.sectionHeader(c, icon, title, len(files))
 			ui.Box(c).Grow(1)
@@ -374,7 +389,7 @@ func (a *app) filesPanel(c *ui.Context, d *detailState, staged bool) {
 			case 4:
 				ui.Text(c, formatSize(f.ServerSize)).FontSize(11).TextColor(t.TextMuted)
 			case 5:
-				if a.iconButton(c, a.t("table.open"), iconExternal, false) {
+				if a.ghostIconButton(c, a.t("table.open"), iconExternal, false) {
 					a.openFileLocation(*f)
 				}
 			}
@@ -387,13 +402,13 @@ func (a *app) publishView(c *ui.Context, d *detailState) {
 	canPublish := !d.busy && !d.uploading && len(d.staged) > 0 &&
 		strings.TrimSpace(d.newVersion) != "" && strings.TrimSpace(d.notes) != ""
 	ui.Column(c).Gap(10).Padding(14).Background(t.Surface).
-		Border(1, t.Border).Radius(8).Children(func() {
+		Border(1, t.Border).Radius(10).Shadow(0, 1, 3, 0, cardShadow).Children(func() {
 		a.sectionHeader(c, iconUpload, a.t("publish.title"), len(d.staged))
 		a.fieldLabel(c, a.t("publish.version"))
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			ui.TextInput(c, &d.newVersion).Placeholder(a.t("publish.versionHint")).Grow(1)
 			nextVersion := suggestVersion(d.currentVersion)
-			if a.iconButton(c, a.t("publish.nextVersion"), iconPlus, d.busy || nextVersion == "") {
+			if a.ghostIconButton(c, a.t("publish.nextVersion"), iconPlus, d.busy || nextVersion == "") {
 				d.newVersion = nextVersion
 			}
 		})
@@ -473,7 +488,7 @@ func (a *app) publishView(c *ui.Context, d *detailState) {
 func (a *app) historyView(c *ui.Context, d *detailState) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).FillHeight().Gap(8).Padding(12).Background(t.Surface).
-		Border(1, t.Border).Radius(8).Children(func() {
+		Border(1, t.Border).Radius(10).Shadow(0, 1, 3, 0, cardShadow).Children(func() {
 		a.sectionHeader(c, iconHistory, a.t("history.title"), len(d.logs))
 		if len(d.logs) == 0 {
 			a.emptyState(c, iconHistory, a.t("history.empty"), "")
