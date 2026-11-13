@@ -1043,12 +1043,12 @@ func uploadStatusColor(t *ui.Theme, status string) ui.Color {
 
 func (a *app) editModal(c *ui.Context) {
 	t := c.Theme()
-	keepModalOpen(&a.editOpen, ui.Modal(c, &a.editOpen, func() {
+	a.formModal(c, &a.editOpen, func() {
 		e := a.editing
 		if e == nil {
 			return
 		}
-		ui.Column(c).Width(820).MaxHeight(680).Gap(12).Padding(18).
+		ui.Column(c).Role(ui.RoleDialog).Width(820).MaxHeight(680).Gap(12).Padding(18).
 			Background(t.Surface).Radius(12).Border(1, t.Border).
 			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.08)).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -1066,7 +1066,7 @@ func (a *app) editModal(c *ui.Context) {
 			})
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, a.t("edit.serverURL")).FontSize(11).TextColor(t.TextMuted).Width(104)
-				ui.TextInput(c, &e.serverURL).Grow(1)
+				ui.TextInput(c, &e.serverURL).Grow(1).AutoFocus()
 			})
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, a.t("edit.projectName")).FontSize(11).TextColor(t.TextMuted).Width(104)
@@ -1137,12 +1137,12 @@ func (a *app) editModal(c *ui.Context) {
 				}
 			})
 		})
-	}))
+	})
 }
 
 func (a *app) editGroup(c *ui.Context, label string, list *[]string, input *string, pick func()) {
 	t := c.Theme()
-	ui.Column(c).Gap(6).Children(func() {
+	ui.Column(c).Gap(4).Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, label).FontSize(11).Bold().TextColor(t.TextMuted)
 			a.countPill(c, len(*list))
@@ -1151,10 +1151,10 @@ func (a *app) editGroup(c *ui.Context, label string, list *[]string, input *stri
 		ui.Row(c).Wrap().Gap(4).Children(func() {
 			for _, value := range items {
 				value := value
-				ui.Row(c).Gap(2).AlignItems(ui.Center).Padding(6, 1).Background(t.Text.Alpha(0.06)).
-					Border(1, t.Border).Radius(5).MaxWidth(320).Children(func() {
-					ui.Text(c, value).FontSize(11).SingleLine().Tooltip(value)
-					if a.ghostIconButtonSize(c, a.t("edit.remove"), iconX, false, 16, 16) {
+				ui.Row(c).Gap(1).AlignItems(ui.Center).Height(18).Padding(5, 0).Background(t.Text.Alpha(0.06)).
+					Border(1, t.Border).Radius(4).MaxWidth(280).Children(func() {
+					ui.Text(c, value).FontSize(10).SingleLine().Tooltip(value)
+					if a.ghostIconButtonSize(c, a.t("edit.remove"), iconX, false, 14, 14) {
 						*list = removeValue(*list, value)
 					}
 				})

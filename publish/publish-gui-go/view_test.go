@@ -93,6 +93,22 @@ func TestEditModalBackdropKeepsOpen(t *testing.T) {
 	}
 }
 
+func TestEditModalEscapeStillCloses(t *testing.T) {
+	a := testApp()
+	a.editOpen = true
+	a.editing = &editState{
+		project:     a.detail.project,
+		serverURL:   "http://127.0.0.1:2000",
+		projectName: "demo",
+		displayName: "demo",
+	}
+	tt := ui.NewTester(a.view, 1440, 900)
+	tt.Key(0, ui.KeyEscape)
+	if a.editOpen {
+		t.Fatal("Escape did not close the edit dialog")
+	}
+}
+
 func TestAddProjectModalRenders(t *testing.T) {
 	a := testApp()
 	a.addOpen = true
