@@ -4,7 +4,7 @@
 
 ---
 
-## 一、命名规则（publish-gui）
+## 一、命名规则（publish-gui-csharp）
 
 ### 1.1 文件命名
 
@@ -33,7 +33,7 @@
 
 ---
 
-## 二、模型设计规则（publish-gui）
+## 二、模型设计规则（publish-gui-csharp）
 
 ### 2.1 DTO（`AlyPublish.Models.Cli`）
 
@@ -101,4 +101,4 @@
 - **Semi.Avalonia 12.1**: https://github.com/irihi/Semi.Avalonia
 - **Ursa.Avalonia 2.2**: https://github.com/irihi/Ursa
 
-> **版本**: 2.1 | **适用范围**: publish/publish-gui/（.NET 8 + Avalonia 12.1 + CommunityToolkit.Mvvm 8.4 + Semi.Avalonia 12.1 + Ursa.Avalonia 2.2）
+> **版本**: 2.1 | **适用范围**: publish/publish-gui-csharp/（.NET 8 + Avalonia 12.1 + CommunityToolkit.Mvvm 8.4 + Semi.Avalonia 12.1 + Ursa.Avalonia 2.2）

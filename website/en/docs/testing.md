@@ -33,7 +33,7 @@ A Go-driven harness, not a patchwork of scripts:
 | `cmd/` | JSON protocol of each command, lock semantics, script execution |
 | `config/` / `util/` / `model/` | Configuration loading, platform utility functions |
 | `linuxui` | Finisher process, replacement orchestration, argument parsing |
-| `publish-gui` tests | Configuration, versioning, CLI output parsing, payload probing and more (54) |
+| `publish-gui-csharp` tests | Configuration, versioning, CLI output parsing, payload probing and more (54) |
 | `server/controllers` | API boundaries: path traversal, chunk boundaries (0 / -1 / 65537), zero-byte merge, MD5 mismatch, concurrent merges, Range/If-Range, soft-delete filtering, idempotent delete, changelog cap (~40 cases) |
 | `publish-cli` (api/diff/staging) | Chunked upload and complete retries, ignore-rule normalization, deleted staging and manifest criterion, force-update tri-state |
 | SDK conformance | 17-18 cases per language (TS / Rust / C++ / Pascal 18, Python 17, Java 17, Go all green; C# covered by E2E 78-94) |
@@ -53,7 +53,7 @@ cd test/tc && go test -run TestCase130 ./...
 cd client/aly-client && go test ./cmd/ ./config/ ./util/ ./selfupdate/
 
 # Publish GUI
-cd publish/publish-gui && dotnet test tests/AlyPublish.Tests/AlyPublish.Tests.csproj
+cd publish/publish-gui-csharp && dotnet test tests/AlyPublish.Tests/AlyPublish.Tests.csproj
 ```
 
 ## CI

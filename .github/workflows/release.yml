@@ -330,14 +330,14 @@ jobs:
 
       - name: Test publish GUI
         shell: pwsh
-        run: dotnet test publish/publish-gui/tests/AlyPublish.Tests/AlyPublish.Tests.csproj --configuration Release --nologo
+        run: dotnet test publish/publish-gui-csharp/tests/AlyPublish.Tests/AlyPublish.Tests.csproj --configuration Release --nologo
 
       - name: Publish publish GUI (self-contained single file)
         shell: pwsh
         run: |
-          $out = Join-Path $env:GITHUB_WORKSPACE "publish\publish-gui\artifacts\app"
+          $out = Join-Path $env:GITHUB_WORKSPACE "publish\publish-gui-csharp\artifacts\app"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
-          dotnet publish publish/publish-gui/src/AlyPublish/AlyPublish.csproj `
+          dotnet publish publish/publish-gui-csharp/src/AlyPublish/AlyPublish.csproj `
             --configuration Release `
             --runtime win-x64 `
             --self-contained true `
@@ -353,31 +353,31 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aly-publish-windows-amd64
-          path: publish/publish-gui/artifacts/staging
+          path: publish/publish-gui-csharp/artifacts/staging
 
       - name: Download linux amd64 publish CLI
         uses: actions/download-artifact@v4
         with:
           name: aly-publish-linux-amd64
-          path: publish/publish-gui/artifacts/staging
+          path: publish/publish-gui-csharp/artifacts/staging
 
       - name: Download linux arm64 publish CLI
         uses: actions/download-artifact@v4
         with:
           name: aly-publish-linux-arm64
-          path: publish/publish-gui/artifacts/staging
+          path: publish/publish-gui-csharp/artifacts/staging
 
       - name: Download Windows updater
         uses: actions/download-artifact@v4
         with:
           name: aly-client-win-xp
-          path: publish/publish-gui/artifacts/staging
+          path: publish/publish-gui-csharp/artifacts/staging
 
       - name: Download Linux updater
         uses: actions/download-artifact@v4
         with:
           name: aly-client-linux
-          path: publish/publish-gui/artifacts/staging
+          path: publish/publish-gui-csharp/artifacts/staging
 
       # 铺 payload 布局 + 写 payload.json + 断言 9 个文件都在（缺了就 fail-fast）。
       # 铺 payload 布局 + 拷 payload.json + 断言 10 项全在（缺一即失败）。
@@ -386,8 +386,8 @@ jobs:
       - name: Stage the package payload
         shell: pwsh
         run: |
-          $app = "publish\publish-gui\artifacts\app"
-          $stg = "publish\publish-gui\artifacts\staging"
+          $app = "publish\publish-gui-csharp\artifacts\app"
+          $stg = "publish\publish-gui-csharp\artifacts\staging"
           foreach ($d in @('publish-cli\windows-amd64', 'publish-cli\linux-amd64', 'publish-cli\linux-arm64', 'client\windows-x86', 'client\linux-amd64', 'client\linux-arm64')) {
             New-Item -ItemType Directory -Force -Path (Join-Path $app $d) | Out-Null
           }
@@ -427,7 +427,7 @@ jobs:
           if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client-ui-linux-arm64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
           if (-not (Test-Path $src)) { throw "payload source missing: aly-client-ui-linux-arm64" }
           Copy-Item $src (Join-Path $app "client\linux-arm64\aly-client-ui") -Force
-          Copy-Item "publish\publish-gui\installer\payload.json" (Join-Path $app "payload.json") -Force
+          Copy-Item "publish\publish-gui-csharp\installer\payload.json" (Join-Path $app "payload.json") -Force
           Get-ChildItem $app -Recurse -Filter *.pdb -ErrorAction SilentlyContinue | Remove-Item -Force
           $need = @('publish-cli\windows-amd64\aly-publish.exe', 'publish-cli\linux-amd64\aly-publish', 'publish-cli\linux-arm64\aly-publish', 'client\windows-x86\aly-client.exe', 'client\windows-x86\aly-client-ui.exe', 'client\linux-amd64\aly-client', 'client\linux-amd64\aly-client-ui', 'client\linux-arm64\aly-client', 'client\linux-arm64\aly-client-ui', 'payload.json')
           $miss = 0
@@ -449,20 +449,20 @@ jobs:
       - name: Build installer
         shell: pwsh
         run: |
-          & $env:ISCC "/DMyAppVersion=$env:ALY_VERSION" "publish\publish-gui\installer\AlyPublish.iss"
+          & $env:ISCC "/DMyAppVersion=$env:ALY_VERSION" "publish\publish-gui-csharp\installer\AlyPublish.iss"
 
       - name: Build portable zip
         shell: pwsh
         run: |
-          Compress-Archive -Path "publish\publish-gui\artifacts\app\*" -DestinationPath "publish\publish-gui\artifacts\AlyPublish-win-x64.zip" -Force
+          Compress-Archive -Path "publish\publish-gui-csharp\artifacts\app\*" -DestinationPath "publish\publish-gui-csharp\artifacts\AlyPublish-win-x64.zip" -Force
 
       - name: Upload publish GUI artifacts
         uses: actions/upload-artifact@v4
         with:
           name: aly-publish-gui-windows-amd64
           path: |
-            publish/publish-gui/artifacts/AlyPublish-Setup.exe
-            publish/publish-gui/artifacts/AlyPublish-win-x64.zip
+            publish/publish-gui-csharp/artifacts/AlyPublish-Setup.exe
+            publish/publish-gui-csharp/artifacts/AlyPublish-win-x64.zip
 
   build-publish-gui-linux:
     # 与 Windows 包同一个 windows-latest 工具链：linux-x64 / linux-arm64 的 Avalonia 产物来自
@@ -490,14 +490,14 @@ jobs:
 
       - name: Test publish GUI
         shell: pwsh
-        run: dotnet test publish/publish-gui/tests/AlyPublish.Tests/AlyPublish.Tests.csproj --configuration Release --nologo
+        run: dotnet test publish/publish-gui-csharp/tests/AlyPublish.Tests/AlyPublish.Tests.csproj --configuration Release --nologo
 
       - name: Publish publish GUI for Linux
         shell: pwsh
         run: |
-          $out = Join-Path $env:GITHUB_WORKSPACE "publish\publish-gui\artifacts\app"
+          $out = Join-Path $env:GITHUB_WORKSPACE "publish\publish-gui-csharp\artifacts\app"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
-          dotnet publish publish/publish-gui/src/AlyPublish/AlyPublish.csproj `
+          dotnet publish publish/publish-gui-csharp/src/AlyPublish/AlyPublish.csproj `
             --configuration Release `
             --runtime ${{ matrix.rid }} `
             --self-contained true `
@@ -511,38 +511,38 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aly-publish-windows-amd64
-          path: publish/publish-gui/artifacts/staging
+          path: publish/publish-gui-csharp/artifacts/staging
 
       - name: Download linux amd64 publish CLI
         uses: actions/download-artifact@v4
         with:
           name: aly-publish-linux-amd64
-          path: publish/publish-gui/artifacts/staging
+          path: publish/publish-gui-csharp/artifacts/staging
 
       - name: Download linux arm64 publish CLI
         uses: actions/download-artifact@v4
         with:
           name: aly-publish-linux-arm64
-          path: publish/publish-gui/artifacts/staging
+          path: publish/publish-gui-csharp/artifacts/staging
 
       - name: Download Windows updater
         uses: actions/download-artifact@v4
         with:
           name: aly-client-win-xp
-          path: publish/publish-gui/artifacts/staging
+          path: publish/publish-gui-csharp/artifacts/staging
 
       - name: Download Linux updater
         uses: actions/download-artifact@v4
         with:
           name: aly-client-linux
-          path: publish/publish-gui/artifacts/staging
+          path: publish/publish-gui-csharp/artifacts/staging
 
       # 与 Windows 包同一套 payload（9 文件 + 本平台的 payload.json），铺装同样内联成 pwsh。
       - name: Stage the package payload
         shell: pwsh
         run: |
-          $app = "publish\publish-gui\artifacts\app"
-          $stg = "publish\publish-gui\artifacts\staging"
+          $app = "publish\publish-gui-csharp\artifacts\app"
+          $stg = "publish\publish-gui-csharp\artifacts\staging"
           foreach ($d in @('publish-cli\windows-amd64', 'publish-cli\linux-amd64', 'publish-cli\linux-arm64', 'client\windows-x86', 'client\linux-amd64', 'client\linux-arm64')) {
             New-Item -ItemType Directory -Force -Path (Join-Path $app $d) | Out-Null
           }
@@ -582,7 +582,7 @@ jobs:
           if (-not (Test-Path $src)) { $h = Get-ChildItem $stg -Recurse -Filter "aly-client-ui-linux-arm64" -ErrorAction SilentlyContinue | Where-Object Length -Gt 0 | Select-Object -First 1; if ($h) { $src = $h.FullName } }
           if (-not (Test-Path $src)) { throw "payload source missing: aly-client-ui-linux-arm64" }
           Copy-Item $src (Join-Path $app "client\linux-arm64\aly-client-ui") -Force
-          Copy-Item (Join-Path "publish\publish-gui\installer" "payload.${{ matrix.rid }}.json") (Join-Path $app "payload.json") -Force
+          Copy-Item (Join-Path "publish\publish-gui-csharp\installer" "payload.${{ matrix.rid }}.json") (Join-Path $app "payload.json") -Force
           Get-ChildItem $app -Recurse -Filter *.pdb -ErrorAction SilentlyContinue | Remove-Item -Force
           $need = @('publish-cli\windows-amd64\aly-publish.exe', 'publish-cli\linux-amd64\aly-publish', 'publish-cli\linux-arm64\aly-publish', 'client\windows-x86\aly-client.exe', 'client\windows-x86\aly-client-ui.exe', 'client\linux-amd64\aly-client', 'client\linux-amd64\aly-client-ui', 'client\linux-arm64\aly-client', 'client\linux-arm64\aly-client-ui', 'payload.json')
           $miss = 0
@@ -593,19 +593,19 @@ jobs:
       - name: Add the Linux installer scripts
         shell: pwsh
         run: |
-          $app = Join-Path $env:GITHUB_WORKSPACE "publish\publish-gui\artifacts\app"
-          Copy-Item "publish\publish-gui\installer\linux\install.sh" $app -Force
-          Copy-Item "publish\publish-gui\installer\linux\uninstall.sh" $app -Force
+          $app = Join-Path $env:GITHUB_WORKSPACE "publish\publish-gui-csharp\artifacts\app"
+          Copy-Item "publish\publish-gui-csharp\installer\linux\install.sh" $app -Force
+          Copy-Item "publish\publish-gui-csharp\installer\linux\uninstall.sh" $app -Force
 
       - name: Compress the Linux package
         shell: pwsh
-        run: Compress-Archive -Path "publish\publish-gui\artifacts\app\*" -DestinationPath "publish\publish-gui\artifacts\AlyPublish-${{ matrix.rid }}.zip" -Force
+        run: Compress-Archive -Path "publish\publish-gui-csharp\artifacts\app\*" -DestinationPath "publish\publish-gui-csharp\artifacts\AlyPublish-${{ matrix.rid }}.zip" -Force
 
       - name: Upload the Linux package
         uses: actions/upload-artifact@v4
         with:
           name: aly-publish-gui-${{ matrix.rid }}
-          path: publish/publish-gui/artifacts/AlyPublish-${{ matrix.rid }}.zip
+          path: publish/publish-gui-csharp/artifacts/AlyPublish-${{ matrix.rid }}.zip
 
   build-csharp-sdk:
     name: Build AlyClient.CSharpSDK nupkg

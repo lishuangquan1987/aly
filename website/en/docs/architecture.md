@@ -78,7 +78,7 @@ aly/
 │   └── aly-client-sdk/         # multi-language SDKs (C#/TS/Go/Python/Java/Rust/C++/Pascal/COM)
 ├── publish/
 │   ├── publish-cli/            # publish CLI (cobra)
-│   └── publish-gui/            # publish desktop app (Avalonia 12.1 · .NET 8)
+│   └── publish-gui-csharp/     # publish desktop app (Avalonia 12.1 · .NET 8)
 ├── test/tc/                    # 148 end-to-end cases
 ├── deploy/                     # deployment scripts
 └── website/                    # this site (VitePress)

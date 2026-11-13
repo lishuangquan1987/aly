@@ -5846,7 +5846,7 @@ tc.Eq(t, "恢复后 has_update", cu.HasUpdate, true)
 >
 > **这是跨语言误判**：publish-gui 是 **C#/Avalonia（net8.0）**，publish-cli 是 **Go**。C# 不可能 `using` Go 包。实测该 grep 命中 **0 条**（原用例据此写日志但没断言，所以"PASS"是假的）。
 >
-> 真实的等价路径是**子进程复用**（`publish-gui/src/AlyPublish/Services/CliService.cs`）：
+> 真实的等价路径是**子进程复用**（`publish-gui-csharp/src/AlyPublish/Services/CliService.cs`）：
 > ```csharp
 > var exeName = OperatingSystem.IsWindows() ? "aly-publish.exe" : "aly-publish";
 > var fullArgs = $"{args} --json";                 // 统一追加 --json
@@ -5870,7 +5870,7 @@ tc.Eq(t, "恢复后 has_update", cu.HasUpdate, true)
 
 ```go
 // ① GUI 的子进程契约
-svc := tc.ReadText(filepath.Join(RepoRoot, "publish/publish-gui/src/AlyPublish/Services/CliService.cs"))
+svc := tc.ReadText(filepath.Join(RepoRoot, "publish/publish-gui-csharp/src/AlyPublish/Services/CliService.cs"))
 tc.Contains(t, svc, `"aly-publish.exe"`,   "必须找 aly-publish.exe")
 tc.Contains(t, svc, "BaseDirectory",       "先查自身目录")
 tc.Contains(t, svc, `"..", "..", "..", "..", "publish-cli"`, "开发路径回退")
@@ -7365,7 +7365,7 @@ for _, want := range []string{
 
 > 本节来自一次**真机实测**（2026-11-04）：在 publish-gui 里对一个真实项目执行"初始化项目"之后，
 > 磁盘上得到的更新器目录三处都不对——位置、内容、以及 `client.json` 的相对路径。
-> 实现见 `test/tc/cases_125_127_test.go`；被测源码 `publish/publish-gui/src/AlyPublish/Services/ConfigService.cs`。
+> 实现见 `test/tc/cases_125_127_test.go`；被测源码 `publish/publish-gui-csharp/src/AlyPublish/Services/ConfigService.cs`。
 >
 > 三条用例都分两层钉：**源码契约**（读 C# 源码断言关键调用形态）+ **消费侧功能**
 > （用真实 aly-client 消费 GUI 写出的那套布局与 `client.json`）。为什么不能只在 Go 里把 C# 的
@@ -7423,7 +7423,7 @@ System.IO.FileNotFoundException: Unable to find the specified file.
 
 **前置条件**
 
-1. 仓库里有 `publish/publish-gui`（C#/Avalonia 源码）。
+1. 仓库里有 `publish/publish-gui-csharp`（C#/Avalonia 源码）。
 2. **不需要**服务端、构建产物：本用例只读源码钉契约（与用例 104 的 ① 段同法），故不建 `Env`。
 
 **步骤**
@@ -7434,7 +7434,7 @@ System.IO.FileNotFoundException: Unable to find the specified file.
 
 ```go
 func TestCase125(t *testing.T) {
-	svc := ReadText(filepath.Join(RepoRoot, "publish", "publish-gui",
+	svc := ReadText(filepath.Join(RepoRoot, "publish", "publish-gui-csharp",
 		"src", "AlyPublish", "Services", "ConfigService.cs"))
 
 	Contains(t, svc, "CreateUpdateFolder", "初始化后产出 UpdateFolder 的入口")
@@ -7474,7 +7474,7 @@ PASS（2026-11-12 全量回归；已修正首发版本号）
 **前置条件**
 
 1. 服务端已就绪（`NewEnv(t, true, 0)`），项目 `tc-gui-init` 已发布 `1.0.0`，数据目录内有 `WinFormsApp1.exe`。
-2. `publish/publish-gui/src/AlyPublish/Services/ConfigService.cs` 在位。
+2. `publish/publish-gui-csharp/src/AlyPublish/Services/ConfigService.cs` 在位。
 
 **步骤**
 
@@ -7493,7 +7493,7 @@ func TestCase126(t *testing.T) {
 	True(t, e.Publish(t, proj, "1.0.1", []string{"初始"}, "", "").IsSuccess, "发布 1.0.1")
 
 	// ── ① 源码契约（GUI 侧三件套 + 相对路径基准）──
-	guiRoot := filepath.Join(RepoRoot, "publish", "publish-gui")
+	guiRoot := filepath.Join(RepoRoot, "publish", "publish-gui-csharp")
 	svc := ReadText(filepath.Join(guiRoot,
 		"src", "AlyPublish", "Services", "ConfigService.cs"))
 	Contains(t, svc, "PkHelper.FindUp(",
@@ -7598,7 +7598,7 @@ PASS（2026-11-12 全量回归；已修正首发版本号）
 ```go
 func TestCase127(t *testing.T) {
 	// ── ① 源码契约：目标不存在时不能 Replace（第一次写必抛）──
-	svc := ReadText(filepath.Join(RepoRoot, "publish", "publish-gui",
+	svc := ReadText(filepath.Join(RepoRoot, "publish", "publish-gui-csharp",
 		"src", "AlyPublish", "Services", "ConfigService.cs"))
 	Contains(t, svc, `var tmpPath = path + ".tmp"`, "原子写先写 .tmp")
 	Contains(t, svc, "if (!File.Exists(path))", "必须先判目标是否存在")

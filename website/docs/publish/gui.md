@@ -265,19 +265,19 @@ payload 的铺装由 release 工作流里的内联 pwsh 步骤完成（`Stage th
 
 ```bash
 # 日常调试（框架依赖，需要本机 .NET 8）
-dotnet build publish/publish-gui/src/AlyPublish/AlyPublish.csproj -c Release
+dotnet build publish/publish-gui-csharp/src/AlyPublish/AlyPublish.csproj -c Release
 
 # 生成自包含单文件（与 CI 便携包一致）
-dotnet publish publish/publish-gui/src/AlyPublish/AlyPublish.csproj \
+dotnet publish publish/publish-gui-csharp/src/AlyPublish/AlyPublish.csproj \
   -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
-  -o publish/publish-gui/artifacts/app
+  -o publish/publish-gui-csharp/artifacts/app
 
 # Linux 包（同一个工程，换 runtime；CI 在此之上再加 install.sh 并压 zip）
-dotnet publish publish/publish-gui/src/AlyPublish/AlyPublish.csproj \
+dotnet publish publish/publish-gui-csharp/src/AlyPublish/AlyPublish.csproj \
   -c Release -r linux-x64 --self-contained true \
   -p:IncludeNativeLibrariesForSelfExtract=true \
-  -o publish/publish-gui/artifacts/app
+  -o publish/publish-gui-csharp/artifacts/app
 ```
 
 手工分发时，把 GUI 本体与 `payload.json`、`publish-cli/`、`client/` 放在同一目录即可（初始化向导就是按这个布局取更新器的）。

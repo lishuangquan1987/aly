@@ -35,20 +35,20 @@ import (
 // Services/UpdateFolderService.cs；安装包化之后又改成“从包内 client/<rid>/ 取更新器”。
 // 本用例跟着指向真正的归属文件，并钉当前契约（意图不变：三件套齐全、与主程序目录同级）。
 func guiConfigServicePath(t *testing.T) string {
-	path := filepath.Join(RepoRoot, "publish", "publish-gui",
+	path := filepath.Join(RepoRoot, "publish", "publish-gui-csharp",
 		"src", "AlyPublish", "Services", "UpdateFolderService.cs")
 	if _, err := os.Stat(path); err != nil {
-		t.Skip("publish-gui 源码不存在，跳过")
+		t.Skip("publish-gui-csharp 源码不存在，跳过")
 	}
 	return path
 }
 
 // guiFileWriteHelperPath 返回 publish-gui 里原子写的归属文件（用例 127 用）。
 func guiFileWriteHelperPath(t *testing.T) string {
-	path := filepath.Join(RepoRoot, "publish", "publish-gui",
+	path := filepath.Join(RepoRoot, "publish", "publish-gui-csharp",
 		"src", "AlyPublish", "Helpers", "FileWriteHelper.cs")
 	if _, err := os.Stat(path); err != nil {
-		t.Skip("publish-gui 源码不存在，跳过")
+		t.Skip("publish-gui-csharp 源码不存在，跳过")
 	}
 	return path
 }
@@ -125,7 +125,7 @@ func TestCase126(t *testing.T) {
 	// ── ①b 强制更新三态：GUI 复选框必须翻译成 --set / --clear 的显式一侧 ──
 	// 审查 B7：CLI 改成三态后，"不传"=保持服务端原值；GUI 若在取消勾选时仍不传，
 	// 用户看到的"关闭强制更新"不会生效。这里把两侧源码契约钉死。
-	guiRoot := filepath.Join(RepoRoot, "publish", "publish-gui")
+	guiRoot := filepath.Join(RepoRoot, "publish", "publish-gui-csharp")
 	cliSvc := ReadText(filepath.Join(guiRoot, "src", "AlyPublish", "Services", "CliService.cs"))
 	Contains(t, cliSvc, `AddFlag(arguments, "--set-force-update", setForceUpdate)`,
 		"GUI 推送必须能把强制更新显式置 true")

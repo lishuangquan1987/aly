@@ -33,7 +33,7 @@ Go 驱动的 harness，不是脚本拼凑：
 | `cmd/` | 各命令 JSON 协议、锁语义、脚本执行 |
 | `config/` / `util/` / `model/` | 配置加载、平台工具函数 |
 | `linuxui` | 收尾进程、替换编排、参数解析 |
-| `publish-gui` tests | 配置、版本、CLI 输出解析、payload 探测等（54 个） |
+| `publish-gui-csharp` tests | 配置、版本、CLI 输出解析、payload 探测等（54 个） |
 | `server/controllers` | API 边界：路径穿越、分片边界（0 / -1 / 65537）、零字节合并、MD5 不符、并发合并、Range/If-Range、软删除过滤、幂等删除、changelog 上限（~40 例） |
 | `publish-cli`（api/diff/staging） | 分片上传与 complete 重试、ignore 规则归一化、deleted 暂存与清单判据、强制更新三态 |
 | SDK conformance | 7 语言各 17–18 例（TS / Rust / C++ / Pascal 18、Python 17、Java 17、Go 全绿；C# 由 E2E 78–94 覆盖） |
@@ -53,7 +53,7 @@ cd test/tc && go test -run TestCase130 ./...
 cd client/aly-client && go test ./cmd/ ./config/ ./util/ ./selfupdate/
 
 # 发布 GUI
-cd publish/publish-gui && dotnet test tests/AlyPublish.Tests/AlyPublish.Tests.csproj
+cd publish/publish-gui-csharp && dotnet test tests/AlyPublish.Tests/AlyPublish.Tests.csproj
 ```
 
 ## CI

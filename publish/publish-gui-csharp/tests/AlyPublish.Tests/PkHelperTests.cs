@@ -181,14 +181,14 @@ public sealed class PkHelperTests
         }
 
         var windows = JsonConvert.DeserializeObject<PkConfig>(File.ReadAllText(Path.Combine(
-            root, "publish", "publish-gui", "installer", "payload.json")));
+            root, "publish", "publish-gui-csharp", "installer", "payload.json")));
         Assert.Equal("windows-x64", windows!.HostRid);
         Assert.Equal("windows-amd64", windows.PubRid);
         Assert.Equal("windows-x86", windows.UpRid);
         Assert.Equal("windows-amd64", windows.RidList[0]);
 
         var linux = JsonConvert.DeserializeObject<PkConfig>(File.ReadAllText(Path.Combine(
-            root, "publish", "publish-gui", "installer", "payload.linux-arm64.json")));
+            root, "publish", "publish-gui-csharp", "installer", "payload.linux-arm64.json")));
         Assert.Equal("linux-arm64", linux!.HostRid);
         Assert.Equal("linux-arm64", linux.PubRid);
         Assert.Equal("linux-arm64", linux.UpRid);
@@ -200,7 +200,7 @@ public sealed class PkHelperTests
         var directory = Path.GetFullPath(".");
         for (var i = 0; i < 12; i++)
         {
-            if (File.Exists(Path.Combine(directory, "publish", "publish-gui", "installer", "payload.json")))
+            if (File.Exists(Path.Combine(directory, "publish", "publish-gui-csharp", "installer", "payload.json")))
             {
                 return directory;
             }

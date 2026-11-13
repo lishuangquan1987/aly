@@ -21,7 +21,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o aly-server-li
 发布 GUI（.NET 8 / Avalonia 12.1）：
 
 ```bash
-cd publish/publish-gui
+cd publish/publish-gui-csharp
 dotnet build src/AlyPublish/AlyPublish.csproj
 dotnet test tests/AlyPublish.Tests/AlyPublish.Tests.csproj
 ```

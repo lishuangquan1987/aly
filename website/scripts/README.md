@@ -9,7 +9,7 @@
 - Python 3.9+ 与 Pillow。
 - 仓库内已有构建产物：
   - `dist-test/server.exe`、`dist-test/aly-publish.exe`、`dist-test/aly-client.exe`、`dist-test/fake_main.exe`
-  - `publish/publish-gui/src/AlyPublish/bin/Debug/net8.0/AlyPublish.exe`（及同目录 `aly-publish.exe`）
+  - `publish/publish-gui-csharp/src/AlyPublish/bin/Debug/net8.0/AlyPublish.exe`（及同目录 `aly-publish.exe`）
   - `client/aly-client-ui/aly-client-winui/aly-client-ui.exe`
 
 ## 用法 / Usage
@@ -38,6 +38,6 @@ python website/scripts/capture_screenshots.py --keep
 
 ## 新增语言后 / After adding a language
 
-发布 GUI 的文案在 `publish/publish-gui/src/AlyPublish/Resources/Strings.json` 与
+发布 GUI 的文案在 `publish/publish-gui-csharp/src/AlyPublish/Resources/Strings.json` 与
 `Strings.zh-Hans.json`。新增语言时复制一份 `Strings.<culture>.json`，保持键集合完全一致，
 并在 `LanguageManager` 的语言解析处加入该 culture；随后用 `--lang` 重新截图。

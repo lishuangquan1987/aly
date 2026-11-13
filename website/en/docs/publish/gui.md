@@ -257,13 +257,13 @@ Build from source:
 
 ```bash
 # Day-to-day debug build (framework-dependent; needs .NET 8 locally)
-dotnet build publish/publish-gui/src/AlyPublish/AlyPublish.csproj -c Release
+dotnet build publish/publish-gui-csharp/src/AlyPublish/AlyPublish.csproj -c Release
 
 # Self-contained single file (same shape as the CI portable bundle)
-dotnet publish publish/publish-gui/src/AlyPublish/AlyPublish.csproj \
+dotnet publish publish/publish-gui-csharp/src/AlyPublish/AlyPublish.csproj \
   -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
-  -o publish/publish-gui/artifacts/app
+  -o publish/publish-gui-csharp/artifacts/app
 ```
 
 When distributing manually, keep `AlyPublish.exe` and `aly-publish.exe` in the same directory. If the initialization wizard should also generate `UpdateFolder` automatically, place `aly-client.exe` / `aly-client-ui.exe` in the GUI directory (or the project directory).

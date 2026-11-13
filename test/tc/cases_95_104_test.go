@@ -780,9 +780,9 @@ func TestCase104(t *testing.T) {
 	True(t, e.PublishCLI(t, ws, "add", "--all").IsSuccess, "add --all")
 
 	// ① 子进程契约：GUI 必须通过 aly-publish.exe 干活，且必须追加 --json
-	guiRoot := filepath.Join(RepoRoot, "publish", "publish-gui")
+	guiRoot := filepath.Join(RepoRoot, "publish", "publish-gui-csharp")
 	if !Exists(guiRoot) {
-		t.Skip("publish-gui 目录不存在，跳过")
+		t.Skip("publish-gui-csharp 目录不存在，跳过")
 	}
 	cliSvc := filepath.Join(guiRoot, "src", "AlyPublish", "Services", "CliService.cs")
 	True(t, Exists(cliSvc), "GUI 必须有 CliService.cs（子进程复用 CLI 的唯一入口）")

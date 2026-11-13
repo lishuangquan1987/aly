@@ -17,7 +17,7 @@ aly/
 │   └── aly-client-sdk/      # C# / TypeScript / Go / Python / Java / Rust / C++ / Pascal + VB.NET/F#/COM samples
 ├── publish/
 │   ├── publish-cli/      # CLI publish engine (Go, cobra)
-│   └── publish-gui/      # Desktop GUI (Avalonia 12.1, .NET 8)
+│   └── publish-gui-csharp/  # Desktop GUI (Avalonia 12.1, .NET 8)
 ├── spec/           # JSON protocol schema, host contract and fixture scenarios (single source of truth)
 ├── test/           # E2E harness (test/tc: 148 cases) and integration tests
 ├── tools/          # Protocol model generator, fake client, SDK packaging and release scripts
@@ -261,7 +261,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o aly-server-li
 ### Publish GUI
 
 ```bash
-cd publish/publish-gui && dotnet build
+cd publish/publish-gui-csharp && dotnet build
 ```
 
 ### Client Updater

@@ -10,7 +10,7 @@ Requirements:
   - Windows interactive desktop
   - .NET 8 runtime (for AlyPublish.exe)
   - Python 3.9+ with Pillow
-  - the repository binaries built (dist-test/ and the publish-gui Debug output)
+  - the repository binaries built (dist-test/ and the publish-gui-csharp Debug output)
 
 Usage:
   python website/scripts/capture_screenshots.py
@@ -46,7 +46,7 @@ OUT_DIR = WEBSITE / "public" / "images"
 TMP_DIR = Path(os.environ.get("ALY_SCREENSHOT_TMP", r"C:\AlyDemo"))
 
 DIST_BIN = ROOT / "dist-test"
-PUBLISH_GUI_BIN = ROOT / "publish" / "publish-gui" / "src" / "AlyPublish" / "bin" / "Debug" / "net8.0"
+PUBLISH_GUI_BIN = ROOT / "publish" / "publish-gui-csharp" / "src" / "AlyPublish" / "bin" / "Debug" / "net8.0"
 CLIENT_UI_EXE = ROOT / "client" / "aly-client-ui" / "aly-client-winui" / "aly-client-ui.exe"
 
 SERVER_PORT = 29100
