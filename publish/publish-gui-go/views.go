@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -119,6 +120,12 @@ func (a *app) view(c *ui.Context) {
 		if a.editOpen && a.editing != nil {
 			a.editModal(c)
 		}
+		if a.addOpen && a.adding != nil {
+			a.addProjectModal(c)
+		}
+		if a.localPreviewOpen && a.localPreview != nil {
+			a.localPreviewModal(c)
+		}
 		if a.removeOpen {
 			switch ui.AlertDialog(c, &a.removeOpen,
 				a.t("remove.title"),
@@ -157,6 +164,9 @@ func (a *app) toolbar(c *ui.Context) {
 		if a.actionButton(c, a.t("toolbar.addLocal"), iconFolderPlus, true, false) {
 			a.addLocalProject()
 		}
+		if a.actionButton(c, a.t("toolbar.addServer"), iconCloud, false, false) {
+			a.openAddProject()
+		}
 		a.toolbarSeparator(c)
 		if a.actionButton(c, a.t("toolbar.edit"), iconSettings, false, a.detail == nil) {
 			a.openEdit()
@@ -191,6 +201,13 @@ func (a *app) toolbar(c *ui.Context) {
 				Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.18))
 			a.accentPanel(c)
 		})
+		a.toolbarSeparator(c)
+		if a.ghostIconButton(c, a.t("toolbar.openCLI"), iconTerminal, false) {
+			a.openCLIFolder()
+		}
+		if a.ghostIconButton(c, a.t("toolbar.openLog"), iconFileText, false) {
+			a.openLogFolder()
+		}
 		a.toolbarSeparator(c)
 		langLabel := "EN"
 		if a.lang == "en" {
@@ -584,5 +601,168 @@ func (a *app) statusBar(c *ui.Context) {
 			ui.Text(c, a.detail.project.ProjectPath).FontSize(10).TextColor(t.TextMuted).SingleLine().
 				MaxWidth(460).Tooltip(a.detail.project.ProjectPath)
 		}
+	})
+}
+
+func (a *app) addProjectModal(c *ui.Context) {
+	s := a.adding
+	if s == nil {
+		return
+	}
+	t := c.Theme()
+	ui.Modal(c, &a.addOpen, func() {
+		ui.Column(c).Width(780).MaxHeight(680).Gap(10).Padding(18).
+			Background(t.Surface).Radius(12).Border(1, t.Border).
+			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.08)).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Icon(c, iconCloud).FontSize(18).TextColor(t.Accent)
+				ui.Text(c, a.t("addProject.title")).FontSize(16).Bold()
+				ui.Box(c).Grow(1)
+				if a.ghostIconButton(c, a.t("edit.cancel"), iconX, s.busy) {
+					a.closeAddProject()
+				}
+			})
+			a.fieldLabel(c, a.t("addProject.server"))
+			ui.Row(c).Gap(6).Children(func() {
+				ui.TextInput(c, &s.serverURL).Placeholder(a.t("addProject.serverHint")).Grow(1)
+				if a.actionButton(c, a.t("addProject.fetch"), iconRefresh, false, s.fetching || s.busy || strings.TrimSpace(s.serverURL) == "") {
+					a.fetchServerProjects()
+				}
+			})
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				a.fieldLabelBox(c, a.t("addProject.project"))
+				ui.TextInput(c, &s.projectName).Placeholder(a.t("addProject.projectHint")).Grow(1)
+				if a.actionButton(c, a.t("addProject.create"), iconCloud, false, s.busy || s.fetching || strings.TrimSpace(s.serverURL) == "" || strings.TrimSpace(s.projectName) == "") {
+					a.createServerProject()
+				}
+			})
+			if len(s.projects) > 0 {
+				s.list.Selected = &s.selected
+				if ui.List(c, &s.list, len(s.projects), func(i int) {
+					p := s.projects[i]
+					ui.Column(c).Gap(1).Padding(8, 4).Children(func() {
+						ui.Text(c, p.Name).FontSize(12).Bold().SingleLine()
+						if p.Title != "" && p.Title != p.Name {
+							ui.Text(c, p.Title).FontSize(10).TextColor(t.TextMuted).SingleLine()
+						}
+					})
+				}).Height(112).Changed() {
+					if s.selected >= 0 && s.selected < len(s.projects) {
+						p := s.projects[s.selected]
+						s.projectName = p.Name
+						s.title = p.Title
+						s.forceUpdate = p.ForceUpdate
+						if s.displayName == "" {
+							s.displayName = p.Name
+						}
+					}
+				}
+			} else if s.fetching {
+				ui.Text(c, a.t("addProject.fetching")).FontSize(11).TextColor(t.TextMuted)
+			} else {
+				ui.Text(c, a.t("addProject.listEmpty")).FontSize(11).TextColor(t.TextMuted)
+			}
+			ui.Checkbox(c, &s.forceUpdate, a.t("addProject.forceUpdate"))
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				a.fieldLabelBox(c, a.t("addProject.titleField"))
+				ui.TextInput(c, &s.title).Placeholder(a.t("addProject.titleHint")).Grow(1)
+			})
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				a.fieldLabelBox(c, a.t("addProject.path"))
+				ui.TextInput(c, &s.path).Placeholder(a.t("addProject.pathHint")).Grow(1)
+				if a.actionButton(c, a.t("edit.browse"), iconFolder, false, false) {
+					a.pickFolder(false, a.t("addProject.path"), func(paths []string) {
+						if len(paths) == 0 {
+							return
+						}
+						s.path = paths[0]
+						if s.displayName == "" {
+							s.displayName = filepath.Base(normalizePath(paths[0]))
+						}
+					})
+				}
+			})
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				a.fieldLabelBox(c, a.t("addProject.displayName"))
+				ui.TextInput(c, &s.displayName).Placeholder(a.t("addProject.displayNameHint")).Grow(1)
+			})
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				a.fieldLabelBox(c, a.t("edit.mainExe"))
+				ui.TextInput(c, &s.mainExe).Placeholder(a.t("edit.mainExeHint")).Grow(1)
+				if a.actionButton(c, a.t("edit.browse"), iconFolder, false, false) {
+					a.pickExecutable(a.t("edit.mainExe"), func(path string) {
+						s.mainExe = path
+					})
+				}
+			})
+			if s.error != "" {
+				ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
+					ui.Icon(c, iconWarning).FontSize(12).TextColor(t.Danger)
+					ui.Text(c, s.error).FontSize(11).TextColor(t.Danger).Wrap()
+				})
+			}
+			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+				if a.actionButton(c, a.t("edit.cancel"), iconX, false, s.busy) {
+					a.closeAddProject()
+				}
+				if a.actionButton(c, a.t("addProject.initialize"), iconCheck, true, s.busy || s.fetching || strings.TrimSpace(s.path) == "") {
+					a.initializeAddProject()
+				}
+			})
+		})
+	})
+}
+
+func (a *app) fieldLabelBox(c *ui.Context, text string) {
+	ui.Text(c, text).FontSize(11).TextColor(c.Theme().TextMuted).Width(104).SingleLine()
+}
+
+func (a *app) localPreviewModal(c *ui.Context) {
+	p := a.localPreview
+	if p == nil {
+		return
+	}
+	t := c.Theme()
+	ui.Modal(c, &a.localPreviewOpen, func() {
+		ui.Column(c).Width(560).Gap(10).Padding(18).
+			Background(t.Surface).Radius(12).Border(1, t.Border).
+			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.08)).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Icon(c, iconFolderPlus).FontSize(18).TextColor(t.Accent)
+				ui.Text(c, a.t("addLocal.previewTitle")).FontSize(16).Bold()
+				ui.Box(c).Grow(1)
+				if a.ghostIconButton(c, a.t("edit.cancel"), iconX, false) {
+					a.closeLocalPreview()
+				}
+			})
+			ui.Text(c, p.path).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			ui.Row(c).Gap(8).Children(func() {
+				a.fieldLabelBox(c, a.t("addLocal.server"))
+				ui.Text(c, p.shared.ServerURL).FontSize(12).Grow(1).SingleLine()
+			})
+			ui.Row(c).Gap(8).Children(func() {
+				a.fieldLabelBox(c, a.t("addLocal.project"))
+				ui.Text(c, p.shared.ProjectName).FontSize(12).Grow(1).SingleLine()
+			})
+			ui.Row(c).Gap(8).Children(func() {
+				a.fieldLabelBox(c, a.t("addLocal.ignored"))
+				ui.Text(c, a.tf("addLocal.previewCount",
+					"folders", fmt.Sprint(len(p.shared.IgnoreFolders)+len(p.shared.UnCopyFolders)),
+					"files", fmt.Sprint(len(p.shared.IgnoreFiles)+len(p.shared.UnCopyFiles)))).
+					FontSize(12).TextColor(t.TextMuted).Grow(1)
+			})
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				a.fieldLabelBox(c, a.t("edit.displayName"))
+				ui.TextInput(c, &p.displayName).Grow(1)
+			})
+			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+				if a.actionButton(c, a.t("edit.cancel"), iconX, false, false) {
+					a.closeLocalPreview()
+				}
+				if a.actionButton(c, a.t("addLocal.confirm"), iconCheck, true, false) {
+					a.confirmLocalProject()
+				}
+			})
+		})
 	})
 }

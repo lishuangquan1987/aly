@@ -33,10 +33,17 @@ type SharedConfig struct {
 	UnCopyFiles   []string `json:"un_copy_files"`
 }
 
+// appSettings is shared with the C# GUI: only the language lives here.
+// C# rewrites settings.json as { "language": ... } whenever it switches
+// language, so appearance must not be stored in this file.
 type appSettings struct {
 	Language string `json:"language"`
-	Theme    string `json:"theme,omitempty"`
-	Accent   string `json:"accent,omitempty"`
+}
+
+// appearanceSettings belongs to the Go experiment only.
+type appearanceSettings struct {
+	Theme  string `json:"theme,omitempty"`
+	Accent string `json:"accent,omitempty"`
 }
 
 func configDir() string {
@@ -65,6 +72,8 @@ func configDir() string {
 
 func configPath() string   { return filepath.Join(configDir(), "config.json") }
 func settingsPath() string { return filepath.Join(configDir(), "settings.json") }
+
+func appearancePath() string { return filepath.Join(configDir(), "appearance.json") }
 
 func appDir() string {
 	if exe, err := os.Executable(); err == nil {
@@ -147,6 +156,43 @@ func saveSettings(s appSettings) error {
 		return err
 	}
 	return writeFileAtomic(settingsPath(), raw)
+}
+
+func loadAppearance() appearanceSettings {
+	raw, err := os.ReadFile(appearancePath())
+	if err == nil {
+		var s appearanceSettings
+		if json.Unmarshal(raw, &s) == nil {
+			return s
+		}
+	}
+	// One-time migration from the legacy Go settings.json fields. The C#
+	// GUI never wrote these, so this cannot resurrect a C# preference.
+	raw, err = os.ReadFile(settingsPath())
+	if err != nil {
+		return appearanceSettings{}
+	}
+	var legacy struct {
+		Theme  string `json:"theme"`
+		Accent string `json:"accent"`
+	}
+	if json.Unmarshal(raw, &legacy) == nil && (legacy.Theme != "" || legacy.Accent != "") {
+		s := appearanceSettings{Theme: legacy.Theme, Accent: legacy.Accent}
+		_ = saveAppearance(s)
+		return s
+	}
+	return appearanceSettings{}
+}
+
+func saveAppearance(s appearanceSettings) error {
+	if err := os.MkdirAll(configDir(), 0o755); err != nil {
+		return err
+	}
+	raw, err := json.Marshal(s)
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(appearancePath(), raw)
 }
 
 func writeFileAtomic(path string, data []byte) error {

@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -50,12 +52,13 @@ type detailState struct {
 }
 
 type editState struct {
-	project  ProjectConfig
-	shared   SharedConfig
-	original SharedConfig
+	project ProjectConfig
+	shared  SharedConfig
 
 	displayName string
 	mainExe     string
+	serverURL   string
+	projectName string
 
 	ignoreFolders []string
 	ignoreFiles   []string
@@ -93,22 +96,32 @@ type app struct {
 	theme      string
 	accent     string
 	accentOpen bool
+	addOpen    bool
+	adding     *addProjectState
+
+	localPreviewOpen bool
+	localPreview     *localPreviewState
+
+	// details keeps per-project tab state (C# ProjectTabViewModel cache).
+	details map[string]*detailState
 }
 
 func newApp() *app {
 	settings := loadSettings()
+	appearance := loadAppearance()
 	lang := "zh"
 	if strings.HasPrefix(strings.ToLower(settings.Language), "en") {
 		lang = "en"
 	}
-	theme := normalizeTheme(settings.Theme)
-	accent := normalizeAccent(settings.Accent)
+	theme := normalizeTheme(appearance.Theme)
+	accent := normalizeAccent(appearance.Accent)
 	a := &app{
 		lang:     lang,
 		theme:    theme,
 		accent:   accent,
 		projects: loadProjects(),
 		selected: -1,
+		details:  map[string]*detailState{},
 	}
 	a.cli = &cliClient{exe: findCLI()}
 	if a.cli.available() {
@@ -121,8 +134,10 @@ func newApp() *app {
 
 func (a *app) t(key string) string { return translate(a.lang, key) }
 
-func (a *app) tf(key string, pairs ...string) string {
-	s := a.t(key)
+func (a *app) tf(key string, pairs ...string) string { return tfLang(a.lang, key, pairs...) }
+
+func tfLang(lang, key string, pairs ...string) string {
+	s := translate(lang, key)
 	for i := 0; i+1 < len(pairs); i += 2 {
 		s = strings.ReplaceAll(s, "{"+pairs[i]+"}", pairs[i+1])
 	}
@@ -167,9 +182,8 @@ func (a *app) applyTheme() {
 func (a *app) savePrefs() {
 	_ = saveSettings(appSettings{
 		Language: map[bool]string{true: "zh-CN", false: "en-US"}[a.lang == "zh"],
-		Theme:    a.theme,
-		Accent:   a.accent,
 	})
+	_ = saveAppearance(appearanceSettings{Theme: a.theme, Accent: a.accent})
 }
 
 type accentOption struct {
@@ -306,13 +320,33 @@ func (a *app) openSelected() {
 		return
 	}
 	p := list[a.selected]
-	if a.detail != nil && normalizePath(a.detail.project.ProjectPath) == normalizePath(p.ProjectPath) {
+	if a.details == nil {
+		a.details = map[string]*detailState{}
+	}
+	key := normalizePath(p.ProjectPath)
+	if a.detail != nil && normalizePath(a.detail.project.ProjectPath) == key {
 		return
 	}
-	if a.detail != nil && a.detail.cancel != nil {
+	// Keep per-project form/version/selection state when switching, like the
+	// C# ProjectTabViewModel cache. An in-flight upload is cancelled before
+	// its tab is hidden, because the hidden state has no progress pump.
+	if a.detail != nil && a.detail.uploading && a.detail.cancel != nil {
 		a.detail.cancel()
+		a.detail.uploading = false
+		a.detail.cancel = nil
+		a.detail.status = a.t("publish.cancelled")
+	}
+	// A refresh/stage callback ignores itself when the visible detail changed;
+	// reset busy so the cached tab cannot come back permanently disabled.
+	if a.detail != nil {
+		a.detail.busy = false
+	}
+	if cached := a.details[key]; cached != nil {
+		a.detail = cached
+		return
 	}
 	a.detail = &detailState{project: p, splitPercent: 62, forceUpdate: false}
+	a.details[key] = a.detail
 	a.refreshDetail()
 }
 
@@ -621,12 +655,38 @@ func (a *app) cancelPublish() {
 	d.status = a.t("publish.cancelled")
 }
 
+func (a *app) openCLIFolder() {
+	if !a.cli.available() {
+		a.toastMsg = a.t("toolbar.cliMissing")
+		return
+	}
+	dir := filepath.Dir(a.cli.exe)
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		a.toastMsg = a.t("folder.missing")
+		return
+	}
+	go func() { _ = mygo.Shell.OpenPath(dir) }()
+}
+
+func (a *app) openLogFolder() {
+	dir := logDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		a.toastMsg = err.Error()
+		return
+	}
+	go func() { _ = mygo.Shell.OpenPath(dir) }()
+}
+
 func (a *app) openProjectFolder() {
 	d := a.detail
 	if d == nil {
 		return
 	}
 	path := d.project.ProjectPath
+	if info, err := os.Stat(path); err != nil || !info.IsDir() {
+		a.toastMsg = a.t("folder.missing")
+		return
+	}
 	go func() { _ = mygo.Shell.OpenPath(path) }()
 }
 
@@ -638,6 +698,15 @@ func (a *app) launchMain() {
 	exe := resolveProjectPath(d.project.ProjectPath, d.project.MainExePath)
 	if exe == "" {
 		a.toastMsg = a.t("edit.mainExeHint")
+		return
+	}
+	if !fileExists(exe) {
+		a.toastMsg = a.tf("launch.missing", "path", exe)
+		return
+	}
+	switch strings.ToLower(filepath.Ext(exe)) {
+	case ".bat", ".cmd":
+		go func() { _ = mygo.Shell.OpenPath(exe) }()
 		return
 	}
 	go func() {
@@ -656,6 +725,10 @@ func (a *app) openFileLocation(f fileItem) {
 	}
 	full := resolveProjectPath(d.project.ProjectPath, f.RelativePath)
 	dir := filepath.Dir(full)
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		a.toastMsg = a.t("folder.missing")
+		return
+	}
 	go func() { _ = mygo.Shell.OpenPath(dir) }()
 }
 
@@ -672,15 +745,41 @@ func (a *app) openEdit() {
 	a.editing = &editState{
 		project:       d.project,
 		shared:        shared,
-		original:      shared,
 		displayName:   d.project.DisplayName,
 		mainExe:       resolveProjectPath(d.project.ProjectPath, d.project.MainExePath),
+		serverURL:     shared.ServerURL,
+		projectName:   shared.ProjectName,
 		ignoreFolders: append([]string(nil), shared.IgnoreFolders...),
 		ignoreFiles:   append([]string(nil), shared.IgnoreFiles...),
 		uncopyFolders: append([]string(nil), shared.UnCopyFolders...),
 		uncopyFiles:   append([]string(nil), shared.UnCopyFiles...),
 	}
 	a.editOpen = true
+}
+
+func (a *app) syncIgnoreRules(ctx context.Context, cli *cliClient, lang, serverURL, projectName string, ignoreFolders, ignoreFiles []string) string {
+	if serverURL == "" || projectName == "" {
+		return ""
+	}
+	projects, err := cli.projectList(ctx, serverURL)
+	if err != nil {
+		return tfLang(lang, "status.syncFailed", "error", err.Error())
+	}
+	var match ProjectInfo
+	found := false
+	for _, p := range projects {
+		if strings.EqualFold(p.Name, projectName) {
+			match, found = p, true
+			break
+		}
+	}
+	if !found {
+		return tfLang(lang, "status.syncMissing", "project", projectName)
+	}
+	if err := cli.projectUpdate(ctx, serverURL, match.Name, match.Title, match.ForceUpdate, ignoreFolders, ignoreFiles); err != nil {
+		return tfLang(lang, "status.syncFailed", "error", err.Error())
+	}
+	return ""
 }
 
 func (a *app) saveEdit() {
@@ -697,48 +796,76 @@ func (a *app) saveEdit() {
 	// rebuild while the CLI calls run.
 	displayName := strings.TrimSpace(e.displayName)
 	mainExe := e.mainExe
+	serverURL := strings.TrimSpace(e.serverURL)
+	projectName := strings.TrimSpace(e.projectName)
 	nextIgnoreFolders := append([]string(nil), e.ignoreFolders...)
 	nextIgnoreFiles := append([]string(nil), e.ignoreFiles...)
 	nextUncopyFolders := append([]string(nil), e.uncopyFolders...)
 	nextUncopyFiles := append([]string(nil), e.uncopyFiles...)
 	cli := a.cli
+	lang := a.lang
 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 		var err error
-		if !cli.available() {
+		syncWarning := ""
+		updaterWarning := ""
+		if serverURL == "" || projectName == "" {
+			err = errors.New(translate(lang, "edit.required"))
+		} else if !cli.available() {
 			err = errCLIMissing
 		} else {
-			for _, group := range []struct {
-				key     string
-				current []string
-				next    []string
-			}{
-				{"ignore.folders", e.original.IgnoreFolders, nextIgnoreFolders},
-				{"ignore.files", e.original.IgnoreFiles, nextIgnoreFiles},
-				{"un_copy.folders", e.original.UnCopyFolders, nextUncopyFolders},
-				{"un_copy.files", e.original.UnCopyFiles, nextUncopyFiles},
-			} {
-				added, removed := diffList(group.current, group.next)
-				for _, item := range added {
-					if err = cli.configSetArray(ctx, path, group.key, true, item); err != nil {
-						break
+			// Re-read the current file so an old dialog snapshot cannot
+			// overwrite changes made elsewhere.
+			current, loadErr := loadShared(path)
+			if loadErr != nil {
+				err = loadErr
+			} else {
+				changed := false
+				if current.ServerURL != serverURL {
+					if err = cli.configSet(ctx, path, "server.url", serverURL); err != nil {
+						goto done
+					}
+					changed = true
+				}
+				for _, group := range []struct {
+					key     string
+					current []string
+					next    []string
+				}{
+					{"ignore.folders", current.IgnoreFolders, nextIgnoreFolders},
+					{"ignore.files", current.IgnoreFiles, nextIgnoreFiles},
+					{"un_copy.folders", current.UnCopyFolders, nextUncopyFolders},
+					{"un_copy.files", current.UnCopyFiles, nextUncopyFiles},
+				} {
+					added, removed := diffList(group.current, group.next)
+					for _, item := range added {
+						if err = cli.configSetArray(ctx, path, group.key, true, item); err != nil {
+							goto done
+						}
+						changed = true
+					}
+					for _, item := range removed {
+						if err = cli.configSetArray(ctx, path, group.key, false, item); err != nil {
+							goto done
+						}
+						changed = true
 					}
 				}
-				if err != nil {
-					break
-				}
-				for _, item := range removed {
-					if err = cli.configSetArray(ctx, path, group.key, false, item); err != nil {
-						break
+				if current.ProjectName != projectName {
+					if err = cli.configSet(ctx, path, "project.name", projectName); err != nil {
+						goto done
 					}
+					changed = true
 				}
-				if err != nil {
-					break
+				if changed {
+					syncWarning = a.syncIgnoreRules(ctx, cli, lang, serverURL, projectName, nextIgnoreFolders, nextIgnoreFiles)
 				}
+				updaterWarning = ensureUpdatersFor(path, mainExe)
 			}
 		}
+	done:
 		a.win.Update(func() {
 			if a.editing != e {
 				return
@@ -749,7 +876,6 @@ func (a *app) saveEdit() {
 				a.toastMsg = a.tf("status.configFailed", "error", err.Error())
 				return
 			}
-			// Update the bookmark and write it atomically.
 			newProject := e.project
 			newProject.DisplayName = displayName
 			if newProject.DisplayName == "" {
@@ -773,7 +899,16 @@ func (a *app) saveEdit() {
 			}
 			a.editOpen = false
 			a.status = a.t("edit.saved")
-			a.toastMsg = a.status
+			switch {
+			case syncWarning != "":
+				a.status = syncWarning
+				a.toastMsg = syncWarning
+			case updaterWarning != "":
+				a.status = updaterWarning
+				a.toastMsg = updaterWarning
+			default:
+				a.toastMsg = a.status
+			}
 			if sameDetail {
 				a.refreshDetail()
 			}
@@ -800,6 +935,9 @@ func (a *app) removeSelected() {
 	if a.detail != nil && a.detail.cancel != nil {
 		a.detail.cancel()
 	}
+	if a.detail != nil {
+		delete(a.details, normalizePath(a.detail.project.ProjectPath))
+	}
 	a.detail = nil
 	if a.selected >= len(a.filteredProjects()) {
 		a.selected = len(a.filteredProjects()) - 1
@@ -810,41 +948,6 @@ func (a *app) removeSelected() {
 	a.status = a.t("remove.done")
 	a.toastMsg = a.status
 	a.openSelected()
-}
-
-func (a *app) addLocalProject() {
-	a.pickFolder(false, a.t("addLocal.title"), func(paths []string) {
-		if len(paths) == 0 {
-			return
-		}
-		path := normalizePath(paths[0])
-		for _, p := range a.projects {
-			if normalizePath(p.ProjectPath) == path {
-				a.toastMsg = a.t("addLocal.duplicate")
-				return
-			}
-		}
-		if !isInitialized(path) {
-			a.toastMsg = a.t("addLocal.notInit")
-			return
-		}
-		shared, _ := loadShared(path)
-		name := strings.TrimSpace(shared.ProjectName)
-		if name == "" {
-			name = filepath.Base(path)
-		}
-		next := append(append([]ProjectConfig(nil), a.projects...), ProjectConfig{DisplayName: name, ProjectPath: path})
-		if err := saveProjects(next); err != nil {
-			a.toastMsg = err.Error()
-			return
-		}
-		a.projects = next
-		a.filter = ""
-		a.selected = len(a.projects) - 1
-		a.status = a.t("addLocal.added")
-		a.toastMsg = a.status
-		a.openSelected()
-	})
 }
 
 func (a *app) pickFolder(multiple bool, title string, cb func([]string)) {
@@ -962,6 +1065,14 @@ func (a *app) editModal(c *ui.Context) {
 					FontSize(11).TextColor(t.TextMuted).SingleLine().Grow(1)
 			})
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, a.t("edit.serverURL")).FontSize(11).TextColor(t.TextMuted).Width(104)
+				ui.TextInput(c, &e.serverURL).Grow(1)
+			})
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, a.t("edit.projectName")).FontSize(11).TextColor(t.TextMuted).Width(104)
+				ui.TextInput(c, &e.projectName).Grow(1)
+			})
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, a.t("edit.displayName")).FontSize(11).TextColor(t.TextMuted).Width(104)
 				ui.TextInput(c, &e.displayName).Grow(1)
 			})
@@ -1021,7 +1132,7 @@ func (a *app) editModal(c *ui.Context) {
 				if a.actionButton(c, a.t("edit.cancel"), iconX, false, e.busy) {
 					a.editOpen = false
 				}
-				if a.actionButton(c, a.t("edit.save"), iconCheck, true, e.busy) {
+				if a.actionButton(c, a.t("edit.save"), iconCheck, true, e.busy || strings.TrimSpace(e.serverURL) == "" || strings.TrimSpace(e.projectName) == "") {
 					a.saveEdit()
 				}
 			})
@@ -1040,10 +1151,10 @@ func (a *app) editGroup(c *ui.Context, label string, list *[]string, input *stri
 		ui.Row(c).Wrap().Gap(4).Children(func() {
 			for _, value := range items {
 				value := value
-				ui.Row(c).Gap(3).AlignItems(ui.Center).Padding(7, 3).Background(t.Text.Alpha(0.06)).
-					Border(1, t.Border).Radius(6).MaxWidth(320).Children(func() {
+				ui.Row(c).Gap(2).AlignItems(ui.Center).Padding(6, 1).Background(t.Text.Alpha(0.06)).
+					Border(1, t.Border).Radius(5).MaxWidth(320).Children(func() {
 					ui.Text(c, value).FontSize(11).SingleLine().Tooltip(value)
-					if a.ghostIconButtonSize(c, a.t("edit.remove"), iconX, false, 20, 20) {
+					if a.ghostIconButtonSize(c, a.t("edit.remove"), iconX, false, 16, 16) {
 						*list = removeValue(*list, value)
 					}
 				})

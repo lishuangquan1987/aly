@@ -29,6 +29,22 @@ func TestConfigRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAppearanceSurvivesCSharpSettingsRewrite(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALYPUBLISH_CONFIG_DIR", dir)
+	want := appearanceSettings{Theme: "dark", Accent: "violet"}
+	if err := saveAppearance(want); err != nil {
+		t.Fatal(err)
+	}
+	// C# LanguageManager writes exactly this shape when it switches language.
+	if err := os.WriteFile(settingsPath(), []byte(`{"language":"en-US"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadAppearance(); got != want {
+		t.Fatalf("appearance=%+v want=%+v", got, want)
+	}
+}
+
 func TestLoadShared(t *testing.T) {
 	dir := t.TempDir()
 	updator := filepath.Join(dir, ".updator")
@@ -53,7 +69,7 @@ func TestLoadShared(t *testing.T) {
 
 func TestSettingsRoundTrip(t *testing.T) {
 	t.Setenv("ALYPUBLISH_CONFIG_DIR", t.TempDir())
-	want := appSettings{Language: "zh-CN", Theme: "dark", Accent: "violet"}
+	want := appSettings{Language: "zh-CN"}
 	if err := saveSettings(want); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +77,11 @@ func TestSettingsRoundTrip(t *testing.T) {
 	if got != want {
 		t.Fatalf("settings=%+v want=%+v", got, want)
 	}
-	if normalizeTheme(got.Theme) != "dark" {
-		t.Fatalf("theme=%q", got.Theme)
+	appearance := appearanceSettings{Theme: "dark", Accent: "violet"}
+	if err := saveAppearance(appearance); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadAppearance(); got != appearance {
+		t.Fatalf("appearance=%+v want=%+v", got, appearance)
 	}
 }

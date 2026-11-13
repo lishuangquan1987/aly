@@ -70,7 +70,77 @@ func TestEditModalRendersChips(t *testing.T) {
 		uncopyFolders: []string{"TestData"},
 	}
 	tt := ui.NewTester(a.view, 1440, 900)
-	for _, text := range []string{"Project settings", "Ignored folders", "Folders not to copy", "nlog1.txt"} {
+	for _, text := range []string{"Project settings", "Server URL", "Server project", "Ignored folders", "Folders not to copy", "nlog1.txt"} {
+		if !tt.HasText(text) {
+			t.Errorf("missing %q; texts=%q", text, tt.Texts())
+		}
+	}
+}
+
+func TestAddProjectModalRenders(t *testing.T) {
+	a := testApp()
+	a.addOpen = true
+	a.adding = &addProjectState{
+		serverURL:   "http://127.0.0.1:2000",
+		projectName: "demo",
+		title:       "Demo",
+		path:        `C:\demo`,
+		displayName: "demo",
+		projects: []ProjectInfo{
+			{Name: "demo", Title: "Demo"},
+		},
+	}
+	tt := ui.NewTester(a.view, 1440, 900)
+	for _, text := range []string{"Add server project", "Server URL", "Create project", "Initialize and add", "demo"} {
+		if !tt.HasText(text) {
+			t.Errorf("missing %q; texts=%q", text, tt.Texts())
+		}
+	}
+}
+
+func TestProjectStateCacheSurvivesSwitch(t *testing.T) {
+	a := &app{
+		projects: []ProjectConfig{
+			{DisplayName: "one", ProjectPath: `C:\one`},
+			{DisplayName: "two", ProjectPath: `C:\two`},
+		},
+		selected: 0,
+		details:  map[string]*detailState{},
+		cli:      &cliClient{},
+	}
+	a.openSelected()
+	first := a.detail
+	if first == nil {
+		t.Fatal("first detail missing")
+	}
+	first.newVersion = "V9.9.9"
+	a.selected = 1
+	a.openSelected()
+	if a.detail == first {
+		t.Fatal("switching projects reused the first detail")
+	}
+	a.selected = 0
+	a.openSelected()
+	if a.detail != first || a.detail.newVersion != "V9.9.9" {
+		t.Fatalf("cached detail not restored: %+v", a.detail)
+	}
+}
+
+func TestLocalPreviewModalRenders(t *testing.T) {
+	a := testApp()
+	a.localPreviewOpen = true
+	a.localPreview = &localPreviewState{
+		path: `C:\demo`,
+		shared: SharedConfig{
+			ServerURL:     "http://127.0.0.1:2000",
+			ProjectName:   "demo",
+			IgnoreFolders: []string{"Log"},
+			IgnoreFiles:   []string{"a.log"},
+		},
+		displayName: "demo",
+	}
+	tt := ui.NewTester(a.view, 1440, 900)
+	for _, text := range []string{"Add local project", "Server", "Ignore rules", "Add project", "demo"} {
 		if !tt.HasText(text) {
 			t.Errorf("missing %q; texts=%q", text, tt.Texts())
 		}

@@ -158,6 +158,75 @@ func (c *cliClient) logs(ctx context.Context, projectPath string, limit int) ([]
 	return data, err
 }
 
+func csvFlag(args []string, flag string, values []string) []string {
+	if len(values) > 0 {
+		return append(args, flag, strings.Join(values, ","))
+	}
+	return args
+}
+
+func (c *cliClient) configSet(ctx context.Context, projectPath, key, value string) error {
+	return c.checked(ctx, projectPath, []string{"config", "set", key, value})
+}
+
+func (c *cliClient) initProject(
+	ctx context.Context,
+	projectPath, serverURL, projectName string,
+	ignoreFolders, ignoreFiles, unCopyFolders, unCopyFiles []string,
+) error {
+	args := []string{"config", "init", "--server", serverURL, "--project", projectName}
+	args = csvFlag(args, "--ignore-folders", ignoreFolders)
+	args = csvFlag(args, "--ignore-files", ignoreFiles)
+	args = csvFlag(args, "--un-copy-folders", unCopyFolders)
+	args = csvFlag(args, "--un-copy-files", unCopyFiles)
+	return c.checked(ctx, projectPath, args)
+}
+
+func (c *cliClient) projectList(ctx context.Context, serverURL string) ([]ProjectInfo, error) {
+	var out []ProjectInfo
+	args := []string{"project", "list"}
+	if serverURL != "" {
+		args = append(args, "--server", serverURL)
+	}
+	err := c.runJSON(ctx, "", args, &out)
+	return out, err
+}
+
+func (c *cliClient) projectCreate(
+	ctx context.Context,
+	serverURL, name, title string,
+	forceUpdate bool,
+	ignoreFolders, ignoreFiles []string,
+) (ProjectInfo, error) {
+	var out ProjectInfo
+	args := []string{"project", "create", "--server", serverURL, "--name", name, "--title", title}
+	if forceUpdate {
+		args = append(args, "--force-update")
+	}
+	args = csvFlag(args, "--ignore-folders", ignoreFolders)
+	args = csvFlag(args, "--ignore-files", ignoreFiles)
+	err := c.runJSON(ctx, "", args, &out)
+	return out, err
+}
+
+func (c *cliClient) projectUpdate(
+	ctx context.Context,
+	serverURL, name, title string,
+	forceUpdate bool,
+	ignoreFolders, ignoreFiles []string,
+) error {
+	args := []string{"project", "update", "--server", serverURL, "--name", name}
+	if title != "" {
+		args = append(args, "--title", title)
+	}
+	if forceUpdate {
+		args = append(args, "--force-update")
+	}
+	args = csvFlag(args, "--ignore-folders", ignoreFolders)
+	args = csvFlag(args, "--ignore-files", ignoreFiles)
+	return c.checked(ctx, "", args)
+}
+
 func (c *cliClient) projectInfo(ctx context.Context, serverURL, projectName string) (ProjectInfo, error) {
 	var info ProjectInfo
 	args := []string{"project", "info"}
