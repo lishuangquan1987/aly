@@ -16,7 +16,7 @@
 | run | 提交 | 结论 |
 |---|---|---|
 | **Release Build v0.1.8**（run 42965884178） | 3650367 | **failure** |
-| 其中 `build-publish-gui-windows` / `…-linux`(x64) / `…-linux`(arm64) | 3650367 | 全部 failure，且**同一步**：第 12 步 `Stage the package payload` |
+| 其中 `build-publish-gui-csharp-windows` / `…-linux`(x64) / `…-linux`(arm64) | 3650367 | 全部 failure，且**同一步**：第 12 步 `Stage the package payload` |
 | 同 run 的 `dotnet test`、Windows 单文件发布、Linux 跨平台发布、五个 artifact 下载、客户端/服务端构建 | 3650367 | 全部 success |
 | 文档同步（Deploy Website）run #8 | 3650367 | failure（另一件事） |
 | 文档同步 run #10 | 07cc405（修好后） | **success** |
@@ -43,7 +43,7 @@ job 的注解只有一句 `Process completed with exit code 1.`（更细的日�
 - 铺装逻辑改写成 release 工作流里的**内联 pwsh 步骤**（两个 GUI job 各一份 `Stage the package payload`）：
   每个 payload 文件按「直取 → 平铺 → 递归找同名文件（只认 `Length > 0` 的真文件）」三种形态命中，
   缺一即 `throw`，并把结果树打印进 CI 注解；
-- **删除** `publish/publish-gui/installer/stage-payload.ps1`；本机开发路径
+- **删除** `publish/publish-gui-csharp/installer/stage-payload.ps1`；本机开发路径
   `publish/deploy-publish.bat` 用同一套文件名直接 `copy`（不再走 .ps1）；
 - 网页 `publish/gui.md` 同步说明，并**去掉指向仓库文件的死链**：本地 `pnpm build` 复现出
   `Found dead link /publish/deploy-publish.bat in docs\publish\gui.md`，这正是「文档同步」run #8 的失败原因；

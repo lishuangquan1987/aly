@@ -986,7 +986,7 @@ applied ──→ (check_update 发现新版本) ──→ [无变化]
 ### 构建
 
 ```bash
-cd publish/aly-publish-gui
+cd publish/publish-gui-csharp
 dotnet build
 ```
 
@@ -1277,7 +1277,7 @@ CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o aly-publish-
 ### aly-publish-gui
 
 ```bash
-cd publish/aly-publish-gui
+cd publish/publish-gui-csharp
 dotnet build
 ```
 

@@ -1,8 +1,8 @@
 package tc
 
-// 用例 125–127：publish-gui 初始化（布局 / 三件套 / 原子写）
+// 用例 125–127：publish-gui-csharp 初始化（布局 / 三件套 / 原子写）
 //
-// 背景：真机实测（2026-11-04）——在 publish-gui 里对一个真实项目"初始化项目"之后，
+// 背景：真机实测（2026-11-04）——在 publish-gui-csharp 里对一个真实项目"初始化项目"之后，
 // 磁盘上的更新器目录三处都不对：
 //
 //	① 位置：UpdateFolder 落在主程序目录**内部**（…\bin\Debug\net8.0-windows\UpdateFolder），
@@ -15,7 +15,7 @@ package tc
 //	   主程序目录名，正确值 = "..\net8.0-windows\WinFormsApp1.exe"。
 //
 // GUI 是 C#/Avalonia 的 UI 程序，框架跑不了它的窗口，所以每条都分两层钉：
-//   - **源码契约**：读 publish-gui 的 C# 源码断言关键调用形态（与用例 104 的 ① 段同法）；
+//   - **源码契约**：读 publish-gui-csharp 的 C# 源码断言关键调用形态（与用例 104 的 ① 段同法）；
 //   - **消费侧功能**：用真实 aly-client 消费 GUI 写出的那套布局与 client.json。
 //     只在 Go 里把 C# 的路径算法重算一遍是自证自话——C# 侧改回旧写法时重算照样通过。
 //
@@ -28,7 +28,7 @@ import (
 	"testing"
 )
 
-// guiConfigServicePath 返回 publish-gui 里产出 UpdateFolder 那个源文件。
+// guiConfigServicePath 返回 publish-gui-csharp 里产出 UpdateFolder 那个源文件。
 // 目录不在时 Skip：本用例只对 C# 源码，缺了没有可断言的对象。
 //
 // 说明（2026-11 复查）：这段逻辑原先写在 Services/ConfigService.cs，后来移到
@@ -43,7 +43,7 @@ func guiConfigServicePath(t *testing.T) string {
 	return path
 }
 
-// guiFileWriteHelperPath 返回 publish-gui 里原子写的归属文件（用例 127 用）。
+// guiFileWriteHelperPath 返回 publish-gui-csharp 里原子写的归属文件（用例 127 用）。
 func guiFileWriteHelperPath(t *testing.T) string {
 	path := filepath.Join(RepoRoot, "publish", "publish-gui-csharp",
 		"src", "AlyPublish", "Helpers", "FileWriteHelper.cs")
@@ -54,7 +54,7 @@ func guiFileWriteHelperPath(t *testing.T) string {
 }
 
 // ────────────────────────────────────────────────────────────────
-// 用例 125 — publish-gui 初始化：UpdateFolder 与主程序目录**同级**
+// 用例 125 — publish-gui-csharp 初始化：UpdateFolder 与主程序目录**同级**
 //
 // 缺陷根因：`Path.GetDirectoryName(Path.GetFullPath(projectPath))`。
 // 浏览对话框返回的路径带**结尾分隔符**（实测 "…\bin\Debug\net8.0-windows\"），
@@ -90,7 +90,7 @@ func TestCase125(t *testing.T) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// 用例 126 — publish-gui 初始化：三件套与 client.json 的相对路径可被真实 client 消费
+// 用例 126 — publish-gui-csharp 初始化：三件套与 client.json 的相对路径可被真实 client 消费
 //
 // ① 源码契约：UpdateFolder 内必须齐 aly-client.exe / aly-client-ui.exe / client.json 三件套
 //    （UI 与更新器同目录：DEVELOPMENT_PLAN §3.0 明令 UI 必须住在 UpdateFolder）；
@@ -175,7 +175,7 @@ func TestCase126(t *testing.T) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// 用例 127 — publish-gui 原子写：目标不存在时必须 File.Move，首次写不得只留 .tmp
+// 用例 127 — publish-gui-csharp 原子写：目标不存在时必须 File.Move，首次写不得只留 .tmp
 //
 // ① 源码契约：WriteAllTextAtomic 的形态必须是"先写 .tmp → 判目标是否存在 → Move/Replace"，
 //    含非 Windows 平台的回退。System.IO 的 ReplaceFile **要求目标已存在**，

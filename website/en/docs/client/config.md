@@ -219,7 +219,7 @@ A configuration exclusive to `aly-publish` in the publish directory; it is curre
 | Attribute | Description |
 |---|---|
 | Location | Publish directory `.updator/publish.json` |
-| Read/written by | `aly-publish` (including publish-gui, which calls it through a child process) |
+| Read/written by | `aly-publish` (including publish-gui-csharp, which calls it through a child process) |
 | Uploaded | No; excluded automatically by the publishing tool |
 | Fields | No official fields yet; reserved for CLI-specific settings |
 

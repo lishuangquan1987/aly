@@ -310,7 +310,7 @@ jobs:
             aly-client-linux-arm64/aly-client-linux-arm64
             aly-client-linux-arm64/aly-client-ui-linux-arm64
 
-  build-publish-gui-windows:
+  build-publish-gui-csharp-windows:
     name: Build AlyPublish for Windows (installer + portable zip)
     runs-on: windows-latest
     needs: [resolve-version, build-aly-publish, build-aly-client, build-aly-client-linux]
@@ -459,12 +459,12 @@ jobs:
       - name: Upload publish GUI artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: aly-publish-gui-windows-amd64
+          name: aly-publish-gui-csharp-windows-amd64
           path: |
             publish/publish-gui-csharp/artifacts/AlyPublish-Setup.exe
             publish/publish-gui-csharp/artifacts/AlyPublish-win-x64.zip
 
-  build-publish-gui-linux:
+  build-publish-gui-csharp-linux:
     # 与 Windows 包同一个 windows-latest 工具链：linux-x64 / linux-arm64 的 Avalonia 产物来自
     # 包里的 runtimes/linux-*/native，交叉发布不需要 Linux 宿主；pwsh 与 ps1 也都在。
     name: Build AlyPublish for Linux (${{ matrix.rid }})
@@ -604,7 +604,7 @@ jobs:
       - name: Upload the Linux package
         uses: actions/upload-artifact@v4
         with:
-          name: aly-publish-gui-${{ matrix.rid }}
+          name: aly-publish-gui-csharp-${{ matrix.rid }}
           path: publish/publish-gui-csharp/artifacts/AlyPublish-${{ matrix.rid }}.zip
 
   build-csharp-sdk:
@@ -758,7 +758,7 @@ jobs:
     name: Upload to Release
     # release 事件 = 正式发布；手动触发仅在勾选 upload_to_release 时上传
     if: github.event_name == 'release' || inputs.upload_to_release == true
-    needs: [resolve-version, build-server, build-publish-gui-windows, build-publish-gui-linux, build-csharp-sdk, build-sdk-packages]
+    needs: [resolve-version, build-server, build-publish-gui-csharp-windows, build-publish-gui-csharp-linux, build-csharp-sdk, build-sdk-packages]
     runs-on: ubuntu-latest
     permissions:
       contents: write

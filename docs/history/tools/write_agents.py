@@ -12,12 +12,12 @@ content = r"""# Aly 项目规则
 | 子项目 | 目录 | 职责 | 技术栈 |
 | ------ | ---- | ---- | ------ |
 | **server** | `server/` | 服务端，提供项目管理和文件管理 REST API | Go 1.25 + Gin + Ent + SQLite |
-| **publish-gui** | `publish/publish-gui/` | 版本发布 GUI 工具，管理项目、上传文件、发布版本 | .NET 8 + Avalonia 12 + CommunityToolkit.Mvvm |
+| **publish-gui-csharp** | `publish/publish-gui-csharp/` | 版本发布 GUI 工具，管理项目、上传文件、发布版本 | .NET 8 + Avalonia 12 + CommunityToolkit.Mvvm |
 | **publish-cli** | `publish/publish-cli/` | 版本发布 CLI 工具，命令行发布管理，类 git 工作流 | Go 1.25 + cobra |
 | **client** | `client/` | 终端用户更新程序，检查更新、下载更新、应用更新 | Go 1.10（兼容 Windows XP） |
 
 **关键约束**：
-- `publish-gui` / `publish-cli` 面向**发布者**，负责上传文件到服务端、管理版本、触发发布
+- `publish-gui-csharp` / `publish-cli` 面向**发布者**，负责上传文件到服务端、管理版本、触发发布
 - `client` 面向**终端用户**，负责从服务端检测新版本、下载更新包、执行文件替换
 - `server` 是三端共同依赖的后端，API 路径和数据结构必须与三端保持一致
 - 修改 `server` API 时，必须同步确认 GUI/CLI 的 DTO 和 Service 层是否需要调整
@@ -48,7 +48,7 @@ Aly/
 │   └── util/                          # 文件操作、进程管理工具
 │
 ├── publish/
-│   ├── publish-gui/                   # C# GUI 发布工具
+│   ├── publish-gui-csharp/                   # C# GUI 发布工具
 │   │   ├── AlyPublish.slnx
 │   │   └── src/AlyPublish/
 │   │       ├── App.axaml(.cs)         # 应用入口 + 主题初始化
@@ -83,7 +83,7 @@ Aly/
 
 ---
 
-## 二、命名规则（publish-gui）
+## 二、命名规则（publish-gui-csharp）
 
 ### 2.1 文件命名
 
@@ -118,7 +118,7 @@ Aly/
 
 ---
 
-## 三、MVVM 架构规则（publish-gui）
+## 三、MVVM 架构规则（publish-gui-csharp）
 
 ### 3.1 ViewModel 规范
 
@@ -148,7 +148,7 @@ public partial class MyViewModel : ObservableObject
 
 ---
 
-## 四、服务层规则（publish-gui）
+## 四、服务层规则（publish-gui-csharp）
 
 ### 4.1 HTTP 服务
 
@@ -224,7 +224,7 @@ await $"{serverUrl}/api/file/upload_file"
 
 ---
 
-## 六、错误处理（publish-gui）
+## 六、错误处理（publish-gui-csharp）
 
 ```csharp
 [RelayCommand]
@@ -244,7 +244,7 @@ private async Task SomeOperation()
 
 ---
 
-## 七、XAML 规则（publish-gui）
+## 七、XAML 规则（publish-gui-csharp）
 
 ### 7.1 布局与绑定
 
@@ -260,7 +260,7 @@ private async Task SomeOperation()
 
 ---
 
-## 八、模型设计规则（publish-gui）
+## 八、模型设计规则（publish-gui-csharp）
 
 ### 8.1 DTO（`AlyPublish.Models.Cli`）
 
@@ -325,7 +325,7 @@ private async Task SomeOperation()
 
 ---
 
-> **版本**: 2.0 | **适用范围**: publish/publish-gui/（.NET 8 + Avalonia 12 + CommunityToolkit.Mvvm + Semi.Avalonia + Ursa.Avalonia）
+> **版本**: 2.0 | **适用范围**: publish/publish-gui-csharp/（.NET 8 + Avalonia 12 + CommunityToolkit.Mvvm + Semi.Avalonia + Ursa.Avalonia）
 """
 
 with open(r'<REPO_ROOT>\AGENTS.md', 'w', encoding='utf-8') as f:

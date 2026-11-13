@@ -7,4 +7,4 @@
 
 `tools/` 下是编写 AGENTS.md 时用过的辅助脚本（含个人环境硬编码路径，不可直接运行）。
 
-> 2026-11-13：`publish/publish-gui/` 已拆分为 `publish/publish-gui-csharp/`（C# GUI）与 `publish/publish-gui-go/`（实验性 MyGo GUI）。本目录历史文档中的旧路径保留原样，以当时状态为准。
+> 2026-11-13：发布 GUI 目录已拆分为 `publish/publish-gui-csharp/`（C# GUI）与 `publish/publish-gui-go/`（实验性 MyGo GUI）。本目录历史文档中的目录路径已同步为新名称；文档结论仍以当时版本为准。

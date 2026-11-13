@@ -749,7 +749,7 @@ func TestCase103(t *testing.T) {
 //
 // **文档原期望有误，必须改正**：原文写"GUI 必须复用 publish-cli 的
 // internal/{api,staging,diff}"，暗示 GUI 会 `using` Go 包——这在技术上不可能：
-// publish-gui 是 C#/Avalonia（net8.0），publish-cli 是 Go。跨语言不存在 import。
+// publish-gui-csharp 是 C#/Avalonia（net8.0），publish-cli 是 Go。跨语言不存在 import。
 //
 // GUI 实际走的等价路径是**子进程复用**（Services/CliService.cs）：
 //

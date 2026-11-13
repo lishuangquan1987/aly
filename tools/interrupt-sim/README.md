@@ -125,5 +125,5 @@ python3 scenarios.py     # 单轮场景（46 场景，含 download 中断、目�
 
 - 修改 `client/aly-client` 的状态机后，请同步更新 `sim.py` 的对应分支，并重跑两个脚本；
 - 判据 4（回滚目录名与内容一致）容易被忽略，但正是 Bug #2 的发现来源，请勿删除；
-- 本目录不参与客户端构建（Go 1.10 / GOPATH 模式），也不属于 publish-gui，
+- 本目录不参与客户端构建（Go 1.10 / GOPATH 模式），也不属于 publish-gui-csharp，
   因此不受 `AGENTS.md` 的 C# 命名与审查流程约束。

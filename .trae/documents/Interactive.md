@@ -17,7 +17,7 @@
 ### Q1: 项目目录
 publish_tool_avalonia/ 目录当前为空，是否直接在此目录下创建项目？还是需要新建一个不同的目录名？
 
-回答：放到publish-gui目录下。把publish-cli和publish-gui都放到publish目录下。
+回答：放到publish-gui-csharp目录下。把publish-cli和publish-gui-csharp都放到publish目录下。
 
 ### Q2: 功能范围
 publish-cli 支持以下命令，GUI 需要覆盖哪些？
@@ -51,7 +51,7 @@ publish-cli发布流程：status->add->publish(填写版本号和commit message)
 - **方案B**: 类 SourceTree — 上方文件列表，下方差异详情，右侧暂存区
 - **方案C**: 类 GitKraken — 三栏布局（左：项目+分支信息，中：文件状态，右：提交详情）
 
-回答：GitKraken 类型。publish-gui不用查看文件差异与比对文件差异，因为文件都是二进制，但是要显示文件在本地和服务端有多大
+回答：GitKraken 类型。publish-gui-csharp不用查看文件差异与比对文件差异，因为文件都是二进制，但是要显示文件在本地和服务端有多大
 
 ### Q4: aly-publish.exe 定位方式
 GUI 如何找到 aly-publish.exe？
@@ -71,7 +71,7 @@ publish-cli 使用 .publish-cli/config.json 存储配置（server.url、project.
 
 回答：1.需要项目设置来编辑这些配置。2.当修改配置保存时，调用publish-cli config命令保存。3.需要，分为两种向导，一种是已经init号的项目，一种是没有init好的项目
 
-aly-publish.exe init之后，会在项目目录下生成一个.publish目录，里面有一个config.json，存放项目的配置。publish-gui调用publish-cli的时候，publish-cli会读取这些配置，优先使用命令行参数
+aly-publish.exe init之后，会在项目目录下生成一个.publish目录，里面有一个config.json，存放项目的配置。publish-gui-csharp调用publish-cli的时候，publish-cli会读取这些配置，优先使用命令行参数
 
 ### Q6: 与现有 publish_tool_avalonia 计划的关系
 .trae/documents/avalonia-publish-tool-plan.md 中有一份详细的计划（直接调用 server API，不经过 publish-cli）。本次新建的 GUI 工具是：

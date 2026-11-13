@@ -219,7 +219,7 @@ apply 激活改名阶段（崩溃恢复证据）：
 | 特性 | 说明 |
 |---|---|
 | 位置 | 发布目录 `.updator/publish.json` |
-| 读写方 | `aly-publish`（含 publish-gui 通过子进程调用） |
+| 读写方 | `aly-publish`（含 publish-gui-csharp 通过子进程调用） |
 | 是否上传 | 否，发布工具自动排除 |
 | 字段 | 当前无正式字段，保留给 CLI 专有设置 |
 

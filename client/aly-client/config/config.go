@@ -177,7 +177,7 @@ func UpdaterFileName() string {
 //
 // 与 UpdaterFileName 同款。两件套遵守"主程序目录与 UpdateFolder 中的副本同名"
 // 的约定（deploy/deploy-client.go、client/aly-client-ui/deploy-client-linux.sh、
-// publish-gui 的 CopyUpdaters 都按同名复制），因此"按目标副本名推导源副本名"
+// publish-gui-csharp 的 CopyUpdaters 都按同名复制），因此"按目标副本名推导源副本名"
 // 在两个平台上都成立——这是 self_update --include-ui 无需平台分支的依据。
 func UIFileName() string {
 	if runtime.GOOS == "windows" {

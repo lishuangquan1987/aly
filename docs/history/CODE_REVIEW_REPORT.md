@@ -334,7 +334,7 @@ ResetAllCommand = new AsyncRelayCommand(ResetAllAsync, () => SelectedProject != 
 ┌─────────────────────────────────────────────────────────┐
 │                    Aly 更新系统                           │
 ├──────────┬──────────────┬──────────────┬────────────────┤
-│  Server  │   Client     │ Publish-CLI  │  Publish-GUI   │
+│  Server  │   Client     │ Publish-CLI  │  publish-gui-csharp   │
 │  (Gin)   │   (aly-update)│ (aly-publish)│  (Avalonia)   │
 │  Go API  │   Go CLI     │  Go CLI      │  C# Desktop   │
 ├──────────┼──────────────┼──────────────┼────────────────┤

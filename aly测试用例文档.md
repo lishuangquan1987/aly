@@ -6,7 +6,7 @@
 >   修复后全量回归 **147 PASS / 1 SKIP / 0 FAIL**，明细见附录 B）
 > - 更新日期：2026-11-13
 > - 被测版本：2026-11-13 工作区（按全仓库审查报告修复后的未提交状态）
-> - 新增：**125–127**（publish-gui 初始化：布局 / 三件套 / 原子写，2026-11-04 加入；2026-11-12 全量回归 3/3 PASS（先修正首发版本号 1.0.0→1.0.1），见 §十一·补四）
+> - 新增：**125–127**（publish-gui-csharp 初始化：布局 / 三件套 / 原子写，2026-11-04 加入；2026-11-12 全量回归 3/3 PASS（先修正首发版本号 1.0.0→1.0.1），见 §十一·补四）
 > - 新增：**130–135**（自更新统一：`self_update` 执行命令、UI/SDK 委派与兜底、
 >   UI 防循环、UI 自身 `-finish-self-update` 收尾，2026-11-09 加入并已在 Windows
 >   实机执行；见 §十一·补五）
@@ -41,7 +41,7 @@
 - [十一·补、更新锁缺陷（105）](#十一补更新锁缺陷105)
 - [十一·补二、判据红线的边界补齐（106–115）](#十一补二判据红线的边界补齐106115)
 - [十一·补三、尚未覆盖的 8 类缺口（116–124）](#十一补三尚未覆盖的-8-类缺口116124)
-- [十一·补四、publish-gui 初始化（125–127）](#十一补四publish-gui-初始化125127)
+- [十一·补四、publish-gui-csharp 初始化（125–127）](#十一补四publish-gui-csharp-初始化125127)
 - [十一·补五、自更新统一与防循环（130–135）](#十一补五自更新统一与防循环130135)
 - [附录 A：故障注入手法速查](#附录-a故障注入手法速查)
 - [附录 B：结果记录表](#附录-b结果记录表)
@@ -67,11 +67,11 @@
 | `test/tc/cases_105_test.go` | 已有 | 用例 105（更新锁空窗期与崩溃残留） |
 | `test/tc/cases_106_115_test.go` | 已有（~850 行） | 用例 106–115（判据红线的边界补齐） |
 | `test/tc/cases_116_124_test.go` | 新增（~960 行） | 用例 116–124（并发 / ACL / 自愈链 / Range / i18n / SDK 失败路径） |
-| `test/tc/cases_125_127_test.go` | 新增（~190 行） | 用例 125–127（publish-gui 初始化：布局 / 三件套 / 原子写，**未执行**） |
+| `test/tc/cases_125_127_test.go` | 新增（~190 行） | 用例 125–127（publish-gui-csharp 初始化：布局 / 三件套 / 原子写，**未执行**） |
 | `test/tc/cases_130_135_test.go` | 新增（~420 行） | 用例 130–135（自更新统一：`self_update` 执行、UI 委派/自身收尾 + 防循环、SDK 委派） |
 | `client/aly-client-ui/aly-client-linuxui/*_test.go` | 新增 | **Linux UI 自身测试**（独立 Go module，不在 `test/tc` 的 135 条内）：client JSON 解析、flow 决策、i18n、journal、路径/复制、UI 自更新派生、收尾参数/改名、`ui.NewTester` 视图 |
 
-> **125–127 的两层钉法**：publish-gui 是 C#/Avalonia 的 UI 程序，框架跑不了它的窗口，
+> **125–127 的两层钉法**：publish-gui-csharp 是 C#/Avalonia 的 UI 程序，框架跑不了它的窗口，
 > 所以每条都分两层——**源码契约**（读 C# 源码断言关键调用形态，与用例 104 的 ① 段同法）
 > 和**消费侧功能**（用真实 aly-client 消费 GUI 写出的那套目录布局与 `client.json`）。
 > 只在 Go 里把 C# 的路径算法重算一遍是自证自话，钉不住任何回归。
@@ -393,9 +393,9 @@ func TestCase01(t *testing.T) {
 | 122 | `-lang en-US` 文案与回落 | 边界 | 不崩 + 未知语言回落 ZH |
 | 123 | 多段 Range / If-Range | 边界 | `multipart/byteranges` + 200 全文回退 |
 | 124 | SDK Launch 失败路径 | SDK | UI 缺失 → NG 不抛异常 |
-| 125 | publish-gui 初始化：UpdateFolder 位置 | publish-gui | 与主程序目录**同级**，不在其内部 |
-| 126 | publish-gui 初始化：三件套与相对路径 | publish-gui | aly-client.exe + aly-client-ui.exe + client.json；`..\<目录>\<exe>` 可被 client 消费 |
-| 127 | publish-gui 原子写：先 Move 后 Replace | publish-gui | 首次写不得只留 `client.json.tmp` |
+| 125 | publish-gui-csharp 初始化：UpdateFolder 位置 | publish-gui-csharp | 与主程序目录**同级**，不在其内部 |
+| 126 | publish-gui-csharp 初始化：三件套与相对路径 | publish-gui-csharp | aly-client.exe + aly-client-ui.exe + client.json；`..\<目录>\<exe>` 可被 client 消费 |
+| 127 | publish-gui-csharp 原子写：先 Move 后 Replace | publish-gui-csharp | 首次写不得只留 `client.json.tmp` |
 | 128 | 客户端真实分片上传路径 | 边界 | publish-cli 推 >1MiB 文件必须走通 `upload_chunk` → `upload_chunk_complete` |
 | 129 | 分片阈值边界 | 边界 | `chunkSize` 走直传、`chunkSize+1` 走分片，两路都逐字节落地 |
 | 130 | self_update 一致跳过 | 自更新 | `updated=false` + `already_up_to_date` + `.new/.old` 残留清理 |
@@ -5842,9 +5842,9 @@ tc.Eq(t, "恢复后 has_update", cu.HasUpdate, true)
 
 ### 用例 104 — GUI 与 CLI 同库（行为等价）
 
-> **⚠ 原期望技术上不可能（已重写）：** 原文写"publish-gui 与 publish-cli 必须共用 `internal/api` + `internal/staging` + `internal/diff`"，还给了 grep `using aly/publish-cli/internal/...` 的做法。
+> **⚠ 原期望技术上不可能（已重写）：** 原文写"publish-gui-csharp 与 publish-cli 必须共用 `internal/api` + `internal/staging` + `internal/diff`"，还给了 grep `using aly/publish-cli/internal/...` 的做法。
 >
-> **这是跨语言误判**：publish-gui 是 **C#/Avalonia（net8.0）**，publish-cli 是 **Go**。C# 不可能 `using` Go 包。实测该 grep 命中 **0 条**（原用例据此写日志但没断言，所以"PASS"是假的）。
+> **这是跨语言误判**：publish-gui-csharp 是 **C#/Avalonia（net8.0）**，publish-cli 是 **Go**。C# 不可能 `using` Go 包。实测该 grep 命中 **0 条**（原用例据此写日志但没断言，所以"PASS"是假的）。
 >
 > 真实的等价路径是**子进程复用**（`publish-gui-csharp/src/AlyPublish/Services/CliService.cs`）：
 > ```csharp
@@ -5859,7 +5859,7 @@ tc.Eq(t, "恢复后 has_update", cu.HasUpdate, true)
 
 **前置条件**
 
-1. publish-gui（Avalonia net8.0）与 publish-cli 都在。
+1. publish-gui-csharp（Avalonia net8.0）与 publish-cli 都在。
 2. 同一个项目、同一批文件。
 
 **步骤**
@@ -7361,9 +7361,9 @@ for _, want := range []string{
 
 ---
 
-## 十一·补四、publish-gui 初始化（125–127）
+## 十一·补四、publish-gui-csharp 初始化（125–127）
 
-> 本节来自一次**真机实测**（2026-11-04）：在 publish-gui 里对一个真实项目执行"初始化项目"之后，
+> 本节来自一次**真机实测**（2026-11-04）：在 publish-gui-csharp 里对一个真实项目执行"初始化项目"之后，
 > 磁盘上得到的更新器目录三处都不对——位置、内容、以及 `client.json` 的相对路径。
 > 实现见 `test/tc/cases_125_127_test.go`；被测源码 `publish/publish-gui-csharp/src/AlyPublish/Services/ConfigService.cs`。
 >
@@ -7393,7 +7393,7 @@ for _, want := range []string{
     └── client.json.tmp              ← ❌ client.json 从未生成，只剩临时文件
 ```
 
-日志证据（publish-gui 自己的日志 `bin/Debug/net8.0/logs/log20261104.log`）：
+日志证据（publish-gui-csharp 自己的日志 `bin/Debug/net8.0/logs/log20261104.log`）：
 
 ```
 [INF] 自动检测主程序: …\bin\Debug\net8.0-windows\WinFormsApp1.exe, 进程名: WinFormsApp1
@@ -7419,7 +7419,7 @@ System.IO.FileNotFoundException: Unable to find the specified file.
 
 ---
 
-### 用例 125 — publish-gui 初始化：UpdateFolder 与主程序目录同级
+### 用例 125 — publish-gui-csharp 初始化：UpdateFolder 与主程序目录同级
 
 **前置条件**
 
@@ -7469,7 +7469,7 @@ PASS（2026-11-12 全量回归；已修正首发版本号）
 
 ---
 
-### 用例 126 — publish-gui 初始化：三件套与 `client.json` 的相对路径可被真实 client 消费
+### 用例 126 — publish-gui-csharp 初始化：三件套与 `client.json` 的相对路径可被真实 client 消费
 
 **前置条件**
 
@@ -7582,7 +7582,7 @@ PASS（2026-11-12 全量回归；已修正首发版本号）
 
 ---
 
-### 用例 127 — publish-gui 原子写：目标不存在时必须 `File.Move`，首次写不得只留 `.tmp`
+### 用例 127 — publish-gui-csharp 原子写：目标不存在时必须 `File.Move`，首次写不得只留 `.tmp`
 
 **前置条件**
 
@@ -8671,9 +8671,9 @@ linuxui 同构测试交叉编译验证（CI Ubuntu 实跑）。
 | 122 | `-lang en-US` | PASS | 43.68s | en-US 与 `bogus-lang` 退出码均 0、无 panic、更新均完成 |
 | 123 | 多段 Range / If-Range | PASS | 12.90s | 6 段 RFC 语义全对：`multipart/byteranges`+boundary、If-Range 不匹配回 200 全文、非法语法 400 |
 | 124 | SDK Launch 失败路径 | PASS | 16.41s | `SUMMARY: PASS=9 FAIL=0`；UI 缺失返回 NG 不抛、不触发 Started、Dispose 后仍 NG |
-| 125 | publish-gui：UpdateFolder 位置 | PASS | 2026-11-12 | 2026-11-04 新增；纯源码契约（不建 Env） |
-| 126 | publish-gui：三件套与相对路径 | PASS | 2026-11-12 | 2026-11-04 新增；源码契约 + 真实 client 消费 GUI 布局 |
-| 127 | publish-gui：原子写先 Move 后 Replace | PASS | 2026-11-12 | 2026-11-04 新增；源码契约 + 只有 `client.json.tmp` 的现场不可用 |
+| 125 | publish-gui-csharp：UpdateFolder 位置 | PASS | 2026-11-12 | 2026-11-04 新增；纯源码契约（不建 Env） |
+| 126 | publish-gui-csharp：三件套与相对路径 | PASS | 2026-11-12 | 2026-11-04 新增；源码契约 + 真实 client 消费 GUI 布局 |
+| 127 | publish-gui-csharp：原子写先 Move 后 Replace | PASS | 2026-11-12 | 2026-11-04 新增；源码契约 + 只有 `client.json.tmp` 的现场不可用 |
 | 128 | 客户端真实分片上传路径 | PASS | 2.20s | 2026-11-06 新增；≥3MiB 非均匀文件走 publish-cli push，md5 逐字节一致、无 `.chunks`/`.merging` 残留。**负向对照实测**：移除服务端 `upload_chunk`/`upload_chunk_complete` 路由后重构建 → FAIL，报错与真机一致（`upload chunk 0/4: HTTP 404: 404 page not found`） |
 | 129 | 分片阈值边界 | PASS | 2.77s | 2026-11-06 新增；`chunkSize`（1048×1024）走直传、`chunkSize+1` 走分片，两文件 md5 均逐字节一致、无中间态残留 |
 | 130 | self_update 一致跳过 | PASS | 23.30s | 2026-11-09 新增；Windows 实跑。单元层：selfupdate 16 / cmd self_update 5 / UI journal 10 / UI 收尾 8；130–135 6/6 PASS |

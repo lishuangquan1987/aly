@@ -26,8 +26,8 @@
 
 | # | 项目 | 命令 | 结果 |
 |---|---|---|---|
-| 1 | 发布 GUI 构建 | `dotnet build publish/publish-gui/src/AlyPublish/AlyPublish.csproj -c Release` | **0 警告 / 0 错误** |
-| 2 | 发布 GUI 单测 | `dotnet test publish/publish-gui/tests/AlyPublish.Tests/AlyPublish.Tests.csproj -c Release` | **54/54 通过**（新增 12 条：`PkHelper` 7、`HostHelper` 4、`UpdateFolderService` 4 里去重；含清单键契约测） |
+| 1 | 发布 GUI 构建 | `dotnet build publish/publish-gui-csharp/src/AlyPublish/AlyPublish.csproj -c Release` | **0 警告 / 0 错误** |
+| 2 | 发布 GUI 单测 | `dotnet test publish/publish-gui-csharp/tests/AlyPublish.Tests/AlyPublish.Tests.csproj -c Release` | **54/54 通过**（新增 12 条：`PkHelper` 7、`HostHelper` 4、`UpdateFolderService` 4 里去重；含清单键契约测） |
 | 3 | 协议模型与 fixtures | `cd tools/alyprotocol && go run . -check` | 通过（10 场景 + 17 生成文件一致） |
 | 4 | fake 客户端单测 | `cd tools/fake-aly-client && go test ./...` | 通过 |
 | 5 | `publish-cli` 单测 | `cd publish/publish-cli && go test ./...` | 通过（`internal/api`、`internal/diff`） |
@@ -84,8 +84,8 @@ $env:ALY_GO1108 = '<GO1108_PATH>'
 cd E:\Project2026\aly
 
 # 2) GUI：构建 + 单测
-dotnet build publish\publish-gui\src\AlyPublish\AlyPublish.csproj -c Release --nologo
-dotnet test publish\publish-gui\tests\AlyPublish.Tests\AlyPublish.Tests.csproj -c Release --nologo
+dotnet build publish\publish-gui-csharp\src\AlyPublish\AlyPublish.csproj -c Release --nologo
+dotnet test publish\publish-gui-csharp\tests\AlyPublish.Tests\AlyPublish.Tests.csproj -c Release --nologo
 
 # 3) 三个平台 CLI
 cd publish\publish-cli
@@ -96,10 +96,10 @@ setx GOARCH arm64 ; go build -o aly-publish-linux-arm64 .
 cd E:\Project2026\aly
 
 # 4) payload 铺装（本地分支）
-powershell -NoProfile -ExecutionPolicy Bypass -File publish\publish-gui\installer\stage-payload.ps1 -FromLocal -App <包根>
+powershell -NoProfile -ExecutionPolicy Bypass -File publish\publish-gui-csharp\installer\stage-payload.ps1 -FromLocal -App <包根>
 
 # 5) Linux 安装脚本
-& 'D:\Install\Git\bin\bash.exe' -n publish/publish-gui/installer/linux/install.sh
+& 'D:\Install\Git\bin\bash.exe' -n publish/publish-gui-csharp/installer/linux/install.sh
 & 'D:\Install\Git\bin\bash.exe' <包根>/install.sh --prefix <前缀>
 
 # 6) 端到端全量（约 41 分钟，必须给超时）
