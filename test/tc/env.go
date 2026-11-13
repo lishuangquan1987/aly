@@ -7,7 +7,8 @@ package tc
 //  1. **只用标准库**：任何装了 Go 的机器可直接 go run / go test，不引第三方依赖。
 //  2. **每条用例独立**：前置现场由 Env 显式构造，不依赖前一条用例的遗留状态。
 //  3. **失败可诊断**：断言失败带"期望 / 实际 / 现场路径"，日志尾部自动附上。
-//  4. **工具链口径显式**：server / publish-cli 用 go1.26（go.mod 声明 go1.25）；
+//  4. **工具链口径显式**：server 需 ≥go1.27.3（server/go.mod 声明 go 1.27.3），
+//     publish-cli 需 ≥go1.25（go.mod 声明 go 1.25.0）；
 //     aly-client 必须 go1.10.8 + GOARCH=386（XP 兼容），见 RepoRoot 与 Go1xx 常量。
 
 import (
@@ -40,14 +41,15 @@ var RepoRoot = func() string {
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 }()
 
-// Go126 构建 server / publish-cli（go.mod 声明 go 1.25.0，故需 >= 1.25 的工具链）
+// Go126 构建 server / publish-cli。变量名沿用早期 go1.26 口径，但
+// server/go.mod 已声明 go 1.27.3，因此实际要求工具链 >= 1.27.3。
 var Go126 = envOr("ALY_GO126", defaultGo126())
 
 // Go1108 构建 aly-client / aly-client-ui / fake_main（XP 兼容口径：1.10.8 + GOARCH=386）
 var Go1108 = envOr("ALY_GO1108", defaultGo1108())
 
 // defaultGo126 返回现代 Go 的默认路径：Windows 用作者机器的安装位置；
-// 其他平台回退到 PATH 里的 go（go.mod 声明 1.25+，一般 PATH 即满足）。
+// 其他平台回退到 PATH 里的 go（server 需 >= 1.27.3，不满足时请设 ALY_GO126）。
 func defaultGo126() string {
 	if runtime.GOOS == "windows" {
 		return `D:\Install\go\bin\go.exe`

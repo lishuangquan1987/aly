@@ -21,7 +21,7 @@ Aly 是一套**自包含的桌面应用自动更新系统**：发布方用发布
 
 | 组件 | 角色 | 技术栈 |
 |---|---|---|
-| **aly-server** | 项目元数据、文件存储、REST API | Go 1.25 · Gin · Ent · SQLite |
+| **aly-server** | 项目元数据、文件存储、REST API | Go 1.27.3 · Gin · Ent · SQLite |
 | **aly-publish** | 发布命令行：配置、差异、暂存、推送 | Go 1.25 · cobra |
 | **aly-publish-gui** | 桌面发布器，包装 CLI | .NET 8 · Avalonia 12.1 · Semi/Ursa |
 | **aly-client** | 终端更新器 | Go 1.10.8（XP 轨）/ 现代 Go（跨平台轨） |

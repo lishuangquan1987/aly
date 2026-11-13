@@ -40,7 +40,7 @@ Publisher (developer / CI / release manager)      End-user machine
 | Track | Toolchain | Artifacts | Targets |
 |---|---|---|---|
 | **XP track** | Go 1.10.8 · GOARCH=386 · GOPATH | `aly-client.exe` + `aly-client-ui.exe` (walk) | Windows XP → Win11 |
-| **Modern track** | Go 1.25+ / 1.27.3 · Modules | Server, publish CLI, Linux updater | Windows / Linux / macOS servers and tools |
+| **Modern track** | Go 1.27.3 (server, Linux UI) / 1.25+ (publish CLI) · Modules | Server, publish CLI, Linux updater | Windows / Linux / macOS servers and tools |
 
 The XP track must stay pinned to Go 1.10.8 (XP support ended with Go 1.11); CI validates the PE header (machine=0x014C, subsystem≤5.0) and the ComCtl32 manifest.
 
@@ -65,7 +65,7 @@ The C# and other language SDKs, plus the GUI, follow the same protocol; see [Lan
 
 ```text
 aly/
-├── server/                     # aly-server (Go 1.25 · Gin · Ent · SQLite)
+├── server/                     # aly-server (Go 1.27.3 · Gin · Ent · SQLite)
 ├── client/
 │   ├── aly-client/             # the updater itself (shared by the XP and modern tracks)
 │   │   ├── cmd/                #   individual subcommands

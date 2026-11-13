@@ -21,7 +21,7 @@ Aly is a **self-contained automatic update system for desktop applications**: pu
 
 | Component | Role | Stack |
 |---|---|---|
-| **aly-server** | Project metadata, file storage, REST API | Go 1.25 · Gin · Ent · SQLite |
+| **aly-server** | Project metadata, file storage, REST API | Go 1.27.3 · Gin · Ent · SQLite |
 | **aly-publish** | Publish CLI: configure, diff, stage, push | Go 1.25 · cobra |
 | **aly-publish-gui** | Desktop publisher that wraps the CLI | .NET 8 · Avalonia 12.1 · Semi/Ursa |
 | **aly-client** | End-user updater | Go 1.10.8 (XP track) / modern Go (cross-platform track) |

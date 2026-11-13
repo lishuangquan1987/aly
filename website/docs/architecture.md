@@ -40,7 +40,7 @@ description: Aly 的组件、发布到应用的数据流、双轨工具链与 GU
 | 轨道 | 工具链 | 产物 | 目标 |
 |---|---|---|---|
 | **XP 轨** | Go 1.10.8 · GOARCH=386 · GOPATH | `aly-client.exe` + `aly-client-ui.exe`（walk） | Windows XP → Win11 |
-| **现代轨** | Go 1.25+ / 1.27.3 · Modules | 服务端、发布 CLI、Linux 更新器 | Windows / Linux / macOS 服务端与工具 |
+| **现代轨** | Go 1.27.3（服务端、Linux UI）/ 1.25+（发布 CLI）· Modules | 服务端、发布 CLI、Linux 更新器 | Windows / Linux / macOS 服务端与工具 |
 
 XP 轨必须锁在 Go 1.10.8（Go 1.11 起不再支持 XP），CI 对 PE 头（machine=0x014C、subsystem≤5.0）与 ComCtl32 manifest 做校验。
 
@@ -65,7 +65,7 @@ C# 与其它语言 SDK、GUI 遵循同一协议，见 [多语言 SDK](/docs/sdk/
 
 ```text
 aly/
-├── server/                     # aly-server（Go 1.25 · Gin · Ent · SQLite）
+├── server/                     # aly-server（Go 1.27.3 · Gin · Ent · SQLite）
 ├── client/
 │   ├── aly-client/             # 更新器本体（XP 轨 + 现代轨共享）
 │   │   ├── cmd/                #   各子命令

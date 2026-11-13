@@ -88,7 +88,7 @@
 
 | 用途 | 工具链 | 常量 | 说明 |
 |---|---|---|---|
-| server / publish-cli | **go1.26** | `tc.Go126` | 二者 `go.mod` 声明 `go 1.25.0`，需 ≥1.25 的工具链 |
+| server / publish-cli | **go1.27.3**（建议） | `tc.Go126` | `server/go.mod` 声明 `go 1.27.3`（需 ≥1.27.3）；`publish-cli/go.mod` 声明 `go 1.25.0`。本地可用 `ALY_GO126` 显式指定路径 |
 | aly-client / aly-client-ui / fake_main | **go1.10.8** | `tc.Go1108` | XP 兼容口径，必须 `GOARCH=386`；用 1.26 编出的 386 产物不保证可在 XP 运行 |
 | Linux aly-client + aly-client-linuxui | **go1.27.3** | 无（module tool 固定） | MyGo 0.8.3 原生 UI；纯 Go/无 cgo，可交叉编译；运行需 GTK3 |
 | C# SDK | dotnet 10 | — | 目标框架 net40 |

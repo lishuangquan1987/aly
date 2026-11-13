@@ -58,8 +58,8 @@ jobs:
         uses: actions/checkout@v4
 
       # server/main.go 使用 //go:debug httpservecontentmaxranges（Go 1.26 引入），
-      # 但 go.mod 仍声明 go 1.25.0；用 go-version-file 会装 Go 1.25 并因
-      # "unknown //go:debug setting" 编译失败。这里固定用 Go 1.27.3（与其它现代轨 job 一致）。
+      # 要求编译器 >= 1.26；server/go.mod 已声明 go 1.27.3，与此处的显式版本一致。
+      # CI 固定显式版本（而非 go-version-file），避免 go.mod 被误改时静默回退到旧工具链。
       - name: Setup Go
         id: setup-go
         uses: actions/setup-go@v5
