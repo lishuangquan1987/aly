@@ -336,6 +336,12 @@
     "ClearStagingDialog": {
       "Title": "Clear staging",
       "Message": "Unstage all files?\n\nNo files are deleted, but they must be selected and staged again."
+    },
+    "Upload": {
+      "Starting": "Uploading",
+      "Done": "Done",
+      "Failed": "Failed",
+      "FailedWithReason": "Failed: {0}"
     }
   },
   "App": {

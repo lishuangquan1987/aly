@@ -26,7 +26,11 @@ func init() {
 	cmdConfigInit.Flags().StringVar(&ignoreFilesInit, "ignore-files", "", "忽略的文件（逗号分隔）")
 	cmdConfigInit.Flags().StringVar(&unCopyFoldersInit, "un-copy-folders", "", "不复制文件夹（逗号分隔）")
 	cmdConfigInit.Flags().StringVar(&unCopyFilesInit, "un-copy-files", "", "不复制文件（逗号分隔）")
-	cmdConfigInit.MarkFlagRequired("project")
+	// 审查 M14：原先这里调用 MarkFlagRequired("project")，但 "project" 是
+	// RootCmd 的 persistent flag，从未注册在 cmdConfigInit 自己的 flagset 上；
+	// cobra 内部 Lookup 失败返回的 error 又被丢弃，required 注解从未生效，
+	// 且 Go 按文件名字母序执行 init()，此时 RootCmd 的 persistent flag 甚至
+	// 还没注册。改为在 runConfigInit 里显式校验（见下）。
 
 	cmdConfigSetArray.Flags().StringVar(&setArrayAdd, "add", "", "添加项")
 	cmdConfigSetArray.Flags().StringVar(&setArrayRemove, "remove", "", "移除项")
@@ -82,9 +86,25 @@ var cmdConfigPath = &cobra.Command{
 	Run:   runConfigPath,
 }
 
+// validateConfigInitProject 校验 config init 的项目名（审查 M14）。
+//
+// 允许两种来源：显式 --project，或工作区既有 shared.json 里已配置的 project_name
+// （对已有项目重复执行 config init 是合法用法，不应被拦）。
+func validateConfigInitProject(resolvedProjectName string) error {
+	if resolvedProjectName == "" {
+		return fmt.Errorf("config init 必须通过 --project 指定项目名称")
+	}
+	return nil
+}
+
 func runConfigInit(cmd *cobra.Command, args []string) {
 	cfg, err := resolveConfig()
 	if err != nil {
+		outputResult(false, err.Error(), nil)
+		return
+	}
+	// 审查 M14：显式校验项目名，避免"不带 --project 静默生成全空配置"
+	if err := validateConfigInitProject(cfg.Shared.ProjectName); err != nil {
 		outputResult(false, err.Error(), nil)
 		return
 	}
@@ -276,7 +296,17 @@ func applyStringSliceOp(target *[]string, add, remove string, clear bool) {
 		*target = nil
 	}
 	if add != "" {
-		*target = append(*target, add)
+		// 审查 publish 轻微④：重复 add 会产生重复项（数据脏但功能无害）
+		exists := false
+		for _, v := range *target {
+			if v == add {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			*target = append(*target, add)
+		}
 	}
 	if remove != "" {
 		var filtered []string

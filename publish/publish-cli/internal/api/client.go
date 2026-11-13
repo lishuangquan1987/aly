@@ -2,6 +2,8 @@ package api
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -61,7 +63,29 @@ func (c *Client) printTransferSetup() {
 
 // ─── 通用方法 ──────────────────────────────────────────────────────────
 
+// get 发起 GET 并解析统一信封。
+//
+// 审查 publish 轻微③：GET 是幂等的，旧实现单发——弱网下一次瞬断就让 status/log
+// 这类只读命令整条失败。这里加与上传同款的 transient 重试。
 func (c *Client) get(path string, result interface{}) error {
+	var lastErr error
+	for attempt := 0; attempt < maxUploadRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(uploadRetryBackoff(attempt))
+		}
+		err := c.getOnce(path, result)
+		if err == nil {
+			return nil
+		}
+		if strings.Contains(err.Error(), "parse response") || !isTransientUploadError(err) {
+			return err
+		}
+		lastErr = err
+	}
+	return fmt.Errorf("GET %s 重试 %d 次仍失败: %w", path, maxUploadRetries, lastErr)
+}
+
+func (c *Client) getOnce(path string, result interface{}) error {
 	resp, err := c.hc.Get(c.ServerURL + path)
 	if err != nil {
 		return fmt.Errorf("GET %s: %w", path, err)
@@ -178,6 +202,31 @@ func (c *Client) GetProjectChangeLogs(projectName string) ([]models.ProjectChang
 	return logs, nil
 }
 
+// GetReleaseManifest 获取项目当前发布清单（审查 B7/A2）。
+//
+// 清单只在 PublishVersion 成功时写入，因此"文件在清单里"等价于
+// "该文件已随某个版本正式发布"——这是区分"上传成功但版本没建成"的关键标记。
+// 老服务器没有该接口时返回错误，调用方降级为旧行为。
+func (c *Client) GetReleaseManifest(projectName string) ([]string, error) {
+	var manifest struct {
+		Files []string `json:"files"`
+	}
+	path := fmt.Sprintf("/api/file/get_release_manifest/%s", url.PathEscape(projectName))
+	if err := c.get(path, &manifest); err != nil {
+		return nil, err
+	}
+	return manifest.Files, nil
+}
+
+// DeleteFile 删除服务端项目内的一个文件（审查 B6：删除同步链路）。
+// 服务端语义为幂等删除（文件不存在也返回成功）。
+func (c *Client) DeleteFile(projectName, relativeFileName string) error {
+	return c.post("/api/file/delete_file", map[string]string{
+		"projectName":      projectName,
+		"relativeFileName": relativeFileName,
+	}, nil)
+}
+
 // GetProjectOSInfo 获取服务端系统信息（按项目名称）
 func (c *Client) GetProjectOSInfo(projectName string) ([]models.ServerOSInfo, error) {
 	var info []models.ServerOSInfo
@@ -241,14 +290,12 @@ func resolveChunkSize() int64 {
 }
 
 // envar 返回环境变量 name 的值（取不到返回空串）。
+//
+// 审查 publish 轻微①：旧实现手写遍历 os.Environ() 做**大小写敏感**前缀匹配——
+// Windows 环境变量名本就不区分大小写，用户设 `aly_chunk_size` 会静默无效。
+// os.Getenv 在 Windows 上即大小写不敏感，直接用即可。
 func envar(name string) string {
-	prefix := name + "="
-	for _, kv := range os.Environ() {
-		if len(kv) > len(prefix) && kv[:len(prefix)] == prefix {
-			return kv[len(prefix):]
-		}
-	}
-	return ""
+	return os.Getenv(name)
 }
 
 // ─── 上传重试 ──────────────────────────────────────────────────────────
@@ -272,6 +319,13 @@ func uploadRetryBackoff(attempt int) time.Duration {
 // 判定统一转小写，兼容措辞大小写不一致的实现。
 func isTransientUploadError(err error) bool {
 	msg := strings.ToLower(err.Error())
+	// 审查 M15：服务端 5xx（网关/临时不可用）对上传是可重试的；
+	// 旧实现不识别，complete 这类单发请求遇到 502 就直接失败。
+	for _, code := range []string{"http 500", "http 502", "http 503", "http 504"} {
+		if strings.Contains(msg, code) {
+			return true
+		}
+	}
 	return strings.Contains(msg, "closed pipe") ||
 		strings.Contains(msg, "connection reset") ||
 		strings.Contains(msg, "broken pipe") ||
@@ -346,6 +400,13 @@ func (c *Client) uploadFileOnce(data []byte, fileName, projectName, relativeFile
 func (c *Client) uploadFileChunked(localPath, projectName, relativeFileName string, fileSize int64) error {
 	totalChunks := int((fileSize + c.chunkSize - 1) / c.chunkSize)
 
+	// 审查 M3：完整文件 MD5 随 complete 一起上报，服务端合并后比对，
+	// 从根上消灭"合并结果与发布者意图不一致却静默下发"的一类问题。
+	wantMD5, err := fileMD5(localPath)
+	if err != nil {
+		return fmt.Errorf("compute md5: %w", err)
+	}
+
 	file, err := os.Open(localPath)
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
@@ -353,7 +414,51 @@ func (c *Client) uploadFileChunked(localPath, projectName, relativeFileName stri
 	defer file.Close()
 
 	// 顺序上传分片（每个分片有独立重试）
+	if err := c.uploadAllChunks(file, fileSize, projectName, relativeFileName, totalChunks, nil); err != nil {
+		return err
+	}
+
+	// 通知服务端合并分片。审查 M15：
+	//   · complete 也要有 transient 重试（旧实现单发，断链即"最后一步前功尽弃"）；
+	//   · 服务端缺片时返回 HTTP 200 + chunksComplete=false，旧实现只看 IsSuccess
+	//     就把"未合并"当成功——文件静默缺失。这里解析 missing 并只重传缺失分片。
+	missing, err := c.completeChunksWithRetry(projectName, relativeFileName, totalChunks, wantMD5)
+	if err != nil {
+		return err
+	}
+	if len(missing) > 0 {
+		// 只重传缺失分片，然后重新 complete（最多两轮，避免死循环）
+		if err := c.uploadAllChunks(file, fileSize, projectName, relativeFileName, totalChunks, missing); err != nil {
+			return err
+		}
+		missing, err = c.completeChunksWithRetry(projectName, relativeFileName, totalChunks, wantMD5)
+		if err != nil {
+			return err
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("服务端仍缺分片: %v（已重传一轮；请检查网络或调小 ALY_CHUNK_SIZE）", missing)
+		}
+	}
+	return nil
+}
+
+// uploadAllChunks 上传全部分片；only 非空时只上传指定的分片下标
+func (c *Client) uploadAllChunks(file *os.File, fileSize int64, projectName, relativeFileName string, totalChunks int, only []int) error {
+	selected := func(i int) bool {
+		if len(only) == 0 {
+			return true
+		}
+		for _, x := range only {
+			if x == i {
+				return true
+			}
+		}
+		return false
+	}
 	for i := 0; i < totalChunks; i++ {
+		if !selected(i) {
+			continue
+		}
 		offset := int64(i) * c.chunkSize
 		remaining := fileSize - offset
 		chunkLen := int(c.chunkSize)
@@ -373,26 +478,91 @@ func (c *Client) uploadFileChunked(localPath, projectName, relativeFileName stri
 			return fmt.Errorf("upload chunk %d/%d: %w", i, totalChunks, err)
 		}
 	}
-
-	// 通知服务端合并分片
-	return c.completeChunks(projectName, relativeFileName, totalChunks)
+	return nil
 }
 
-// completeChunks 通知服务端合并所有分片
-func (c *Client) completeChunks(projectName, relativeFileName string, totalChunks int) error {
-	body := multipartFormBuffer(nil, "", map[string]string{
+// fileMD5 计算文件 MD5（分块读取，避免大文件一次性读入内存）
+func fileMD5(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := md5.New()
+	buf := make([]byte, 1<<20)
+	for {
+		n, err := f.Read(buf)
+		if n > 0 {
+			h.Write(buf[:n])
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// completeChunksWithRetry 通知服务端合并（带 transient 重试 + 缺片解析）
+// 返回仍缺失的分片下标（空切片表示合并成功）。
+func (c *Client) completeChunksWithRetry(projectName, relativeFileName string, totalChunks int, wantMD5 string) ([]int, error) {
+	var lastErr error
+	for attempt := 0; attempt < maxUploadRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(uploadRetryBackoff(attempt))
+		}
+		missing, err := c.completeChunksOnce(projectName, relativeFileName, totalChunks, wantMD5)
+		if err == nil {
+			return missing, nil
+		}
+		if !isTransientUploadError(err) {
+			return nil, err
+		}
+		lastErr = err
+	}
+	return nil, fmt.Errorf("chunk complete failed after %d retries: %w", maxUploadRetries, lastErr)
+}
+
+// completeChunksOnce 单次 complete：解析服务端返回的 chunksComplete/missingChunks。
+func (c *Client) completeChunksOnce(projectName, relativeFileName string, totalChunks int, wantMD5 string) ([]int, error) {
+	fields := map[string]string{
 		"projectName":      projectName,
 		"relativeFileName": relativeFileName,
 		"totalChunks":      fmt.Sprintf("%d", totalChunks),
-	})
+	}
+	if wantMD5 != "" {
+		fields["md5"] = wantMD5
+	}
+	body := multipartFormBuffer(nil, "", fields)
 
 	resp, err := c.hc.Post(c.ServerURL+"/api/file/upload_chunk_complete", body.contentType, &body.buf)
 	if err != nil {
-		return fmt.Errorf("chunk complete: %w", err)
+		return nil, fmt.Errorf("chunk complete: %w", err)
 	}
 	defer resp.Body.Close()
 
-	return checkResponse(resp)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("chunk complete: HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+	respBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, fmt.Errorf("read complete response: %w", readErr)
+	}
+	var cr models.ChunkCompleteResponse
+	if err := json.Unmarshal(respBody, &cr); err != nil {
+		return nil, fmt.Errorf("parse complete response: %w", err)
+	}
+	if !cr.IsSuccess {
+		return nil, fmt.Errorf("%s", cr.ErrorMsg)
+	}
+	// 审查 M15 核心：IsSuccess=true 不代表合并成功
+	if !cr.Data.ChunksComplete {
+		return cr.Data.MissingChunks, nil
+	}
+	return nil, nil
 }
 
 // uploadChunkWithRetry 上传单个分片（带重试）

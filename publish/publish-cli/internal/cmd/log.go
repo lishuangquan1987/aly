@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"aly/publish-cli/pkg/models"
 
 	"github.com/spf13/cobra"
@@ -19,7 +21,21 @@ var cmdLog = &cobra.Command{
 	Run:   runLog,
 }
 
+// validateLogLimit 校验 --limit（审查 M13：负数会 make([]T,-1) panic）
+func validateLogLimit(limit int) error {
+	if limit <= 0 {
+		return fmt.Errorf("invalid --limit: 必须是正整数")
+	}
+	return nil
+}
+
 func runLog(cmd *cobra.Command, args []string) {
+	// 审查 M13：--limit 负数会让 make([]T, -1) 直接 panic，0 则静默返回空列表。
+	// 负数更像手误（不是"无限制"的约定），统一按 usage 错误处理，行为确定。
+	if err := validateLogLimit(logLimit); err != nil {
+		outputResult(false, err.Error(), nil)
+		return
+	}
 	cfg, err := resolveConfig()
 	if err != nil {
 		outputResult(false, err.Error(), nil)

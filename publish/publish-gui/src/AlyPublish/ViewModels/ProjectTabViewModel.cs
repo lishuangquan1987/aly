@@ -305,7 +305,10 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
             NewVersion = string.Empty;
             CommitMessage = string.Empty;
             AfterApplyUpdateScript = string.Empty;
-            SetForceUpdate = false;
+            // 审查 B5：不再把 SetForceUpdate 复位成 false——
+            // 旧实现每次发布后硬复位，用户下次发布默认又变成"不强制"，
+            // 与服务端现值脱节。改为发布后按服务端实际状态回填。
+            await RefreshForceUpdateFromServerAsync(cancellationToken);
             await RunAsync(
                 LanguageManager.T(LanguageManager.Instance.Operation_Refresh),
                 token => FetchDataAsync(token),
@@ -463,19 +466,47 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
         var status = await _cli.GetStatusAsync(Project.ProjectPath, cancellationToken);
         var changeLogs = await _cli.GetLogAsync(Project.ProjectPath, cancellationToken: cancellationToken);
         ApplyStatus(status, changeLogs);
+        await RefreshForceUpdateFromServerAsync(cancellationToken);
         StatusMessage = LanguageManager.F(
             LanguageManager.T(LanguageManager.Instance.ProjectTab_Changes_StatusSummary),
             UnstagedFiles.Count,
             StagedFiles.Count);
     }
 
+    /// <summary>
+    /// 审查 B5：强制更新开关的初值改为继承服务端现值。
+    /// 旧实现固定 false 且每次发布后硬复位，用户每次发布都得重新勾选，
+    /// 而且默认会把服务端的"强制更新"静默关掉（CLI 侧已改为三态 flag，
+    /// 这里保证 GUI 的复选框反映真实状态）。查询失败时保持当前值，不误改。
+    /// </summary>
+    private async Task RefreshForceUpdateFromServerAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            // 服务端地址/项目名在 .updator/shared.json 里（ProjectConfig 只是书签）
+            var shared = ProjectConfigService.Load(Project.ProjectPath);
+            if (string.IsNullOrWhiteSpace(shared.ServerUrl) || string.IsNullOrWhiteSpace(shared.ProjectName))
+            {
+                return;
+            }
+            var projects = await _cli.GetServerProjectsAsync(shared.ServerUrl, cancellationToken);
+            var match = projects.FirstOrDefault(p => p.Name == shared.ProjectName);
+            if (match is not null)
+            {
+                SetForceUpdate = match.IsForceUpdate;
+            }
+        }
+        catch (CliException)
+        {
+            // 服务端不可达时保留既有勾选状态：这是展示型同步，不该阻断操作
+        }
+    }
+
     private void ApplyStatus(StatusData status, List<ChangeLog> changeLogs)
     {
-        ReplaceFiles(
-            UnstagedFiles,
-            status.Unstaged
-                .Where(item => item.Status != FileStatus.Deleted)
-                .Select(FileItem.FromCliItem));
+        // 审查 B6：删除同步链路打通后，deleted 必须显示出来供用户操作
+        // （旧实现直接过滤掉，用户根本看不到"本地已删除、服务端仍存在"的文件）
+        ReplaceFiles(UnstagedFiles, status.Unstaged.Select(FileItem.FromCliItem));
 
         ReplaceFiles(StagedFiles, status.Staged.Select(FileItem.FromCliItem));
 

@@ -11,6 +11,24 @@ type CommonResponse struct {
 	Data      json.RawMessage `json:"data"`
 }
 
+// ChunkCompleteData 分片合并响应数据（审查 M15）。
+//
+// 关键：服务端缺片时返回 HTTP 200 + isSuccess=true，但 chunksComplete=false
+// 且带 missingChunks —— 只看 isSuccess 会把"未合并"当成功，文件静默缺失。
+type ChunkCompleteData struct {
+	ChunksComplete bool   `json:"chunksComplete"`
+	MissingChunks  []int  `json:"missingChunks"`
+	TotalSize      int64  `json:"totalSize"`
+	Md5            string `json:"md5"`
+}
+
+// ChunkCompleteResponse 分片合并响应（Data 为强类型，便于判断合并是否真的完成）
+type ChunkCompleteResponse struct {
+	IsSuccess bool              `json:"isSuccess"`
+	ErrorMsg  string            `json:"errorMsg"`
+	Data      ChunkCompleteData `json:"data"`
+}
+
 // Project 服务端 ent 生成的 Project（GET 响应 snake_case）
 type Project struct {
 	ID            int      `json:"id"`

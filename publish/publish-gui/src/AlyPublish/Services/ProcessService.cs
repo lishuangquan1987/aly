@@ -16,6 +16,8 @@ public sealed record ProcessResult(
 public static class ProcessService
 {
     private const int KillWaitMilliseconds = 5_000;
+    // 审查 M17：Kill 后等待输出排空的上限，避免残留句柄让 Task 永久挂起
+    private const int DrainTimeoutMilliseconds = 5_000;
     private const int DefaultTimeoutMilliseconds = 60_000;
 
     public static Task<ProcessResult> RunAsync(
@@ -159,6 +161,14 @@ public static class ProcessService
         }
         catch (InvalidOperationException)
         {
+            // 进程已经退出：无需再等
+            return;
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            // 审查 M17：权限不足等 Kill 失败场景，旧实现会让异常一路往上抛。
+            // 这里转成"结构化失败"：记日志后返回，由上层统一判超时失败。
+            Log.Warning(ex, "进程 Kill 失败（可能权限不足）: {File}", fileName);
             return;
         }
 
@@ -173,11 +183,24 @@ public static class ProcessService
         }
     }
 
+    /// <summary>
+    /// 审查 M17：Kill 后若残留子进程仍握着重定向句柄，裸 await 会永久挂起
+    /// （DrainOutputAsync 用了 CancellationToken.None），导致整个 RunCoreAsync
+    /// 的 Task 永不完成、UI 卡在"运行中"。这里给排空加 5s 上限，超时就放弃，
+    /// 句柄由调用方的 <c>using var process</c> 负责最终释放。
+    /// </summary>
     private static async Task DrainOutputAsync(Task outputTask, Task<string> errorTask)
     {
         try
         {
-            await Task.WhenAll(outputTask, errorTask);
+            var all = Task.WhenAll(outputTask, errorTask);
+            var completed = await Task.WhenAny(all, Task.Delay(DrainTimeoutMilliseconds));
+            if (completed != all)
+            {
+                Log.Warning("等待进程输出排空超时（{Timeout}ms），放弃剩余输出", DrainTimeoutMilliseconds);
+                return;
+            }
+            await all;
         }
         catch (Exception ex)
         {

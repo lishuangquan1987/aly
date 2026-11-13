@@ -70,7 +70,16 @@ func resolveConfig() (RuntimeConfig, error) {
 
 	shared, err := config.LoadShared(cwd)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to load shared.json: %v\n", err)
+		// 审查 M20：shared.json 损坏时旧实现只打警告然后用默认值继续——
+		// 任何一条写命令都会把用户配置永久覆盖。这里先备份再降级
+		// （与 staging 的 .corrupted 机制同款），做到"原文件不丢 + 系统可用"；
+		// 不禁写，否则 config init 这条自愈通道也被堵死。
+		backupPath := config.SharedPath(cwd) + ".corrupted"
+		if renameErr := os.Rename(config.SharedPath(cwd), backupPath); renameErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to load shared.json: %v（备份失败: %v）\n", err, renameErr)
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: shared.json 损坏: %v，已备份到 %s\n", err, backupPath)
+		}
 		shared = config.DefaultShared()
 	}
 	publish, err := config.LoadPublish(cwd)

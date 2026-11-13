@@ -29,6 +29,8 @@ fi
 echo "安装 AlyPublish: $here -> $prefix"
 mkdir -p "$prefix"
 cp -a "$here/." "$prefix/"
+# 审查 publish 轻微⑦：写安装标记，卸载脚本据此拒绝删除"非本包目录"
+printf '%s\n' "AlyPublish installer marker" > "$prefix/.aly-publish-install"
 
 # 可执行位：GUI 本体（单文件发布叫 AlyPublish）、发布 CLI、更新器与两个脚本。
 chmod 0755 "$prefix/AlyPublish" 2>/dev/null || true
@@ -37,14 +39,32 @@ chmod 0755 "$prefix/client"/*/aly-client "$prefix/client"/*/aly-client-ui 2>/dev
 chmod 0755 "$prefix/install.sh" "$prefix/uninstall.sh" 2>/dev/null || true
 
 # 便捷启动器：$HOME/.local/bin 通常已在 PATH 上。
+#
+# 审查 publish 轻微⑧：旧实现把 GUI 启动器命名为 `aly-publish`——与真正的发布
+# CLI 撞名，用户敲 `aly-publish status` 会弹出 GUI 窗口。这里改为：
+#   · `aly-publish-gui`  → GUI
+#   · `aly-publish`      → 真正的 CLI shim（按 rid 探测 publish-cli/<rid>/aly-publish）
 bindir="$HOME/.local/bin"
 if [ -d "$bindir" ]; then
-    cat > "$bindir/aly-publish" <<EOF
+    cat > "$bindir/aly-publish-gui" <<EOF
 #!/bin/sh
 exec "$prefix/AlyPublish" "\$@"
 EOF
+    chmod 0755 "$bindir/aly-publish-gui"
+
+    cat > "$bindir/aly-publish" <<EOF
+#!/bin/sh
+# 发布 CLI 启动器：在安装树的 publish-cli/<rid>/ 下探测可执行文件。
+for f in "$prefix/publish-cli"/*/aly-publish; do
+    if [ -x "\$f" ]; then
+        exec "\$f" "\$@"
+    fi
+done
+echo "未找到 publish-cli（安装树: $prefix）" >&2
+exit 1
+EOF
     chmod 0755 "$bindir/aly-publish"
-    echo "已写入启动器: $bindir/aly-publish"
+    echo "已写入启动器: $bindir/aly-publish（CLI）、$bindir/aly-publish-gui（GUI）"
 fi
 
 echo

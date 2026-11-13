@@ -336,6 +336,12 @@
     "ClearStagingDialog": {
       "Title": "清空暂存区",
       "Message": "确定取消暂存所有文件吗？\n\n文件不会被删除，但需要重新勾选并暂存。"
+    },
+    "Upload": {
+      "Starting": "上传中",
+      "Done": "完成",
+      "Failed": "失败",
+      "FailedWithReason": "失败: {0}"
     }
   },
   "App": {

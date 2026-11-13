@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -88,7 +89,30 @@ func AddWithStatus(projectPath string, relativePaths []string, statusMap map[str
 		existingMap[f.RelativePath] = true
 	}
 	for _, rp := range relativePaths {
+		// 审查 M21：用户手工输入的路径可能带反斜杠、"./"、"a//b" 等形态，
+		// 而扫描产出恒为 ToSlash 形式。不归一会导致"同一文件既 staged 又
+		// unstaged"（status 里双行显示）、服务端落盘脏数据。
+		rp = normalizeRelPath(rp)
+		if rp == "" {
+			continue
+		}
 		if existingMap[rp] {
+			continue
+		}
+		status := "modified"
+		if statusMap != nil {
+			if s, ok := statusMap[rp]; ok {
+				status = s
+			}
+		}
+		// 审查 B6：deleted 文件本地已不存在，不能去 Hash/Stat——
+		// 旧实现会让"删除同步"在 add 阶段就报错，链路永远走不通。
+		if status == "deleted" {
+			current = append(current, StagedFile{
+				RelativePath: rp,
+				Status:       status,
+			})
+			existingMap[rp] = true
 			continue
 		}
 		absPath := filepath.Join(projectPath, filepath.FromSlash(rp))
@@ -99,12 +123,6 @@ func AddWithStatus(projectPath string, relativePaths []string, statusMap map[str
 		info, err := os.Stat(absPath)
 		if err != nil {
 			return fmt.Errorf("stat %s: %w", rp, err)
-		}
-		status := "modified"
-		if statusMap != nil {
-			if s, ok := statusMap[rp]; ok {
-				status = s
-			}
 		}
 		current = append(current, StagedFile{
 			RelativePath: rp,
@@ -153,6 +171,10 @@ func Verify(projectPath string) (conflicts []string, err error) {
 		return nil, nil
 	}
 	for _, f := range current {
+		// 审查 B6：deleted 文件本地已不存在，无从 Verify
+		if f.Status == "deleted" {
+			continue
+		}
 		absPath := filepath.Join(projectPath, filepath.FromSlash(f.RelativePath))
 		md5Str, _, err := diff.HashFile(absPath)
 		if err != nil {
@@ -165,10 +187,16 @@ func Verify(projectPath string) (conflicts []string, err error) {
 	return
 }
 
-// Sync 移除暂存区中已在服务端存在的文件（MD5 一致即视为已上传成功）。
-// serverMD5s 为服务端文件相对路径 → MD5 的映射（可从 diff 结果获取）。
-// 返回被移除的路径列表。
-func Sync(projectPath string, serverMD5s map[string]string) (removed []string, err error) {
+// Sync 移除暂存区中"已确认发布成功"的文件。
+//
+// 审查 B7：旧实现只看"服务端 MD5 与本地一致"就移除——但上传成功、
+// PublishVersion 失败时服务端同样已有该文件，暂存区被清空后版本号再也补不上，
+// 与 push 的"可重试"承诺直接矛盾。
+//
+// 现在加第二判据：manifestFiles 非 nil 时，要求文件在当前发布清单里
+// （清单只在建版本成功时写入）；manifestFiles == nil 表示老服务器无该接口，
+// 降级为旧行为。
+func Sync(projectPath string, serverMD5s map[string]string, manifestFiles map[string]bool) (removed []string, err error) {
 	current, err := Load(projectPath)
 	if err != nil {
 		return nil, err
@@ -180,11 +208,17 @@ func Sync(projectPath string, serverMD5s map[string]string) (removed []string, e
 	var remaining []StagedFile
 	for _, f := range current {
 		serverMd5, ok := serverMD5s[f.RelativePath]
-		if ok && strings.EqualFold(f.LocalMd5, serverMd5) {
-			removed = append(removed, f.RelativePath)
-		} else {
+		if !ok || !strings.EqualFold(f.LocalMd5, serverMd5) {
 			remaining = append(remaining, f)
+			continue
 		}
+		// 文件在服务端且内容一致；再看是否已进入发布清单
+		if manifestFiles != nil && !manifestFiles[f.RelativePath] {
+			// 已上传但版本未建立：保留，供用户重试 push 同版本号
+			remaining = append(remaining, f)
+			continue
+		}
+		removed = append(removed, f.RelativePath)
 	}
 
 	if len(removed) > 0 {
@@ -193,6 +227,23 @@ func Sync(projectPath string, serverMD5s map[string]string) (removed []string, e
 		}
 	}
 	return removed, nil
+}
+
+// normalizeRelPath 归一化用户输入的文件相对路径（审查 M21）：
+// 反斜杠转正斜杠、Clean 掉 "./" 与重复分隔符、去掉前导 "./"。
+// 注意不做大小写归一（会改变实际上传路径、影响服务端目录形态）。
+func normalizeRelPath(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return ""
+	}
+	p = filepath.ToSlash(p)
+	p = strings.TrimPrefix(p, "./")
+	p = path.Clean(p)
+	if p == "." || p == ".." || strings.HasPrefix(p, "../") {
+		return ""
+	}
+	return p
 }
 
 func stagingPath(projectPath string) string {

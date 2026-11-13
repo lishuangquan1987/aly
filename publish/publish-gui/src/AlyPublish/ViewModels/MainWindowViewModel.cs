@@ -344,7 +344,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         try
         {
-            var warning = UpdateFolderService.RefrshUpdaters(
+            var warning = UpdateFolderService.RefreshUpdaters(
                 project.ProjectPath,
                 AppDomain.CurrentDomain.BaseDirectory);
             if (warning is not null)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -44,7 +45,8 @@ func ScanDirectory(root string, ignoreFolders, ignoreFiles []string) ([]models.L
 			relPath, _ := filepath.Rel(root, absPath)
 			relPath = filepath.ToSlash(relPath)
 			for _, ignoreFolder := range ignoreFolders {
-				if isSubPath(relPath, ignoreFolder) {
+				// 审查 M19：目录规则按"任意层级 + 大小写不敏感 + 去尾斜杠"匹配
+				if matchDir(relPath, ignoreFolder) {
 					return filepath.SkipDir
 				}
 			}
@@ -107,8 +109,10 @@ func ScanDirectory(root string, ignoreFolders, ignoreFiles []string) ([]models.L
 				return
 			default:
 			}
-			md5Str, sha256Str, err := HashFile(e.absPath)
-			results <- hashResult{idx: idx, md5: md5Str, sha256: sha256Str, err: err}
+			md5Str, err := HashFileMD5(e.absPath)
+			// 扫描路径不再计算 SHA256（审查 publish 轻微②：零消费者，纯白耗 CPU）；
+			// LocalFile.SHA256 保持空串，需要时由调用方自行调 HashFile。
+			results <- hashResult{idx: idx, md5: md5Str, err: err}
 		}(i, e)
 	}
 
@@ -192,7 +196,11 @@ func Diff(localFiles []models.LocalFile, serverFiles []models.FileInfo) []models
 	return diffs
 }
 
-// HashFile 计算单个文件的 MD5 和 SHA256
+// HashFile 计算单个文件的 MD5 和 SHA256。
+//
+// 注意：扫描/比对路径请用 HashFileMD5（审查 publish 轻微②）——SHA256 目前
+// **没有任何消费者**（服务端自己算、上传只发原始字节），status/diff 每个文件
+// 都多算一遍 SHA256 属纯白耗 CPU（SHA256 约为 MD5 的 2-3 倍耗时）。
 func HashFile(path string) (md5Str, sha256Str string, err error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -207,6 +215,21 @@ func HashFile(path string) (md5Str, sha256Str string, err error) {
 		return "", "", err
 	}
 	return fmt.Sprintf("%x", md5h.Sum(nil)), fmt.Sprintf("%x", sha256h.Sum(nil)), nil
+}
+
+// HashFileMD5 只计算 MD5（扫描/暂存校验用；SHA256 无消费者，省一次全文件哈希）
+func HashFileMD5(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	md5h := md5.New()
+	if _, err := io.Copy(md5h, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", md5h.Sum(nil)), nil
 }
 
 // RunStatus 执行完整 status 流程：扫描 → 查询 → 比对
@@ -243,47 +266,84 @@ func RunStatus(projectPath string, ignoreFolders []string, ignoreFiles []string,
 	return sd, nil
 }
 
-// isSubPath 判断 child 是否是 parent 的子路径（路径前缀匹配）
+// isSubPath 判断 child 是否是 parent 的子路径（路径前缀匹配）。
+//
+// 审查 M19：入参统一归一化——ToSlash + Clean + 去尾部 "/" + Windows 下忽略大小写。
 func isSubPath(child, parent string) bool {
-	child = strings.TrimPrefix(child, "./")
-	parent = strings.TrimPrefix(parent, "./")
+	child = normalizeRulePath(child)
+	parent = normalizeRulePath(parent)
 	if child == parent {
 		return true
 	}
 	return strings.HasPrefix(child, parent+"/")
 }
 
-// matchFile 判断文件路径是否匹配忽略规则
-// 支持精确匹配、*.ext 后缀匹配、标准 filepath.Match glob 匹配
+// normalizeRulePath 归一化 ignore 规则/相对路径（审查 M19）。
+//
+// 旧实现的三处边界问题：
+//  1. 规则 "build" 对 "a/build" 不生效（只做根级前缀匹配）——语义上"目录规则"
+//     应命中任意层级，这里统一用 "/"+parent+"/" 的形式在 matchDir 里按段匹配；
+//  2. Windows 下大小写敏感（HasPrefix 逐字节比较）；
+//  3. 规则写成 "build/" 时 HasPrefix("build/x","build//") 恒 false → 静默完全失效。
+func normalizeRulePath(p string) string {
+	p = filepath.ToSlash(strings.TrimSpace(p))
+	p = strings.TrimPrefix(p, "./")
+	p = path.Clean(p)
+	if p == "." {
+		return ""
+	}
+	p = strings.TrimSuffix(p, "/")
+	return p
+}
+
+// matchDir 判断目录相对路径是否命中 ignore 规则（审查 M19）。
+// 规则按"任意层级目录名/前缀"匹配，Windows 下大小写不敏感。
+func matchDir(relPath, rule string) bool {
+	rel := strings.ToLower(normalizeRulePath(relPath))
+	rule = strings.ToLower(normalizeRulePath(rule))
+	if rule == "" {
+		return false
+	}
+	if rel == rule {
+		return true
+	}
+	// 任意层级命中：a/build、a/b/build
+	if strings.HasPrefix(rel, rule+"/") {
+		return true
+	}
+	return strings.Contains(rel, "/"+rule+"/") || strings.HasSuffix(rel, "/"+rule)
+}
+
+// matchFile 判断文件路径是否匹配忽略规则。
+//
+// 审查 M19：改用 path.Match（全平台按 "/" 切段，`*` 不跨目录）。
+// 旧实现用 filepath.Match 配 ToSlash 路径，在 Windows 上 `/` 是普通字符，
+// `a*` 会意外匹配 "a/b/c" 整条路径；Linux 上分隔符是 `/` 则不会——同一份
+// 规则两端行为不一致。
 func matchFile(relPath, pattern string) bool {
+	relPath = filepath.ToSlash(relPath)
+	pattern = filepath.ToSlash(pattern)
 	// 精确匹配
-	if relPath == pattern {
+	if strings.EqualFold(relPath, pattern) {
 		return true
 	}
-	// 尝试标准 glob 匹配（支持 *, ?, [abc]）
-	matched, matchErr := filepath.Match(pattern, relPath)
-	if matchErr != nil {
-		// 非法 glob 模式（如未闭合的 "["）：提示而非静默当作不匹配
-		fmt.Fprintf(os.Stderr, "warning: invalid ignore pattern %q: %v\n", pattern, matchErr)
-		return false
-	}
-	if matched {
-		return true
-	}
-	// 用文件名尝试 glob 匹配（方便只写文件名的情况）
-	base := filepath.Base(relPath)
-	matched, matchErr = filepath.Match(pattern, base)
+	// 标准 glob 匹配（支持 *, ?, [abc]）；path.Match 按 / 切段
+	matched, matchErr := path.Match(pattern, relPath)
 	if matchErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: invalid ignore pattern %q: %v\n", pattern, matchErr)
 		return false
 	}
 	if matched {
+		return true
+	}
+	// 用文件名尝试匹配（方便只写文件名的情况）
+	base := path.Base(relPath)
+	if matched, err := path.Match(pattern, base); err == nil && matched {
 		return true
 	}
 	// 如果 pattern 以 * 开头，匹配后缀（兼容旧行为）
 	if strings.HasPrefix(pattern, "*") {
-		suffix := pattern[1:]
-		return strings.HasSuffix(relPath, suffix)
+		return strings.HasSuffix(strings.ToLower(relPath), strings.ToLower(pattern[1:]))
 	}
 	return false
 }

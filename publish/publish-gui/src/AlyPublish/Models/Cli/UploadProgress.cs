@@ -1,4 +1,5 @@
 using AlyPublish.Helpers;
+using AlyPublish.Localization;
 using Newtonsoft.Json;
 
 namespace AlyPublish.Models.Cli;
@@ -54,11 +55,6 @@ public sealed class UploadProgress
     public string FileSizeText => FileSizeHelper.Format(FileSize);
 
     [JsonIgnore]
-    public string StatusText => Status switch
-    {
-        "START" => "上传中",
-        "DONE" => "完成",
-        "FAIL" => string.IsNullOrWhiteSpace(Error) ? "失败" : $"失败: {Error}",
-        _ => Status
-    };
+    // 审查 publish 轻微⑤：文案不再在这里硬编码中文，统一走 Lingua（中英双语）。
+    public string StatusText => LanguageManager.UploadStatusText(Status, Error);
 }

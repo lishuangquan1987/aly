@@ -66,11 +66,11 @@ public static class UpdateFolderService
     /// updater files still get the packaged payload copies, but the user's configuration is left alone.
     /// </summary>
     /// <returns>A warning for missing updater executables, or <see langword="null"/> when complete.</returns>
-    public static string? RefrshUpdaters(string projectPath)
-        => RefrshUpdaters(projectPath, AppDomain.CurrentDomain.BaseDirectory);
+    public static string? RefreshUpdaters(string projectPath)
+        => RefreshUpdaters(projectPath, AppDomain.CurrentDomain.BaseDirectory);
 
-    /// <summary>Same as <see cref="RefrshUpdaters(string)"/> with an explicit package root.</summary>
-    public static string? RefrshUpdaters(string projectPath, string packageDirectory)
+    /// <summary>Same as <see cref="RefreshUpdaters(string)"/> with an explicit package root.</summary>
+    public static string? RefreshUpdaters(string projectPath, string packageDirectory)
     {
         if (string.IsNullOrWhiteSpace(projectPath))
         {

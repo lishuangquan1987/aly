@@ -16,7 +16,11 @@ public sealed class CliService
 {
     private const int DefaultTimeoutMilliseconds = 60_000;
     private const int StatusTimeoutMilliseconds = 120_000;
-    private const int PushTimeoutMilliseconds = 300_000;
+    // 审查 M16：push 的总超时不能短于 CLI 自身的重试预算。
+    // CLI 单请求 600s、分片/直传各 5 次重试，默认分片 128KiB——
+    // 1GB 发布包在 1MB/s 链路上需要约 1050s，旧的 300s 会在传输中途杀掉进程，
+    // 用户只看到"超时"。这里放到 30 分钟，覆盖典型弱网大包场景。
+    private const int PushTimeoutMilliseconds = 30 * 60_000;
 
     public CliService()
     {

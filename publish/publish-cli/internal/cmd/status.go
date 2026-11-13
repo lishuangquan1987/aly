@@ -1,4 +1,4 @@
-﻿package cmd
+package cmd
 
 import (
 	"fmt"
@@ -51,7 +51,7 @@ func runStatus(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// 自动同步暂存区：移除已在服务端存在的文件（MD5 一致）
+	// 自动同步暂存区：移除"已确认发布成功"的文件
 	serverMD5s := make(map[string]string)
 	for _, f := range sd.Unstaged {
 		if f.ServerMd5 != "" {
@@ -61,7 +61,17 @@ func runStatus(cmd *cobra.Command, args []string) {
 	for _, f := range sd.Unchanged {
 		serverMD5s[f.RelativePath] = f.ServerMd5
 	}
-	if removed, err := staging.Sync(cfg.Path, serverMD5s); err != nil {
+	// 审查 B7：加"是否已进入发布清单"第二判据。清单只在 PublishVersion
+	// 成功时写入，因此"已上传但版本没建成"的文件会保留在暂存区，用户仍可
+	// 重试 push 同版本号。老服务器（无该接口）降级为旧行为。
+	var manifestFiles map[string]bool
+	if files, err := client.GetReleaseManifest(cfg.Shared.ProjectName); err == nil {
+		manifestFiles = make(map[string]bool, len(files))
+		for _, f := range files {
+			manifestFiles[f] = true
+		}
+	}
+	if removed, err := staging.Sync(cfg.Path, serverMD5s, manifestFiles); err != nil {
 		outputResult(false, fmt.Sprintf("同步暂存区失败: %v", err), nil)
 		return
 	} else if len(removed) > 0 && !jsonOutput {

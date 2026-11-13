@@ -75,7 +75,7 @@ public sealed class UpdateFolderServiceTests
     }
 
     [Fact]
-    public void RefrshUpdaters_ReplacesTheUpdatersButKeepsClientJson()
+    public void RefreshUpdaters_ReplacesTheUpdatersButKeepsClientJson()
     {
         var root = CreateTempRoot();
         try
@@ -91,7 +91,7 @@ public sealed class UpdateFolderServiceTests
             var upName = HostHelper.UpFileName("aly-client");
             File.WriteAllText(Path.Combine(updateFolder, upName), "stale");
 
-            var warning = UpdateFolderService.RefrshUpdaters(project, pakage);
+            var warning = UpdateFolderService.RefreshUpdaters(project, pakage);
 
             Assert.True(warning is null);
             Assert.Equal("pakage", File.ReadAllText(Path.Combine(updateFolder, upName)));
@@ -104,7 +104,7 @@ public sealed class UpdateFolderServiceTests
     }
 
     [Fact]
-    public void RefrshUpdaters_DoesNothingWithoutAnUpdateFolder()
+    public void RefreshUpdaters_DoesNothingWithoutAnUpdateFolder()
     {
         var root = CreateTempRoot();
         try
@@ -113,7 +113,7 @@ public sealed class UpdateFolderServiceTests
             var project = Path.Combine(root, "proj");
             StagUpdaters(pakage);
 
-            var warning = UpdateFolderService.RefrshUpdaters(project, pakage);
+            var warning = UpdateFolderService.RefreshUpdaters(project, pakage);
 
             Assert.True(warning is null);
             Assert.False(Directory.Exists(Path.Combine(root, "UpdateFolder")));
