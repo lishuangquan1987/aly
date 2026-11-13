@@ -53,7 +53,7 @@ func TestLoadShared(t *testing.T) {
 
 func TestSettingsRoundTrip(t *testing.T) {
 	t.Setenv("ALYPUBLISH_CONFIG_DIR", t.TempDir())
-	want := appSettings{Language: "zh-CN", Theme: "dark"}
+	want := appSettings{Language: "zh-CN", Theme: "dark", Accent: "violet"}
 	if err := saveSettings(want); err != nil {
 		t.Fatal(err)
 	}

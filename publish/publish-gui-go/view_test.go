@@ -11,6 +11,7 @@ func testApp() *app {
 	return &app{
 		lang:     "en",
 		theme:    "light",
+		accent:   "violet",
 		status:   "Ready",
 		projects: []ProjectConfig{project},
 		selected: 0,
@@ -73,6 +74,15 @@ func TestEditModalRendersChips(t *testing.T) {
 		if !tt.HasText(text) {
 			t.Errorf("missing %q; texts=%q", text, tt.Texts())
 		}
+	}
+}
+
+func TestAccentPalette(t *testing.T) {
+	if normalizeAccent("rose") != "rose" || accentHex("rose") != "#e11d48" {
+		t.Fatal("rose accent lookup failed")
+	}
+	if normalizeAccent("bogus") != "blue" || accentHex("bogus") != "#2563eb" {
+		t.Fatal("invalid accent should fall back to blue")
 	}
 }
 

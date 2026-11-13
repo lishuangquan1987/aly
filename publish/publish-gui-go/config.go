@@ -36,6 +36,7 @@ type SharedConfig struct {
 type appSettings struct {
 	Language string `json:"language"`
 	Theme    string `json:"theme,omitempty"`
+	Accent   string `json:"accent,omitempty"`
 }
 
 func configDir() string {
@@ -366,5 +367,7 @@ func initLogging() {
 	if err != nil {
 		return
 	}
-	log.SetOutput(io.MultiWriter(os.Stderr, f))
+	// Put the file first: a windowsgui build has no valid stderr, and
+	// io.MultiWriter stops at the first writer that fails.
+	log.SetOutput(io.MultiWriter(f, os.Stderr))
 }

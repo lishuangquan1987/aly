@@ -24,7 +24,8 @@ $env:GO111MODULE = 'on'
 $env:GOARCH = 'amd64'                  # 全局 GOARCH 可能是 386（XP client），必须覆盖
 $env:GOOS = 'windows'
 go test ./...
-go build -o build\windows-amd64\AlyPublish.exe .
+# -H windowsgui 很重要：否则双击/启动时会带一个黑色控制台窗口
+go build -trimpath -ldflags "-H windowsgui" -o build\windows-amd64\AlyPublish.exe .
 ```
 
 或直接运行 `build.ps1`（会显式设置 GOOS/GOARCH 并构建三平台）。
@@ -44,6 +45,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o build/linux-arm64/AlyPublish .
 - 只实现 add-local 项目；服务端项目创建/选择向导、UpdateFolder 生成、服务端 ignore 同步留到
   Phase 1。
 - 编辑项目保存本地书签与 `.updator/shared.json`（通过 CLI `config set*`），不主动改服务端项目信息。
-- 支持跟随系统/浅色/深色三态主题，选择写入 `settings.json`；视觉不追求 Semi/Ursa 像素级一致。
+- 支持跟随系统/浅色/深色三态主题与 7 种主题色，选择写入 `settings.json`；视觉不追求 Semi/Ursa 像素级一致。
+- Windows 构建必须带 `-ldflags "-H windowsgui"`，否则会带一个黑色控制台窗口；`build.ps1` 已内置。
 - `go test ./...` 包含 `ui.NewTester` 无窗口视图测试（浅色/深色、最小窗口、编辑框 chips），
   不依赖真实窗口或 CLI。

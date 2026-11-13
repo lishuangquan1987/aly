@@ -33,7 +33,15 @@ var cardShadow = ui.RGBA(0, 0, 0, 0.06)
 // ghostIconButton is the borderless variant for table rows, header utilities
 // and chips, where a full button face on every item looks heavy.
 func (a *app) ghostIconButton(c *ui.Context, label string, ic *ui.SVG, disabled bool) bool {
-	return a.ghostIconButtonSize(c, label, ic, disabled, 28, 28)
+	return a.ghostIconButtonElement(c, label, ic, disabled).Clicked()
+}
+
+func (a *app) ghostIconButtonElement(c *ui.Context, label string, ic *ui.SVG, disabled bool) ui.Element {
+	b := ui.ButtonBase(c).Label(label).Tooltip(label).Disabled(disabled).Width(28).Height(28)
+	b.Children(func() {
+		ui.Icon(c, ic).FontSize(15)
+	})
+	return b
 }
 
 func (a *app) ghostIconButtonSize(c *ui.Context, label string, ic *ui.SVG, disabled bool, w, h float32) bool {
@@ -53,9 +61,7 @@ func (a *app) toolbarSeparator(c *ui.Context) {
 }
 
 func (a *app) countPill(c *ui.Context, n int) {
-	t := c.Theme()
-	ui.Text(c, fmt.Sprint(n)).FontSize(10).Padding(6, 1).Background(t.Background).
-		Radius(8).TextColor(t.TextMuted)
+	ui.Badge(c, fmt.Sprint(n))
 }
 
 func (a *app) sectionHeader(c *ui.Context, ic *ui.SVG, title string, count int) {
@@ -97,6 +103,7 @@ func (a *app) emptyState(c *ui.Context, ic *ui.SVG, title, hint string) {
 }
 
 func (a *app) view(c *ui.Context) {
+	a.applyAccent(c)
 	t := c.Theme()
 	ui.Column(c).Fill().Background(t.Background).Children(func() {
 		a.toolbar(c)
@@ -175,6 +182,15 @@ func (a *app) toolbar(c *ui.Context) {
 		if a.ghostIconButton(c, a.tf("theme.tooltip", "theme", a.themeLabel()), a.themeIcon(), false) {
 			a.cycleTheme()
 		}
+		palette := a.ghostIconButtonElement(c, a.t("accent.title"), iconPalette, false)
+		if palette.Clicked() {
+			a.accentOpen = !a.accentOpen
+		}
+		ui.PopoverBase(c, palette, &a.accentOpen, func(panel ui.Element) {
+			panel.Width(280).Padding(12).Background(t.Surface).Border(1, t.Border).Radius(12).
+				Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.18))
+			a.accentPanel(c)
+		})
 		a.toolbarSeparator(c)
 		langLabel := "EN"
 		if a.lang == "en" {
@@ -183,6 +199,38 @@ func (a *app) toolbar(c *ui.Context) {
 		if a.actionButtonLabel(c, langLabel, a.t("toolbar.languageTip"), iconGlobe, false, false) {
 			a.toggleLang()
 		}
+	})
+}
+
+func (a *app) accentPanel(c *ui.Context) {
+	t := c.Theme()
+	ui.Column(c).Gap(8).Children(func() {
+		ui.Text(c, a.t("accent.title")).FontSize(11).Bold().TextColor(t.TextMuted)
+		ui.Row(c).Wrap().Gap(8).Children(func() {
+			for _, opt := range accentPalette {
+				selected := normalizeAccent(a.accent) == opt.ID
+				label := a.t(opt.Label)
+				sw := ui.ButtonBase(c).Label(label).Tooltip(label).Width(28).Height(28).
+					Radius(14).Background(ui.Hex(opt.Hex))
+				if selected {
+					sw.Border(2, t.Text)
+				} else {
+					sw.Border(1, t.Border)
+				}
+				if selected {
+					sw.Children(func() {
+						ui.Icon(c, iconCheck).FontSize(12).TextColor(ui.Hex("#ffffff"))
+					})
+				}
+				if sw.Clicked() {
+					a.accent = opt.ID
+					a.savePrefs()
+					if a.win != nil {
+						a.win.Update(func() {})
+					}
+				}
+			}
+		})
 	})
 }
 
@@ -528,7 +576,7 @@ func (a *app) statusBar(c *ui.Context) {
 	if !a.cli.available() {
 		col = t.Danger
 	}
-	ui.Row(c).Height(30).Shrink(0).Padding(14, 0).Background(t.Surface).
+	ui.Row(c).Height(40).Shrink(0).Padding(14, 0).Background(t.Surface).
 		BorderWidth(1, 0, 0, 0).BorderColor(t.Border).AlignItems(ui.Center).Children(func() {
 		a.statusDot(c, col)
 		ui.Text(c, status).FontSize(11).TextColor(t.TextMuted).SingleLine().Grow(1)

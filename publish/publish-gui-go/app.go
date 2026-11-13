@@ -88,9 +88,11 @@ type app struct {
 	removeOpen bool
 	clearOpen  bool
 
-	status   string
-	toastMsg string
-	theme    string
+	status     string
+	toastMsg   string
+	theme      string
+	accent     string
+	accentOpen bool
 }
 
 func newApp() *app {
@@ -100,9 +102,11 @@ func newApp() *app {
 		lang = "en"
 	}
 	theme := normalizeTheme(settings.Theme)
+	accent := normalizeAccent(settings.Accent)
 	a := &app{
 		lang:     lang,
 		theme:    theme,
+		accent:   accent,
 		projects: loadProjects(),
 		selected: -1,
 	}
@@ -164,7 +168,53 @@ func (a *app) savePrefs() {
 	_ = saveSettings(appSettings{
 		Language: map[bool]string{true: "zh-CN", false: "en-US"}[a.lang == "zh"],
 		Theme:    a.theme,
+		Accent:   a.accent,
 	})
+}
+
+type accentOption struct {
+	ID    string
+	Hex   string
+	Label string
+}
+
+var accentPalette = []accentOption{
+	{"blue", "#2563eb", "accent.blue"},
+	{"teal", "#0d9488", "accent.teal"},
+	{"green", "#16a34a", "accent.green"},
+	{"violet", "#7c3aed", "accent.violet"},
+	{"orange", "#ea580c", "accent.orange"},
+	{"rose", "#e11d48", "accent.rose"},
+	{"indigo", "#4f46e5", "accent.indigo"},
+}
+
+func normalizeAccent(value string) string {
+	for _, opt := range accentPalette {
+		if opt.ID == value {
+			return value
+		}
+	}
+	return "blue"
+}
+
+func accentHex(value string) string {
+	for _, opt := range accentPalette {
+		if opt.ID == value {
+			return opt.Hex
+		}
+	}
+	return "#2563eb"
+}
+
+func (a *app) applyAccent(c *ui.Context) {
+	base := *c.Theme()
+	accent := ui.Hex(accentHex(normalizeAccent(a.accent)))
+	base.Accent = accent
+	base.AccentHover = accent.MixOklab(ui.Hex("#ffffff"), 0.14)
+	base.AccentPressed = accent.MixOklab(ui.Hex("#000000"), 0.16)
+	base.AccentText = ui.Hex("#ffffff")
+	base.InactiveAccent = accent
+	c.SetTheme(&base)
 }
 
 func (a *app) cycleTheme() {
@@ -990,8 +1040,8 @@ func (a *app) editGroup(c *ui.Context, label string, list *[]string, input *stri
 		ui.Row(c).Wrap().Gap(4).Children(func() {
 			for _, value := range items {
 				value := value
-				ui.Row(c).Gap(3).AlignItems(ui.Center).Padding(7, 3).Background(t.Background).
-					Border(1, t.Border).Radius(5).MaxWidth(320).Children(func() {
+				ui.Row(c).Gap(3).AlignItems(ui.Center).Padding(7, 3).Background(t.Text.Alpha(0.06)).
+					Border(1, t.Border).Radius(6).MaxWidth(320).Children(func() {
 					ui.Text(c, value).FontSize(11).SingleLine().Tooltip(value)
 					if a.ghostIconButtonSize(c, a.t("edit.remove"), iconX, false, 20, 20) {
 						*list = removeValue(*list, value)

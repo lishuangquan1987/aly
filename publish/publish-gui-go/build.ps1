@@ -33,9 +33,9 @@ go test ./...
 Check-Exit 'go test'
 
 $targets = @(
-    @{ GOOS = 'windows'; GOARCH = 'amd64'; Name = 'build/windows-amd64/AlyPublish.exe' },
-    @{ GOOS = 'linux';   GOARCH = 'amd64'; Name = 'build/linux-amd64/AlyPublish' },
-    @{ GOOS = 'linux';   GOARCH = 'arm64'; Name = 'build/linux-arm64/AlyPublish' }
+    @{ GOOS = 'windows'; GOARCH = 'amd64'; Name = 'build/windows-amd64/AlyPublish.exe'; Ldflags = @('-H', 'windowsgui') },
+    @{ GOOS = 'linux';   GOARCH = 'amd64'; Name = 'build/linux-amd64/AlyPublish'; Ldflags = @() },
+    @{ GOOS = 'linux';   GOARCH = 'arm64'; Name = 'build/linux-arm64/AlyPublish'; Ldflags = @() }
 )
 
 foreach ($t in $targets) {
@@ -43,7 +43,12 @@ foreach ($t in $targets) {
     $env:GOARCH = $t.GOARCH
     $dir = Split-Path $t.Name
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    go build -trimpath -o $t.Name .
+    if ($t.Ldflags.Count -gt 0) {
+        $ld = $t.Ldflags -join ' '
+        go build -trimpath -ldflags $ld -o $t.Name .
+    } else {
+        go build -trimpath -o $t.Name .
+    }
     Check-Exit "build $($t.GOOS)/$($t.GOARCH)"
     Get-Item $t.Name | Select-Object FullName, Length
 }
