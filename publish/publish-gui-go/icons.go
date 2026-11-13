@@ -30,6 +30,7 @@ var (
 	iconCloud       = mustIcon(`<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/>`)
 	iconTerminal    = mustIcon(`<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>`)
 	iconFileText    = mustIcon(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/>`)
+	iconArrowLeft   = mustIcon(`<path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>`)
 	iconPalette     = mustIcon(`<path d="M12 22a10 10 0 1 1 10-10c0 2.5-1.5 4-4 4h-2.5a2.5 2.5 0 0 0 0 5H12z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="10.5" cy="6.5" r="1"/><circle cx="14.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/>`)
 	iconInfo        = mustIcon(`<circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/>`)
 	iconWarning     = mustIcon(`<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>`)

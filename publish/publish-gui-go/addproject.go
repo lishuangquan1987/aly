@@ -25,6 +25,16 @@ type addProjectState struct {
 	list     ui.ListState
 	selected int
 
+	ignoreFolders   []string
+	ignoreFiles     []string
+	uncopyFolders   []string
+	uncopyFiles     []string
+	newIgnoreFolder string
+	newIgnoreFile   string
+	newUncopyFolder string
+	newUncopyFile   string
+	advancedOpen    bool
+
 	fetching bool
 	busy     bool
 	error    string
@@ -117,6 +127,8 @@ func (a *app) createServerProject() {
 	name := strings.TrimSpace(s.projectName)
 	title := strings.TrimSpace(s.title)
 	forceUpdate := s.forceUpdate
+	ignoreFolders := append([]string(nil), s.ignoreFolders...)
+	ignoreFiles := append([]string(nil), s.ignoreFiles...)
 	if serverURL == "" || name == "" {
 		s.error = a.t("addProject.required")
 		return
@@ -130,7 +142,7 @@ func (a *app) createServerProject() {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		info, err := cli.projectCreate(ctx, serverURL, name, title, forceUpdate, nil, nil)
+		info, err := cli.projectCreate(ctx, serverURL, name, title, forceUpdate, ignoreFolders, ignoreFiles)
 		a.win.Update(func() {
 			if a.adding != s {
 				return
@@ -166,6 +178,10 @@ func (a *app) initializeAddProject() {
 	path := normalizePath(strings.TrimSpace(s.path))
 	displayName := strings.TrimSpace(s.displayName)
 	mainExe := s.mainExe
+	ignoreFolders := append([]string(nil), s.ignoreFolders...)
+	ignoreFiles := append([]string(nil), s.ignoreFiles...)
+	uncopyFolders := append([]string(nil), s.uncopyFolders...)
+	uncopyFiles := append([]string(nil), s.uncopyFiles...)
 	if serverURL == "" || name == "" || path == "" {
 		s.error = a.t("addProject.required")
 		return
@@ -197,7 +213,7 @@ func (a *app) initializeAddProject() {
 		var err error
 		if !cli.available() {
 			err = errCLIMissing
-		} else if err = cli.initProject(ctx, path, serverURL, name, nil, nil, nil, nil); err == nil {
+		} else if err = cli.initProject(ctx, path, serverURL, name, ignoreFolders, ignoreFiles, uncopyFolders, uncopyFiles); err == nil {
 			if strings.TrimSpace(mainExe) != "" {
 				w, createErr := createUpdateFolder(path, mainExe, "")
 				if createErr != nil {

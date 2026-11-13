@@ -45,6 +45,20 @@ func TestAppearanceSurvivesCSharpSettingsRewrite(t *testing.T) {
 	}
 }
 
+func TestLoadSharedRejectsMalformedJSON(t *testing.T) {
+	dir := t.TempDir()
+	updator := filepath.Join(dir, ".updator")
+	if err := os.MkdirAll(updator, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(updator, "shared.json"), []byte("{broken"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadShared(dir); err == nil {
+		t.Fatal("malformed shared.json was accepted")
+	}
+}
+
 func TestLoadShared(t *testing.T) {
 	dir := t.TempDir()
 	updator := filepath.Join(dir, ".updator")

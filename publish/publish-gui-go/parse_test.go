@@ -90,6 +90,30 @@ func TestRelativeToProject(t *testing.T) {
 	}
 }
 
+func TestProjectRelativePath(t *testing.T) {
+	project := filepath.Join(t.TempDir(), "app")
+	inside := filepath.Join(project, "bin", "a.exe")
+	if rel, ok := projectRelativePath(project, inside); !ok || rel != "bin/a.exe" {
+		t.Fatalf("inside rel=%q ok=%v", rel, ok)
+	}
+	if _, ok := projectRelativePath(project, project); ok {
+		t.Fatal("project root must be rejected")
+	}
+	if _, ok := projectRelativePath(project, filepath.Join(t.TempDir(), "outside.exe")); ok {
+		t.Fatal("outside path must be rejected")
+	}
+}
+
+func TestDiffListCaseSensitiveAndNoDuplicates(t *testing.T) {
+	added, removed := diffList([]string{"a", "A", "a"}, []string{"a", "b", "b"})
+	if len(added) != 1 || added[0] != "b" {
+		t.Fatalf("added=%v", added)
+	}
+	if len(removed) != 1 || removed[0] != "A" {
+		t.Fatalf("removed=%v", removed)
+	}
+}
+
 func TestParseJSONOutput(t *testing.T) {
 	var out cliOutput
 	if err := json.Unmarshal([]byte(`{"isSuccess":true,"data":{"staged":[],"unstaged":[]}}`), &out); err != nil {

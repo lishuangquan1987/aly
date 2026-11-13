@@ -29,6 +29,16 @@ func (a *app) actionButtonLabel(c *ui.Context, visible, tooltip string, ic *ui.S
 	return b.Clicked()
 }
 
+// textButton is a compact, left-aligned secondary action for dialogs.
+func (a *app) textButton(c *ui.Context, label string, ic *ui.SVG, disabled bool) bool {
+	b := ui.ButtonBase(c).Label(label).Tooltip(label).Disabled(disabled).Width(150).Height(28)
+	b.Children(func() {
+		ui.Icon(c, ic).FontSize(13)
+		ui.Text(c, label).FontSize(11).SingleLine()
+	})
+	return b.Clicked()
+}
+
 var cardShadow = ui.RGBA(0, 0, 0, 0.06)
 
 // ghostIconButton is the borderless variant for table rows, header utilities
@@ -609,6 +619,10 @@ func (a *app) addProjectModal(c *ui.Context) {
 	if s == nil {
 		return
 	}
+	if s.advancedOpen {
+		a.addProjectIgnoresModal(c, s)
+		return
+	}
 	t := c.Theme()
 	ui.Modal(c, &a.addOpen, func() {
 		ui.Column(c).Width(780).MaxHeight(680).Gap(10).Padding(18).
@@ -695,6 +709,9 @@ func (a *app) addProjectModal(c *ui.Context) {
 					})
 				}
 			})
+			if a.textButton(c, a.t("addProject.advanced"), iconSettings, false) {
+				s.advancedOpen = true
+			}
 			if s.error != "" {
 				ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
 					ui.Icon(c, iconWarning).FontSize(12).TextColor(t.Danger)
@@ -761,6 +778,69 @@ func (a *app) localPreviewModal(c *ui.Context) {
 				}
 				if a.actionButton(c, a.t("addLocal.confirm"), iconCheck, true, false) {
 					a.confirmLocalProject()
+				}
+			})
+		})
+	})
+}
+
+func (a *app) addProjectIgnoresModal(c *ui.Context, s *addProjectState) {
+	t := c.Theme()
+	ui.Modal(c, &a.addOpen, func() {
+		ui.Column(c).Width(780).MaxHeight(340).Gap(8).Padding(18).
+			Background(t.Surface).Radius(12).Border(1, t.Border).
+			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.08)).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Icon(c, iconSettings).FontSize(18).TextColor(t.Accent)
+				ui.Text(c, a.t("addProject.ignoreTitle")).FontSize(16).Bold()
+				ui.Box(c).Grow(1)
+				if a.ghostIconButton(c, a.t("edit.cancel"), iconX, false) {
+					a.closeAddProject()
+				}
+			})
+			ui.Text(c, a.t("addProject.ignoreHint")).FontSize(11).TextColor(t.TextMuted).Wrap()
+			ui.Scroll(c).Height(165).Children(func() {
+				ui.Row(c).Gap(14).Children(func() {
+					ui.Column(c).Grow(1).Gap(10).Children(func() {
+						a.editGroup(c, a.t("edit.ignoreFolders"), &s.ignoreFolders, &s.newIgnoreFolder, func() {
+							a.pickFolder(true, a.t("edit.ignoreFolders"), func(paths []string) {
+								for _, path := range paths {
+									a.addProjectPath(&s.ignoreFolders, s.path, path)
+								}
+							})
+						})
+						a.editGroup(c, a.t("edit.ignoreFiles"), &s.ignoreFiles, &s.newIgnoreFile, func() {
+							a.pickFiles(a.t("edit.ignoreFiles"), func(paths []string) {
+								for _, path := range paths {
+									a.addProjectPath(&s.ignoreFiles, s.path, path)
+								}
+							})
+						})
+					})
+					ui.Column(c).Grow(1).Gap(10).Children(func() {
+						a.editGroup(c, a.t("edit.uncopyFolders"), &s.uncopyFolders, &s.newUncopyFolder, func() {
+							a.pickFolder(true, a.t("edit.uncopyFolders"), func(paths []string) {
+								for _, path := range paths {
+									a.addProjectPath(&s.uncopyFolders, s.path, path)
+								}
+							})
+						})
+						a.editGroup(c, a.t("edit.uncopyFiles"), &s.uncopyFiles, &s.newUncopyFile, func() {
+							a.pickFiles(a.t("edit.uncopyFiles"), func(paths []string) {
+								for _, path := range paths {
+									a.addProjectPath(&s.uncopyFiles, s.path, path)
+								}
+							})
+						})
+					})
+				})
+			})
+			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+				if a.actionButton(c, a.t("addProject.back"), iconArrowLeft, false, false) {
+					s.advancedOpen = false
+				}
+				if a.actionButton(c, a.t("addProject.done"), iconCheck, true, false) {
+					s.advancedOpen = false
 				}
 			})
 		})

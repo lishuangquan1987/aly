@@ -126,6 +126,26 @@ func TestProjectStateCacheSurvivesSwitch(t *testing.T) {
 	}
 }
 
+func TestAddProjectIgnoreModalRenders(t *testing.T) {
+	a := testApp()
+	a.addOpen = true
+	a.adding = &addProjectState{
+		serverURL:     "http://127.0.0.1:2000",
+		projectName:   "demo",
+		path:          `C:\demo`,
+		advancedOpen:  true,
+		ignoreFolders: []string{"Log", "Config"},
+		ignoreFiles:   []string{"a.log"},
+		uncopyFolders: []string{"TestData"},
+	}
+	tt := ui.NewTester(a.view, 1440, 900)
+	for _, text := range []string{"Ignore rules", "Ignored folders", "Folders not to copy", "Back"} {
+		if !tt.HasText(text) {
+			t.Errorf("missing %q; texts=%q", text, tt.Texts())
+		}
+	}
+}
+
 func TestLocalPreviewModalRenders(t *testing.T) {
 	a := testApp()
 	a.localPreviewOpen = true

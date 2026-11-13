@@ -393,14 +393,18 @@ func diffList(current, next []string) (added, removed []string) {
 	for _, v := range next {
 		nxt[v] = true
 	}
+	seenAdded := make(map[string]bool, len(next))
 	for _, v := range next {
-		if !cur[v] {
+		if !cur[v] && !seenAdded[v] {
 			added = append(added, v)
+			seenAdded[v] = true
 		}
 	}
+	seenRemoved := make(map[string]bool, len(current))
 	for _, v := range current {
-		if !nxt[v] {
+		if !nxt[v] && !seenRemoved[v] {
 			removed = append(removed, v)
+			seenRemoved[v] = true
 		}
 	}
 	return added, removed
