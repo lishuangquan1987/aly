@@ -876,7 +876,7 @@ aly-client.exe check_self_update [--main-exe-path <relative_path>]
 ### 签名
 
 ```bash
-aly-client.exe self_update [--main-exe-path <relative_path>]
+aly-client.exe self_update [--main-exe-path <relative_path>] [--include-ui]
 ```
 
 ### 参数
@@ -884,6 +884,7 @@ aly-client.exe self_update [--main-exe-path <relative_path>]
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |---|---|---|---|---|
 | `--main-exe-path` | string | 否 | 空，沿用 `client.json` 的 `main_exe_relative_path` | 临时覆盖主程序相对路径 |
+| `--include-ui` | bool | 否 | false | 顺带补齐 `UpdateFolder` 里的 `aly-client-ui(.exe)` 副本：只在目标缺失或为 0 字节时从主程序目录复制补齐，已存在则不动 |
 
 ### 行为
 
@@ -897,6 +898,7 @@ aly-client.exe self_update [--main-exe-path <relative_path>]
    - `.new` 原子落位；失败则回滚 `.old`；
    - 复制/校验失败时保留原文件并清理 `.new`。
 6. 当前进程继续从旧 inode 运行直至退出；宿主下次拉起即为新版。
+7. 带 `--include-ui` 时顺带同步图形前端副本：目标缺失或 0 字节 → 从主程序目录落位（`ui_reason=replaced`）；已存在 → 不动（`ui_reason=existing_kepped`）；UI 收尾进程在途（`<dst>.selfupdate.json` 的 `pending=true`）→ 跳过（`ui_reason=pending_inflight`）；主程序目录没有该副本 → 跳过（`ui_reason=source_missing`，不算错误）。
 
 ### 返回字段
 
@@ -905,6 +907,9 @@ aly-client.exe self_update [--main-exe-path <relative_path>]
 | `updated` | bool | 总是 | 是否完成了替换 |
 | `reason` | string | 总是 | `replaced` / `already_up_to_date` / `source_missing` |
 | `old_path` | string | `updated=true` 时 | 被替换下来的旧副本备份路径（`.old`） |
+| `ui_updated` | bool | 传了 `--include-ui` 时 | 是否补齐了图形前端副本（`ui_reason=replaced` 时为 `true`） |
+| `ui_reason` | string | 传了 `--include-ui` 时 | `replaced` / `existing_kepped` / `pending_inflight` / `source_missing` |
+| `ui_old_path` | string | 传了 `--include-ui` 且 `ui_updated=true` 时 | 图形前端旧副本备份路径；补齐路径的目标本不存在，因此通常缺省 |
 
 ### 示例
 
@@ -924,6 +929,12 @@ aly-client.exe self_update [--main-exe-path <relative_path>]
 
 ```json
 {"isSuccess":true,"errorMsg":"","data":{"updated":false,"reason":"source_missing"}}
+```
+
+带 `--include-ui` 补齐图形前端（`ui_updated=true`，`ui_reason` 为补齐结果）：
+
+```json
+{"isSuccess":true,"errorMsg":"","data":{"updated":false,"reason":"already_up_to_date","ui_updated":true,"ui_reason":"replaced"}}
 ```
 
 锁被占用：

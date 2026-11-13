@@ -798,7 +798,7 @@ aly-client.exe clean [--keep N] [--all]
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
-| `--keep` | int | 否 | 3 | 保留最近 N 个版本快照，清理更旧的（与 prune 语义一致） |
+| `--keep` | int | 否 | 0（<1 时按 3 处理） | 保留最近 N 个版本快照，清理更旧的（与 prune 语义一致） |
 | `--all` | bool | 否 | — | 激进模式：只保留 MainFolder 当前版本相关的保护集，清掉其余全部快照 |
 
 **实现逻辑**：
@@ -854,7 +854,7 @@ aly-client.exe clean --all
 | 配置存储 | 项目目录下的 `.updator/shared.json` + `.updator/publish.json` |
 | 工作流 | `config init` → `status`/`diff` → `add` → `push`（类似 Git） |
 | 输出格式 | 支持 human 可读格式（默认）和 `--json` JSON 格式 |
-| 全局参数 | `--server`, `--project`, `--id`, `--json`, `--quiet` |
+| 全局参数 | `--server`, `--project`, `--json`, `--quiet` |
 
 ### 全局参数
 
@@ -864,7 +864,6 @@ aly-client.exe clean --all
 |------|------|------|
 | `--server` | string | 服务器地址（覆盖配置文件） |
 | `--project` | string | 项目名称（覆盖配置文件） |
-| `--id` | int | 项目 ID（直传，跳过名称查找） |
 | `--json` | bool | JSON 格式输出 |
 | `--quiet` | bool | 静默模式（抑制 human 输出） |
 
@@ -897,10 +896,7 @@ aly-publish
 ├── reset               # 从暂存区移除文件
 ├── staged              # 查看暂存区内容
 ├── push                # 推送暂存区文件到服务端
-├── push-all            # 一键推送所有变更
-├── publish             # 完整发布流程
 ├── log                 # 查看版本变更日志
-├── watch               # 实时监控文件变更
 └── server
     └── info            # 查看服务端系统信息
 ```
@@ -975,7 +971,8 @@ aly-publish config set <key> <value>
 |------|------|------|
 | `server.url` | string | 服务器地址 |
 | `project.name` | string | 项目名称 |
-| `output.format` | string | 输出格式（`human` / `json`） |
+
+> 输出格式由全局参数 `--json` 控制，不是配置项；`config set output.format` 会报 unknown config key。
 
 **示例 1：设置服务器地址**
 
@@ -983,10 +980,10 @@ aly-publish config set <key> <value>
 aly-publish config set server.url http://192.168.1.100:2000
 ```
 
-**示例 2：设置输出格式**
+**示例 2：设置项目名称**
 
 ```bash
-aly-publish config set output.format json
+aly-publish config set project.name myapp
 ```
 
 ---
@@ -1081,7 +1078,6 @@ aly-publish config list
 # project.name    = myapp
 # ignore.folders  = [logs temp]
 # ignore.files    = [*.log .DS_Store]
-# output.format   = human
 ```
 
 **示例 2：JSON 格式输出**
@@ -1253,7 +1249,7 @@ aly-publish project delete --name old_project
 **用法**：
 
 ```bash
-aly-publish project info [--name <名称> | --id <ID>]
+aly-publish project info --name <名称>
 ```
 
 **参数**：
@@ -1261,7 +1257,8 @@ aly-publish project info [--name <名称> | --id <ID>]
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `--name` | string | 按名称查找项目 |
-| `--id` | int | 按 ID 查找项目 |
+
+> `--id` 是已弃用、隐藏的参数，不参与查询；仅 `--name` 生效。
 
 **示例 1：按名称查看项目详情**
 
@@ -1269,10 +1266,10 @@ aly-publish project info [--name <名称> | --id <ID>]
 aly-publish project info --name myapp
 ```
 
-**示例 2：按 ID 查看并 JSON 输出**
+**示例 2：按名称查看并 JSON 输出**
 
 ```bash
-aly-publish project info --id 1 --json
+aly-publish project info --name myapp --json
 ```
 
 ---
@@ -1627,11 +1624,9 @@ aly-publish status
 # 步骤 4：添加文件到暂存区
 aly-publish add --all
 
+# 首发不能用 1.0.0（项目创建时已占用该版本号），从 V1.0.1 起
 # 步骤 5：推送到服务端
-aly-publish push --version 1.0.0 --message "首次发布"
-
-# 或者使用一键发布
-aly-publish publish --version 1.0.0 --message "首次发布"
+aly-publish push --version 1.0.1 --message "首次发布"
 ```
 
 ### B. 状态码速查

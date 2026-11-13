@@ -77,7 +77,7 @@ Unchanged files:
         a.txt
 ```
 
-`deleted` 只出现在 `unstaged` 中；`add --all` 不会暂存删除项。
+`deleted` 出现在 `unstaged` 中；`add --all` **会**暂存删除项，`push` 时调用 `file/delete_file` 同步删除。
 
 JSON：
 
@@ -187,7 +187,7 @@ JSON：
 
 行为与限制：
 
-- `--all` 不会暂存 `deleted`，也不会暂存已暂存的文件。
+- `--all` 会暂存 `new` / `modified` / `deleted`（已暂存的不重复暂存）；`deleted` 由 `push` 调用 `file/delete_file` 同步删除。
 - 指定文件模式**不查询服务端**，因此不知道文件是新增还是修改；暂存条目的状态一律记为 `modified`。真正的 `new`/`modified` 判定仍以 `status`/`push` 时的服务端清单为准。
 - 指定文件必须存在于项目目录中；路径不存在会返回 `hash <path>: ...` 形式的业务失败。
 - 重复 `add` 同一路径是幂等的（已存在的条目会被跳过），但 JSON 中的 `added` 统计的是**本次请求的文件数**，不是实际新增的条目数。

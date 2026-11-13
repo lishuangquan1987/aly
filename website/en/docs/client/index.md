@@ -25,6 +25,17 @@ name to download the package:
 
 The updater is only responsible for turning the local files into the new version published by the server; it does not decide when to prompt the user or whether an update is forced. Prompting policy belongs to the host or the GUI.
 
+## Host Lifecycle: exit together with the host
+
+`aly-client` and `aly-client-ui` are both child processes launched by the host. **They exit when the host exits** and never stay in the process table after the user closes the main program.
+
+The only exception is the **apply stage**: the updater has to close the host process, atomically replace the main directory and restart the main program, so the host is going to (and must) disappear anyway — the updater has to finish that step instead of exiting halfway. Two conditions qualify, either is enough:
+
+- Command level: the current command is `apply_update`;
+- State level: `version_status == applying` in `UpdateFolder/version.json` (the crash-recovery window — no command is running that time, but the main directory may already be gone, so it must resume in the same way).
+
+Exit is a graceful shutdown: write the log first, then exit. The update lock needs no explicit release — a lock file is judged stale by "the owning process has exited", and the next run cleans up any leftover lock automatically. The normative text is `spec/host-contract.md` §15.
+
 ## Deployment Layout
 
 The endpoint deployment layout from the README looks like this (Windows file names; on Linux there is no `.exe`):

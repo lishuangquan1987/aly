@@ -81,7 +81,7 @@ Unchanged files:
         a.txt
 ```
 
-`deleted` only appears under `unstaged`; `add --all` does not stage deletions.
+`deleted` appears under `unstaged`; `add --all` **does** stage deletions and `push` calls `file/delete_file` to delete them on the server.
 
 JSON:
 
@@ -191,7 +191,7 @@ JSON:
 
 Behavior and limitations:
 
-- `--all` does not stage `deleted` files, and does not stage files that are already staged.
+- `--all` stages `new` / `modified` / `deleted` (already staged files are skipped); `deleted` entries are removed on the server by `push` via `file/delete_file`.
 - Explicit-file mode **does not query the server**, so it cannot tell whether a file is new or modified; the staged entry is always recorded with status `modified`. The real `new`/`modified` decision is still based on the server manifest at `status`/`push` time.
 - Explicit files must exist in the project directory; a missing path returns a business failure of the form `hash <path>: ...`.
 - Repeating `add` for the same path is idempotent (an existing entry is skipped), but the `added` count in the JSON is the **number of files in this request**, not the number of entries actually added.

@@ -543,13 +543,12 @@ func TestCase62(t *testing.T) {
 		True(t, p.Name != proj, "软删除项目不应出现在 get_all_projects")
 	}
 
-	// ② 按名查询**仍能查到**，但 is_deleted=true
-	// （GetProjectByName 未加 IsDeletedEQ(false) 过滤——这是当前实现，
-	//  行为上"能查到但标记已删除"，与管理端查看回收站的用途一致。
-	//  真正的"不能用"体现在下面 ③：不能发布新版本。）
+	// ② 按名查询必须**过滤**软删除（2026-11-12 修复 M2：GetProjectByName 加
+	//    IsDeletedEQ(false)。旧行为"能查到但带 is_deleted=true"会让下载清单、
+	//    工作路径校验把已删除项目当正常项目用，属于越权可用）。
 	r2 := e.Get(t, "/api/project/get_project_by_name/"+proj)
-	True(t, r2.IsSuccess, "按名查询当前实现不过滤软删除")
-	Eq(t, "查到的项目应带 is_deleted=true", RespData[Project](t, r2).IsDeleted, true)
+	Eq(t, "按名查询必须过滤软删除", r2.IsSuccess, false)
+	True(t, r2.ErrorMsg != "", "过滤后应给出明确错误而不是空数据")
 
 	// ③ 不能发布新版本（PublishVersion 的 IsDeletedEQ(false) 挡住）
 	r3 := e.Publish(t, proj, "1.1.0", []string{"x"}, "", "")

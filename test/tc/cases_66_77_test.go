@@ -75,8 +75,9 @@ func jsonUnmarshalBytes(b []byte, v interface{}) bool {
 // 与 `.updator/staging/`）。所以工作区里这个文件永远算一个 `new`。
 // 下面的断言把业务文件与 .updator/shared.json 分开计算。
 //
-// 重要口径二：`deleted` 只出现在 status 里，`add --all` **不收**它
-// （add.go 只暂存 new/modified），因为它推不动——整条链路没有删除接口。
+// 重要口径二（2026-11-12 修复后）：`deleted` 出现在 status 里，`add --all` **也收**
+// ——删除同步（B6）补齐了 server 的 file/delete_file 接口与 push 的删除调用，
+// 所以 deleted 不再是"推不动"的残留；它暂存后由 push 执行删除。
 // ────────────────────────────────────────────────────────────────
 func TestCase67(t *testing.T) {
 	e := NewEnv(t, true, 0)
@@ -126,14 +127,13 @@ func TestCase67(t *testing.T) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// 用例 68 — add --all 暂存【全部可上传的】变更（**不含 deleted**）
+// 用例 68 — add --all 暂存【全部变更，含 deleted】
 //
-// 重要口径（文档原期望是错的）：`add --all` 只暂存 `new` 与 `modified`，
-// **`deleted` 不暂存**——add.go 的过滤条件是
-//     if f.Status == "new" || f.Status == "modified" { ... }
-// 原因：整条链路上根本没有"删除文件"的接口（server 无 delete 路由、
-// publish-cli 无 delete 调用、aly-client 无删除上报），deleted 暂存了也推不动。
-// 所以 deleted 会永久留在 unstaged 里（见用例 70 的残留）。
+// 2026-11-12 修复后口径（B6 删除同步）：server 已补 `file/delete_file` 接口、
+// push 对 `deleted` 条目调用删除。所以：
+//     add --all 暂存 new + modified + **deleted** + `.updator/shared.json`
+// 本例：b.txt(modified) + d.txt(new) + c.txt(deleted) + .updator/shared.json = 4 项，
+// 暂存后 unstaged 清空（不再有"推不动的 deleted 残留"）。
 // ────────────────────────────────────────────────────────────────
 func TestCase68(t *testing.T) {
 	e := NewEnv(t, true, 0)
@@ -151,8 +151,8 @@ func TestCase68(t *testing.T) {
 
 	r := e.PublishCLI(t, ws, "add", "--all")
 	True(t, r.IsSuccess, "add --all 失败: %s", r.ErrorMsg)
-	// 2 业务变更（b.txt modified、d.txt new）+ .updator/shared.json（new）
-	Eq(t, "暂存数量（b.txt + d.txt + .updator/shared.json）", RespData[AddData](t, r).Added, 3)
+	// 4 业务变更（b.txt modified、d.txt new、c.txt deleted）+ .updator/shared.json（new）
+	Eq(t, "暂存数量（b + d + c(deleted) + .updator/shared.json）", RespData[AddData](t, r).Added, 4)
 
 	st := e.PublishCLI(t, ws, "staged")
 	True(t, st.IsSuccess, "staged 失败: %s", st.ErrorMsg)
@@ -162,8 +162,8 @@ func TestCase68(t *testing.T) {
 		names = append(names, s.RelativePath)
 	}
 	sort.Strings(names)
-	Eq(t, "暂存内容（无 c.txt：deleted 不暂存）",
-		strings.Join(names, ","), ".updator/shared.json,b.txt,d.txt")
+	Eq(t, "暂存内容（含 c.txt：deleted 也暂存）",
+		strings.Join(names, ","), ".updator/shared.json,b.txt,c.txt,d.txt")
 
 	byPath := map[string]StagedItem{}
 	for _, s := range staged {
@@ -171,24 +171,23 @@ func TestCase68(t *testing.T) {
 	}
 	Eq(t, "b.txt 暂存 status 记录加入时的分类", byPath["b.txt"].Status, "modified")
 	Eq(t, "d.txt 暂存 status 记录加入时的分类", byPath["d.txt"].Status, "new")
+	Eq(t, "c.txt 暂存 status 为 deleted（删除同步）", byPath["c.txt"].Status, "deleted")
 	True(t, byPath["b.txt"].LocalMd5 != "", "暂存项必须带 md5（push 前复核的基线）")
+	Eq(t, "deleted 项没有 md5（本地文件已不存在）", byPath["c.txt"].LocalMd5, "")
 
-	// 暂存后 status：staged 为 3，unstaged 只剩 c.txt 的 deleted
+	// 暂存后 status：staged 为 4，unstaged 清空
 	sd := RespData[StatusData](t, e.PublishCLI(t, ws, "status"))
-	Eq(t, "staged 为 3", len(sd.Staged), 3)
-	Eq(t, "unstaged 只剩 deleted（不参与暂存）", len(sd.Unstaged), 1)
-	Eq(t, "残留项是 c.txt 且为 deleted", sd.Unstaged[0].RelativePath+"/"+sd.Unstaged[0].Status, "c.txt/deleted")
+	Eq(t, "staged 为 4", len(sd.Staged), 4)
+	Eq(t, "unstaged 清空（deleted 也能暂存）", len(sd.Unstaged), 0)
 }
 
 // ────────────────────────────────────────────────────────────────
-// 用例 69 — push 发布（上传 + 建版本 + 清单固化）
+// 用例 69 — push 发布（上传 + 删除同步 + 建版本 + 清单固化）
 //
-// 重要口径（文档原期望是错的）：`push` **只上传 + 建版本，从不删服务端文件**。
-// 暂存区里就算有 `deleted` 条目（本例没有：add --all 不收 deleted），
-// push 也只按 staged 列表逐个 upload，服务端的旧文件原地保留。
-// 真正让客户端删本地文件的是"发布清单"（.updator_manifest.json）——
-// 清单由 PublishVersion 按**服务端磁盘实际内容**固化，客户端按清单做差集删除。
-// 所以本例断言：c.txt 仍在服务端 + 清单里仍含 c.txt（清单 ⊇ 服务端文件）。
+// 2026-11-12 修复后口径（B6/M21）：push 除上传外，对暂存区里 `deleted` 的条目
+// 调用 `file/delete_file`，所以服务端会真的删掉 c.txt；随后 PublishVersion 按
+// **删除后的磁盘内容**固化清单，客户端据清单做差集删除。
+// 本例断言：c.txt 已不在服务端、清单里也不含 c.txt。
 // ────────────────────────────────────────────────────────────────
 func TestCase69(t *testing.T) {
 	e := NewEnv(t, true, 0)
@@ -210,8 +209,8 @@ func TestCase69(t *testing.T) {
 	True(t, r.IsSuccess, "push 失败: %s", r.ErrorMsg)
 	pd := RespData[PushData](t, r)
 	Eq(t, "push 回报的版本", pd.Version, "1.1.0")
-	// staged 3 项（b.txt / d.txt / .updator/shared.json）
-	Eq(t, "push 回报的上传文件数", pd.Files, "3")
+	// staged 4 项（b.txt / d.txt / c.txt(deleted) / .updator/shared.json）
+	Eq(t, "push 回报的文件数（含 1 个删除）", pd.Files, "4")
 
 	Eq(t, "服务端版本", e.GetProject(t, proj).Version, "1.1.0")
 	logs := e.ChangeLogs(t, proj)
@@ -221,10 +220,10 @@ func TestCase69(t *testing.T) {
 	Eq(t, "第一条 message", logs[0].Logs[0], "更新说明")
 	Eq(t, "第二条 message", logs[0].Logs[1], "第二条")
 
-	// 服务端文件集合：b 更新、d 新增、c **仍在**（push 不删文件）
-	want := ".updator/shared.json,a.txt,b.txt,c.txt,d.txt"
+	// 服务端文件集合：b 更新、d 新增、c **已被删除同步删掉**
+	want := ".updator/shared.json,a.txt,b.txt,d.txt"
 	Eq(t, "服务端文件集合", strings.Join(relsOf(e.GetAllFiles(t, proj)), ","), want)
-	Eq(t, "c.txt 仍在（push 不执行删除）", Exists(filepath.Join(e.DataDir(proj), "c.txt")), true)
+	Eq(t, "c.txt 已被删除（删除同步生效）", Exists(filepath.Join(e.DataDir(proj), "c.txt")), false)
 	Eq(t, "b.txt 已更新",
 		strings.TrimSpace(ReadText(filepath.Join(e.DataDir(proj), "b.txt"))), "b.txt-v2")
 	Eq(t, "d.txt 已落地",
@@ -241,12 +240,10 @@ func TestCase69(t *testing.T) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// 用例 70 — push 后 status 干净（**除 deleted 残留**）
+// 用例 70 — push 后 status 干净 + 本地删除可同步到服务端
 //
-// 文档原期望"unstaged 与 staged 双零"在当前实现下不成立：
-// push 不删服务端文件（无删除接口），所以本地缺失的 c.txt 永远判为
-// `deleted` 并常驻 unstaged。这是**已知产品缺口**，不是 status 口径错。
-// 本例分两段断言，把"真干净"与"已知残留"分开，避免用它掩盖真实回归。
+// 2026-11-12 修复后口径（B6 删除同步）：本地删文件 → status 出现 deleted →
+// add --all 可暂存 → push 调 file/delete_file 真的删服务端。全程 status 可收敛为干净。
 // ────────────────────────────────────────────────────────────────
 func TestCase70(t *testing.T) {
 	e := NewEnv(t, true, 0)
@@ -279,9 +276,7 @@ func TestCase70(t *testing.T) {
 	Eq(t, "已上传文件全部归入 unchanged",
 		strings.Join(unchanged, ","), ".updator/shared.json,a.txt,b.txt,d.txt")
 
-	// ── 已知缺口段落：本地删了文件，服务端不会被删 ──
-	// 这是设计层面缺失（server 无 delete 路由），下面断言把当前行为**钉死**，
-	// 一旦将来补上删除同步，这几条会立刻 FAIL 提醒去更新文档。
+	// ── 本地删了文件：删除必须能同步到服务端 ──
 	if err := os.Remove(filepath.Join(ws, "d.txt")); err != nil {
 		t.Fatalf("删本地 d.txt 失败: %v", err)
 	}
@@ -289,10 +284,16 @@ func TestCase70(t *testing.T) {
 	Eq(t, "本地删除后 unstaged 出现 1 项", len(sd2.Unstaged), 1)
 	Eq(t, "它就是 d.txt 且为 deleted",
 		sd2.Unstaged[0].RelativePath+"/"+sd2.Unstaged[0].Status, "d.txt/deleted")
-	Eq(t, "add --all 不暂存 deleted（补不上）",
-		RespData[AddData](t, e.PublishCLI(t, ws, "add", "--all")).Added, 0)
-	Eq(t, "服务端 d.txt 仍在（删除无法同步）",
-		Exists(filepath.Join(e.DataDir(proj), "d.txt")), true)
+	Eq(t, "add --all 可暂存 deleted（删除同步的第一步）",
+		RespData[AddData](t, e.PublishCLI(t, ws, "add", "--all")).Added, 1)
+	True(t, e.PublishCLI(t, ws, "push", "--version", "1.2.0", "--message", "删 d").IsSuccess, "push 删除")
+	Eq(t, "服务端 d.txt 已被删除同步删掉",
+		Exists(filepath.Join(e.DataDir(proj), "d.txt")), false)
+
+	// 删除同步后 status 必须回到干净（deleted 不再常驻）
+	sd3 := RespData[StatusData](t, e.PublishCLI(t, ws, "status"))
+	Eq(t, "删除同步后 unstaged 清空", len(sd3.Unstaged), 0)
+	Eq(t, "删除同步后 staged 清空", len(sd3.Staged), 0)
 }
 
 // ────────────────────────────────────────────────────────────────

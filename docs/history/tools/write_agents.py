@@ -328,7 +328,7 @@ private async Task SomeOperation()
 > **版本**: 2.0 | **适用范围**: publish/publish-gui/（.NET 8 + Avalonia 12 + CommunityToolkit.Mvvm + Semi.Avalonia + Ursa.Avalonia）
 """
 
-with open(r'E:\Project2026\aly\AGENTS.md', 'w', encoding='utf-8') as f:
+with open(r'<REPO_ROOT>\AGENTS.md', 'w', encoding='utf-8') as f:
     f.write(content.lstrip())
 
 print(f'Written {len(content)} chars to AGENTS.md')

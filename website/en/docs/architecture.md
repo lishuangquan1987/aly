@@ -79,7 +79,7 @@ aly/
 ├── publish/
 │   ├── publish-cli/            # publish CLI (cobra)
 │   └── publish-gui/            # publish desktop app (Avalonia 12.1 · .NET 8)
-├── test/tc/                    # 135 end-to-end cases
+├── test/tc/                    # 148 end-to-end cases
 ├── deploy/                     # deployment scripts
 └── website/                    # this site (VitePress)
 ```

@@ -50,7 +50,7 @@ refresh on every publish; see [Download & Install](/en/docs/download) for the fu
 - **Single file, zero dependencies**: the updater and the server are each a single executable; the Linux GUI only depends on the GTK3 preinstalled by the distribution.
 - **Protocol before implementation**: a single `{isSuccess, errorMsg, data}` shape; GUI, SDK and updater are decoupled.
 - **Configuration ships with the version**: `.updator/shared.json` is uploaded together with each version, so a server address change takes effect with the next update.
-- **Everything is verifiable**: MD5 + SHA256 double verification; monotonically increasing versions; [135 end-to-end cases](/en/docs/testing) cover crashes, power loss, concurrency and self-update.
+- **Everything is verifiable**: MD5 + SHA256 double verification; monotonically increasing versions; [148 end-to-end cases](/en/docs/testing) cover crashes, power loss, concurrency and self-update.
 
 ## When to Use It
 

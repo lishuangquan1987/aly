@@ -9,6 +9,8 @@ description: 平台、宿主语言、停机时间、断电恢复、回滚、认�
 
 工控机、收银终端、医院设备仍在运行 XP，而这些机器最需要安全更新。主流更新框架（Squirrel、Velopack、Electron updater）通常要求 Windows 7+；Aly 通过锁定 Go 1.10.8 + 386 保留这条通道，并由 CI 校验 PE 头与 manifest。
 
+和主流框架相比，Aly 的取舍是：以单个二进制 + 纯目录改名完成内网部署，服务端与客户端都不需要额外运行时；代价是信任模型更朴素——客户端只校验服务端清单提供的 MD5（下载阶段另有 SHA-256），没有签名链，所以服务端必须部署在可信内网。也正因为如此，「无鉴权」是有意的设计前提而不是缺陷，详见 [安全说明](https://github.com/lishuangquan1987/aly/blob/master/SECURITY.md)。
+
 ## 客户端宿主必须用 C# 吗？
 
 不需要。`aly-client` 是独立可执行文件，所有命令输出统一 JSON。任何能拉起子进程并解析 JSON 的语言都能做宿主；仓库提供 C#/TypeScript/Go/Python/Java/Rust/C++/Pascal SDK 与 VB6/易语言 COM，SDK 只是省掉编排。见[多语言 SDK](/docs/sdk/languages)。

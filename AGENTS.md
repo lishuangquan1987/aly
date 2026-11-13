@@ -63,6 +63,7 @@
 4. ❌ 不在生产代码中写 `Console.WriteLine`（用 Serilog）
 5. ❌ 不为了简单控件创建自定义 UserControl
 6. ❌ 写出不兼容的代码。client为go1.10编写(GOPATH模式, GOARCH=386)，需要兼容xp，这个必须遵守。源码位于 client/aly-client/
+7. ❌ 不建议、不擅自为 server API 增加鉴权/token/速率限制等机制。**API 无鉴权是有意为之的简单设计**（定位为可信内网工具），不为此增加复杂度；审查/评审时不得将"无鉴权"本身判为缺陷。
 
 ---
 

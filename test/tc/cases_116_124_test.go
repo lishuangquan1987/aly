@@ -879,10 +879,11 @@ func TestCase124(t *testing.T) {
 	const proj = "tc-sdk-launch"
 	e.EnsureProject(t, proj, false, nil, nil)
 	e.PutFile(t, proj, "app.exe", "app-100")
-	e.Publish(t, proj, "1.0.0", nil, "", "")
+	// 首发不能用 1.0.0：项目创建时已占用该版本号（V1.0.0），服务端防倒退保护会拒绝。
+	e.Publish(t, proj, "1.0.1", nil, "", "")
 
 	c := e.NewClient(t, NewClientOpts{
-		Version: "1.0.0", Status: StatusApplied, Previous: "1.0.0",
+		Version: "1.0.1", Status: StatusApplied, Previous: "1.0.1",
 		Project: proj, MainFile: "app-100",
 	})
 

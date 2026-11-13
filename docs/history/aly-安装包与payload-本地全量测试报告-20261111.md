@@ -17,7 +17,7 @@
 | 项 | 实测 |
 |---|---|
 | 现代 Go | `D:\Install\go1.27.3\bin\go.exe`（计划里假定的 `D:\Install\go\bin\go.exe` **不存在**） |
-| Go 1.10.8（XP 轨） | `C:\Users\5001494\sdk\go1.10.8\bin\go.exe`（与 [test/tc/env.go](/test/tc/env.go:63) 缺省值一致） |
+| Go 1.10.8（XP 轨） | `%LOCALAPPDATA%\sdk\go1.10.8\bin\go.exe`（与 [test/tc/env.go](/test/tc/env.go:63) 缺省值一致） |
 | E2E 工具链环境变量 | 必须显式设 `ALY_GO126`（缺省路径不存在，否则 135 条用例全部 0.00s 速败） |
 | WSL | `wsl.exe` 存在但**无发行版**（`Failed to start the systemd user session`）→ 不能重编 Linux 更新器，也不跑 `linuxui` 单测 |
 | 现成产物 | 仓库里已有 `client/aly-client/aly-client.exe`、`client/aly-client-ui/aly-client-winui/aly-client-ui.exe`、`client/aly-client-ui/dist/linux-{amd64,arm64}/{aly-client,aly-client-ui}` |
@@ -80,7 +80,7 @@
 ```powershell
 # 1) 工具链
 $env:ALY_GO126 = 'D:\Install\go1.27.3\bin\go.exe'
-$env:ALY_GO1108 = 'C:\Users\5001494\sdk\go1.10.8\bin\go.exe'
+$env:ALY_GO1108 = '<GO1108_PATH>'
 cd E:\Project2026\aly
 
 # 2) GUI：构建 + 单测

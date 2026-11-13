@@ -273,13 +273,16 @@ jobs:
             chmod 0755 "aly-client-linux-$arch/aly-client"
           done
 
-      - name: Test Linux aly-client (config/util/selfupdate)
+      - name: Test Linux aly-client (config/util/selfupdate/cmd)
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/gopath/src/aly/client/aly-client"
+          # 审查 A8：cmd 包是状态机核心（3569 行测试：崩溃恢复/熔断/回滚/锁），
+          # 旧命令只跑 config/util/selfupdate，cmd 测试从未进 CI、是最大盲区。
+          # 注意：测试用 Go 1.14+ 的 t.Cleanup，需现代工具链（本 job 已是 1.27）。
           GOPATH="$RUNNER_TEMP/gopath" GO111MODULE=off GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-            go test ./config ./util ./selfupdate -count=1
+            go test ./config ./util ./selfupdate ./cmd -count=1
 
       - name: Test & build Linux UI (MyGo native)
         shell: bash

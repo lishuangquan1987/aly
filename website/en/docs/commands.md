@@ -880,7 +880,7 @@ Replace the running copy of the updater in `UpdateFolder` with the newer updater
 ### Signature
 
 ```bash
-aly-client.exe self_update [--main-exe-path <relative_path>]
+aly-client.exe self_update [--main-exe-path <relative_path>] [--include-ui]
 ```
 
 ### Parameters
@@ -888,6 +888,7 @@ aly-client.exe self_update [--main-exe-path <relative_path>]
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `--main-exe-path` | string | No | Empty; falls back to `main_exe_relative_path` in `client.json` | Temporarily override the main program path |
+| `--include-ui` | bool | No | false | Also restore the `aly-client-ui(.exe)` copy in `UpdateFolder`: copy it from the main program directory only when the target is missing or 0 bytes; leave an existing copy untouched |
 
 ### Behavior
 
@@ -901,6 +902,7 @@ aly-client.exe self_update [--main-exe-path <relative_path>]
    - atomically place `.new`; on failure, roll back `.old`;
    - if copying or verification fails, keep the original file and clean up `.new`.
 6. The current process keeps running from the old inode until it exits; the next launch by the host runs the new version.
+7. With `--include-ui`, the UI copy is synced along the way: missing or 0-byte target → deploy from the main program directory (`ui_reason=replaced`); existing copy → untouched (`ui_reason=existing_kepped`); a UI finisher process in flight (`pending=true` in `<dst>.selfupdate.json`) → skip (`ui_reason=pending_inflight`); no such copy in the main program directory → skip (`ui_reason=source_missing`, not an error).
 
 ### Return Fields
 
@@ -909,6 +911,9 @@ aly-client.exe self_update [--main-exe-path <relative_path>]
 | `updated` | bool | Always | Whether the replacement was completed |
 | `reason` | string | Always | `replaced` / `already_up_to_date` / `source_missing` |
 | `old_path` | string | When `updated=true` | Backup path of the replaced old copy (`.old`) |
+| `ui_updated` | bool | When `--include-ui` is passed | Whether a UI copy was deployed (`true` when `ui_reason=replaced`) |
+| `ui_reason` | string | When `--include-ui` is passed | `replaced` / `existing_kepped` / `pending_inflight` / `source_missing` |
+| `ui_old_path` | string | When `--include-ui` is passed and `ui_updated=true` | Backup path of the old UI copy; the bootstrap path has no old target, so it is usually omitted |
 
 ### Examples
 
@@ -928,6 +933,12 @@ No updater in the main program directory:
 
 ```json
 {"isSuccess":true,"errorMsg":"","data":{"updated":false,"reason":"source_missing"}}
+```
+
+With `--include-ui`, the UI copy is deployed (`ui_updated=true`; `ui_reason` carries the outcome):
+
+```json
+{"isSuccess":true,"errorMsg":"","data":{"updated":false,"reason":"already_up_to_date","ui_updated":true,"ui_reason":"replaced"}}
 ```
 
 Lock held:

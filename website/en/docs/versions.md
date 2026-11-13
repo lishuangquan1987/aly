@@ -15,7 +15,7 @@ Documentation lives in the same repository and tag as the code. To read the docs
 2. Open `https://github.com/lishuangquan1987/aly/tree/<tag>/website/docs`;
 3. To render locally, check out that tag and run `cd website && pnpm install && pnpm dev`.
 
-For a given version, the authoritative CLI parameters and return fields are that tag's `COMMANDS.md` and source code; newer docs may have removed old flags.
+For a given version, the authoritative CLI parameters and return fields are that tag's `COMMANDS.md` (Chinese) and source code; newer docs may have removed old flags.
 
 ## Current version
 

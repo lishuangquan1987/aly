@@ -1,11 +1,11 @@
 ---
 title: Testing
-description: Aly's 135 end-to-end cases, unit-test coverage and how to run them locally.
+description: Aly's 148 end-to-end cases, unit-test coverage and how to run them locally.
 ---
 
 # Testing
 
-Aly tracks end-to-end cases in its repository test case document, `aly测试用例文档.md`. There are **135** of them, numbered consecutively from 1 to 135; each records its own "preconditions → steps → expected result → failure criteria" and can be reproduced independently. The most recent full regression result is whatever that document records; PASS counts are not frozen on this site.
+Aly tracks end-to-end cases in its repository test case document, `aly测试用例文档.md`. There are **148** of them, numbered consecutively from 1 to 148; each records its own "preconditions → steps → expected result → failure criteria" and can be reproduced independently. The most recent full regression result is whatever that document records; PASS counts are not frozen on this site. The document is currently Chinese-only; its numbered cases mirror test/tc cases 1..148, which are readable as Go code.
 
 ## E2E Framework (test/tc)
 

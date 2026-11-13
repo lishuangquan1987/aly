@@ -1,6 +1,6 @@
 ---
 layout: home
-description: Lightweight client auto-update system with crash-safe atomic replacement, Windows XP through Linux, one JSON protocol and 135 E2E cases.
+description: Lightweight client auto-update system with crash-safe atomic replacement, Windows XP through Linux, one JSON protocol and 148 E2E cases.
 
 hero:
   name: Aly
@@ -35,6 +35,6 @@ features:
     title: Prebuilt for Windows / Linux
     details: The client ships for 32-bit Windows and Linux amd64/arm64; the server and publisher also ship for macOS. Other platforms build from the same source.
   - icon: 🧪
-    title: 135 end-to-end cases
+    title: 148 end-to-end cases
     details: A Go-driven E2E harness covers normal flows, crash injection, resumable downloads, rollback, locking and self-update. Each case carries its own preconditions.
 ---

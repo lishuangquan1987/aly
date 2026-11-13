@@ -227,7 +227,7 @@ export default defineConfig({
       label: '简体中文',
       lang: 'zh-CN',
       description:
-        '轻量级客户端自动更新系统：崩溃安全的原子替换、XP 到 Linux 全平台覆盖、自更新闭环、135 条端到端用例守护。',
+        '轻量级客户端自动更新系统：崩溃安全的原子替换、XP 到 Linux 全平台覆盖、自更新闭环、148 条端到端用例守护。',
       themeConfig: {
         logo: '/logo.svg',
         nav: zhNav,
@@ -260,7 +260,7 @@ export default defineConfig({
       lang: 'en-US',
       link: '/en/',
       description:
-        'Lightweight client auto-update system: crash-safe atomic replacement, XP through Linux, self-update loop closed, guarded by 135 E2E cases.',
+        'Lightweight client auto-update system: crash-safe atomic replacement, XP through Linux, self-update loop closed, guarded by 148 E2E cases.',
       themeConfig: {
         logo: '/logo.svg',
         nav: enNav,

@@ -104,7 +104,7 @@ func TestCase126(t *testing.T) {
 	const proj = "tc-gui-init"
 	e.EnsureProject(t, proj, false, nil, nil)
 	e.PutFile(t, proj, "WinFormsApp1.exe", "app-100")
-	True(t, e.Publish(t, proj, "1.0.0", []string{"初始"}, "", "").IsSuccess, "发布 1.0.0 失败")
+	True(t, e.Publish(t, proj, "1.0.1", []string{"初始"}, "", "").IsSuccess, "发布 1.0.1 失败")
 
 	// ── ① 源码契约（GUI 侧三件套 + 相对路径基准 + 更新器来自安装包 payload）──
 	svc := ReadText(guiConfigServicePath(t))
@@ -190,7 +190,7 @@ func TestCase127(t *testing.T) {
 	const proj = "tc-gui-atomic"
 	e.EnsureProject(t, proj, false, nil, nil)
 	e.PutFile(t, proj, "app.exe", "app-100")
-	True(t, e.Publish(t, proj, "1.0.0", []string{"初始"}, "", "").IsSuccess, "发布失败")
+	True(t, e.Publish(t, proj, "1.0.1", []string{"初始"}, "", "").IsSuccess, "发布失败")
 
 	c := e.NewClient(t, NewClientOpts{
 		Version: "1.0.0", Status: StatusApplied, Previous: "1.0.0",

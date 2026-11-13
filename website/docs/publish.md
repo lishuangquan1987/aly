@@ -86,7 +86,7 @@ aly-publish project create --name myapp --title "我的应用"
 
 # 4. 日常发版三步
 aly-publish status           # 这次改了什么
-aly-publish add --all        # 暂存新增与修改（不含删除）
+aly-publish add --all        # 暂存新增 / 修改 / 删除
 aly-publish push --version V1.0.1 --message "修复登录超时"
 ```
 
@@ -94,7 +94,7 @@ aly-publish push --version V1.0.1 --message "修复登录超时"
 
 - `config init` **不会**创建服务端项目；`project create` **不会**写本地配置。两边通过 `project_name` 与 `--name` 保持一致。
 - `push` 只能上传暂存区中的文件。暂存区为空时直接失败。
-- `add --all` 只暂存 `new` 与 `modified`；本地删除的文件不会进入暂存区，由服务端在发布后固化的清单驱动客户端删除。
+- `add --all` 暂存 `new` / `modified` / `deleted`；本地删除的文件在 `push` 时调用 `file/delete_file` 同步删除，随后从发布清单中消失，客户端据此删除本地旧文件。
 
 ## 配置文件
 

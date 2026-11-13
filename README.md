@@ -18,10 +18,15 @@ aly/
 ├── publish/
 │   ├── publish-cli/      # CLI publish engine (Go, cobra)
 │   └── publish-gui/      # Desktop GUI (Avalonia 12.1, .NET 8)
+├── spec/           # JSON protocol schema, host contract and fixture scenarios (single source of truth)
+├── test/           # E2E harness (test/tc: 148 cases) and integration tests
+├── tools/          # Protocol model generator, fake client, SDK packaging and release scripts
+├── deploy/         # Client and server deployment scripts
+├── website/        # Project website and online documentation (VitePress)
 └── README.md
 ```
 
-**Four modules:**
+**Five modules:**
 
 | Module | Role | For whom |
 |--------|------|----------|
@@ -108,7 +113,7 @@ for the in-package payload layout.
 ```bash
 # Step 1 — Check for updates
 aly-client.exe check_update
-# → {"isSuccess":true,"data":{"has_update":true,"need_download_update":true,"new_version":"1.0.1","force_update":false}}
+# → {"isSuccess":true,"errorMsg":"","data":{"has_update":true,"need_download_update":true,"new_version":"1.0.1","force_update":false}}
 
 # Step 2 — Download (only downloads changed files, with SHA-256 verification)
 aly-client.exe download_update
@@ -134,6 +139,10 @@ PackageFolder/
 │   └── version.json              # Version state machine
 ```
 
+## Deployment & Trust Boundary
+
+The server API has **no authentication and no rate limiting**. That is a deliberate design premise, not an oversight: Aly is positioned as a trusted-intranet tool, so **never expose the server port to the public internet**. If you need stronger isolation, enforce it at the reverse-proxy or firewall layer (network allowlists, VPN); adding app-level auth is explicitly out of scope. See the "Trust boundary: no authentication" section in [website/docs/api.md](website/docs/api.md).
+
 ## Key Concepts
 
 ### `.updator/` — Shared Config Directory
@@ -149,7 +158,9 @@ Both `aly-publish` and `aly-client` read from `.updator/shared.json`:
 }
 ```
 
-- `ignore_folders` / `ignore_files`: applied during **scanning** (what gets uploaded) and **applying** (what gets skipped when copying files during version replacement).
+- `ignore_folders` / `ignore_files` only affect **publish-time scanning** — they shape the file manifest uploaded to the server. The client's `apply_update` stage does not filter anything by these rules.
+- `ignore_folders` is a **pure directory-name prefix match**: it matches at any level, is case-insensitive on Windows, and does not support `*` / `**` globs.
+- `ignore_files` supports exact name, file-name, glob and suffix matching.
 - `shared.json` is uploaded with each release. When the client downloads an update, the new `shared.json` replaces the old one — so config changes roll out automatically.
 
 ### Version State Machine (`version.json`)
@@ -197,7 +208,7 @@ State guards (a write never happens on an inconsistent state):
 
 `apply_update` performs pure directory renames (crash-safe, seconds-level even for GB-scale folders):
 
-1. During `download_update` (after all files are downloaded and verified), unchanged files are **materialized** into the new version directory by copying them from the current `ApplicationFolder` (excluding ignored paths) while your app is still running — read-only copies don't lock the directory rename that follows.
+1. During `download_update` (after all files are downloaded and verified), unchanged files are **materialized** into the new version directory by copying them from the current `ApplicationFolder` (excluding `un_copy_*` paths) while your app is still running — read-only copies don't lock the directory rename that follows.
 2. Rename `ApplicationFolder` → `ApplicationFolder_{previous_version}` (backup; the nameless
    `ApplicationFolder_` when there is no previous version).
 3. Rename `ApplicationFolder_{new_version}` → `ApplicationFolder` (after writing `apply_stage=activating`).
@@ -218,6 +229,7 @@ With materialization done at download time, `apply_update` closes your app only 
 | `rollback --version X` | Rollback to a previous version snapshot |
 | `clean [--keep N] [--all]` | Prune old version snapshots, temp files (`.part`/`.tmp`/`.old*`), stale logs |
 | `check_self_update` | Check if the updater exe itself needs updating |
+| `self_update` | Update the updater exe itself from the main program directory (`--include-ui` also restores a missing UI copy) |
 
 Notes:
 
@@ -295,4 +307,4 @@ go build -ldflags="-s -w -H=windowsgui" -o aly-client-ui.exe aly/client/aly-clie
 
 ## License
 
-MIT
+Released under the [MIT License](LICENSE) © 2026 lishuangquan1987. See [LICENSE](LICENSE) for the full text.

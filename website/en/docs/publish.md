@@ -86,7 +86,7 @@ aly-publish project create --name myapp --title "我的应用"
 
 # 4. Three steps for day-to-day releases
 aly-publish status           # what changed this time
-aly-publish add --all        # stage new and modified files (deletions excluded)
+aly-publish add --all        # stage new / modified / deleted files
 aly-publish push --version V1.0.1 --message "修复登录超时"
 ```
 
@@ -94,7 +94,7 @@ A few constraints:
 
 - `config init` does **not** create a server project; `project create` does **not** write local config. The two sides are kept consistent through `project_name` and `--name`.
 - `push` can only upload files in the staging area. When the staging area is empty, it fails immediately.
-- `add --all` stages only `new` and `modified`; files deleted locally never enter the staging area — the manifest frozen by the server after a release drives their deletion on the client.
+- `add --all` stages `new` / `modified` / `deleted`; files deleted locally are removed on the server by `push` (`file/delete_file`), disappear from the release manifest, and the client then deletes the stale local copies.
 
 ## Config files
 

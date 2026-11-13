@@ -1,6 +1,6 @@
 ---
 layout: home
-description: 轻量级客户端自动更新系统：崩溃安全的原子替换、Windows XP 到 Linux、统一 JSON 协议、135 条端到端用例。
+description: 轻量级客户端自动更新系统：崩溃安全的原子替换、Windows XP 到 Linux、统一 JSON 协议、148 条端到端用例。
 
 hero:
   name: Aly
@@ -35,6 +35,6 @@ features:
     title: 预构建覆盖 Windows / Linux
     details: 客户端提供 Windows 32 位与 Linux amd64/arm64；服务端与发布工具另有 macOS 构建。其他平台可从同一份源码编译。
   - icon: 🧪
-    title: 135 条端到端用例
+    title: 148 条端到端用例
     details: Go 驱动的 E2E 框架覆盖正常流、崩溃注入、断点续传、回滚、锁与自更新；单条用例自带前置条件即可复现。
 ---

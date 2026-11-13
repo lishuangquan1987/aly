@@ -788,27 +788,40 @@ func TestCase104(t *testing.T) {
 	True(t, Exists(cliSvc), "GUI 必须有 CliService.cs（子进程复用 CLI 的唯一入口）")
 	svc := ReadText(cliSvc)
 
-	// ①-1 能找到 exe（同目录优先 + 开发路径回退）
-	Contains(t, svc, `"aly-publish.exe"`, "GUI 必须在 Windows 下找 aly-publish.exe")
-	Contains(t, svc, "BaseDirectory", "GUI 必须先查自身目录")
-	Contains(t, svc, `"..", "..", "..", "..", "publish-cli"`, "GUI 必须有开发路径回退")
-
-	// ①-2 每条命令都要追加 --json。实测 CliService.cs 里共 **3 处**：
-	//   :64  var fullArgs = $"{args} --json";                    （字符串拼接版）
-	//   :113 var list = new List<string>(args) { "--json" };      （ArgumentList 版）
-	//   :197 args.Add("--json");                                  （push 专用路径）
+	// ①-1 能找到 exe（payload 目录 → 同目录 → 开发路径回退）
 	//
-	// 注意计数口径：只统计**代码行**，不统计注释。原实现用
-	// `strings.Count(svc, "--json")`，会把注释/文档字符串里出现的 `--json`
-	// 也算进去——改一句注释就 FAIL，而真正的执行路径少一条反而可能漏过。
-	// 这里先剥掉注释行再计数。
+	// 2026-11-12 重构：平台文件名与探测顺序收敛到 Helpers（HostHelper / PkHelper），
+	// CliService 只做委派，不再各自拼 "aly-publish.exe" / BaseDirectory / 上溯路径。
+	// 源码契约断言随实现更新，语义（Windows 下找 .exe、先查自身目录、开发路径回退）不变。
+	hostHelper := filepath.Join(guiRoot, "src", "AlyPublish", "Helpers", "HostHelper.cs")
+	pkHelper := filepath.Join(guiRoot, "src", "AlyPublish", "Helpers", "PkHelper.cs")
+	True(t, Exists(hostHelper), "必须有 HostHelper（平台文件名唯一来源）")
+	True(t, Exists(pkHelper), "必须有 PkHelper（payload 探测顺序唯一来源）")
+	Contains(t, ReadText(hostHelper), `"aly-publish.exe"`, "GUI 必须在 Windows 下找 aly-publish.exe")
+	Contains(t, ReadText(pkHelper), "publish-cli", "payload 目录名必须是 publish-cli")
+	Contains(t, ReadText(pkHelper), `"..", "..", "..", "..", "..", ".."`,
+		"GUI 必须有开发路径回退（从 bin/Debug/net8 上溯 6 级到仓库根）")
+	Contains(t, svc, "AppDomain.CurrentDomain.BaseDirectory", "GUI 必须先查自身目录")
+	Contains(t, svc, "PkHelper.PubProbes(", "CliService 必须走统一探测（不得各自拼路径）")
+
+	// ①-2 每条命令都要追加 --json。
+	//
+	// 2026-11-12 重构后只有两条执行入口：
+	//   · RunAsync（普通命令统一入口）：arguments 首部插入 AppConstants.JsonOutputArgument
+	//   · PushAsync（流式进度，独立走 ProcessService.RunWithProgressAsync）：同样首部插入
+	// 常量值定义在 Constants/AppConstants.cs。断言"两条路径都带 + 常量值确为 --json"。
 	codeOnly := stripCLineComments(svc)
-	Eq(t, "追加 --json 的位置数（三条执行路径都必须带；已排除注释）",
-		strings.Count(codeOnly, `--json`), 3)
-	Contains(t, svc, `$"{args} --json"`, "字符串版拼参数必须带 --json")
-	Contains(t, svc, "new List<string>(args) { \"--json\" }",
-		"ArgumentList 版必须把 --json 作为独立参数（避免用户输入注入）")
-	Contains(t, svc, `args.Add("--json")`, "push 专用路径也要带 --json")
+	Eq(t, "追加 --json 的执行路径数（RunAsync + PushAsync）",
+		strings.Count(codeOnly, "AppConstants.JsonOutputArgument"), 2)
+	Contains(t, svc, "new List<string>(arguments.Count + 1) { AppConstants.JsonOutputArgument }",
+		"普通命令必须把 --json 作为独立首参数（避免用户输入注入）")
+	Contains(t, svc, "AppConstants.JsonOutputArgument,",
+		"push 专用路径也要带 --json")
+
+	appConstants := filepath.Join(guiRoot, "src", "AlyPublish", "Constants", "AppConstants.cs")
+	True(t, Exists(appConstants), "必须有 AppConstants（--json 常量唯一来源）")
+	Contains(t, ReadText(appConstants), `JsonOutputArgument = "--json"`,
+		"JsonOutputArgument 的值必须是 --json")
 
 	// ①-3 输出结构必须与 CLI 的 CliOutput<T> 对齐（同一套 isSuccess/data 契约）
 	Contains(t, svc, "CliOutput<T>", "GUI 必须反序列化成 CliOutput<T>（与 CLI 同结构）")
