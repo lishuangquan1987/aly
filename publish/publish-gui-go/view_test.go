@@ -77,6 +77,22 @@ func TestEditModalRendersChips(t *testing.T) {
 	}
 }
 
+func TestEditModalBackdropKeepsOpen(t *testing.T) {
+	a := testApp()
+	a.editOpen = true
+	a.editing = &editState{
+		project:     a.detail.project,
+		serverURL:   "http://127.0.0.1:2000",
+		projectName: "demo",
+		displayName: "demo",
+	}
+	tt := ui.NewTester(a.view, 1440, 900)
+	tt.ClickAt(4, 4)
+	if !a.editOpen {
+		t.Fatal("clicking the backdrop closed the edit dialog")
+	}
+}
+
 func TestAddProjectModalRenders(t *testing.T) {
 	a := testApp()
 	a.addOpen = true

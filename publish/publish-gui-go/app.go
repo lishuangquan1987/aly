@@ -1043,7 +1043,7 @@ func uploadStatusColor(t *ui.Theme, status string) ui.Color {
 
 func (a *app) editModal(c *ui.Context) {
 	t := c.Theme()
-	ui.Modal(c, &a.editOpen, func() {
+	keepModalOpen(&a.editOpen, ui.Modal(c, &a.editOpen, func() {
 		e := a.editing
 		if e == nil {
 			return
@@ -1137,7 +1137,7 @@ func (a *app) editModal(c *ui.Context) {
 				}
 			})
 		})
-	})
+	}))
 }
 
 func (a *app) editGroup(c *ui.Context, label string, list *[]string, input *string, pick func()) {

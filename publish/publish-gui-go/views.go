@@ -39,6 +39,16 @@ func (a *app) textButton(c *ui.Context, label string, ic *ui.SVG, disabled bool)
 	return b.Clicked()
 }
 
+// keepModalOpen keeps form dialogs open when the dimmed backdrop is clicked.
+// MyGo's Modal closes on backdrop/Escape by design; restoring the open flag in
+// the same frame is the documented Dismissed() override pattern. Explicit
+// Cancel/X buttons remain the way to close.
+func keepModalOpen(open *bool, modal ui.Element) {
+	if modal.Dismissed() {
+		*open = true
+	}
+}
+
 var cardShadow = ui.RGBA(0, 0, 0, 0.06)
 
 // ghostIconButton is the borderless variant for table rows, header utilities
@@ -624,7 +634,7 @@ func (a *app) addProjectModal(c *ui.Context) {
 		return
 	}
 	t := c.Theme()
-	ui.Modal(c, &a.addOpen, func() {
+	keepModalOpen(&a.addOpen, ui.Modal(c, &a.addOpen, func() {
 		ui.Column(c).Width(780).MaxHeight(680).Gap(10).Padding(18).
 			Background(t.Surface).Radius(12).Border(1, t.Border).
 			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.08)).Children(func() {
@@ -727,7 +737,7 @@ func (a *app) addProjectModal(c *ui.Context) {
 				}
 			})
 		})
-	})
+	}))
 }
 
 func (a *app) fieldLabelBox(c *ui.Context, text string) {
@@ -740,7 +750,7 @@ func (a *app) localPreviewModal(c *ui.Context) {
 		return
 	}
 	t := c.Theme()
-	ui.Modal(c, &a.localPreviewOpen, func() {
+	keepModalOpen(&a.localPreviewOpen, ui.Modal(c, &a.localPreviewOpen, func() {
 		ui.Column(c).Width(560).Gap(10).Padding(18).
 			Background(t.Surface).Radius(12).Border(1, t.Border).
 			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.08)).Children(func() {
@@ -781,12 +791,12 @@ func (a *app) localPreviewModal(c *ui.Context) {
 				}
 			})
 		})
-	})
+	}))
 }
 
 func (a *app) addProjectIgnoresModal(c *ui.Context, s *addProjectState) {
 	t := c.Theme()
-	ui.Modal(c, &a.addOpen, func() {
+	keepModalOpen(&a.addOpen, ui.Modal(c, &a.addOpen, func() {
 		ui.Column(c).Width(780).MaxHeight(340).Gap(8).Padding(18).
 			Background(t.Surface).Radius(12).Border(1, t.Border).
 			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.08)).Children(func() {
@@ -844,5 +854,5 @@ func (a *app) addProjectIgnoresModal(c *ui.Context, s *addProjectState) {
 				}
 			})
 		})
-	})
+	}))
 }
