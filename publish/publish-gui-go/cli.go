@@ -70,6 +70,7 @@ func (c *cliClient) runRaw(ctx context.Context, workDir string, args []string) (
 	}
 	log.Printf("aly-publish %v", args)
 	cmd := exec.CommandContext(ctx, c.exe, args...)
+	hideConsole(cmd)
 	if workDir != "" {
 		cmd.Dir = workDir
 	}
@@ -292,6 +293,7 @@ func (c *cliClient) push(
 		args = append(args, "--after-apply-update-script", afterApply)
 	}
 	cmd := exec.CommandContext(ctx, c.exe, args...)
+	hideConsole(cmd)
 	cmd.Dir = projectPath
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
