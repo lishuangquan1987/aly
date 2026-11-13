@@ -173,6 +173,7 @@ public sealed class CliService
         string message,
         string afterApplyUpdateScript,
         bool setForceUpdate,
+        bool clearForceUpdate,
         IProgress<UploadProgress> progress,
         CancellationToken cancellationToken = default)
     {
@@ -187,7 +188,11 @@ public sealed class CliService
             "--message",
             message
         };
+        // 审查 B7：CLI 的强制更新是三态（--set / --clear / 都不传），GUI 的复选框
+        // 必须始终翻译成显式的一侧——否则"取消勾选"会退化为"不传"，服务端保留
+        // 旧的 true，用户看到的"已取消强制更新"并不会生效。
         AddFlag(arguments, "--set-force-update", setForceUpdate);
+        AddFlag(arguments, "--clear-force-update", clearForceUpdate);
         if (!string.IsNullOrWhiteSpace(afterApplyUpdateScript))
         {
             arguments.Add("--after-apply-update-script");

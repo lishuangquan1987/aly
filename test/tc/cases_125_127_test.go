@@ -122,6 +122,19 @@ func TestCase126(t *testing.T) {
 	Contains(t, svc, "GetFileNameWithoutExtension",
 		"关进程名缺省时必须从主程序名推导（否则更新前不会关掉主程序）")
 
+	// ── ①b 强制更新三态：GUI 复选框必须翻译成 --set / --clear 的显式一侧 ──
+	// 审查 B7：CLI 改成三态后，"不传"=保持服务端原值；GUI 若在取消勾选时仍不传，
+	// 用户看到的"关闭强制更新"不会生效。这里把两侧源码契约钉死。
+	guiRoot := filepath.Join(RepoRoot, "publish", "publish-gui")
+	cliSvc := ReadText(filepath.Join(guiRoot, "src", "AlyPublish", "Services", "CliService.cs"))
+	Contains(t, cliSvc, `AddFlag(arguments, "--set-force-update", setForceUpdate)`,
+		"GUI 推送必须能把强制更新显式置 true")
+	Contains(t, cliSvc, `AddFlag(arguments, "--clear-force-update", clearForceUpdate)`,
+		"GUI 推送必须能把强制更新显式置 false（不能靠不传参数）")
+	vmSrc := ReadText(filepath.Join(guiRoot, "src", "AlyPublish", "ViewModels", "ProjectTabViewModel.cs"))
+	Contains(t, vmSrc, "!SetForceUpdate && _forceUpdateKnown",
+		"取消勾选时只在已知服务端现值时才发 --clear（未知时保持原值）")
+
 	// ── ② 消费侧：GUI 形状的布局必须真能被 aly-client 消费 ──
 	c := e.NewClient(t, NewClientOpts{
 		Version: "1.0.0", Status: StatusApplied, Previous: "1.0.0",

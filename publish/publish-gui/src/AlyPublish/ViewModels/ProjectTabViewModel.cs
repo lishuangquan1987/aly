@@ -72,6 +72,13 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
     [ObservableProperty]
     private bool _setForceUpdate;
 
+    /// <summary>
+    /// 是否已经从服务端读到过强制更新现值（审查 B7）。
+    /// 只读失败时复选框保持既有值，此时不该把「未勾选」翻译成 --clear——
+    /// 否则会在不知道真值的情况下把服务端的 true 关掉。
+    /// </summary>
+    private bool _forceUpdateKnown;
+
     [ObservableProperty]
     private bool _isInitialLoading;
 
@@ -288,6 +295,9 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
                         message,
                         AfterApplyUpdateScript.Trim(),
                         SetForceUpdate,
+                        // 审查 B7：复选框为 false 且**已知服务端现值**时才显式清标记；
+                        // 未知时两侧都不传（三态的"保持原值"）
+                        !SetForceUpdate && _forceUpdateKnown,
                         new Progress<UploadProgress>(OnUploadProgress),
                         token);
                 },
@@ -494,6 +504,7 @@ public sealed partial class ProjectTabViewModel : ViewModelBase
             if (match is not null)
             {
                 SetForceUpdate = match.IsForceUpdate;
+                _forceUpdateKnown = true;
             }
         }
         catch (CliException)

@@ -7490,22 +7490,37 @@ func TestCase126(t *testing.T) {
 	const proj = "tc-gui-init"
 	e.EnsureProject(t, proj, false, nil, nil)
 	e.PutFile(t, proj, "WinFormsApp1.exe", "app-100")
-	True(t, e.Publish(t, proj, "1.0.0", []string{"初始"}, "", "").IsSuccess, "发布 1.0.0")
+	True(t, e.Publish(t, proj, "1.0.1", []string{"初始"}, "", "").IsSuccess, "发布 1.0.1")
 
 	// ── ① 源码契约（GUI 侧三件套 + 相对路径基准）──
-	svc := ReadText(filepath.Join(RepoRoot, "publish", "publish-gui",
+	guiRoot := filepath.Join(RepoRoot, "publish", "publish-gui")
+	svc := ReadText(filepath.Join(guiRoot,
 		"src", "AlyPublish", "Services", "ConfigService.cs"))
-	Contains(t, svc, `CopyClientExecutable(updateFolder, projectDir, "aly-client")`,
-		"必须复制 aly-client（更新器）")
-	Contains(t, svc, `CopyClientExecutable(updateFolder, projectDir, "aly-client-ui")`,
-		"必须复制 aly-client-ui（图形前端，与更新器同目录）")
+	Contains(t, svc, "PkHelper.FindUp(",
+		"更新器必须从安装包 payload（client/<rid>/）取，调用方不再自带二进制")
+	Contains(t, svc, "HostHelper.UpBaseNames",
+		"两个更新器走同一循环：aly-client 与 aly-client-ui 必须同进同退")
+	Contains(t, svc, `Path.Combine(updateFolder, fileName)`,
+		"必须复制到 UpdateFolder 下的同名文件（两件套错位即失败）")
 	Contains(t, svc, `Path.Combine(updateFolder, "client.json")`,
 		"client.json 的目标必须是 UpdateFolder/client.json（不得带临时后缀）")
 	Contains(t, svc, "GetRelativePath(updateFolder, mainExeFullPath)",
 		"相对路径必须以纠正后的 UpdateFolder 为基准、以绝对主程序路径为目标")
 	Contains(t, svc, "MustCloseProcessName", "必须写 must_close_process_name")
 	Contains(t, svc, "GetFileNameWithoutExtension",
-		"关进程名缺省时必须从主程序名推导（否则更新前不关主程序）")
+		"关进程名缺省时必须从主程序名推导（否则更新前不会关掉主程序）")
+
+	// ── ①b 强制更新三态（审查 B7）：复选框必须翻译成 --set / --clear 的显式一侧 ──
+	cliSvc := ReadText(filepath.Join(guiRoot,
+		"src", "AlyPublish", "Services", "CliService.cs"))
+	Contains(t, cliSvc, `AddFlag(arguments, "--set-force-update", setForceUpdate)`,
+		"GUI 推送必须能把强制更新显式置 true")
+	Contains(t, cliSvc, `AddFlag(arguments, "--clear-force-update", clearForceUpdate)`,
+		"GUI 推送必须能把强制更新显式置 false（不能靠不传参数）")
+	vmSrc := ReadText(filepath.Join(guiRoot,
+		"src", "AlyPublish", "ViewModels", "ProjectTabViewModel.cs"))
+	Contains(t, vmSrc, "!SetForceUpdate && _forceUpdateKnown",
+		"取消勾选时只在已知服务端现值时才发 --clear（未知时保持原值）")
 
 	// ── ② 消费侧：GUI 形状的布局必须真能被 aly-client 消费 ──
 	c := e.NewClient(t, NewClientOpts{
@@ -7554,6 +7569,7 @@ func TestCase126(t *testing.T) {
 - 真实 aly-client 按这套布局跑通 check / download / apply：
   新内容落到**同级**主程序目录，备份目录名 = `<主程序目录名>_<旧版本>`
 - apply 之后 `UpdateFolder/client.json` 仍在（更新器目录既没被替换、也没被主目录改名卷走）
+- 强制更新复选框的源码契约：勾选 / 取消分别对应 `--set-force-update` / `--clear-force-update`；未知服务端现值时两侧都不发（保持原值）
 
 **失败判定**
 
