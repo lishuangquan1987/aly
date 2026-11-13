@@ -2,8 +2,6 @@ package controllers
 
 import (
 	"fmt"
-	"regexp"
-	"strings"
 	"aly/server/ent"
 	"aly/server/ent/project"
 	"aly/server/internal/db"
@@ -14,31 +12,12 @@ import (
 	"github.com/utils-go/ngo/io/directory"
 )
 
-// validProjectName 项目名称合法性：只要能创建为文件夹名即可
-// 禁止 Windows/Linux 文件系统非法字符：< > : " / \ | ? *
-var validProjectName = regexp.MustCompile(`^[^<>:"/\\|?*]{1,64}$`)
-
-// validateProjectName 校验项目名称：白名单 + Windows 保留名检查
+// validateProjectName 校验项目名称。
+//
+// 实现已收敛到 service.ValidateProjectName（审查 B1/A7）：上传、下载、发布、
+// 系统信息等所有入口共用同一套规则，避免"某个入口漏校验"再次发生。
 func validateProjectName(name string) error {
-	if name == "" {
-		return fmt.Errorf("项目名称不能为空")
-	}
-	if !validProjectName.MatchString(name) {
-		return fmt.Errorf("项目名称包含非法字符或长度不在1-64范围内")
-	}
-	// Windows 保留名检查
-	reserved := map[string]bool{
-		"CON": true, "PRN": true, "AUX": true, "NUL": true,
-		"COM1": true, "COM2": true, "COM3": true, "COM4": true,
-		"COM5": true, "COM6": true, "COM7": true, "COM8": true, "COM9": true,
-		"LPT1": true, "LPT2": true, "LPT3": true, "LPT4": true,
-		"LPT5": true, "LPT6": true, "LPT7": true, "LPT8": true, "LPT9": true,
-	}
-	upper := strings.ToUpper(name)
-	if reserved[upper] {
-		return fmt.Errorf("项目名称不能使用系统保留名: %s", name)
-	}
-	return nil
+	return service.ValidateProjectName(name)
 }
 
 func CreateProject(ctx *gin.Context) {

@@ -107,6 +107,31 @@ func winToWsl(winPath string) string {
 	return "/mnt/" + drive + rest
 }
 
+// shQuote 把路径安全地嵌进 bash -c 的命令串（审查 M29）。
+//
+// 旧实现直接把路径拼进命令：Windows 用户名/仓库名带空格时会被 word-split，
+// 命令直接失败；更糟的是路径里的 `;`、`$()`、反引号会被 bash 解释成命令注入。
+// 用单引号包裹，并把内部的单引号写成 '\'' 是 POSIX shell 的通用安全写法。
+func shQuote(s string) string {
+	return "'" + strings.Replace(s, "'", `'\''`, -1) + "'"
+}
+
+// assertUnderGopath 断言待删除路径确实位于 WSL GOPATH 之下（审查 M29）。
+//
+// 旧实现的 `rm -rf <路径>` 在路径含空格被 word-split 后可能删掉前缀目录
+// （如 ALY_WSL_GOPATH="/home/john smith/go" 时 `rm -rf /home/john`），
+// 属于不可逆破坏。凡是删除操作执行前必须先过本断言。
+func assertUnderGopath(paths ...string) error {
+	root := strings.TrimRight(wslGopathResolved, "/")
+	for _, p := range paths {
+		if p == "" || p == "/" || strings.HasPrefix(p, root+"/") || p == root {
+			continue
+		}
+		return fmt.Errorf("拒绝删除 GOPATH 之外的路径: %s（GOPATH=%s）", p, root)
+	}
+	return nil
+}
+
 func configPath() string {
 	appdata := os.Getenv("LOCALAPPDATA")
 	if appdata == "" {
@@ -161,18 +186,23 @@ func main() {
 
 	// ── Step 1: Copy to WSL ──
 	fmt.Println("  [1/4] Copy client to WSL ...")
-	if err := wsl("rm -rf " + wslSrc + " " + wslUISrc); err != nil {
+	// 审查 M29：删除前先做 GOPATH 归属断言，避免路径分裂后误删父目录
+	if err := assertUnderGopath(wslSrc, wslUISrc); err != nil {
+		fmt.Printf("  [ERROR] %v\n", err)
+		os.Exit(1)
+	}
+	if err := wsl("rm -rf " + shQuote(wslSrc) + " " + shQuote(wslUISrc)); err != nil {
 		fmt.Printf("  [WARN] rm failed: %v\n", err)
 	}
-	if err := wsl("mkdir -p " + wslGopathResolved + "/src/aly/client/aly-client-ui"); err != nil {
+	if err := wsl("mkdir -p " + shQuote(wslGopathResolved+"/src/aly/client/aly-client-ui")); err != nil {
 		fmt.Printf("  [ERROR] mkdir failed: %v\n", err)
 		os.Exit(1)
 	}
-	if err := wsl("cp -r " + linuxSrc + " " + wslSrc); err != nil {
+	if err := wsl("cp -r " + shQuote(linuxSrc) + " " + shQuote(wslSrc)); err != nil {
 		fmt.Printf("  [ERROR] copy to WSL failed: %v\n", err)
 		os.Exit(1)
 	}
-	if err := wsl("cp -r " + linuxUISrc + " " + wslUISrc); err != nil {
+	if err := wsl("cp -r " + shQuote(linuxUISrc) + " " + shQuote(wslUISrc)); err != nil {
 		fmt.Printf("  [ERROR] copy UI to WSL failed: %v\n", err)
 		os.Exit(1)
 	}
@@ -182,7 +212,7 @@ func main() {
 	fmt.Println("  [2/4] Building aly-client.exe (GOARCH=386) ...")
 	buildCmd := fmt.Sprintf(
 		"cd %s && GOROOT=%s GOPATH=%s GOOS=windows GOARCH=386 %s build -ldflags=\"-s -w\" -o aly-client.exe .",
-		wslSrc, wslGoroot, wslGopathResolved, wslGo,
+		shQuote(wslSrc), shQuote(wslGoroot), shQuote(wslGopathResolved), shQuote(wslGo),
 	)
 	if err := wsl(buildCmd); err != nil {
 		fmt.Printf("  [ERROR] Build failed: %v\n", err)
@@ -194,7 +224,7 @@ func main() {
 	fmt.Println("  [2b/4] Building aly-client-ui.exe (GOARCH=386) ...")
 	buildUICmd := fmt.Sprintf(
 		"cd %s && GOROOT=%s GOPATH=%s GOOS=windows GOARCH=386 CGO_ENABLED=0 %s build -ldflags=\"-s -w -H=windowsgui\" -o aly-client-ui.exe aly/client/aly-client-ui/aly-client-winui",
-		wslSrc, wslGoroot, wslGopathResolved, wslGo,
+		shQuote(wslSrc), shQuote(wslGoroot), shQuote(wslGopathResolved), shQuote(wslGo),
 	)
 	if err := wsl(buildUICmd); err != nil {
 		fmt.Printf("  [ERROR] UI build failed: %v\n", err)
@@ -214,8 +244,11 @@ func main() {
 		if name == "aly-client-ui.exe" {
 			dstDir = linuxUISrc
 		}
-		if err := wsl("cp -f " + wslSrc + "/" + name + " " + dstDir + "/" + name); err != nil {
-			fmt.Printf("  [WARN] copy %s back to repo failed: %v\n", name, err)
+		if err := wsl("cp -f " + shQuote(wslSrc+"/"+name) + " " + shQuote(dstDir+"/"+name)); err != nil {
+			// 审查 M29：回拷失败会让仓库里的 exe 与部署到目标机的 exe 不一致
+			// （自更新的比对源错位），旧实现只给 [WARN] 就继续，属于静默不一致。
+			fmt.Printf("  [ERROR] copy %s back to repo failed: %v\n", name, err)
+			os.Exit(1)
 		} else {
 			fmt.Printf("         OK %s\n", name)
 		}
@@ -226,7 +259,7 @@ func main() {
 	// 两个 exe 都必须构建成功，否则部署会"只拷一半"，导致 UI 与更新器版本错位。
 	fmt.Println("  [2d/4] Verifying build artifacts ...")
 	for _, name := range deployFiles {
-		out, err := wslOutput("test -f " + wslSrc + "/" + name + " && echo ok")
+		out, err := wslOutput("test -f " + shQuote(wslSrc+"/"+name) + " && echo ok")
 		if err != nil || out != "ok" {
 			fmt.Printf("  [ERROR] %s missing after build: %v\n", name, err)
 			os.Exit(1)

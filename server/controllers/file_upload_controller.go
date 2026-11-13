@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"aly/server/internal/service"
 	"aly/server/models"
 	"errors"
@@ -15,7 +17,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/utils-go/ngo/io/directory"
 	"github.com/utils-go/ngo/io/path"
-	"github.com/utils-go/ngo/stringUtils"
 )
 
 // maxUploadFileSize 单文件上传大小上限（1GB），防止恶意/异常上传填满磁盘
@@ -66,9 +67,15 @@ func UploadFile(ctx *gin.Context) {
 		return
 	}
 
-	workDir, err := service.GetProjectWorkPath(fileInfo.ProjectName)
-	if err != nil {
-		ctx.JSON(200, models.NGWithError(err))
+	// 审查 M5：上传前要求项目已存在于库中（未软删除）——否则任何人可借上传
+	// 在服务端任意位置建目录、写文件。
+	if !checkUploadProject(ctx, fileInfo.ProjectName) {
+		return
+	}
+
+	// 审查 B1：项目名校验 + 落点断言（GetProjectWorkPath 内含 data 目录断言）
+	workDir, absFileName, ok := resolveUploadTarget(ctx, fileInfo.ProjectName, fileInfo.RelativeFileName)
+	if !ok {
 		return
 	}
 
@@ -80,14 +87,11 @@ func UploadFile(ctx *gin.Context) {
 		}
 	}
 
-	fileName := stringUtils.Replace(fileInfo.RelativeFileName, "\\", "/")
-	// 路径穿越防护：规范化路径并验证在 workDir 内
-	rawPath := path.Combine(workDir, fileName)
-	absFileName := filepath.Clean(rawPath)
-	if !strings.HasPrefix(absFileName, workDir+string(filepath.Separator)) && absFileName != workDir {
-		ctx.JSON(200, models.NG("非法的文件路径"))
+	// 审查 M5：磁盘空间检查（含 512MB 预留）
+	if !checkDiskSpace(ctx, workDir, f.Size) {
 		return
 	}
+
 	dir := path.GetDirectoryName(absFileName)
 	if !directory.Exists(dir) {
 		if err = directory.CreateDirectory(dir); err != nil {
@@ -95,7 +99,6 @@ func UploadFile(ctx *gin.Context) {
 			return
 		}
 	}
-
 	// 原子落盘（#3）：先保存到 .merging 临时文件，再 rename 切换 ——
 	// 与分片上传路径（UploadChunkComplete）同款保护。旧实现直接写最终路径，
 	// 上传进行中并发 get_all_files 会把半截文件当正式文件立刻缓存下发（撕裂读）。
@@ -117,7 +120,8 @@ func UploadFile(ctx *gin.Context) {
 	ctx.JSON(200, models.OK())
 }
 
-// chunkMaxSize 单分片大小上限（64MB）：publish-cli 实际按 1MB 分包，64MB 是宽松上限，
+// chunkMaxSize 单分片大小上限（64MB）：publish-cli 默认按 128KiB 分包
+// （defaultChunkSize=128*1024，可用 ALY_CHUNK_SIZE 覆盖），64MB 是宽松上限，
 // 防止单请求写入近 1GB 临时文件（#14 审查发现）。
 const chunkMaxSize int64 = 64 << 20
 
@@ -158,6 +162,11 @@ func UploadChunk(ctx *gin.Context) {
 		ctx.JSON(200, models.NG(fmt.Sprintf("分片序号不合法: chunkIndex=%d, totalChunks=%d", chunkInfo.ChunkIndex, chunkInfo.TotalChunks)))
 		return
 	}
+	// 审查 N1：totalChunks 上界校验（与 complete 同一防护点）
+	if chunkInfo.TotalChunks > maxChunkTotalChunks {
+		ctx.JSON(200, models.NG(fmt.Sprintf("分片总数不合法: totalChunks=%d, 上限 %d", chunkInfo.TotalChunks, maxChunkTotalChunks)))
+		return
+	}
 
 	f, err := ctx.FormFile("file")
 	if err != nil {
@@ -170,9 +179,14 @@ func UploadChunk(ctx *gin.Context) {
 		return
 	}
 
-	workDir, err := service.GetProjectWorkPath(chunkInfo.ProjectName)
-	if err != nil {
-		ctx.JSON(200, models.NGWithError(err))
+	// 审查 M5：项目必须存在且未软删除
+	if !checkUploadProject(ctx, chunkInfo.ProjectName) {
+		return
+	}
+
+	// 审查 B1：项目名校验 + 落点断言
+	workDir, absFileName, ok := resolveUploadTarget(ctx, chunkInfo.ProjectName, chunkInfo.RelativeFileName)
+	if !ok {
 		return
 	}
 	if !directory.Exists(workDir) {
@@ -181,12 +195,8 @@ func UploadChunk(ctx *gin.Context) {
 			return
 		}
 	}
-
-	fileName := stringUtils.Replace(chunkInfo.RelativeFileName, "\\", "/")
-	rawPath := path.Combine(workDir, fileName)
-	absFileName := filepath.Clean(rawPath)
-	if !strings.HasPrefix(absFileName, workDir+string(filepath.Separator)) && absFileName != workDir {
-		ctx.JSON(200, models.NG("非法的文件路径"))
+	// 审查 M5：磁盘空间检查（分片累加未知，按单分片 + 预留估计）
+	if !checkDiskSpace(ctx, workDir, f.Size) {
 		return
 	}
 
@@ -217,6 +227,9 @@ func UploadChunkComplete(ctx *gin.Context) {
 		ProjectName      string `form:"projectName"`
 		RelativeFileName string `form:"relativeFileName"`
 		TotalChunks      int    `form:"totalChunks"`
+		// Md5 期望的整文件 MD5（审查 M3）：可选，服务端合并后计算比对，
+		// 从根上消灭"合并结果与发布者意图不一致却静默下发"的一类问题。
+		Md5 string `form:"md5"`
 	}
 	if err := ctx.ShouldBind(&info); err != nil {
 		ctx.JSON(200, models.NGWithError(err))
@@ -230,18 +243,23 @@ func UploadChunkComplete(ctx *gin.Context) {
 		ctx.JSON(200, models.NG("文件路径不能为空"))
 		return
 	}
-
-	workDir, err := service.GetProjectWorkPath(info.ProjectName)
-	if err != nil {
-		ctx.JSON(200, models.NGWithError(err))
+	// 审查 B3 + N1：totalChunks 必须为正且在合理上界内。
+	// 旧实现 `for i := 0; i < info.TotalChunks; i++` 遇 0/负数不执行循环 →
+	// missing 为空、totalSize=0 不超限 → 创建空 .merging 后原子 rename
+	// **覆盖目标文件为 0 字节**；上界缺失还可被单请求打成 OOM/CPU 自旋。
+	if info.TotalChunks <= 0 || info.TotalChunks > maxChunkTotalChunks {
+		ctx.JSON(200, models.NG(fmt.Sprintf("totalChunks 不合法: %d（允许范围 1-%d）", info.TotalChunks, maxChunkTotalChunks)))
 		return
 	}
 
-	fileName := stringUtils.Replace(info.RelativeFileName, "\\", "/")
-	rawPath := path.Combine(workDir, fileName)
-	absFileName := filepath.Clean(rawPath)
-	if !strings.HasPrefix(absFileName, workDir+string(filepath.Separator)) && absFileName != workDir {
-		ctx.JSON(200, models.NG("非法的文件路径"))
+	// 审查 M5：项目必须存在且未软删除
+	if !checkUploadProject(ctx, info.ProjectName) {
+		return
+	}
+
+	// 审查 B1：项目名校验 + 落点断言
+	workDir, absFileName, ok := resolveUploadTarget(ctx, info.ProjectName, info.RelativeFileName)
+	if !ok {
 		return
 	}
 
@@ -251,7 +269,13 @@ func UploadChunkComplete(ctx *gin.Context) {
 		return
 	}
 
-	// 验证所有分片存在、文件大小
+	// 审查 M3：按目标文件加锁，避免两个发布者并发 complete 同一文件时
+	// 互相清掉对方分片、静默产出损坏文件。
+	fileLock := lockForFile(absFileName)
+	fileLock.Lock()
+	defer fileLock.Unlock()
+
+	// 验证所有分片存在、累计文件大小
 	var missing []int
 	var totalSize int64
 	for i := 0; i < info.TotalChunks; i++ {
@@ -270,9 +294,18 @@ func UploadChunkComplete(ctx *gin.Context) {
 		}))
 		return
 	}
+	// 审查 B3：分片都在但全部为空同样会造出 0 字节覆盖，必须拒绝
+	if totalSize == 0 {
+		ctx.JSON(200, models.NG("分片内容为空，拒绝合并（避免把目标文件清空）"))
+		return
+	}
 	// 累计大小校验
 	if totalSize > maxUploadFileSize {
 		ctx.JSON(200, models.NG(fmt.Sprintf("文件过大: %d 字节，上限 %d 字节", totalSize, maxUploadFileSize)))
+		return
+	}
+	// 审查 M5：磁盘空间检查
+	if !checkDiskSpace(ctx, workDir, totalSize) {
 		return
 	}
 
@@ -294,6 +327,10 @@ func UploadChunkComplete(ctx *gin.Context) {
 		return
 	}
 
+	// 审查 M3：边合并边算 MD5，与发布者给出的期望值比对
+	hasher := md5.New()
+	writer := io.MultiWriter(destFile, hasher)
+
 	for i := 0; i < info.TotalChunks; i++ {
 		chunkPath := filepath.Join(chunksDir, strconv.Itoa(i))
 		chunkFile, err := os.Open(chunkPath)
@@ -303,7 +340,7 @@ func UploadChunkComplete(ctx *gin.Context) {
 			ctx.JSON(200, models.NG(fmt.Sprintf("open chunk %d error: %v", i, err)))
 			return
 		}
-		if _, err := io.Copy(destFile, chunkFile); err != nil {
+		if _, err := io.Copy(writer, chunkFile); err != nil {
 			chunkFile.Close()
 			destFile.Close()
 			os.Remove(mergePath)
@@ -318,6 +355,16 @@ func UploadChunkComplete(ctx *gin.Context) {
 		ctx.JSON(200, models.NG(fmt.Sprintf("close merged file error: %v", closeErr)))
 		return
 	}
+
+	// 审查 M3：期望 MD5 校验（未提供时保持向后兼容，跳过）
+	actualMd5 := hex.EncodeToString(hasher.Sum(nil))
+	if info.Md5 != "" && !strings.EqualFold(info.Md5, actualMd5) {
+		// 保留 .chunks 供发布者在修正后重试，不删除现场
+		os.Remove(mergePath)
+		ctx.JSON(200, models.NG(fmt.Sprintf("合并结果 MD5 不符: 期望 %s，实际 %s（分片已保留，可重试）", info.Md5, actualMd5)))
+		return
+	}
+
 	if err := os.Rename(mergePath, absFileName); err != nil {
 		os.Remove(mergePath)
 		ctx.JSON(200, models.NG(fmt.Sprintf("atomic rename merged file error: %v", err)))
@@ -332,5 +379,6 @@ func UploadChunkComplete(ctx *gin.Context) {
 	ctx.JSON(200, models.OKWithData(map[string]interface{}{
 		"chunksComplete": true,
 		"totalSize":      totalSize,
+		"md5":            actualMd5,
 	}))
 }

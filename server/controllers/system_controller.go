@@ -4,11 +4,10 @@ import (
 	"aly/server/ent"
 	"aly/server/ent/project"
 	"aly/server/internal/db"
+	"aly/server/internal/pathcfg"
 	"aly/server/internal/service"
 	"aly/server/models"
 	"log"
-	"os"
-	"path/filepath"
 	"runtime"
 
 	"github.com/gin-gonic/gin"
@@ -57,12 +56,8 @@ func GetProjectOSInfo(ctx *gin.Context) {
 
 // ServerInfo 获取服务器基本信息（无需指定项目）
 func ServerInfo(ctx *gin.Context) {
-	exePath, err := os.Executable()
-	if err != nil {
-		ctx.JSON(200, models.NGWithError(err))
-		return
-	}
-	workDir := filepath.Dir(exePath)
+	// 审查 A7：基础目录统一由 pathcfg 解析（与 db / data 目录同源）
+	workDir := pathcfg.MustBaseDir()
 
 	ctx.JSON(200, models.CommonResponse{
 		IsSuccess: true,

@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -15,11 +17,10 @@ import (
 	"aly/server/ent/project"
 	"aly/server/ent/projectchangelog"
 	"aly/server/internal/db"
+	"aly/server/internal/pathcfg"
 	"aly/server/models"
 
 	"github.com/utils-go/ngo/datetime"
-	"github.com/utils-go/ngo/io/path"
-	"io/ioutil"
 )
 
 const (
@@ -29,14 +30,72 @@ const (
 	DataDirName = "data"
 )
 
+// validProjectName 项目名称合法性：只要能创建为文件夹名即可
+// 禁止 Windows/Linux 文件系统非法字符：< > : " / \ | ? *
+var validProjectName = regexp.MustCompile(`^[^<>:"/\\|?*]{1,64}$`)
+
+// reservedProjectNames Windows 系统保留设备名
+var reservedProjectNames = map[string]bool{
+	"CON": true, "PRN": true, "AUX": true, "NUL": true,
+	"COM1": true, "COM2": true, "COM3": true, "COM4": true,
+	"COM5": true, "COM6": true, "COM7": true, "COM8": true, "COM9": true,
+	"LPT1": true, "LPT2": true, "LPT3": true, "LPT4": true,
+	"LPT5": true, "LPT6": true, "LPT7": true, "LPT8": true, "LPT9": true,
+}
+
+// ValidateProjectName 校验项目名称（审查 B1）。
+//
+// 关键修复：旧实现的正则 ^[^<>:"/\\|?*]{1,64}$ **放行 "." 与 ".."**——
+// 而 "."/".." 经 filepath.Join 会被 Clean 掉，导致落点逃逸到 data 目录之外
+// （".." → 服务端 exe 目录，"../sub" → 任意上级子目录）。
+//
+// 注意：Go 的 regexp 是 RE2，**不支持负向前瞻**，无法用 (?!\.{1,2}$) 表达；
+// 把 "." 加进排除字符类又会误杀 "a.b" 这类合法名。因此必须用精确等值判断。
+//
+// 另外拒绝以点或空格结尾的名字（Windows 上会被静默去掉尾点/尾空格，
+// 造成 "abc." 与 "abc" 落同一目录、客户端看到的路径与预期不一致）。
+func ValidateProjectName(name string) error {
+	if name == "" {
+		return fmt.Errorf("项目名称不能为空")
+	}
+	// B1 核心：拒绝当前目录/上级目录语义
+	if name == "." || name == ".." {
+		return fmt.Errorf("项目名称不能为 . 或 ..")
+	}
+	if !validProjectName.MatchString(name) {
+		return fmt.Errorf("项目名称包含非法字符或长度不在1-64范围内")
+	}
+	// Windows 会静默剥掉尾部的点和空格
+	if strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") {
+		return fmt.Errorf("项目名称不能以点或空格结尾")
+	}
+	// Windows 保留名检查
+	upper := strings.ToUpper(name)
+	if reservedProjectNames[upper] {
+		return fmt.Errorf("项目名称不能使用系统保留名: %s", name)
+	}
+	return nil
+}
+
+// GetProjectWorkPath 返回项目的磁盘工作目录（{dataDir}/{projectName}）。
+//
+// 两重保护（审查 B1）：
+//  1. 入口先跑 ValidateProjectName，拒绝 "."/".."/含分隔符等非法名；
+//  2. 落位断言：Clean 后必须直接位于 dataDir 之下——兜住未来任何漏校验入口。
 func GetProjectWorkPath(projectName string) (string, error) {
-	exe, err := os.Executable()
+	if err := ValidateProjectName(projectName); err != nil {
+		return "", err
+	}
+	dataDir, err := pathcfg.DataDir()
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Dir(exe)
-
-	return path.Combine(dir, DataDirName, projectName), nil
+	workDir := filepath.Clean(filepath.Join(dataDir, projectName))
+	if filepath.Dir(workDir) != dataDir ||
+		!strings.HasPrefix(workDir, dataDir+string(filepath.Separator)) {
+		return "", fmt.Errorf("非法的项目路径: %s", projectName)
+	}
+	return workDir, nil
 }
 
 func CreateProjectWithFirstLog(ctx context.Context, name string, title string, isForceUpdate bool, ignoreFolders []string, ignoreFiles []string) models.CommonResponse {
@@ -92,8 +151,10 @@ func UpdateProject(ctx context.Context, name string, title string, isForceUpdate
 		if err != nil {
 			return err
 		}
-		// Mutation 返回的是 mutation 对象，无法直接检查 affected 行数。
-		// 这里再查一次确认条目存在（防御并发软删除后更新）。
+		// 审查修正：ent 的 Update().Save(ctx) 实际返回 (affected int, err error)，
+		// 可以直接用 affected 判断是否命中行（同文件 SetForceUpdate/DeleteProject
+		// 即如此）。这里保留再查一次的实现，是为了同时校验"未被并发软删除"，
+		// 语义上比单看 affected 更严格；但原注释"无法检查 affected 行数"是错的。
 		exists, checkErr := tx.Project.Query().Where(project.NameEQ(name), project.IsDeletedEQ(false)).Exist(ctx)
 		if checkErr != nil {
 			return checkErr
@@ -141,11 +202,15 @@ func GetAllProjects(ctx context.Context) models.CommonResponse {
 }
 
 func GetProjectChangeLogs(ctx context.Context, projectName string) models.CommonResponse {
+	// 条数上限（审查 server 轻微④）：该接口返回项目有史以来全部变更日志，
+	// 项目长期发布后会无界膨胀，且是无鉴权端点。取最近 200 条（倒序），
+	// 客户端只需要最新版本信息，历史全量价值低。
 	projectLogs, err := db.Client.ProjectChangeLog.
 		Query().
 		Where(projectchangelog.HasProjectWith(project.NameEQ(projectName)),
 			projectchangelog.IsDeletedEQ(false)).
 		Order(ent.Desc(projectchangelog.FieldID)).
+		Limit(maxChangeLogRows).
 		All(ctx)
 	if err != nil {
 		return models.NGWithError(err)
@@ -154,8 +219,18 @@ func GetProjectChangeLogs(ctx context.Context, projectName string) models.Common
 	return models.OKWithData(projectLogs)
 }
 
+// maxChangeLogRows get_project_change_logs 返回的最大条数
+const maxChangeLogRows = 200
+
+// GetProjectByName 按名称查询未软删除的项目（审查 M2）。
+//
+// 旧实现不过滤 IsDeleted，导致软删除项目仍能通过 get_project_by_name /
+// get_all_files 对外服务、客户端 check_update 也照样认为"有更新"——
+// 软删除对已部署客户端形同虚设。
 func GetProjectByName(ctx context.Context, projectName string) models.CommonResponse {
-	p, err := db.Client.Project.Query().Where(project.NameEQ(projectName)).First(ctx)
+	p, err := db.Client.Project.Query().
+		Where(project.NameEQ(projectName), project.IsDeletedEQ(false)).
+		First(ctx)
 	if err != nil {
 		return models.NGWithError(err)
 	}

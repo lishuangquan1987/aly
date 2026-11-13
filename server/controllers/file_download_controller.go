@@ -2,13 +2,17 @@ package controllers
 
 import (
 	"aly/server/ent"
+	"aly/server/internal/pathcfg"
 	"aly/server/internal/service"
 	"aly/server/models"
 	"encoding/json"
+	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/utils-go/ngo/io/path"
@@ -65,6 +69,13 @@ func GetReleaseManifest(ctx *gin.Context) {
 		return
 	}
 
+	// 审查 M2/N2：清单接口旧实现完全不查库——软删除项目（甚至从未创建的项目）
+	// 只要磁盘上有清单文件就照常返回。补项目存在且未删除校验。
+	if projectResult := service.GetProjectByName(ctx.Request.Context(), projectNameDto.ProjectName); !projectResult.IsSuccess {
+		ctx.JSON(200, projectResult)
+		return
+	}
+
 	workDir, err := service.GetProjectWorkPath(projectNameDto.ProjectName)
 	if err != nil {
 		ctx.JSON(200, models.NGWithError(err))
@@ -109,12 +120,12 @@ func DownloadFile(ctx *gin.Context) {
 		ctx.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	exePath, err := os.Executable()
+	// 审查 A7：data 目录基准与其它模块同源（pathcfg），避免"校验一套、落位另一套"
+	dataDir, err := pathcfg.DataDir()
 	if err != nil {
 		ctx.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	dataDir := filepath.Join(filepath.Dir(exePath), service.DataDirName)
 	if !strings.HasPrefix(cleanPath, dataDir+string(filepath.Separator)) && cleanPath != dataDir {
 		ctx.AbortWithStatus(http.StatusNotFound)
 		return
@@ -139,10 +150,39 @@ func DownloadFile(ctx *gin.Context) {
 		return
 	}
 
+	// 审查 B11：全局 WriteTimeout 已置 0（大文件下载不能有固定总时限），
+	// 这里按文件大小给本次响应设置写期限，避免慢速读客户端长期占用连接。
+	writeBudget := downloadWriteBudget(fileInfo.Size())
+	if rc := http.NewResponseController(ctx.Writer); rc != nil {
+		if err := rc.SetWriteDeadline(time.Now().Add(writeBudget)); err != nil {
+			// 不支持 SetWriteDeadline 的 ResponseWriter 不阻断下载
+			log.Printf("DownloadFile: SetWriteDeadline unsupported (non-fatal): %v", err)
+		}
+	}
+
 	fileName := path.GetFileName(cleanPath)
-	// RFC 6266: filename*=UTF-8''<percent-encoded> 支持非 ASCII 文件名
-	encodedName := strings.ReplaceAll(fileName, " ", "%20")
-	ctx.Header("Content-Disposition", "attachment; filename*=UTF-8''"+encodedName+"; filename="+fileName)
-	ctx.Header("Content-Transfer-Encoding", "binary")
+	// 审查 M1：改用 mime.FormatMediaType 生成符合 RFC 6266/5987 的
+	// Content-Disposition（非 ASCII 文件名走 filename* 的百分号编码，
+	// 引号/换行等特殊字符由此函数转义）。非法输入时退回旧拼接兜底。
+	disposition := ""
+	if v := mime.FormatMediaType("attachment", map[string]string{"filename": fileName}); v != "" {
+		disposition = v
+	} else {
+		encodedName := strings.Replace(fileName, " ", "%20", -1)
+		disposition = "attachment; filename*=UTF-8''" + encodedName + "; filename=" + fileName
+	}
+	ctx.Header("Content-Disposition", disposition)
 	http.ServeContent(ctx.Writer, ctx.Request, fileName, fileInfo.ModTime(), fileReader)
+}
+
+// downloadWriteBudget 按文件大小估算下载写期限（审查 B11）：
+// 以 1MB/s 的保守带宽估算，再加 5 分钟固定余量，上限 30 分钟。
+func downloadWriteBudget(size int64) time.Duration {
+	const minBudget = 5 * time.Minute
+	const maxBudget = 30 * time.Minute
+	budget := minBudget + time.Duration(size/(1<<20))*time.Second
+	if budget > maxBudget {
+		return maxBudget
+	}
+	return budget
 }

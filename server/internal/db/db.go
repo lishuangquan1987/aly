@@ -7,9 +7,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"aly/server/ent"
+	"aly/server/internal/pathcfg"
 
 	sqldialect "entgo.io/ent/dialect/sql"
 
@@ -46,32 +46,24 @@ func WithTx(ctx context.Context, fn func(tx *ent.Tx) error) error {
 
 // InitDB 初始化数据库 — 数据库文件默认放在程序根目录（go run 时为工作目录）
 func InitDB() {
-	// 优先使用 DBPath，否则基于可执行文件路径解析（go run 时回退到工作目录）
+	// 优先使用 DBPath，否则由 pathcfg 统一解析（A7：路径推导集中化）
 	dbPath := DBPath
 	if dbPath == "" {
-		dbDir := ""
-		exe, err := os.Executable()
-		if err == nil {
-			exeDir := filepath.Dir(exe)
-			// go run 会将可执行文件放在临时目录，此时回退到工作目录
-			if !strings.Contains(exeDir, os.TempDir()) {
-				dbDir = exeDir
-			}
+		p, err := pathcfg.DBPath()
+		if err != nil {
+			log.Fatalf("failed to resolve database path: %v", err)
 		}
-		if dbDir == "" {
-			wd, err := os.Getwd()
-			if err != nil {
-				log.Fatalf("failed to get working directory: %v", err)
-			}
-			dbDir = wd
-		}
-		dbPath = filepath.Join(dbDir, "aly.db")
+		dbPath = p
 	}
 	// 确保数据库文件所在目录存在
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
 		log.Fatalf("failed to create database directory: %v", err)
 	}
-	db, err := sql.Open("sqlite", dbPath+"?_fk=1")
+	// DSN 参数（审查 M4）：modernc.org/sqlite 只识别 _pragma，旧写法 "_fk=1"
+	// 是 mattn/go-sqlite3 的参数，被静默忽略；外键仅在 Open 后靠一次性 PRAGMA
+	// 开启，连接重建即失效。改用 _pragma 后驱动会在**每个新连接**重放。
+	dsn := dbPath + "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		log.Fatalf("failed opening connection to sqlite: %v", err)
 	}
@@ -83,6 +75,7 @@ func InitDB() {
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		log.Printf("failed enabling WAL mode (non-fatal): %v", err)
 	}
+	// 显式 PRAGMA 保留（与 DSN 双保险，便于阅读与排障）
 	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
 		log.Printf("failed setting busy_timeout (non-fatal): %v", err)
 	}
