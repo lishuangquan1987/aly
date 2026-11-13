@@ -1,0 +1,31 @@
+{
+  "name": "pending_apply",
+  "description": "本地已下载待应用：check_update 返回 has_update=true 且 need_download_update=false，宿主应直接调用 apply_update（不下载、不询问）。",
+  "commands": {
+    "check_self_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"need_update": false}}
+      ]
+    },
+    "check_update": {
+      "lines": [
+        {
+          "isSuccess": true,
+          "errorMsg": "",
+          "data": {
+            "has_update": true,
+            "need_download_update": false,
+            "current_version": "1.0.0",
+            "new_version": "1.0.1",
+            "force_update": false
+          }
+        }
+      ]
+    },
+    "apply_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": null}
+      ]
+    }
+  }
+}

@@ -1,4 +1,4 @@
-﻿use alyclient::{
+use alyclient::{
     Api, CancelToken, CloseOptions, DownloadOptions, DownloadProgressInfo, Status, UpdateClient,
     DEFAULT_DOWNLOAD_STALL_TIMEOUT,
 };
@@ -230,6 +230,53 @@ fn managed_non_force_waits_for_confirmations() {
 
     assert_eq!(downloads.lock().unwrap().clone(), vec!["1.0.1".to_string()]);
     assert_eq!(applies.lock().unwrap().clone(), vec!["1.0.1".to_string()]);
+}
+
+#[test]
+fn managed_pending_apply_applies_without_downloading() {
+    let statuses = Arc::new(Mutex::new(Vec::<String>::new()));
+    let downloads = Arc::new(Mutex::new(Vec::<String>::new()));
+    let applies = Arc::new(Mutex::new(Vec::<String>::new()));
+    let captured_statuses = Arc::clone(&statuses);
+    let captured_downloads = Arc::clone(&downloads);
+    let captured_applies = Arc::clone(&applies);
+
+    let mut client = UpdateClient::new(api("pending_apply"))
+        .on_status(move |status, _| {
+            captured_statuses.lock().unwrap().push(status.to_string());
+        })
+        .confirm_download(move |version, _| {
+            captured_downloads.lock().unwrap().push(version.to_string());
+        })
+        .confirm_apply(move |version, _| {
+            captured_applies.lock().unwrap().push(version.to_string());
+        });
+
+    client.start();
+    wait_for_status(&client, Status::APPLY_UPDATE, Duration::from_secs(10));
+    assert!(client.stop(Duration::from_secs(10)));
+
+    let got = statuses.lock().unwrap().clone();
+    assert_eq!(
+        downloads.lock().unwrap().clone(),
+        Vec::<String>::new(),
+        "pending apply must not ask for download"
+    );
+    assert!(
+        !got.iter().any(|s| s == Status::DOWNLOADING_UPDATE),
+        "pending apply must not download: {got:?}"
+    );
+    assert!(!got.iter().any(|s| s == Status::DISCOVERED_UPDATE));
+    assert_eq!(
+        applies.lock().unwrap().clone(),
+        vec!["1.0.1".to_string()]
+    );
+    assert_eq!(
+        got.first().map(String::as_str),
+        Some(Status::DOWNLOADED_UPDATE)
+    );
+    assert_eq!(got.last().map(String::as_str), Some(Status::APPLY_UPDATE));
+    assert_eq!(client.last_error(), "");
 }
 
 #[test]

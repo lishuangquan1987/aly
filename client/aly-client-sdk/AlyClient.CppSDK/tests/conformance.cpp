@@ -296,6 +296,54 @@ int main(int argc, char** argv) {
         return std::string();
     });
 
+    check("managed pending apply applies without downloading", []() -> std::string {
+        std::mutex lock;
+        std::vector<std::string> statuses;
+        std::vector<std::string> downloads;
+        std::vector<std::string> applies;
+        aly::UpdateClient client(makeApi("pending_apply"));
+        client.setOnStatus([&lock, &statuses](const std::string& status, const std::string&) {
+            std::lock_guard<std::mutex> guard(lock);
+            statuses.push_back(status);
+        });
+        client.setConfirmDownload([&lock, &downloads](const std::string& version, const aly::CancelToken&) {
+            std::lock_guard<std::mutex> guard(lock);
+            downloads.push_back(version);
+        });
+        client.setConfirmApply([&lock, &applies](const std::string& version, const aly::CancelToken&) {
+            std::lock_guard<std::mutex> guard(lock);
+            applies.push_back(version);
+        });
+        client.start();
+        waitForStatus(client, aly::Status::APPLY_UPDATE, 10);
+        if (!client.stop(10000)) {
+            return "stop timeout";
+        }
+        std::lock_guard<std::mutex> guard(lock);
+        if (!downloads.empty()) {
+            return "pending apply must not ask for download";
+        }
+        if (statuses.empty() || statuses[0] != aly::Status::DOWNLOADED_UPDATE) {
+            return "status sequence mismatch";
+        }
+        for (size_t i = 0; i < statuses.size(); ++i) {
+            if (statuses[i] == aly::Status::DISCOVERED_UPDATE
+                || statuses[i] == aly::Status::DOWNLOADING_UPDATE) {
+                return "pending apply must not download";
+            }
+        }
+        if (applies.size() != 1 || applies[0] != "1.0.1") {
+            return "apply confirmations mismatch";
+        }
+        if (statuses.back() != aly::Status::APPLY_UPDATE) {
+            return "status sequence mismatch";
+        }
+        if (!client.lastError().empty()) {
+            return "lastError=" + client.lastError();
+        }
+        return std::string();
+    });
+
     check("managed offline stays idle", []() -> std::string {
         aly::UpdateClient client(makeApi("offline"));
         std::mutex lock;

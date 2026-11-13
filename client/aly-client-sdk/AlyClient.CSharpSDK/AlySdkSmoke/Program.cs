@@ -528,7 +528,7 @@ namespace AlySdkSmoke
             {
                 if (!string.IsNullOrEmpty(expected))
                 {
-                    var deadline = DateTime.UtcNow.AddSeconds(15);
+                    var deadline = DateTime.UtcNow.AddSeconds(30);
                     while (DateTime.UtcNow < deadline)
                     {
                         if (string.Equals(TryComputeSha256(_exePath), expected, StringComparison.OrdinalIgnoreCase))

@@ -150,7 +150,7 @@ public final class UpdateClient {
                 continue;
             }
 
-            if (!data.hasUpdate || !data.needDownloadUpdate) {
+            if (!data.hasUpdate) {
                 if (!Status.NONE.equals(status)) {
                     setStatus(Status.NONE, "Update status cleared");
                 }
@@ -162,48 +162,54 @@ public final class UpdateClient {
 
             boolean force = Boolean.TRUE.equals(data.forceUpdate);
             String version = data.newVersion == null ? "" : data.newVersion;
-            String message = version.isEmpty() ? "Found new version" : "Found new version " + version;
-            setStatus(Status.DISCOVERED_UPDATE, message);
-            if (!force) {
-                callConfirm(confirmDownload, version);
+            // 三态分派（与 C# UpdateClient 一致）：hasUpdate && !needDownloadUpdate
+            // 表示本地已下载待应用 / applying 崩溃恢复 / 回滚续跑，直接 applyUpdate，
+            // 不下载、不询问（恢复场景自愈）。
+            if (data.needDownloadUpdate) {
+                String message =
+                        version.isEmpty() ? "Found new version" : "Found new version " + version;
+                setStatus(Status.DISCOVERED_UPDATE, message);
+                if (!force) {
+                    callConfirm(confirmDownload, version);
+                    if (!running) {
+                        return;
+                    }
+                }
+
+                setStatus(Status.DOWNLOADING_UPDATE, "Downloading update...");
+                Response<Void> downloaded = api.downloadUpdate(
+                        new ProgressListener() {
+                            @Override
+                            public void onProgress(DownloadProgressInfo info) {
+                                setStatus(
+                                        Status.DOWNLOADING_UPDATE,
+                                        "Downloading "
+                                                + info.file
+                                                + "... "
+                                                + (int) (info.ratio * 100)
+                                                + "%");
+                            }
+                        },
+                        API.DEFAULT_DOWNLOAD_STALL_TIMEOUT_MS,
+                        token());
                 if (!running) {
                     return;
                 }
-            }
-
-            setStatus(Status.DOWNLOADING_UPDATE, "Downloading update...");
-            Response<Void> downloaded = api.downloadUpdate(
-                    new ProgressListener() {
-                        @Override
-                        public void onProgress(DownloadProgressInfo info) {
-                            setStatus(
-                                    Status.DOWNLOADING_UPDATE,
-                                    "Downloading "
-                                            + info.file
-                                            + "... "
-                                            + (int) (info.ratio * 100)
-                                            + "%");
+                if (!downloaded.isSuccess) {
+                    if (downloaded.errorMsg != null
+                            && downloaded.errorMsg.contains("already at latest version")) {
+                        setStatus(Status.NONE, "Update status cleared");
+                        if (sleep(idleDelayMillis())) {
+                            return;
                         }
-                    },
-                    API.DEFAULT_DOWNLOAD_STALL_TIMEOUT_MS,
-                    token());
-            if (!running) {
-                return;
-            }
-            if (!downloaded.isSuccess) {
-                if (downloaded.errorMsg != null
-                        && downloaded.errorMsg.contains("already at latest version")) {
-                    setStatus(Status.NONE, "Update status cleared");
-                    if (sleep(idleDelayMillis())) {
+                        continue;
+                    }
+                    reportError(downloaded.errorMsg);
+                    if (sleep(1000L)) {
                         return;
                     }
                     continue;
                 }
-                reportError(downloaded.errorMsg);
-                if (sleep(1000L)) {
-                    return;
-                }
-                continue;
             }
 
             setStatus(Status.DOWNLOADED_UPDATE, "Update downloaded");

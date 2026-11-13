@@ -46,7 +46,8 @@ client.stop(5000L);
 - 启动时先尝试 `check_self_update` / `self_update`；
 - 空闲轮询默认 300s（最小 60s，叠加 0–60s 抖动），`stop` 可中断等待；
 - `force_update=true` 时不调用确认回调，直接下载并应用；
-- 服务器不可达时 `has_update=false`，已下载产物保留；
+- `hasUpdate=true` 且 `needDownloadUpdate=false`（本地已下载待应用、applying 崩溃恢复、回滚续跑）时**直接调用 `applyUpdate`**，不下载、不询问（恢复场景自愈）；
+- 服务器不可达且本地无在途恢复状态时 `has_update=false`，已下载产物保留；
 - `apply_update` 以独立进程拉起后立即返回；更新器会关闭宿主并重启主程序。
 
 ## 底层 API
@@ -56,14 +57,19 @@ client.stop(5000L);
 ```java
 API api = new API("/path/to/aly-client");
 Response<CheckUpdateData> check = api.checkUpdate();
-if (check.isSuccess && check.data.hasUpdate && check.data.needDownloadUpdate) {
-    Response<Void> downloaded = api.downloadUpdate(
-        info -> System.out.println(info.file + " " + info.ratio),
-        API.DEFAULT_DOWNLOAD_STALL_TIMEOUT_MS,
-        CancelToken.NEVER);
-    if (downloaded.isSuccess) {
-        api.applyUpdate(new CloseOptions("YourApp", 30));
+if (check.isSuccess && check.data.hasUpdate) {
+    if (check.data.needDownloadUpdate) {
+        Response<Void> downloaded = api.downloadUpdate(
+            info -> System.out.println(info.file + " " + info.ratio),
+            API.DEFAULT_DOWNLOAD_STALL_TIMEOUT_MS,
+            CancelToken.NEVER);
+        if (!downloaded.isSuccess) {
+            throw new IllegalStateException(downloaded.errorMsg);
+        }
     }
+    // needDownloadUpdate=false：本地已下载待应用 / applying 崩溃恢复 / 回滚续跑，
+    // 直接 applyUpdate 完成恢复，不下载、不询问。
+    api.applyUpdate(new CloseOptions("YourApp", 30));
 }
 ```
 
@@ -99,6 +105,8 @@ check.data.releaseNotes;
   可能闪一个窗口。需要绝对静默时建议由原生启动器或 `aly-client-ui` 承担。
 - `API.defaultPath()` 以 `user.dir` 为基准（Java 无法可靠取得宿主 exe 路径），生产环境请显式传路径。
 - 不提供 `aly-client-ui` 启动器；不做自更新本地替换兜底（只委派 `self_update`）。
+
+托管循环的恢复语义与 C# 一致：`hasUpdate=true` 且 `needDownloadUpdate=false` 时直接 `applyUpdate`，不下载、不询问；差异仅在上表列出的方面。
 
 ## 开发与测试
 

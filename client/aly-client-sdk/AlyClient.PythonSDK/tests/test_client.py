@@ -60,6 +60,35 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(downloads, ["1.0.1"])
         self.assertEqual(applies, ["1.0.1"])
 
+    def test_pending_apply_applies_without_downloading(self) -> None:
+        with scenario("pending_apply"):
+            statuses = []
+            downloads = []
+            applies = []
+            lock = threading.Lock()
+
+            def on_status(status: str, _message: str) -> None:
+                with lock:
+                    statuses.append(status)
+
+            client = UpdateClient(self.fake)
+            client.on_status_change = on_status
+            client.confirm_download = lambda version, _stop: downloads.append(version)
+            client.confirm_apply = lambda version, _stop: applies.append(version)
+            client.start()
+            wait_for(lambda: client.status == Status.APPLY_UPDATE, 5)
+            self.assertTrue(client.stop(5))
+
+        with lock:
+            got = list(statuses)
+        self.assertEqual(downloads, [], "pending apply must not ask for download")
+        self.assertNotIn(Status.DISCOVERED_UPDATE, got)
+        self.assertNotIn(Status.DOWNLOADING_UPDATE, got)
+        self.assertEqual(applies, ["1.0.1"])
+        self.assertEqual(got[0], Status.DOWNLOADED_UPDATE)
+        self.assertEqual(got[-1], Status.APPLY_UPDATE)
+        self.assertEqual(client.last_error, "")
+
     def test_offline_stays_idle(self) -> None:
         with scenario("offline"):
             client = UpdateClient(self.fake)

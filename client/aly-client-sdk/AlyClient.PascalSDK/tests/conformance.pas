@@ -413,6 +413,37 @@ begin
   end;
 end;
 
+procedure TestManagedPendingApply;
+var
+  Api: TApi;
+  Client: TUpdateClient;
+  Callbacks: TCallbacks;
+begin
+  Api := ApiFor('pending_apply');
+  Client := TUpdateClient.Create(Api);
+  Callbacks := TCallbacks.Create;
+  try
+    Client.SetOnStatus(Callbacks.OnStatus);
+    Client.SetOnError(Callbacks.OnError);
+    Client.SetConfirmDownload(Callbacks.OnConfirmDownload);
+    Client.SetConfirmApply(Callbacks.OnConfirmApply);
+    Client.Start;
+    WaitStatus(Client, StatusApplyUpdate, 10000);
+    AssertTrue(Client.Stop(10000), 'stop timeout');
+    AssertTrue(Callbacks.Downloads.Count = 0, 'pending apply must not ask for download');
+    AssertTrue(Callbacks.Statuses.IndexOf(StatusDiscoveredUpdate) < 0, 'discovered status');
+    AssertTrue(Callbacks.Statuses.IndexOf(StatusDownloadingUpdate) < 0, 'downloading status');
+    AssertTrue((Callbacks.Applies.Count = 1) and (Callbacks.Applies[0] = '1.0.1'), 'applies');
+    AssertTrue((Callbacks.Statuses.Count > 0) and (Callbacks.Statuses[0] = StatusDownloadedUpdate), 'first status');
+    AssertTrue(Callbacks.Statuses[Callbacks.Statuses.Count - 1] = StatusApplyUpdate, 'last status');
+    AssertTrue(Client.LastError = '', Client.LastError);
+  finally
+    Client.Free;
+    Callbacks.Free;
+    Api.Free;
+  end;
+end;
+
 procedure TestManagedOffline;
 var
   Api: TApi;
@@ -518,6 +549,7 @@ begin
   Check('defaultPath points to UpdateFolder', TestDefaultPath);
   Check('managed force update full chain', TestManagedForce);
   Check('managed non-force waits for confirmations', TestManagedNonForce);
+  Check('managed pending apply applies without downloading', TestManagedPendingApply);
   Check('managed offline stays idle', TestManagedOffline);
   Check('stop interrupts pending confirmation', TestStopPendingConfirm);
   Check('stop is idempotent', TestStopIdempotent);

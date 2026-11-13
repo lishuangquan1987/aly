@@ -104,7 +104,7 @@ class UpdateClient:
                     return
                 continue
 
-            if not data.has_update or not data.need_download_update:
+            if not data.has_update:
                 if self.status != Status.NONE:
                     self._set_status(Status.NONE, "Update status cleared")
                 if self._wait(self._idle_delay()):
@@ -112,33 +112,37 @@ class UpdateClient:
                 continue
 
             version = data.new_version or ""
-            message = f"Found new version {version}".strip()
-            self._set_status(Status.DISCOVERED_UPDATE, message)
-            if not data.force_update:
-                self._call_confirm(self.confirm_download, version)
+            # 三态分派（与 C# UpdateClient 一致）：has_update 且 need_download_update
+            # 为 false 表示本地已下载待应用 / applying 崩溃恢复 / 回滚续跑，
+            # 直接 apply_update，不下载、不询问（恢复场景自愈）。
+            if data.need_download_update:
+                message = f"Found new version {version}".strip()
+                self._set_status(Status.DISCOVERED_UPDATE, message)
+                if not data.force_update:
+                    self._call_confirm(self.confirm_download, version)
+                    if self._stop.is_set():
+                        return
+
+                self._set_status(Status.DOWNLOADING_UPDATE, "Downloading update...")
+                downloaded = self.api.download_update(
+                    on_progress=lambda info: self._set_status(
+                        Status.DOWNLOADING_UPDATE,
+                        f"Downloading {info.file}... {int(info.ratio * 100)}%",
+                    ),
+                    cancel_event=self._stop,
+                )
                 if self._stop.is_set():
                     return
-
-            self._set_status(Status.DOWNLOADING_UPDATE, "Downloading update...")
-            downloaded = self.api.download_update(
-                on_progress=lambda info: self._set_status(
-                    Status.DOWNLOADING_UPDATE,
-                    f"Downloading {info.file}... {int(info.ratio * 100)}%",
-                ),
-                cancel_event=self._stop,
-            )
-            if self._stop.is_set():
-                return
-            if not downloaded.is_success:
-                if "already at latest version" in downloaded.error_msg:
-                    self._set_status(Status.NONE, "Update status cleared")
-                    if self._wait(self._idle_delay()):
+                if not downloaded.is_success:
+                    if "already at latest version" in downloaded.error_msg:
+                        self._set_status(Status.NONE, "Update status cleared")
+                        if self._wait(self._idle_delay()):
+                            return
+                        continue
+                    self._report_error(downloaded.error_msg)
+                    if self._wait(1.0):
                         return
                     continue
-                self._report_error(downloaded.error_msg)
-                if self._wait(1.0):
-                    return
-                continue
 
             self._set_status(Status.DOWNLOADED_UPDATE, "Update downloaded")
             if not data.force_update:

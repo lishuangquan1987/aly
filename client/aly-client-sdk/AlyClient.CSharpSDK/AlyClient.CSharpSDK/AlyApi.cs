@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AlyClient.CSharpSDK.Models;
@@ -86,12 +87,14 @@ namespace AlyClient.CSharpSDK
                         StandardErrorEncoding = Encoding.UTF8
                     };
 
-                    using (var cts = new CancellationTokenSource())
                     using (var process = new Process { StartInfo = psi, EnableRaisingEvents = true })
                     {
-                        // Exited 事件依赖 EnableRaisingEvents（构造时已设），且必须在 Start 前订阅，
-                        // 否则进程先退出时事件丢失（#1b）。
-                        process.Exited += (s, e) => cts.Cancel();
+                        // 审查 M24：不再用 Exited→Cancel 来中断读循环。
+                        // 旧实现的竞态：进程写完 finish 行后立刻退出，Exited 在线程池触发
+                        // Cancel；主线程若正好在上一条的进度回调里，回到循环顶发现"已取消"
+                        // 就跳出，管道里已缓冲的 finish 行永不被读——**成功下载被报成失败**。
+                        // 现在一律读到 EOF 为止：进程退出后管道必然 EOF，��会挂起；
+                        // 看门狗仍负责"停流"场景（Kill 后同样 EOF）。
                         process.Start();
 
                         // 停流看门狗：距上一行输出超过 stallTimeout 即杀进程。
@@ -108,7 +111,7 @@ namespace AlyClient.CSharpSDK
                         }, null, 5000, 5000);
                         using (watchdog)
                         {
-                            while (!cts.IsCancellationRequested)
+                            while (true)
                             {
                                 var stdoutTask = process.StandardOutput.ReadLine();
                                 if (stdoutTask == null)
@@ -148,14 +151,86 @@ namespace AlyClient.CSharpSDK
                             }
                         }
                     }
-
-                    return AlyResponse.NG("Download interrupted");
                 }
                 catch (Exception ex)
                 {
                     return AlyResponse.NG(ex);
                 }
             });
+        }
+
+        // ─── 命令行参数安全（审查 M25）─────────────────────────────────────────
+        //
+        // net40 没有 Process.ArgumentList，只能拼字符串；不转义时进程名/版本号里
+        // 的空格、引号会改变参数边界（版本号甚至是完全裸拼的）。
+        //   QuoteArg：按 Windows CRT 规则加引号与反斜杠转义；
+        //   IsSafeVersion：版本号白名单（与 server 端 validVersion 字符集兼容），
+        //                   属纵深防御——绕过服务端的宿主直调也不会注入额外 argv。
+
+        private static readonly Regex SafeVersionPattern =
+            new Regex(@"^[0-9A-Za-z._+\-]+$", RegexOptions.Compiled);
+
+        private static bool IsSafeVersion(string version)
+            => !string.IsNullOrEmpty(version) && SafeVersionPattern.IsMatch(version);
+
+        /// <summary>
+        /// 构造"已完成"的任务。
+        /// net40 没有 <c>Task.FromResult</c>（.NET 4.5 才引入），
+        /// 而本 SDK 同时编译 netstandard2.0 与 net40，必须用 TaskCompletionSource。
+        /// </summary>
+        private static Task<T> CompletedTask<T>(T result)
+        {
+            var tcs = new TaskCompletionSource<T>();
+            tcs.SetResult(result);
+            return tcs.Task;
+        }
+
+        internal static string QuoteArg(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return "\"\"";
+            }
+            var needsQuote = false;
+            foreach (var ch in value)
+            {
+                if (ch == ' ' || ch == '\t' || ch == '"' || ch == '\\')
+                {
+                    needsQuote = true;
+                    break;
+                }
+            }
+            if (!needsQuote)
+            {
+                return value;
+            }
+
+            var sb = new StringBuilder();
+            sb.Append('"');
+            var backslashes = 0;
+            foreach (var ch in value)
+            {
+                if (ch == '\\')
+                {
+                    backslashes++;
+                    continue;
+                }
+                if (ch == '"')
+                {
+                    // 引号前的反斜杠要翻倍，再加一个用于转义引号本身
+                    sb.Append('\\', backslashes * 2 + 1);
+                    sb.Append('"');
+                    backslashes = 0;
+                    continue;
+                }
+                sb.Append('\\', backslashes);
+                backslashes = 0;
+                sb.Append(ch);
+            }
+            // 收尾引号前的反斜杠也要翻倍
+            sb.Append('\\', backslashes * 2);
+            sb.Append('"');
+            return sb.ToString();
         }
 
         /// <summary>应用更新（原子替换），会关闭主进程并重启。返回 OperationResult（无 data）。</summary>
@@ -166,7 +241,7 @@ namespace AlyClient.CSharpSDK
         {
             var args = "apply_update";
             if (!string.IsNullOrWhiteSpace(mustCloseProcessNames))
-                args += $" --must-close-process-name \"{mustCloseProcessNames}\"";
+                args += " --must-close-process-name " + QuoteArg(mustCloseProcessNames);
             if (closeTimeoutSeconds != 30)
                 args += $" --close-timeout {closeTimeoutSeconds}";
 
@@ -191,9 +266,15 @@ namespace AlyClient.CSharpSDK
             string mustCloseProcessNames = null,
             int closeTimeoutSeconds = 30)
         {
-            var args = $"rollback --version {version}";
+            // 审查 M25：版本号曾完全裸拼进命令行（"rollback --version {version}"），
+            // 宿主把版本号来源交给用户输入时，一个空格就能加出额外 argv。
+            // 白名单 + 引号转义双保险。
+            if (!IsSafeVersion(version))
+                return CompletedTask(AlyResponse<RollbackData>.NG("invalid version: " + version));
+
+            var args = "rollback --version " + QuoteArg(version);
             if (!string.IsNullOrWhiteSpace(mustCloseProcessNames))
-                args += $" --must-close-process-name \"{mustCloseProcessNames}\"";
+                args += " --must-close-process-name " + QuoteArg(mustCloseProcessNames);
             if (closeTimeoutSeconds != 30)
                 args += $" --close-timeout {closeTimeoutSeconds}";
 

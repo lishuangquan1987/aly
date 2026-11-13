@@ -135,7 +135,7 @@ func (c *UpdateClient) loop(ctx context.Context) {
 		c.clearError()
 
 		data := check.Data
-		if !data.HasUpdate || !data.NeedDownloadUpdate {
+		if !data.HasUpdate {
 			if c.Status() != StatusNone {
 				c.setStatus(StatusNone, "Update status cleared")
 			}
@@ -146,42 +146,47 @@ func (c *UpdateClient) loop(ctx context.Context) {
 		}
 
 		version := strings.TrimSpace(data.NewVersion)
-		message := "Found new version"
-		if version != "" {
-			message += " " + version
-		}
-		c.setStatus(StatusDiscoveredUpdate, message)
-		if !data.ForceUpdate {
-			if !c.waitConfirm(ctx, c.ConfirmDownload, version) {
+		// 三态分派（与 C# UpdateClient 一致）：HasUpdate && !NeedDownloadUpdate
+		// 表示本地已下载待应用 / applying 崩溃恢复 / 回滚续跑，直接 ApplyUpdate，
+		// 不下载、不询问（恢复场景自愈）。
+		if data.NeedDownloadUpdate {
+			message := "Found new version"
+			if version != "" {
+				message += " " + version
+			}
+			c.setStatus(StatusDiscoveredUpdate, message)
+			if !data.ForceUpdate {
+				if !c.waitConfirm(ctx, c.ConfirmDownload, version) {
+					return
+				}
+			}
+
+			c.setStatus(StatusDownloadingUpdate, "Downloading update...")
+			downloaded := c.API.DownloadUpdate(ctx, DownloadOptions{
+				OnProgress: func(info DownloadProgressInfo) {
+					c.setStatus(
+						StatusDownloadingUpdate,
+						fmt.Sprintf("Downloading %s... %d%%", info.File, int(info.Ratio*100)),
+					)
+				},
+			})
+			if ctx.Err() != nil {
 				return
 			}
-		}
-
-		c.setStatus(StatusDownloadingUpdate, "Downloading update...")
-		downloaded := c.API.DownloadUpdate(ctx, DownloadOptions{
-			OnProgress: func(info DownloadProgressInfo) {
-				c.setStatus(
-					StatusDownloadingUpdate,
-					fmt.Sprintf("Downloading %s... %d%%", info.File, int(info.Ratio*100)),
-				)
-			},
-		})
-		if ctx.Err() != nil {
-			return
-		}
-		if !downloaded.IsSuccess {
-			if strings.Contains(downloaded.ErrorMsg, "already at latest version") {
-				c.setStatus(StatusNone, "Update status cleared")
-				if !sleepCtx(ctx, c.idleDelay()) {
+			if !downloaded.IsSuccess {
+				if strings.Contains(downloaded.ErrorMsg, "already at latest version") {
+					c.setStatus(StatusNone, "Update status cleared")
+					if !sleepCtx(ctx, c.idleDelay()) {
+						return
+					}
+					continue
+				}
+				c.reportError(downloaded.ErrorMsg)
+				if !sleepCtx(ctx, time.Second) {
 					return
 				}
 				continue
 			}
-			c.reportError(downloaded.ErrorMsg)
-			if !sleepCtx(ctx, time.Second) {
-				return
-			}
-			continue
 		}
 
 		c.setStatus(StatusDownloadedUpdate, "Update downloaded")

@@ -1,0 +1,31 @@
+{
+  "name": "rollback_resume",
+  "description": "回滚续跑：回滚中断后重启，check_update 返回 has_update=true 且 need_download_update=false，宿主应直接 apply_update 完成续跑。",
+  "commands": {
+    "check_self_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": {"need_update": false}}
+      ]
+    },
+    "check_update": {
+      "lines": [
+        {
+          "isSuccess": true,
+          "errorMsg": "",
+          "data": {
+            "has_update": true,
+            "need_download_update": false,
+            "current_version": "1.0.2",
+            "new_version": "1.0.1",
+            "force_update": false
+          }
+        }
+      ]
+    },
+    "apply_update": {
+      "lines": [
+        {"isSuccess": true, "errorMsg": "", "data": null}
+      ]
+    }
+  }
+}

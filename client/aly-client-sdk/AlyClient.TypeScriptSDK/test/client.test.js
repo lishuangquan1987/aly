@@ -92,6 +92,38 @@ test("managed loop: offline stays idle and does not ask for download", async () 
   });
 });
 
+test("managed loop: pending apply (=true, need_download=false) applies without downloading", async () => {
+  await withScenario("pending_apply", async () => {
+    const statuses = [];
+    const downloads = [];
+    const applies = [];
+    const errors = [];
+    const client = new AlyUpdateClient({
+      clientPath,
+      confirmDownload: (version) => {
+        downloads.push(version);
+      },
+      confirmApply: (version) => {
+        applies.push(version);
+      },
+      onStatusChange: (status) => statuses.push(status),
+      onError: (message) => errors.push(message),
+    });
+
+    client.start();
+    await waitFor(() => statuses.includes("applyUpdate"), 8000);
+    await client.dispose();
+
+    assert.deepEqual(downloads, [], "pending apply must not ask for download");
+    assert.equal(statuses.includes("discoveredUpdate"), false);
+    assert.equal(statuses.includes("downloadingUpdate"), false);
+    assert.deepEqual(applies, ["1.0.1"], "must ask for apply confirmation");
+    assert.equal(statuses[0], "downloadedUpdate");
+    assert.equal(statuses[statuses.length - 1], "applyUpdate");
+    assert.deepEqual(errors, []);
+  });
+});
+
 test("managed loop: dispose is idempotent and state stays readable", async () => {
   const client = new AlyUpdateClient({ clientPath });
   client.start();

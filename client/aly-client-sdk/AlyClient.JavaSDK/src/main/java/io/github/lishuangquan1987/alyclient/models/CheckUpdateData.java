@@ -9,9 +9,9 @@ import java.util.Map;
 
 /** check_update 命令的 data：检查服务端是否有新版本。服务器不可达时 has_update 为 false，不报错。 */
 public final class CheckUpdateData {
-    // 是否有新版本。服务器不可达或本地已下载待应用时为 false。
+    // 是否有新版本。本地已下载待应用、applying 崩溃恢复或回滚续跑时为 true（此时 need_download_update=false，宿主应调用 apply_update 完成恢复）；仅当服务器不可达且本地无在途恢复状态时为 false。
     public boolean hasUpdate;
-    // 是否需要下载变更文件。已下载待应用时为 false。
+    // 是否需要下载变更文件。本地已下载待应用、applying 崩溃恢复或回滚续跑时为 false（此时 has_update=true，宿主应调用 apply_update 完成恢复）；仅当需要下载变更文件时才为 true。
     public boolean needDownloadUpdate;
     // 当前版本。
     public String currentVersion;

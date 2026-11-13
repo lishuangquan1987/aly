@@ -59,7 +59,8 @@ func main() {
 - 启动时先尝试 `check_self_update` / `self_update`；
 - 空闲轮询默认 300s（最小 60s，叠加 0–60s 抖动），`Stop` 可中断等待；
 - `force_update=true` 时不调用确认回调，直接下载并应用；
-- 服务器不可达时 `has_update=false`，已下载产物保留；
+- `HasUpdate=true` 且 `NeedDownloadUpdate=false`（本地已下载待应用、applying 崩溃恢复、回滚续跑）时**直接调用 `ApplyUpdate`**，不下载、不询问（恢复场景自愈）；
+- 服务器不可达且本地无在途恢复状态时 `has_update=false`，已下载产物保留；
 - `ApplyUpdate` 以独立进程拉起后立即返回；更新器会关闭宿主并重启主程序。
 
 ## 底层 API
@@ -71,15 +72,20 @@ api := alyclient.NewAPI("/path/to/aly-client")
 ctx := context.Background()
 
 check := api.CheckUpdate(ctx)
-if check.IsSuccess && check.Data.HasUpdate && check.Data.NeedDownloadUpdate {
-	downloaded := api.DownloadUpdate(ctx, alyclient.DownloadOptions{
-		OnProgress: func(info alyclient.DownloadProgressInfo) {
-			fmt.Println(info.File, info.Ratio)
-		},
-	})
-	if downloaded.IsSuccess {
-		api.ApplyUpdate(alyclient.CloseOptions{MustCloseProcessNames: "YourApp"})
+if check.IsSuccess && check.Data.HasUpdate {
+	if check.Data.NeedDownloadUpdate {
+		downloaded := api.DownloadUpdate(ctx, alyclient.DownloadOptions{
+			OnProgress: func(info alyclient.DownloadProgressInfo) {
+				fmt.Println(info.File, info.Ratio)
+			},
+		})
+		if !downloaded.IsSuccess {
+			return
+		}
 	}
+	// NeedDownloadUpdate=false：本地已下载待应用 / applying 崩溃恢复 / 回滚续跑，
+	// 直接 ApplyUpdate 完成恢复，不下载、不询问。
+	api.ApplyUpdate(alyclient.CloseOptions{MustCloseProcessNames: "YourApp"})
 }
 ```
 
@@ -118,6 +124,8 @@ check.Data.ReleaseNotes  // json:"release_notes"
 | 确认回调 | 同步 | 接收 `context.Context`，应响应取消 |
 | 更新器自更新兜底 | 命令失败时本地复制兜底 | 只委派 `self_update`，不做本地替换 |
 | GUI 启动器 | `AlyUpdateUIClient` | 未提供 |
+
+托管循环的恢复语义与 C# 一致：`HasUpdate=true` 且 `NeedDownloadUpdate=false` 时直接 `ApplyUpdate`，不下载、不询问；差异仅在上表列出的方面。
 
 ## 开发与测试
 

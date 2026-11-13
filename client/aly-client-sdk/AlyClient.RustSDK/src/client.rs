@@ -7,7 +7,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 /// 更新生命周期阶段。
 pub struct Status;
@@ -177,6 +177,12 @@ impl UpdateClient {
         }
         if handle.is_finished() {
             let _ = handle.join();
+            // 审查 Rust 轻微①：停止成功后清空回调，避免宿主在 stop 之后
+            // 仍收到迟到的状态/错误/确认回调（UI 已关闭时这类回调会触碰失效状态）。
+            self.on_status = None;
+            self.on_error = None;
+            self.confirm_download = None;
+            self.confirm_apply = None;
             true
         } else {
             self.handle = Some(handle);
@@ -228,7 +234,7 @@ fn run_loop(
             }
         };
 
-        if !data.has_update || !data.need_download_update {
+        if !data.has_update {
             if lock(&status).as_str() != Status::NONE {
                 set_status(&status, &on_status, Status::NONE, "Update status cleared");
             }
@@ -240,60 +246,65 @@ fn run_loop(
 
         let force = data.force_update.unwrap_or(false);
         let version = data.new_version.clone().unwrap_or_default();
-        let message = if version.is_empty() {
-            "Found new version".to_string()
-        } else {
-            format!("Found new version {version}")
-        };
-        set_status(&status, &on_status, Status::DISCOVERED_UPDATE, &message);
-        if !force {
-            call_confirm(confirm_download.as_ref(), &version, &token, &error, &on_error);
+        // 三态分派（与 C# UpdateClient 一致）：has_update && !need_download_update
+        // 表示本地已下载待应用 / applying 崩溃恢复 / 回滚续跑，直接 apply，
+        // 不下载、不询问（恢复场景自愈）。
+        if data.need_download_update {
+            let message = if version.is_empty() {
+                "Found new version".to_string()
+            } else {
+                format!("Found new version {version}")
+            };
+            set_status(&status, &on_status, Status::DISCOVERED_UPDATE, &message);
+            if !force {
+                call_confirm(confirm_download.as_ref(), &version, &token, &error, &on_error);
+                if token.is_cancelled() {
+                    return;
+                }
+            }
+
+            set_status(
+                &status,
+                &on_status,
+                Status::DOWNLOADING_UPDATE,
+                "Downloading update...",
+            );
+            let downloaded = {
+                let mut on_progress = |info: crate::DownloadProgressInfo| {
+                    set_status(
+                        &status,
+                        &on_status,
+                        Status::DOWNLOADING_UPDATE,
+                        &format!(
+                            "Downloading {}... {}%",
+                            info.file,
+                            (info.ratio * 100.0) as i32
+                        ),
+                    );
+                };
+                api.download_update(DownloadOptions {
+                    stall_timeout: DEFAULT_DOWNLOAD_STALL_TIMEOUT,
+                    on_progress: Some(&mut on_progress),
+                    cancel: Some(&token),
+                })
+            };
             if token.is_cancelled() {
                 return;
             }
-        }
-
-        set_status(
-            &status,
-            &on_status,
-            Status::DOWNLOADING_UPDATE,
-            "Downloading update...",
-        );
-        let downloaded = {
-            let mut on_progress = |info: crate::DownloadProgressInfo| {
-                set_status(
-                    &status,
-                    &on_status,
-                    Status::DOWNLOADING_UPDATE,
-                    &format!(
-                        "Downloading {}... {}%",
-                        info.file,
-                        (info.ratio * 100.0) as i32
-                    ),
-                );
-            };
-            api.download_update(DownloadOptions {
-                stall_timeout: DEFAULT_DOWNLOAD_STALL_TIMEOUT,
-                on_progress: Some(&mut on_progress),
-                cancel: Some(&token),
-            })
-        };
-        if token.is_cancelled() {
-            return;
-        }
-        if !downloaded.is_success {
-            if downloaded.error_msg.contains("already at latest version") {
-                set_status(&status, &on_status, Status::NONE, "Update status cleared");
-                if !sleep(&running, idle_delay(idle_poll)) {
+            if !downloaded.is_success {
+                if downloaded.error_msg.contains("already at latest version") {
+                    set_status(&status, &on_status, Status::NONE, "Update status cleared");
+                    if !sleep(&running, idle_delay(idle_poll)) {
+                        return;
+                    }
+                    continue;
+                }
+                report_error(&error, &on_error, &downloaded.error_msg);
+                if !sleep(&running, Duration::from_secs(1)) {
                     return;
                 }
                 continue;
             }
-            report_error(&error, &on_error, &downloaded.error_msg);
-            if !sleep(&running, Duration::from_secs(1)) {
-                return;
-            }
-            continue;
         }
 
         set_status(
@@ -411,13 +422,20 @@ fn sleep(running: &AtomicBool, duration: Duration) -> bool {
     running.load(Ordering::SeqCst)
 }
 
+/// 空闲轮询的实际间隔（带抖动）。
+///
+/// 审查 Rust 轻微②：旧实现抖动 = `当前纳秒 % 61`（0..=60s）。
+/// 问题有二：① 抖动可达 +60s——interval=60s 时最长要 120s 才检查一次，
+/// 与文档"每 N 秒检查一次"不符，静默期/更新响应被成倍拉长；
+/// ② 每次 sleep 都不同，行为完全不可预测（测试也没法断言）。
+/// 现在改为**按进程确定**的偏移：幅度 ≤ 10% 且 ≤ 30s，不同机器错峰、同一进程稳定。
 fn idle_delay(interval: Duration) -> Duration {
     let seconds = interval.as_secs().max(60);
-    let jitter = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| (elapsed.subsec_nanos() as u64) % 61)
-        .unwrap_or(0);
-    Duration::from_secs(seconds + jitter)
+    let cap = (seconds / 10).clamp(1, 30) as i64;
+    let hash = (std::process::id() as u64).wrapping_mul(2654435761);
+    let delta = (hash % ((cap * 2 + 1) as u64)) as i64 - cap;
+    let total = (seconds as i64 + delta).max(1) as u64;
+    Duration::from_secs(total)
 }
 
 fn lock(value: &Arc<Mutex<String>>) -> std::sync::MutexGuard<'_, String> {

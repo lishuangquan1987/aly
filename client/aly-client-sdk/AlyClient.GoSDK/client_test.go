@@ -77,6 +77,61 @@ func TestManagedNonForceWaitsForConfirmations(t *testing.T) {
 	}
 }
 
+func TestManagedPendingApplyAppliesWithoutDownloading(t *testing.T) {
+	fake := fakeClient(t)
+	useScenario(t, "pending_apply")
+
+	client := NewUpdateClient(fake)
+	var mu sync.Mutex
+	var statuses []Status
+	var downloads, applies []string
+	client.OnStatusChange = func(status Status, _ string) {
+		mu.Lock()
+		statuses = append(statuses, status)
+		mu.Unlock()
+	}
+	client.ConfirmDownload = func(_ context.Context, version string) {
+		mu.Lock()
+		downloads = append(downloads, version)
+		mu.Unlock()
+	}
+	client.ConfirmApply = func(_ context.Context, version string) {
+		mu.Lock()
+		applies = append(applies, version)
+		mu.Unlock()
+	}
+
+	client.Start()
+	waitFor(t, func() bool { return client.Status() == StatusApplyUpdate }, 5*time.Second)
+	client.Stop()
+
+	mu.Lock()
+	gotStatuses := append([]Status(nil), statuses...)
+	gotDownloads := append([]string(nil), downloads...)
+	gotApplies := append([]string(nil), applies...)
+	mu.Unlock()
+
+	if len(gotDownloads) != 0 {
+		t.Fatalf("pending apply must not ask for download, got %v", gotDownloads)
+	}
+	if containsStatus(gotStatuses, StatusDiscoveredUpdate) ||
+		containsStatus(gotStatuses, StatusDownloadingUpdate) {
+		t.Fatalf("pending apply must not download, statuses = %v", gotStatuses)
+	}
+	if len(gotApplies) != 1 || gotApplies[0] != "1.0.1" {
+		t.Fatalf("apply confirms = %v", gotApplies)
+	}
+	if len(gotStatuses) == 0 || gotStatuses[0] != StatusDownloadedUpdate {
+		t.Fatalf("statuses = %v", gotStatuses)
+	}
+	if gotStatuses[len(gotStatuses)-1] != StatusApplyUpdate {
+		t.Fatalf("last status = %v", gotStatuses[len(gotStatuses)-1])
+	}
+	if errMsg := client.LastError(); errMsg != "" {
+		t.Fatalf("unexpected error: %s", errMsg)
+	}
+}
+
 func TestManagedOfflineStaysIdle(t *testing.T) {
 	fake := fakeClient(t)
 	useScenario(t, "offline")

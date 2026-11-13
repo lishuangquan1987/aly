@@ -64,10 +64,30 @@ export interface DownloadProgressInfo {
 
 export type ProgressCallback = (info: DownloadProgressInfo) => void;
 
-/** 默认更新器路径：<cwd>/../UpdateFolder/aly-client[.exe]。 */
+/**
+ * 默认更新器路径：`<应用目录>/../UpdateFolder/aly-client[.exe]`。
+ *
+ * 审查 TS 轻微：旧实现按 `process.cwd()` 推算——工作目录不等于应用目录的场景
+ * （快捷方式、DLL 宿主、计划任务、`node /path/app.js` 从别的目录启动）会静默
+ * 指向错误的 UpdateFolder，然后报"找不到更新器"。现在：
+ *   1. `ALY_CLIENT_PATH`（完整可执行路径）/ `ALY_UPDATE_FOLDER`（目录）显式覆盖优先；
+ *   2. 否则按入口脚本目录（`process.argv[1]`）推算，打包成单文件 exe 时
+ *      `argv[1]` 缺失则退回 `process.execPath` 所在目录。
+ */
 export function defaultClientPath(): string {
   const exe = process.platform === "win32" ? "aly-client.exe" : "aly-client";
-  return path.resolve(process.cwd(), "..", "UpdateFolder", exe);
+
+  const explicit = process.env.ALY_CLIENT_PATH?.trim();
+  if (explicit) {
+    return explicit;
+  }
+  const folder = process.env.ALY_UPDATE_FOLDER?.trim();
+  if (folder) {
+    return path.join(folder, exe);
+  }
+
+  const entry = process.argv[1] ?? process.execPath;
+  return path.resolve(path.dirname(entry), "..", "UpdateFolder", exe);
 }
 
 interface RunResult {

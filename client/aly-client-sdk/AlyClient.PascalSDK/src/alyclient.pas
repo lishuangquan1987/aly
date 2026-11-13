@@ -1273,7 +1273,7 @@ begin
       Continue;
     end;
 
-    if (not Check.Data.has_update) or (not Check.Data.need_download_update) then
+    if not Check.Data.has_update then
     begin
       if Status <> StatusNone then
         SetStatus(StatusNone, 'Update status cleared');
@@ -1284,45 +1284,51 @@ begin
 
     Force := Check.Data.force_update;
     Version := Check.Data.new_version;
-    if Version = '' then
-      SetStatus(StatusDiscoveredUpdate, 'Found new version')
-    else
-      SetStatus(StatusDiscoveredUpdate, 'Found new version ' + Version);
-
-    if not Force then
+    { 三态分派（与 C# UpdateClient 一致）：has_update 且 need_download_update
+      为 False 表示本地已下载待应用 / applying 崩溃恢复 / 回滚续跑，
+      直接 apply，不下载、不询问（恢复场景自愈）。 }
+    if Check.Data.need_download_update then
     begin
-      if Assigned(FOnConfirmDownload) then
+      if Version = '' then
+        SetStatus(StatusDiscoveredUpdate, 'Found new version')
+      else
+        SetStatus(StatusDiscoveredUpdate, 'Found new version ' + Version);
+
+      if not Force then
       begin
-        try
-          FOnConfirmDownload(Version, FCancel);
-        except
-          ReportError('confirm handler error');
+        if Assigned(FOnConfirmDownload) then
+        begin
+          try
+            FOnConfirmDownload(Version, FCancel);
+          except
+            ReportError('confirm handler error');
+          end;
         end;
+        if FCancel.IsCancelled then
+          Exit;
       end;
+
+      SetStatus(StatusDownloadingUpdate, 'Downloading update...');
+      Options := DefaultDownloadOptions;
+      Options.Cancel := FCancel;
+      Options.OnProgress := FThread.DownloadProgress;
+      Downloaded := FApi.DownloadUpdate(Options);
       if FCancel.IsCancelled then
         Exit;
-    end;
-
-    SetStatus(StatusDownloadingUpdate, 'Downloading update...');
-    Options := DefaultDownloadOptions;
-    Options.Cancel := FCancel;
-    Options.OnProgress := FThread.DownloadProgress;
-    Downloaded := FApi.DownloadUpdate(Options);
-    if FCancel.IsCancelled then
-      Exit;
-    if not Downloaded.IsSuccess then
-    begin
-      if Pos('already at latest version', Downloaded.ErrorMsg) > 0 then
+      if not Downloaded.IsSuccess then
       begin
-        SetStatus(StatusNone, 'Update status cleared');
-        if not SleepFor(IdleDelayMs) then
+        if Pos('already at latest version', Downloaded.ErrorMsg) > 0 then
+        begin
+          SetStatus(StatusNone, 'Update status cleared');
+          if not SleepFor(IdleDelayMs) then
+            Exit;
+          Continue;
+        end;
+        ReportError(Downloaded.ErrorMsg);
+        if not SleepFor(1000) then
           Exit;
         Continue;
       end;
-      ReportError(Downloaded.ErrorMsg);
-      if not SleepFor(1000) then
-        Exit;
-      Continue;
     end;
 
     SetStatus(StatusDownloadedUpdate, 'Update downloaded');

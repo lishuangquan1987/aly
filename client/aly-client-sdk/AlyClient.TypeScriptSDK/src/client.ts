@@ -122,7 +122,7 @@ export class AlyUpdateClient {
         await this.sleep(5000);
         continue;
       }
-      if (!data.has_update || !data.need_download_update) {
+      if (!data.has_update) {
         if (this.statusValue !== "none") {
           this.setStatus("none", "Update status cleared");
         }
@@ -131,34 +131,39 @@ export class AlyUpdateClient {
       }
 
       const version = data.new_version ?? "";
-      this.setStatus("discoveredUpdate", version ? `Found new version ${version}` : "Found new version");
-      if (!data.force_update) {
-        await this.waitConfirm(this.options.confirmDownload, version);
+      // 三态分派（与 C# AlyUpdateClient 一致）：has_update && !need_download_update
+      // 表示本地已下载待应用 / applying 崩溃恢复 / 回滚续跑，直接 apply，
+      // 不下载、不询问（恢复场景自愈）。
+      if (data.need_download_update) {
+        this.setStatus("discoveredUpdate", version ? `Found new version ${version}` : "Found new version");
+        if (!data.force_update) {
+          await this.waitConfirm(this.options.confirmDownload, version);
+          if (this.disposed) return;
+        }
+
+        this.setStatus("downloadingUpdate", "Downloading update...");
+        const downloaded = await downloadUpdate(
+          this.clientPath,
+          (progress) => {
+            this.setStatus(
+              "downloadingUpdate",
+              `Downloading ${progress.file}... ${Math.round(progress.ratio * 100)}%`,
+            );
+          },
+          { env: this.options.env },
+        );
         if (this.disposed) return;
-      }
 
-      this.setStatus("downloadingUpdate", "Downloading update...");
-      const downloaded = await downloadUpdate(
-        this.clientPath,
-        (progress) => {
-          this.setStatus(
-            "downloadingUpdate",
-            `Downloading ${progress.file}... ${Math.round(progress.ratio * 100)}%`,
-          );
-        },
-        { env: this.options.env },
-      );
-      if (this.disposed) return;
-
-      if (!downloaded.isSuccess) {
-        if ((downloaded.errorMsg ?? "").includes("already at latest version")) {
-          this.setStatus("none", "Update status cleared");
-          await this.sleep(this.idleDelayMs());
+        if (!downloaded.isSuccess) {
+          if ((downloaded.errorMsg ?? "").includes("already at latest version")) {
+            this.setStatus("none", "Update status cleared");
+            await this.sleep(this.idleDelayMs());
+            continue;
+          }
+          this.reportError(downloaded.errorMsg || "download failed");
+          await this.sleep(1000);
           continue;
         }
-        this.reportError(downloaded.errorMsg || "download failed");
-        await this.sleep(1000);
-        continue;
       }
 
       this.setStatus("downloadedUpdate", "Update downloaded");

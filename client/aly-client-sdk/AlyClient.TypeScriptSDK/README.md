@@ -49,7 +49,8 @@ await client.dispose();
 - 启动时先尝试 `check_self_update` / `self_update`（失败只记录错误，不阻塞主循环）；
 - 空闲轮询默认 300s（最小 60s，叠加 0–60s 随机抖动），`dispose()` 会中断等待；
 - `force_update=true` 时不调用确认回调，直接下载并应用；
-- 服务器不可达时 `check_update` 返回 `has_update=false`，已下载产物保留；
+- `has_update=true` 且 `need_download_update=false`（本地已下载待应用、applying 崩溃恢复、回滚续跑）时**直接调用 `apply_update`**，不下载、不询问（恢复场景自愈）；
+- 服务器不可达且本地无在途恢复状态时 `check_update` 返回 `has_update=false`，已下载产物保留；
 - `apply_update` 以独立进程拉起，立即返回；更新器会关闭宿主并重启主程序。
 
 ## 底层 API
@@ -60,14 +61,19 @@ await client.dispose();
 import { checkUpdate, downloadUpdate, applyUpdate } from "aly-client-sdk";
 
 const check = await checkUpdate("/path/to/aly-client");
-if (check.isSuccess && check.data.has_update && check.data.need_download_update) {
-  const downloaded = await downloadUpdate(
-    "/path/to/aly-client",
-    (progress) => console.log(progress.file, progress.ratio),
-  );
-  if (downloaded.isSuccess) {
-    await applyUpdate("/path/to/aly-client", { mustCloseProcessNames: "YourApp" });
+if (check.isSuccess && check.data.has_update) {
+  if (check.data.need_download_update) {
+    const downloaded = await downloadUpdate(
+      "/path/to/aly-client",
+      (progress) => console.log(progress.file, progress.ratio),
+    );
+    if (!downloaded.isSuccess) {
+      throw new Error(downloaded.errorMsg);
+    }
   }
+  // need_download_update=false：本地已下载待应用 / applying 崩溃恢复 / 回滚续跑，
+  // 直接 apply 完成恢复，不下载、不询问。
+  await applyUpdate("/path/to/aly-client", { mustCloseProcessNames: "YourApp" });
 }
 ```
 
@@ -103,6 +109,8 @@ check.data.release_notes;
 | 事件模型 | `event` + 同步处理器 | 回调函数（可 async） |
 | 更新器自更新兜底 | 命令失败时本地复制兜底 | 只委派 `self_update`，不做本地替换 |
 | GUI 启动器 | `AlyUpdateUIClient` | 未提供（直接拉起 `aly-client-ui.exe` 亦可） |
+
+托管循环的恢复语义与 C# 一致：`has_update=true` 且 `need_download_update=false` 时直接 `apply_update`，不下载、不询问；差异仅在上表列出的方面。
 
 ## 开发与测试
 

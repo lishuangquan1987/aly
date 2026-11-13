@@ -381,6 +381,59 @@ public final class TestMain {
             }
         });
 
+        check("托管循环: 待应用恢复直接 apply 且不下载", new CaseBody() {
+            @Override
+            public String run() throws Exception {
+                final List<String> statuses = Collections.synchronizedList(new ArrayList<String>());
+                final List<String> downloads = Collections.synchronizedList(new ArrayList<String>());
+                final List<String> applies = Collections.synchronizedList(new ArrayList<String>());
+                UpdateClient client = new UpdateClient(api("pending_apply"));
+                client.setOnStatusChange(new UpdateClient.StatusListener() {
+                    @Override
+                    public void onStatus(String status, String message) {
+                        statuses.add(status);
+                    }
+                });
+                client.setConfirmDownload(new UpdateClient.ConfirmHandler() {
+                    @Override
+                    public void confirm(String version, CancelToken token) {
+                        downloads.add(version);
+                    }
+                });
+                client.setConfirmApply(new UpdateClient.ConfirmHandler() {
+                    @Override
+                    public void confirm(String version, CancelToken token) {
+                        applies.add(version);
+                    }
+                });
+                client.start();
+                waitForStatus(client, Status.APPLY_UPDATE, 5000L);
+                if (!client.stop(5000L)) {
+                    return "stop 超时";
+                }
+                if (!downloads.isEmpty()) {
+                    return "pending apply 不应询问下载: " + downloads;
+                }
+                if (statuses.contains(Status.DISCOVERED_UPDATE)
+                        || statuses.contains(Status.DOWNLOADING_UPDATE)) {
+                    return "pending apply 不应下载: " + statuses;
+                }
+                if (!applies.equals(Collections.singletonList("1.0.1"))) {
+                    return "apply confirms=" + applies;
+                }
+                if (statuses.isEmpty() || !Status.DOWNLOADED_UPDATE.equals(statuses.get(0))) {
+                    return "statuses=" + statuses;
+                }
+                if (!Status.APPLY_UPDATE.equals(statuses.get(statuses.size() - 1))) {
+                    return "last status=" + statuses.get(statuses.size() - 1);
+                }
+                if (!client.lastError().isEmpty()) {
+                    return "lastError=" + client.lastError();
+                }
+                return null;
+            }
+        });
+
         System.out.println("SUMMARY: PASS=" + pass + " FAIL=" + fail);
         System.exit(fail == 0 ? 0 : 1);
     }

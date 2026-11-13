@@ -45,7 +45,8 @@ client.stop()
 - 启动时先尝试 `check_self_update` / `self_update`；
 - 空闲轮询默认 300s（最小 60s，叠加 0–60s 抖动），`stop()` 可中断等待；
 - `force_update=true` 时不调用确认回调，直接下载并应用；
-- 服务器不可达时 `has_update=false`，已下载产物保留；
+- `has_update=true` 且 `need_download_update=false`（本地已下载待应用、applying 崩溃恢复、回滚续跑）时**直接调用 `apply_update`**，不下载、不询问（恢复场景自愈）；
+- 服务器不可达且本地无在途恢复状态时 `has_update=false`，已下载产物保留；
 - `apply_update` 以独立进程拉起后立即返回；更新器会关闭宿主并重启主程序。
 
 ## 底层 API
@@ -57,12 +58,16 @@ from alyclient import API, CloseOptions
 
 api = API("/path/to/aly-client")
 check = api.check_update()
-if check.is_success and check.data.has_update and check.data.need_download_update:
-    downloaded = api.download_update(
-        on_progress=lambda info: print(info.file, info.ratio),
-    )
-    if downloaded.is_success:
-        api.apply_update(CloseOptions(must_close_process_names="YourApp"))
+if check.is_success and check.data.has_update:
+    if check.data.need_download_update:
+        downloaded = api.download_update(
+            on_progress=lambda info: print(info.file, info.ratio),
+        )
+        if not downloaded.is_success:
+            raise RuntimeError(downloaded.error_msg)
+    # need_download_update=False：本地已下载待应用 / applying 崩溃恢复 / 回滚续跑，
+    # 直接 apply_update 完成恢复，不下载、不询问。
+    api.apply_update(CloseOptions(must_close_process_names="YourApp"))
 ```
 
 | 方法 | 对应命令 | 默认超时 |
@@ -100,6 +105,8 @@ check.data.release_notes
 | 确认回调 | 同步 | 同步，接收 `threading.Event`（应响应取消） |
 | 更新器自更新兜底 | 命令失败时本地复制兜底 | 只委派 `self_update`，不做本地替换 |
 | GUI 启动器 | `AlyUpdateUIClient` | 未提供 |
+
+托管循环的恢复语义与 C# 一致：`has_update=true` 且 `need_download_update=false` 时直接 `apply_update`，不下载、不询问；差异仅在上表列出的方面。
 
 ## 开发与测试
 

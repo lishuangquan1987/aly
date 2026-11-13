@@ -142,7 +142,7 @@ void UpdateClient::run() {
             continue;
         }
         const CheckUpdateData& data = check.data.get();
-        if (!data.has_update || !data.need_download_update) {
+        if (!data.has_update) {
             if (status() != Status::NONE) {
                 setStatus(Status::NONE, "Update status cleared");
             }
@@ -154,53 +154,58 @@ void UpdateClient::run() {
 
         bool force = data.force_update.has_value() && data.force_update.get();
         std::string version = data.new_version.value_or(std::string());
-        setStatus(
-            Status::DISCOVERED_UPDATE,
-            version.empty() ? "Found new version" : "Found new version " + version);
-        if (!force) {
-            if (confirmDownload_) {
-                try {
-                    confirmDownload_(version, token);
-                } catch (...) {
-                    reportError("confirm handler error");
+        // 三态分派（与 C# UpdateClient 一致）：has_update && !need_download_update
+        // 表示本地已下载待应用 / applying 崩溃恢复 / 回滚续跑，直接 apply，
+        // 不下载、不询问（恢复场景自愈）。
+        if (data.need_download_update) {
+            setStatus(
+                Status::DISCOVERED_UPDATE,
+                version.empty() ? "Found new version" : "Found new version " + version);
+            if (!force) {
+                if (confirmDownload_) {
+                    try {
+                        confirmDownload_(version, token);
+                    } catch (...) {
+                        reportError("confirm handler error");
+                    }
+                }
+                if (!running_.load(std::memory_order_seq_cst) || token.isCancelled()) {
+                    return;
                 }
             }
+
+            setStatus(Status::DOWNLOADING_UPDATE, "Downloading update...");
+            DownloadOptions options;
+            options.stallTimeoutMs = 1800000;
+            options.cancel = &token;
+            options.onProgress = [this](const DownloadProgressInfo& info) {
+                char message[256];
+                std::snprintf(
+                    message,
+                    sizeof(message),
+                    "Downloading %s... %d%%",
+                    info.file.c_str(),
+                    static_cast<int>(info.ratio * 100.0));
+                setStatus(Status::DOWNLOADING_UPDATE, message);
+            };
+            Response<bool> downloaded = api_.downloadUpdate(options);
             if (!running_.load(std::memory_order_seq_cst) || token.isCancelled()) {
                 return;
             }
-        }
-
-        setStatus(Status::DOWNLOADING_UPDATE, "Downloading update...");
-        DownloadOptions options;
-        options.stallTimeoutMs = 1800000;
-        options.cancel = &token;
-        options.onProgress = [this](const DownloadProgressInfo& info) {
-            char message[256];
-            std::snprintf(
-                message,
-                sizeof(message),
-                "Downloading %s... %d%%",
-                info.file.c_str(),
-                static_cast<int>(info.ratio * 100.0));
-            setStatus(Status::DOWNLOADING_UPDATE, message);
-        };
-        Response<bool> downloaded = api_.downloadUpdate(options);
-        if (!running_.load(std::memory_order_seq_cst) || token.isCancelled()) {
-            return;
-        }
-        if (!downloaded.isSuccess) {
-            if (downloaded.errorMsg.find("already at latest version") != std::string::npos) {
-                setStatus(Status::NONE, "Update status cleared");
-                if (!sleepFor(idleDelayMs())) {
+            if (!downloaded.isSuccess) {
+                if (downloaded.errorMsg.find("already at latest version") != std::string::npos) {
+                    setStatus(Status::NONE, "Update status cleared");
+                    if (!sleepFor(idleDelayMs())) {
+                        return;
+                    }
+                    continue;
+                }
+                reportError(downloaded.errorMsg);
+                if (!sleepFor(1000)) {
                     return;
                 }
                 continue;
             }
-            reportError(downloaded.errorMsg);
-            if (!sleepFor(1000)) {
-                return;
-            }
-            continue;
         }
 
         setStatus(Status::DOWNLOADED_UPDATE, "Update downloaded");
