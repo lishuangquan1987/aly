@@ -78,7 +78,11 @@ cd client/aly-client-ui
 
 ```bash
 # Windows: build both executables and copy them back according to config.json
+# (requires WSL + the Docker image golang:1.10.8-stretch)
 go run deploy/deploy-client.go
+
+# The binaries are built by Go 1.10.8 inside the image (windows/386); the PE header
+# is verified (Machine=0x014C, SubsystemVer=4.0) before anything is copied or deployed
 
 # Linux
 ./client/aly-client-ui/deploy-client-linux.sh

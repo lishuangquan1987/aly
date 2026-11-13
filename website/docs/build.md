@@ -77,8 +77,11 @@ cd client/aly-client-ui
 ## 一键部署
 
 ```bash
-# Windows：构建两件套并按 config.json 回拷
+# Windows：构建两件套并按 config.json 回拷（需 WSL + Docker 镜像 golang:1.10.8-stretch）
 go run deploy/deploy-client.go
+
+# 产物由镜像内的 Go 1.10.8 编译（windows/386），构建后校验 PE 头
+# （Machine=0x014C、SubsystemVer=4.0）不通过即中止，不会回拷/部署
 
 # Linux
 ./client/aly-client-ui/deploy-client-linux.sh

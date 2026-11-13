@@ -13,6 +13,11 @@
 
 - **Go 1.10.8**（Windows XP 硬性要求；Go 1.11+ 产出的二进制 XP 无法加载，
   因为 PE `MajorSubsystemVersion` 会变成 5.1 以上。`build.bat` 有版本断言）。
+- 一键构建（仓库根 `deploy/deploy-client.bat`）不再依赖 WSL 里安装的 Go 1.10：
+  它在 WSL 内用 Docker 镜像 `golang:1.10.8-stretch` 编译（`--network none` 离线、
+  源码只读挂载），构建后校验 PE 头（386 / `SubsystemVer=4.0`，即 Go 1.10 产物）
+  才回拷与部署。
+  镜像可用 `ALY_GO_IMAGE` 覆盖，必须是 `go1.10.x`，否则脚本直接报错。
 - 项目位于 GOPATH 下：
   - `client/aly-client/`     → `%GOPATH%/src/aly/client/aly-client/`
   - `client/aly-client-ui/`  → `%GOPATH%/src/aly/client/aly-client-ui/`（构建 winui 时需要）
@@ -72,7 +77,8 @@ Go 1.27.3 交叉编译；产物无扩展名。完整两件套（更新器 + MyGo
 ## 一键编译脚本
 
 `build.bat` 只构建更新器（内置 Go 1.10.x 版本断言）。完整部署用仓库根的
-`deploy/deploy-client.go`，它会同时构建 `aly-client.exe` 与 `aly-client-ui.exe`。
+`deploy/deploy-client.go`，它会用 Docker 镜像内的 Go 1.10.8 同时构建
+`aly-client.exe` 与 `aly-client-ui.exe`（需要 WSL 内 docker 可用且镜像已存在）。
 
 ## 常见问题
 

@@ -30,8 +30,8 @@ copy /y aly-client-ui.exe client\aly-client-ui\aly-client-winui\aly-client-ui.ex
 del aly-client-ui.exe
 ```
 
-`deploy-client.go` 会自动完成构建/回拷/部署；手工构建时才需要执行。产物路径已
-加入 `.gitignore`。
+`deploy-client.go` 会自动完成构建/回拷/部署（用 Docker 镜像 `golang:1.10.8-stretch`
+在 WSL 内编译并校验 PE 头）；手工构建时才需要执行。产物路径已加入 `.gitignore`。
 
 ## 一键脚本
 

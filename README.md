@@ -300,8 +300,9 @@ go build -ldflags="-s -w -H=windowsgui" -o aly-client-ui.exe aly/client/aly-clie
 >
 > Linux UI is a MyGo native UI (GTK3 runtime only; no WebKitGTK/Bun).
 >
-> Locally you can run `go run deploy/deploy-client.go` (WSL + Go 1.10.8) to build both
-> executables and deploy them to every target listed in `config.json`.
+> Locally you can run `go run deploy/deploy-client.go` (WSL + the Docker image
+> `golang:1.10.8-stretch`) to build both executables and deploy them to every target
+> listed in `config.json`.
 
 [lxn/walk]: https://github.com/lxn/walk
 
