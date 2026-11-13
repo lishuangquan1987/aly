@@ -57,19 +57,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # server/main.go 使用 //go:debug httpservecontentmaxranges（Go 1.26 引入），
+      # 但 go.mod 仍声明 go 1.25.0；用 go-version-file 会装 Go 1.25 并因
+      # "unknown //go:debug setting" 编译失败。这里固定用 Go 1.27.3（与其它现代轨 job 一致）。
       - name: Setup Go
         id: setup-go
         uses: actions/setup-go@v5
         with:
-          go-version-file: server/go.mod
+          go-version: '1.27.3'
         continue-on-error: true
 
       - name: Fallback — download Go
         if: steps.setup-go.outcome == 'failure'
         shell: cmd
         run: |
-          echo "setup-go could not resolve Go version from go.mod, using go1.25.0..."
-          powershell -Command "& {$(Invoke-WebRequest -Uri 'https://go.dev/dl/go1.25.0.windows-amd64.zip' -OutFile 'C:\go.zip'); Expand-Archive -Path 'C:\go.zip' -DestinationPath 'C:\go' -Force}"
+          echo "setup-go failed, downloading go1.27.3..."
+          powershell -Command "& {$(Invoke-WebRequest -Uri 'https://go.dev/dl/go1.27.3.windows-amd64.zip' -OutFile 'C:\go.zip'); Expand-Archive -Path 'C:\go.zip' -DestinationPath 'C:\go' -Force}"
           echo C:\go\go\bin>> %GITHUB_PATH%
 
       - name: Verify Go version

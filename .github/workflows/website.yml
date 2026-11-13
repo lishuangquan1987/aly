@@ -6,10 +6,11 @@ on:
   push:
     branches: [master]
     paths: ['website/**', '.github/workflows/website.yml']
-  # 发布 Release 时立即重建一次；若此刻资产还在上传，生成脚本会沿用仓库内快照，
-  # 随后 Release Build 上传完成后会再触发一次带 tag 的同步，链接最终一定对齐。
-  release:
-    types: [published]
+  # 注意：不能用 release 事件直接触发本 workflow。github-pages environment 启用了
+  # 自定义分支策略（只允许 master），而 release 事件的 ref 是 tag（refs/tags/vX.Y.Z），
+  # deploy job 会在启动前被环境规则拒绝（steps 为空、3 秒即 failure）。
+  # 发布后的链接刷新改由 release.yml 的 "Refresh website download links" 步骤完成：
+  # 它在资产全部上传后以 --ref master 触发本 workflow（带 release_tag），可通过环境规则。
   # 手动触发：可指定 tag，留空则取最新 Release
   workflow_dispatch:
     inputs:

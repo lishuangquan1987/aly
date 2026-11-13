@@ -147,9 +147,13 @@ func TestApplyRecoveryBothMissingDegrades(t *testing.T) {
 // （ACL/网络盘瞬断/非法名字）时，必须 fail-safe 报错返回、不改状态、不做任何磁盘动作，
 // 绝不能当成"缺失"继续走恢复（可能把真实主目录旁移成 {folderName}.old）。
 func TestApplyRecoveryVersionDirStatErrorFailsSafe(t *testing.T) {
+	// 失败注入用 NUL（JSON 里写 \u0000）：Windows 非法字符 * 在 Linux 上是合法文件名，
+	// os.Stat 只会返回 ENOENT（被当成"缺失"），永远走不到 fail-safe 分支。
+	// NUL 在 Windows / Linux / macOS 上都会让 os.Stat 返回 EINVAL / ERROR_INVALID_NAME，
+	// os.IsNotExist 为 false，正好命中 M9 要验证的"状态不可读"分支。
 	pkg := setupRollbackLayout(t, `{
   "version_previous": "1.0",
-  "version": "bad*name",
+  "version": "bad\u0000name",
   "version_status": "applying"
 }`)
 	writePkgFile(t, pkg, "ApplicationFolder/old.txt", "old")

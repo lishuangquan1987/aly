@@ -87,13 +87,14 @@ func TestResumeRollbackBothMissingDegrades(t *testing.T) {
 
 // TestResumeRollbackFailureKeepsApplyingAndCounts M6：回滚续跑失败但现场仍可重试时，
 // 保持 applying（保留 rollback_previous/target 供下次续跑）并递增 ApplyFailCount。
-// 失败注入：rollback_previous 取非法路径字符，使备份目录 stat 返回非"不存在"错误。
+// 失败注入：rollback_previous 含 NUL（\u0000），使备份目录 stat 返回 EINVAL 而非 ENOENT。
+// 不能用 Windows 非法字符 *：Linux 上它是合法文件名，stat 只会返回 ENOENT。
 func TestResumeRollbackFailureKeepsApplyingAndCounts(t *testing.T) {
 	root := setupRollbackLayout(t, `{
   "version_previous": "2.0",
   "version": "3.0",
   "version_status": "applying",
-  "rollback_previous": "bad*name",
+  "rollback_previous": "bad\u0000name",
   "rollback_target": "1.0"
 }`)
 	// 主目录存在；目标目录 1.0 存在（分支 2 条件），随后备份 stat 失败
@@ -120,7 +121,7 @@ func TestResumeRollbackFailureKeepsApplyingAndCounts(t *testing.T) {
 	if persisted.ApplyFailCount != 1 {
 		t.Errorf("应递增 ApplyFailCount 为 1，实际 %d", persisted.ApplyFailCount)
 	}
-	if persisted.RollbackPrevious != "bad*name" || persisted.RollbackTarget != "1.0" {
+	if persisted.RollbackPrevious != "bad\u0000name" || persisted.RollbackTarget != "1.0" {
 		t.Errorf("回滚现场应保留供下次续跑，实际 %+v", persisted)
 	}
 	// 现场未被破坏
