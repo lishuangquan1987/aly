@@ -101,4 +101,15 @@
 - **Semi.Avalonia 12.1**: https://github.com/irihi/Semi.Avalonia
 - **Ursa.Avalonia 2.2**: https://github.com/irihi/Ursa
 
-> **版本**: 2.1 | **适用范围**: publish/publish-gui-csharp/（.NET 8 + Avalonia 12.1 + CommunityToolkit.Mvvm 8.4 + Semi.Avalonia 12.1 + Ursa.Avalonia 2.2）
+---
+
+## 八、MyGo 实验模块（publish/publish-gui-go）
+
+- 使用 MyGo（`github.com/egoist/mygo`）开发、修改或审查 `publish/publish-gui-go/` 时，**必须先加载技能**：
+  `C:\Users\5001494\.agents\skills\mygo`（DeepSeek Harness 中对应技能名 `mygo`）。
+- 技能内的 `reference/architecture.md`、`reference/views.md`、`reference/controls/*.md` 是 native UI
+  的权威参考；API 以 `go.mod` 锁定的 MyGo 版本（当前 v0.8.3）源码为准，技能按更新版本编写时注意核对差异。
+- 约束：Go 1.27.3；纯 Go、无 cgo；只用 native UI（`ui` 包），不使用 WebView/HTML/JS。
+- 本模块遵循 Go 规范，不套用上面的 C#/XAML 命名规则；它是实验项目，稳定前不同步到网站/根 README。
+
+> **版本**: 2.2 | **适用范围**: publish/publish-gui-csharp/（C#/Avalonia）与 publish/publish-gui-go/（MyGo 实验；Go 规范，见 §八）

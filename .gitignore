@@ -124,3 +124,10 @@ tools/interrupt-sim/result*.json
 tools/interrupt-sim/results/
 client/aly-client/version.json
 .reasonix/truncated-results/
+
+# publish-gui-go experimental build outputs
+publish/publish-gui-go/build/
+publish/publish-gui-go/.mygo/
+publish/publish-gui-go/artifacts/
+publish/publish-gui-go/publish-gui-go.exe
+publish/publish-gui-go/logs/

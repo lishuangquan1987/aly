@@ -1,0 +1,13 @@
+{
+  "name": "AlyPublish",
+  "slug": "aly-publish-go",
+  "identifier": "com.lishuangquan.aly.publish.go",
+  "version": "0.1.0",
+  "out": "build",
+  "linux": {
+    "webview": false,
+    "maintainer": "lishuangquan <lishuangquan@yofc.com>",
+    "comment": "Aly publish GUI (experimental MyGo native UI)",
+    "categories": ["Development"]
+  }
+}
