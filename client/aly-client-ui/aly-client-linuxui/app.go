@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -36,6 +37,17 @@ type uiButton struct {
 }
 
 type app struct {
+	// 审查 M23：生命周期字段的互斥锁。
+	//
+	// UI 可见字段（status/detail/buttons/progress/...）仍通过 a.update 编组到 UI 线程；
+	// 但 downloadGen/downloadCancel/countdownCancel/autoClose/forced/phase/retryStage/
+	// pending 会被多个 goroutine 读写（下载 goroutine、倒计时 goroutine、第二个实例的
+	// goroutine、点击回调），**必须**用本锁串行化。注意 a.update 在 win==nil 时直接在
+	// 调用 goroutine 执行（见 update 实现），不能代替加锁。
+	//
+	// 规则：持有本锁时不得调用 a.update / mygo 窗口 API（避免与 UI 线程编组互相等待）。
+	mu sync.Mutex
+
 	l       layout
 	mode    string
 	lang    string
@@ -65,13 +77,155 @@ type app struct {
 	countdownCancel context.CancelFunc
 	autoClose       *time.Timer
 
-	userVisible bool
+	// pending/pendingArgs 由第二个实例的 goroutine 写、主 goroutine 读（审查 M23），
+	// 访问一律在 a.mu 下进行。
 	pending     bool
 	pendingArgs []string
 }
 
 func (a *app) t(key string) string                    { return tr(a.lang, key) }
 func (a *app) tf(key string, v ...interface{}) string { return trf(a.lang, key, v...) }
+
+// ── 生命周期字段的线程安全访问器（审查 M23）────────────────────────────
+//
+// 这些字段跨 goroutine 读写；集中到此处的访问器里加锁，避免调用点各自漏锁。
+// 注意：持有 a.mu 期间一律不做 UI 操作（不调 a.update / a.win.*）。
+
+// nextDownloadGen 开启新的一代下载并返回代数；旧一代的进度/结果据此丢弃。
+func (a *app) nextDownloadGen() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.downloadGen++
+	return a.downloadGen
+}
+
+// downloadGenIs 判断代数是否仍是最新（用于下载 goroutine 过滤陈旧进度/结果）。
+func (a *app) downloadGenIs(gen int) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return gen == a.downloadGen
+}
+
+// takeDownloadCancel 取走并返回当前的下载取消函数（同时置空）。
+func (a *app) takeDownloadCancel() context.CancelFunc {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	cancel := a.downloadCancel
+	a.downloadCancel = nil
+	return cancel
+}
+
+// setDownloadCancel 设置当前下载取消函数。
+func (a *app) setDownloadCancel(cancel context.CancelFunc) {
+	a.mu.Lock()
+	a.downloadCancel = cancel
+	a.mu.Unlock()
+}
+
+// takeCountdownCancel 取走并返回倒计时取消函数。
+func (a *app) takeCountdownCancel() context.CancelFunc {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	cancel := a.countdownCancel
+	a.countdownCancel = nil
+	return cancel
+}
+
+func (a *app) setCountdownCancel(cancel context.CancelFunc) {
+	a.mu.Lock()
+	a.countdownCancel = cancel
+	a.mu.Unlock()
+}
+
+// setAutoClose 设置自动关闭定时器（替换旧的）。
+func (a *app) setAutoClose(d time.Duration, fn func()) {
+	timer := time.AfterFunc(d, fn)
+	a.mu.Lock()
+	old := a.autoClose
+	a.autoClose = timer
+	a.mu.Unlock()
+	if old != nil {
+		old.Stop()
+	}
+}
+
+// takeAutoClose 取走自动关闭定时器（并停止）。
+func (a *app) takeAutoClose() *time.Timer {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	timer := a.autoClose
+	a.autoClose = nil
+	return timer
+}
+
+// setForced / isForced 保护 force_update 现场。
+func (a *app) setForced(v bool) {
+	a.mu.Lock()
+	a.forced = v
+	a.mu.Unlock()
+}
+
+func (a *app) isForced() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.forced
+}
+
+// setPhase 记录当前阶段。
+func (a *app) setPhase(p string) {
+	a.mu.Lock()
+	a.phase = p
+	a.mu.Unlock()
+}
+
+// currentPhase 读取当前阶段（供跨 goroutine 判断）。
+func (a *app) currentPhase() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.phase
+}
+
+// enterPhase 阶段双跑守卫：已是目标阶段则返回 false（防止重复发起 apply）。
+func (a *app) enterPhase(p string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.phase == p {
+		return false
+	}
+	a.phase = p
+	return true
+}
+
+func (a *app) setRetryStage(stage string) {
+	a.mu.Lock()
+	a.retryStage = stage
+	a.mu.Unlock()
+}
+
+func (a *app) currentRetryStage() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.retryStage
+}
+
+// setPending 记录"第二个实例请求显示 UI"。
+func (a *app) setPending(args []string) {
+	a.mu.Lock()
+	a.pending = true
+	a.pendingArgs = append([]string(nil), args...)
+	a.mu.Unlock()
+}
+
+// takePending 读取并清空 pending 现场。
+func (a *app) takePending() (bool, []string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	pending := a.pending
+	args := append([]string(nil), a.pendingArgs...)
+	a.pending = false
+	a.pendingArgs = nil
+	return pending, args
+}
 
 func (a *app) update(fn func()) {
 	if a.win != nil {
@@ -175,8 +329,8 @@ func (a *app) startCheck() {
 		return
 	}
 	a.cancelAutoClose()
+	a.setPhase("check")
 	a.update(func() {
-		a.phase = "check"
 		a.status = a.t(keyChecking)
 		a.detail = ""
 		a.buttons = nil
@@ -199,15 +353,26 @@ func (a *app) startCheck() {
 			a.check = *p.Check
 			a.newer = p.Check.NewVersion
 			a.notes = append([]string(nil), p.Check.ReleaseNotes...)
-			a.forced = p.Check.ForceUpdate != nil && *p.Check.ForceUpdate
+			a.setForced(p.Check.ForceUpdate != nil && *p.Check.ForceUpdate)
 		})
 		a.handleCheck(*p.Check)
 	}()
 }
 
-func decide(chk client.CheckUpdate) (action string, ask bool) {
+// decide 依据 check_update 结果与现场决定下一步（与 winui flow.Decide 同款语义）。
+//
+//  1. applying（崩溃恢复 / 回滚续跑）→ 无条件 apply、**不询问**：
+//     主目录可能已被改名甚至丢失，应用处于不可用状态，必须自愈；
+//     询问会把机器留在坏状态里（审查 B10，linuxui 原缺此分支）。
+//  2. 无更新 → none。
+//  3. 需要下载 → download；force_update 明确为 true 才自动。
+//  4. 已下载只差应用 → apply；同样只有明确 true 才自动。
+func decide(chk client.CheckUpdate, applying bool) (action string, ask bool) {
 	if !chk.HasUpdate {
 		return "none", false
+	}
+	if applying {
+		return "apply", false
 	}
 	forced := chk.ForceUpdate != nil && *chk.ForceUpdate
 	if chk.NeedDownloadUpdate {
@@ -217,7 +382,7 @@ func decide(chk client.CheckUpdate) (action string, ask bool) {
 }
 
 func (a *app) handleCheck(chk client.CheckUpdate) {
-	a.forced = chk.ForceUpdate != nil && *chk.ForceUpdate
+	a.setForced(chk.ForceUpdate != nil && *chk.ForceUpdate)
 	newer := chk.NewVersion
 	a.update(func() {
 		a.current = chk.CurrentVersion
@@ -225,7 +390,7 @@ func (a *app) handleCheck(chk client.CheckUpdate) {
 		a.newer = newer
 		a.notes = append([]string(nil), chk.ReleaseNotes...)
 	})
-	action, ask := decide(chk)
+	action, ask := decide(chk, applyingNow())
 	switch action {
 	case "none":
 		a.noUpdate()
@@ -234,8 +399,8 @@ func (a *app) handleCheck(chk client.CheckUpdate) {
 			a.startDownload()
 			return
 		}
+		a.setPhase("found")
 		a.update(func() {
-			a.phase = "found"
 			a.status = a.tf(keyFoundVersion, newer)
 			a.showProgress = false
 			a.detail = ""
@@ -249,8 +414,8 @@ func (a *app) handleCheck(chk client.CheckUpdate) {
 			a.startCountdown()
 			return
 		}
+		a.setPhase("downloaded")
 		a.update(func() {
-			a.phase = "downloaded"
 			a.status = a.t(keyDownloaded)
 			a.showProgress = false
 			a.detail = a.t(keyWillRestart)
@@ -263,15 +428,15 @@ func (a *app) handleCheck(chk client.CheckUpdate) {
 }
 
 func (a *app) noUpdate() {
+	a.setPhase("no_update")
 	a.update(func() {
-		a.phase = "no_update"
 		a.status = a.t(keyNoUpdate)
 		a.detail = a.t(keyNoUpdateBox)
 		a.showProgress = false
 		a.buttons = []uiButton{{id: btnClose, label: a.t(keyClose), primary: true}}
 	})
 	if a.mode == "check" || a.mode == "update" || a.mode == "auto" || a.mode == "silent" {
-		a.autoClose = time.AfterFunc(5*time.Second, a.quit)
+		a.setAutoClose(5*time.Second, a.quit)
 	}
 }
 
@@ -280,15 +445,14 @@ func (a *app) startDownload() {
 		a.fail("download", "aly-client not found next to aly-client-ui")
 		return
 	}
-	if a.downloadCancel != nil {
-		a.downloadCancel()
+	if cancel := a.takeDownloadCancel(); cancel != nil {
+		cancel()
 	}
-	a.downloadGen++
-	gen := a.downloadGen
+	gen := a.nextDownloadGen()
 	ctx, cancel := context.WithCancel(context.Background())
-	a.downloadCancel = cancel
+	a.setDownloadCancel(cancel)
+	a.setPhase("download")
 	a.update(func() {
-		a.phase = "download"
 		a.paused = false
 		a.err = false
 		a.detail = ""
@@ -300,7 +464,7 @@ func (a *app) startDownload() {
 	go func() {
 		p, err := a.cl.DownloadUpdate(ctx, func(pr client.Progress) {
 			a.update(func() {
-				if gen != a.downloadGen {
+				if !a.downloadGenIs(gen) {
 					return
 				}
 				if pr.TotalBytes > 0 {
@@ -327,7 +491,7 @@ func (a *app) startDownload() {
 		if ctx.Err() != nil {
 			return // 暂停/取消
 		}
-		if gen != a.downloadGen {
+		if !a.downloadGenIs(gen) {
 			return // 已被更新的一代取代
 		}
 		if err != nil {
@@ -338,14 +502,14 @@ func (a *app) startDownload() {
 			a.fail("download", p.ErrMsg)
 			return
 		}
+		a.setPhase("downloaded")
 		a.update(func() {
-			a.phase = "downloaded"
 			a.progress = 1
 			a.status = a.t(keyDownloaded)
 			a.showProgress = false
 			a.buttons = nil
 		})
-		if a.forced {
+		if a.isForced() {
 			a.startCountdown()
 			return
 		}
@@ -360,10 +524,9 @@ func (a *app) startDownload() {
 }
 
 func (a *app) pauseDownload() {
-	a.downloadGen++
-	if a.downloadCancel != nil {
-		a.downloadCancel()
-		a.downloadCancel = nil
+	a.nextDownloadGen()
+	if cancel := a.takeDownloadCancel(); cancel != nil {
+		cancel()
 	}
 	a.update(func() {
 		a.paused = true
@@ -376,13 +539,13 @@ func (a *app) pauseDownload() {
 }
 
 func (a *app) startCountdown() {
-	if a.countdownCancel != nil {
-		a.countdownCancel()
+	if cancel := a.takeCountdownCancel(); cancel != nil {
+		cancel()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	a.countdownCancel = cancel
+	a.setCountdownCancel(cancel)
+	a.setPhase("countdown")
 	a.update(func() {
-		a.phase = "countdown"
 		a.status = a.tf(keyCountdown, 10)
 		a.detail = a.t(keyWillRestart)
 		a.showProgress = false
@@ -407,20 +570,19 @@ func (a *app) startCountdown() {
 }
 
 func (a *app) startApply() {
-	if a.phase == "apply" {
+	// 审查 M23：阶段双跑守卫必须在锁内 check-and-set，
+	// 否则倒计时 goroutine 与用户点击并发时可能双拉 ApplyUpdate。
+	if !a.enterPhase("apply") {
 		return
 	}
 	if a.cl == nil {
 		a.fail("apply", "aly-client not found next to aly-client-ui")
 		return
 	}
-	if a.countdownCancel != nil {
-		a.countdownCancel()
-		a.countdownCancel = nil
+	if cancel := a.takeCountdownCancel(); cancel != nil {
+		cancel()
 	}
-	a.phase = "apply"
 	a.update(func() {
-		a.phase = "apply"
 		a.status = a.t(keyApplying)
 		a.detail = ""
 		a.buttons = nil
@@ -436,8 +598,8 @@ func (a *app) startApply() {
 			a.fail("apply", p.ErrMsg)
 			return
 		}
+		a.setPhase("done")
 		a.update(func() {
-			a.phase = "done"
 			a.status = a.t(keyApplyDone)
 			a.detail = ""
 		})
@@ -451,8 +613,8 @@ func (a *app) startRollback() {
 		a.fail("rollback", "aly-client not found next to aly-client-ui")
 		return
 	}
+	a.setPhase("rollback")
 	a.update(func() {
-		a.phase = "rollback"
 		a.status = a.t(keyVersionList)
 		a.detail = ""
 		a.showProgress = false
@@ -482,8 +644,8 @@ func (a *app) startRollback() {
 }
 
 func (a *app) runRollback(version string) {
+	a.setPhase("apply")
 	a.update(func() {
-		a.phase = "apply"
 		a.status = a.t(keyApplying)
 		a.buttons = nil
 	})
@@ -497,8 +659,8 @@ func (a *app) runRollback(version string) {
 			a.fail("rollback", p.ErrMsg)
 			return
 		}
+		a.setPhase("done")
 		a.update(func() {
-			a.phase = "done"
 			a.status = a.t(keyApplyDone)
 		})
 		time.Sleep(1200 * time.Millisecond)
@@ -507,12 +669,12 @@ func (a *app) runRollback(version string) {
 }
 
 func (a *app) fail(stage, msg string) {
-	a.retryStage = stage
+	a.setRetryStage(stage)
 	if msg == "" {
 		msg = a.t(keyErrorGeneric)
 	}
+	a.setPhase("error")
 	a.update(func() {
-		a.phase = "error"
 		a.status = a.t(keyErrorGeneric)
 		a.detail = msg
 		a.showProgress = false
@@ -521,9 +683,9 @@ func (a *app) fail(stage, msg string) {
 			{id: btnClose, label: a.t(keyClose)},
 		}
 	})
-	if a.mode == "check" {
-		a.autoClose = time.AfterFunc(5*time.Second, a.quit)
-	}
+	// 审查 M26：失败卡片不再 5 秒自动关闭——用户只有 5 秒读错误详情，
+	// "重试"按钮形同虚设，且与 winui（带按钮的失败卡片常驻）行为相悖。
+	// 无按钮的"无更新"提示仍保留 5 秒自动关（见上方 noUpdate）。
 }
 
 func (a *app) click(b uiButton) {
@@ -550,7 +712,7 @@ func (a *app) retry() {
 		a.detail = ""
 		a.buttons = nil
 	})
-	switch a.retryStage {
+	switch a.currentRetryStage() {
 	case "download":
 		a.startDownload()
 	case "apply":
@@ -563,28 +725,25 @@ func (a *app) retry() {
 }
 
 func (a *app) cancelAutoClose() {
-	if a.autoClose != nil {
-		a.autoClose.Stop()
-		a.autoClose = nil
+	if timer := a.takeAutoClose(); timer != nil {
+		timer.Stop()
 	}
 }
 
 func (a *app) quit() {
 	a.cancelAutoClose()
-	if a.downloadCancel != nil {
-		a.downloadCancel()
+	if cancel := a.takeDownloadCancel(); cancel != nil {
+		cancel()
 	}
-	if a.countdownCancel != nil {
-		a.countdownCancel()
+	if cancel := a.takeCountdownCancel(); cancel != nil {
+		cancel()
 	}
 	mygo.App.Quit()
 }
 
 func (a *app) handleSecond(args []string) {
-	a.userVisible = true
 	if a.win == nil {
-		a.pending = true
-		a.pendingArgs = append([]string(nil), args...)
+		a.setPending(args)
 		return
 	}
 	if !a.win.IsDestroyed() {
@@ -597,8 +756,8 @@ func (a *app) handleSecond(args []string) {
 	if mode != "" && mode != a.mode {
 		a.mode = mode
 	}
-	switch {
-	case a.phase == "no_update" || a.phase == "error" || a.phase == "":
+	switch phase := a.currentPhase(); {
+	case phase == "no_update" || phase == "error" || phase == "":
 		if a.mode == "rollback" {
 			a.startRollback()
 		} else {

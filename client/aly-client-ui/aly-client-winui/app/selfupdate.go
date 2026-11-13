@@ -208,7 +208,13 @@ func UpdateSelfUI(updateFolder, mainFolder string, restartArgs []string) (bool, 
 	// 当前 UI 自己若是被收尾进程重启的，则把收到的原始宿主继续往下传。
 	hostPID := hostPidFromArgs()
 	if hostPID == 0 {
-		hostPID = uint32(os.Getppid())
+		// 审查（轻微项）：os.Getppid() 在快照失败时返回 -1，直接转 uint32 会回绕成
+		// 4294967295，新 UI 的 hostGone 恒 true → 启动 1-2 秒后自杀。
+		// 注意 Go 1.10.8 下 os.Getppid 与 vendor x/sys 实现同源（都返回 -1），
+		// "换实现"是空操作，正确做法是取值守卫。
+		if ppid := os.Getppid(); ppid > 0 {
+			hostPID = uint32(ppid)
+		}
 	}
 	helperArgs := []string{
 		"-finish-self-update",

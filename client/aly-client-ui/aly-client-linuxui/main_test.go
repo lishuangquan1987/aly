@@ -12,20 +12,24 @@ func TestDecide(t *testing.T) {
 	forced := true
 	notForced := false
 	tests := []struct {
-		name   string
-		chk    client.CheckUpdate
-		action string
-		ask    bool
+		name     string
+		chk      client.CheckUpdate
+		applying bool
+		action   string
+		ask      bool
 	}{
-		{"无更新", client.CheckUpdate{HasUpdate: false}, "none", false},
-		{"需要下载-不强制", client.CheckUpdate{HasUpdate: true, NeedDownloadUpdate: true}, "download", true},
-		{"需要下载-强制", client.CheckUpdate{HasUpdate: true, NeedDownloadUpdate: true, ForceUpdate: &forced}, "download", false},
-		{"已下载-不强制", client.CheckUpdate{HasUpdate: true}, "apply", true},
-		{"已下载-强制", client.CheckUpdate{HasUpdate: true, ForceUpdate: &forced}, "apply", false},
-		{"force_update=false 视为询问", client.CheckUpdate{HasUpdate: true, ForceUpdate: &notForced}, "apply", true},
+		{"无更新", client.CheckUpdate{HasUpdate: false}, false, "none", false},
+		{"需要下载-不强制", client.CheckUpdate{HasUpdate: true, NeedDownloadUpdate: true}, false, "download", true},
+		{"需要下载-强制", client.CheckUpdate{HasUpdate: true, NeedDownloadUpdate: true, ForceUpdate: &forced}, false, "download", false},
+		// 审查 B10：applying（崩溃恢复/回滚续跑）必须无条件自愈，不询问
+		{"崩溃恢复-不询问", client.CheckUpdate{HasUpdate: true}, true, "apply", false},
+		{"崩溃恢复-即使 force_update=false 也自愈", client.CheckUpdate{HasUpdate: true, ForceUpdate: &notForced}, true, "apply", false},
+		{"已下载-不强制", client.CheckUpdate{HasUpdate: true}, false, "apply", true},
+		{"已下载-强制", client.CheckUpdate{HasUpdate: true, ForceUpdate: &forced}, false, "apply", false},
+		{"force_update=false 视为询问", client.CheckUpdate{HasUpdate: true, ForceUpdate: &notForced}, false, "apply", true},
 	}
 	for _, tc := range tests {
-		action, ask := decide(tc.chk)
+		action, ask := decide(tc.chk, tc.applying)
 		if action != tc.action || ask != tc.ask {
 			t.Errorf("%s: decide=%q,%v; want %q,%v", tc.name, action, ask, tc.action, tc.ask)
 		}

@@ -3,6 +3,7 @@
 package view
 
 import (
+	"sync"
 	"time"
 	"unsafe"
 
@@ -27,7 +28,29 @@ type Window struct {
 	// h 是当前窗口的逻辑高度：默认 defaultH，展示发布内容/按钮时由 Relayout 增加。
 	h int
 	// onButton 是按钮点击回调（在 UI 线程执行；由 app 层注入，转发到后台 goroutine）。
-	onButton func(ButtonID)
+	//
+	// 审查 M22：该字段被后台 goroutine（WaitButton/ButtonClicks/defer SetOnButton(nil)）
+	// 与 UI 线程（点击回调）并发读写，是唯一绕过 Synchronize 的字段。
+	// 仅靠"竞争可检出"还不够——点击回调是 check-then-use，若读检查与拷贝之间
+	// 后台置 nil，`cb := w.onButton; cb(id)` 会拿到 nil 并在 UI 线程 panic。
+	// 用 mutex 保护（Go 1.10 无 atomic.Bool）；不要改走 walk 的 Synchronize：
+	// 它要求消息泵存活，窗口已 Quit/销毁时调用会永久阻塞。
+	onButtonMu sync.Mutex
+	onButton   func(ButtonID)
+}
+
+// setOnButton 线程安全地写入回调。
+func (w *Window) setOnButton(cb func(ButtonID)) {
+	w.onButtonMu.Lock()
+	w.onButton = cb
+	w.onButtonMu.Unlock()
+}
+
+// currentOnButton 线程安全地取回调快照（可能为 nil）。
+func (w *Window) currentOnButton() func(ButtonID) {
+	w.onButtonMu.Lock()
+	defer w.onButtonMu.Unlock()
+	return w.onButton
 }
 
 // New 创建窗口：定位到所在显示器工作区右下角，设为 topmost + 工具窗口，
@@ -93,8 +116,8 @@ func New(title string) (*Window, error) {
 			return
 		}
 		// 交互即取消自动关闭（如「无更新 5 秒后关窗」期间用户点了重试）。
-		if w.onButton != nil {
-			cb := w.onButton
+		// 审查 M22：锁内取快照，避免 check-then-use 之间被后台置 nil 而 panic。
+		if cb := w.currentOnButton(); cb != nil {
 			cb(id)
 		}
 	})
@@ -107,7 +130,7 @@ func New(title string) (*Window, error) {
 // SetOnButton 注入按钮点击回调。回调在 **UI 线程**执行，
 // 需要切回后台 goroutine 的逻辑请用 channel / Synchronize 自行调度。
 func (w *Window) SetOnButton(cb func(ButtonID)) {
-	w.onButton = cb
+	w.setOnButton(cb)
 }
 
 // SetContent 更新卡片文案。

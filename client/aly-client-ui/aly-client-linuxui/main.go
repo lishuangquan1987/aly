@@ -53,7 +53,7 @@ func main() {
 	})
 
 	project := "aly-client-ui"
-	a := &app{mode: m, lang: lng, project: project, userVisible: m != "auto" && m != "silent"}
+	a := &app{mode: m, lang: lng, project: project}
 
 	go func() {
 		for args := range secondCh {
@@ -88,10 +88,13 @@ func main() {
 		if a.cl == nil {
 			return
 		}
+		// 审查 M23：pending/pendingArgs 由第二个实例的 goroutine 写，
+		// 这里在锁内一次性取快照，后续只用局部变量。
+		pending, pendingArgs := a.takePending()
 		p, cErr := a.cl.CheckUpdate(contextBackground())
 		if cErr != nil || !p.Success || p.Check == nil {
-			if a.pending {
-				if m := modeFromArgs(a.pendingArgs); m != "" {
+			if pending {
+				if m := modeFromArgs(pendingArgs); m != "" {
 					a.mode = m
 				}
 				a.precheck = nil
@@ -100,7 +103,7 @@ func main() {
 			return
 		}
 		if !p.Check.HasUpdate {
-			if !a.pending {
+			if !pending {
 				return
 			}
 			a.precheck = nil
@@ -108,8 +111,8 @@ func main() {
 			chk := *p.Check
 			a.precheck = &chk
 		}
-		if a.pending {
-			if m := modeFromArgs(a.pendingArgs); m != "" {
+		if pending {
+			if m := modeFromArgs(pendingArgs); m != "" {
 				a.mode = m
 			}
 		}

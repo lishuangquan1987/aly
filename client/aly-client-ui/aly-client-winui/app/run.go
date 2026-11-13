@@ -170,18 +170,13 @@ func Run(opt Options) int {
 	mf, mfErr := mainFolderOf(self)
 	title = resolveTitle(opt.ProjectName, mf)
 
-	// 启动时自更新（对齐 SDK 构造函数顺序：在首次 check 之前）。
-	// 两者都是「有差异才动」，失败不阻断启动。
-	if mfErr == nil {
-		_ = UpdateUpdater(self, mf)
-		// 重启时透传原参数，保证自更新后仍按同一模式运行
-		//（否则手动「检查更新」重启后会变成静默的 auto 模式）
-		if replaced, upErr := UpdateSelfUI(self, mf, os.Args[1:]); upErr == nil && replaced {
-			// 已派生收尾进程，本实例立即退出让位
-			return 0
-		}
-	}
-
+	// 审查 M27：先建窗口并立刻进入消息泵，自更新挪到后台 goroutine。
+	//
+	// 旧实现把同步自更新（UpdateUpdater + UpdateSelfUI，最坏 20s 超时 + 兜底复制 + SHA）
+	// 放在 view.New 与首帧 Show 之前：check 模式用户"点了按钮没反应"最长约 40s，
+	// 与自家注释（"立即显示正在检查，让用户知道点了按钮有反应"）直接矛盾。
+	// 也不能只把 Show 提前——walk 窗口在 w.Run() 之前没有消息泵，提前 Show 只会得到
+	// 一块冻结白卡。正确顺序：建窗 → Show 首帧 → 进 Run() → 后台自更新 → 完成后再跑流程。
 	w, err := view.New(title)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create window failed: %v\n", err)
@@ -227,10 +222,31 @@ func Run(opt Options) int {
 		}()
 	}
 
-	if mode == "rollback" {
-		go runRollback(w, exePath, findErr)
+	startFlow := func() {
+		if mode == "rollback" {
+			go runRollback(w, exePath, findErr)
+		} else {
+			go runFlow(w, inter, exePath, findErr)
+		}
+	}
+
+	// 自更新：失败不阻断启动（与原语义一致）。
+	if mfErr != nil {
+		go startFlow()
 	} else {
-		go runFlow(w, inter, exePath, findErr)
+		go func() {
+			_ = UpdateUpdater(self, mf)
+			// 重启时透传原参数，保证自更新后仍按同一模式运行
+			//（否则手动「检查更新」重启后会变成静默的 auto 模式）
+			replaced, upErr := UpdateSelfUI(self, mf, os.Args[1:])
+			if upErr == nil && replaced {
+				// 已派生收尾进程，本实例立即退出让位。
+				// 窗口此时已显示（check 模式），必须干净关闭而不是直接 os.Exit。
+				w.Synchronize(w.Quit)
+				return
+			}
+			startFlow()
+		}()
 	}
 
 	return w.Run()
@@ -747,6 +763,11 @@ func checkUpdate(cl *bridge.Client, ctx context.Context) checkOutcome {
 		ForceUpdate:    c.ForceUpdate,
 		NewVersion:     c.NewVersion,
 		CurrentVersion: c.CurrentVersion,
+		// 审查 B10：此前唯一的生产调用点从不填充 Applying，导致 flow/updater.go
+		// 里"Applying → 无条件 apply、不询问"的分支是死代码——写 applying 后崩溃
+		// 的机器重启后会弹"重启完成更新"按钮无限期等用户点击（auto/silent 模式
+		// 窗口隐藏，则直接僵死）。复用 host.go 的 applyingNow()。
+		Applying: applyingNow(),
 	})
 	return res
 }

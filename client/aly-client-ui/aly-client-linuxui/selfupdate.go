@@ -108,7 +108,11 @@ func updateSelfUI(l layout, restartArgs []string) (bool, error) {
 	// 当前 UI 自己若是被收尾进程重启的，则把收到的原始宿主继续往下传。
 	hostPID := hostPidFromArgs()
 	if hostPID == 0 {
-		hostPID = uint32(os.Getppid())
+		// 审查（轻微项）：os.Getppid() 在拿不到父进程时返回 -1，
+		// uint32 回绕成 0xFFFFFFFF 会让新 UI 误判宿主已退出而自杀。取值守卫。
+		if ppid := os.Getppid(); ppid > 0 {
+			hostPID = uint32(ppid)
+		}
 	}
 	helperArgs := []string{
 		"-finish-self-update",
