@@ -53,11 +53,23 @@ Apart from `download_update`, every command prints a single line of JSON. `downl
 |---|---|
 | `0` | The command finished running, **including business failures where `isSuccess=false`** |
 | `1` | No subcommand or an unknown subcommand; or stdout JSON serialization failed |
-| `2` | Parameter parsing failed (Go `flag.ExitOnError`), for example an invalid `--close-timeout` or an unknown option |
+| `2` | Parameter parsing failed (`flag.ContinueOnError`), for example an invalid `--close-timeout` or an unknown option; a **one-line JSON envelope is still printed** (`isSuccess=false` with the reason), and `-h`/`--help` prints usage and exits `0` |
 
 ::: warning
 Do not use the exit code to judge whether an operation succeeded. A failed download, no pending update, or a lock held by another process all end with exit code `0` and are only reflected in `isSuccess` and `errorMsg` in the JSON. A host that only looks at the exit code will treat failures as successes.
 :::
+
+### Log Files and Rotation
+
+| Log | Location | Contents |
+| --- | --- | --- |
+| `update.log` | `UpdateFolder/update.log` | Results of `apply_update` / `rollback` / `self_update` / the post-update script |
+| `download.log` | `UpdateFolder/download.log` | Materialization and deletion-sync details of `download_update` |
+| `check_diff.log` | `UpdateFolder/check_diff.log` | Local MD5 scan warnings |
+
+- Single-generation rotation: when a file exceeds **5 MB** it is renamed to `<name>.1` (the old `.1` is deleted first) and the new log starts empty; a failed rotation never blocks the command.
+- Logs are always written under `UpdateFolder` (no longer into the process working directory), so they can be found no matter where the command was started.
+- Business failures still exit with `0`; diagnostics live only in these logs and stderr.
 
 ### Configuration Loading and the Global Lock
 

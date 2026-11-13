@@ -267,7 +267,7 @@ project_change_logs
 └── logs
 ```
 
-- Both tables have `is_deleted`, filtered as needed at query time: `get_all_projects` filters it, `get_project_by_name` does not.
+- Both tables have `is_deleted`; the public queries filter it consistently: neither `get_all_projects` nor `get_project_by_name` returns soft-deleted records (`get_project_by_name` now fails instead, review M2).
 - The server never physically deletes any rows; `ON DELETE SET NULL` is only protection at the foreign-key-definition level.
 - Table structure and column changes are auto-migrated by ent at startup; the old database's `project_id` column is filled in by a one-time migration (see [Deployment](/en/docs/server/deploy)).
 

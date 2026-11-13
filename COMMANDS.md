@@ -928,6 +928,8 @@ aly-publish config init --project <项目名称> [--server <服务器地址>]
 2. 写入 `shared.json`：包含 `server_url`、`project_name` 和空的 `ignore_folders`/`ignore_files`
 3. 写入 `publish.json`：包含 `output_format`（默认 `human`）
 
+**校验**：`--project`（或既有 `shared.json` 里的 `project_name`）为空时直接返回失败 `config init 必须通过 --project 指定项目名称`，不写任何文件（审查 M14）。
+
 **返回示例**：
 
 ```text
@@ -1379,12 +1381,12 @@ aly-publish add [--all | <file1> <file2> ...]
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `--all` | bool | 添加所有变更文件（new + modified） |
+| `--all` | bool | 添加所有变更文件（new + modified + deleted） |
 | 位置参数 | string[] | 指定要添加的文件路径 |
 
 **实现逻辑**：
 
-- **`--all`** 模式：先执行 `status` 获取所有变更文件，然后将所有 `new` 和 `modified` 文件加入暂存区
+- **`--all`** 模式：先执行 `status` 获取所有变更文件，然后将所有 `new`、`modified` 与 `deleted` 加入暂存区（`deleted` 不读本地文件，`push` 时调用 `file/delete_file` 删除服务端文件）
 - **指定文件** 模式：直接计算指定文件的 MD5 和大小，写入暂存区文件 `.updator/staging/staged-files.json`
 
 **示例 1：添加所有变更文件**
@@ -1466,7 +1468,7 @@ aly-publish staged
 **用法**：
 
 ```bash
-aly-publish push --version <版本号> --message <变更说明> [--dry-run] [--force]
+aly-publish push --version <版本号> --message <变更说明> [--dry-run] [--force] [--set-force-update | --clear-force-update]
 ```
 
 **参数**：
@@ -1475,7 +1477,8 @@ aly-publish push --version <版本号> --message <变更说明> [--dry-run] [--f
 |------|------|------|------|
 | `--version` | string | **是** | 新版本号（如 `1.0.1`） |
 | `--message` | string[] | **是** | 变更说明（可多次指定） |
-| `--set-force-update` | bool | 否 | 推送后设置强制更新 |
+| `--set-force-update` | bool | 否 | 推送成功后置强制更新为 true；与 `--clear-force-update` 互斥 |
+| `--clear-force-update` | bool | 否 | 推送成功后清除强制更新标记；与 `--set-force-update` 互斥 |
 | `--after-apply-update-script` | string | 否 | 更新后执行的脚本路径 |
 | `--dry-run` | bool | 否 | 仅校验不实际推送 |
 | `--force` | bool | 否 | 跳过 MD5 复核强制上传 |
@@ -1484,12 +1487,12 @@ aly-publish push --version <版本号> --message <变更说明> [--dry-run] [--f
 
 1. 加载暂存区文件列表
 2. （非 `--force` 模式）调用 `staging.Verify()`：重新计算暂存区文件的 MD5，若与 add 时记录的不一致 → 提示"文件已修改，请重新 add"
-3. 逐文件通过 `POST /api/file/upload_file`（multipart 上传）上传到服务端
+3. 逐文件上传：`deleted` 条目调用 `POST /api/file/delete_file` 同步删除（幂等），其余按大小走 `upload_file` 直传或 `upload_chunk` + `upload_chunk_complete`（默认 128 KiB 分片，可用 `ALY_CHUNK_SIZE` 调整）；`push --json` 会逐文件实时输出 `START` / `DONE` / `FAIL` 进度行
 4. 调用 `POST /api/project/publish_version` 创建版本变更日志记录；
    **服务端防倒退校验**：新版本号必须**严格大于**该项目已发布的最新版本号，否则拒绝
    （防手滑倒退——重发旧版本号会让已更新的客户端"卡"在旧内容上；确需回退内容，
    请发布更高的版本号。无例外口子）
-5. 成功后清空暂存区
+5. 成功后清空暂存区，并按三态更新强制更新标记：`--set-force-update` 置 true、`--clear-force-update` 置 false、**都不传则保持原值**（旧实现会无条件写 false）；两个参数同时传会报错，`--dry-run` 不允许携带
 
 **返回示例（防倒退拒绝）**：
 

@@ -76,7 +76,7 @@ Human output:
 
 Limitations and notes:
 
-- `--project` is the de-facto required flag for initialization: it writes `project_name`. The CLI does not enforce it through cobra's required-flag validation, so omitting it still succeeds but writes an empty `project_name`, and later `status`/`push` report "no project name configured". Always pass it explicitly.
+- `--project` is required (unless the existing `shared.json` in the workspace already has a `project_name`): when neither is present the command **fails immediately** with `config init 必须通过 --project 指定项目名称` and writes nothing (fixed 2026-11-12, M14).
 - `config init` only writes local files; it does not validate whether the project name is legal and does not create a server project. The naming rules are checked by the server in `project create` / `push`.
 - Re-running it in an already initialized directory does not clear fields you did not specify; to clear an array use `config set-array <key> --clear`, and to clear a scalar use `config set <key> ""`. The CLI has no `unset` command.
 - `publish.json` currently has no writable fields, so writing `{}` is expected.
@@ -270,7 +270,7 @@ The path is assembled from the current working directory, so the result depends 
 | `set` / `get` support only two scalar keys | `server.url`, `project.name` |
 | Arrays can only be modified through `set-array` | `get` returns an empty string for arrays |
 | `set-array` handles one item per call | Repeated `--add` keeps only the last item |
-| `init` requires an explicit `--project` | Otherwise it silently writes an empty `project_name` |
+| `init` requires a project name | Without `--project` and without an existing `project_name` it fails instead of silently writing an empty config |
 | Config always belongs to the current directory | There is no `--path` / `--cwd` |
 | There is no `output.format` | The output format is controlled only by `--json` |
 | There is no `unset` / delete-key command | To clear something, use `set-array --clear` or edit the JSON by hand |

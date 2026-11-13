@@ -1,11 +1,11 @@
 ---
 title: 文件接口
-description: aly-server 的 6 个文件接口：整文件上传、分片上传与合并、文件列表（MD5/SHA256）、发布清单、按绝对路径下载与 Range 续传。
+description: aly-server 的 7 个文件接口：整文件上传、分片上传与合并、文件列表（MD5/SHA256）、发布清单、删除已发布文件、按绝对路径下载与 Range 续传。
 ---
 
 # 文件接口
 
-文件接口负责接收发布产物、向更新器提供文件清单与字节流，全部挂在 `/api/file` 下，共 6 个。
+文件接口负责接收发布产物、向更新器提供文件清单与字节流，全部挂在 `/api/file` 下，共 7 个。
 
 所有接口返回统一信封（HTTP 200 + `isSuccess` / `errorMsg` / `data`），**唯一例外是 `download_file`**：它是流式下载，用真实 HTTP 状态码，不返回 JSON。信封说明见 [API 总览](/docs/api)。
 
@@ -16,7 +16,10 @@ description: aly-server 的 6 个文件接口：整文件上传、分片上传�
 | 单文件上限 | 1 GB（`1 << 30` 字节） |
 | 单分片上限 | 64 MB（`64 << 20` 字节） |
 | 分片编号 | 从 `0` 开始的整数，`0 ≤ chunkIndex < totalChunks` |
-| 发布端分片大小 | aly-publish 固定 1 MiB，超过 1 MiB 的文件自动走分片 |
+| 发布端分片大小 | aly-publish 默认 128 KiB（环境变量 `ALY_CHUNK_SIZE` 可覆盖）；文件大于分片大小时自动走分片 |
+| 分片总数上限 | `totalChunks` 必须在 `1..65536`（含） |
+| 上传前磁盘余量 | 目标磁盘至少「本次上传字节数 + 512 MB」空闲，否则直接拒绝 |
+| 项目前置 | `projectName` 必须已 `create_project` 且未软删除，否则返回「项目不存在」 |
 | 上传字段 | `multipart/form-data`，文件字段名固定为 `file` |
 
 上限施加在整个请求体上（`Content-Length` 预检 + `MaxBytesReader` + multipart 解析后的文件大小兜底），因此**文件本身接近 1 GB 时，multipart 的表单开销会先触发上限**，实际可用文件大小略小于 1 GB。
@@ -28,7 +31,7 @@ description: aly-server 的 6 个文件接口：整文件上传、分片上传�
 
 `.chunks` 与 `.merging` 被 `get_all_files`、发布清单、`download_file` 一致过滤，因此上传进行中不会把半截文件下发给客户端。每次上传成功后都会使该项目的文件列表缓存失效，下一次 `get_all_files` 重新计算哈希。
 
-`projectName` 对应的目录不存在时会自动创建，但**不会**自动创建数据库项目记录：向不存在的项目上传会成功，随后 `get_all_files` 报 `ent: project not found`。正常流程应先 `create_project`（见 [项目接口](/docs/server/api-project#创建项目)）。
+上传前服务端会校验 `projectName` 对应的数据库项目必须存在且未软删除（与 `get_all_files` 同口径），否则返回「项目不存在: X（请先创建项目）」；项目数据目录也不再因上传而自动创建。正常流程必须先 `create_project`（见 [项目接口](/docs/server/api-project#创建项目)）。
 
 `relativeFileName` 用 `/` 或 `\` 都可以，服务端统一转成 `/`。路径会被规范化并校验必须落在项目目录内，含 `..` 的越界路径返回「非法的文件路径」。
 
@@ -148,6 +151,7 @@ curl -X POST http://127.0.0.1:2000/api/file/upload_chunk \
 | `projectName` | string | 是 | 项目名称 |
 | `relativeFileName` | string | 是 | 与分片上传时一致 |
 | `totalChunks` | int | 是 | 分片总数，必须与上传时一致 |
+| `md5` | string | 否 | 整个文件的 MD5（小写十六进制，32 字符）。传了就在合并后校验：不一致不落位、清理合并临时文件并**保留分片**供重传 |
 
 不带 `file` 字段。
 
@@ -165,7 +169,7 @@ curl -X POST http://127.0.0.1:2000/api/file/upload_chunk_complete \
 成功：
 
 ```json
-{ "isSuccess": true, "errorMsg": "", "data": { "chunksComplete": true, "totalSize": 1500 } }
+{ "isSuccess": true, "errorMsg": "", "data": { "chunksComplete": true, "totalSize": 1500, "md5": "2e3587c7179025e801964d9babf8c70e" } }
 ```
 
 分片缺失（**仍然是成功响应**，调用方必须读 `chunksComplete`）：
@@ -179,13 +183,18 @@ curl -X POST http://127.0.0.1:2000/api/file/upload_chunk_complete \
 | `chunksComplete` | bool | 总是 | 分片是否齐全并已合并 |
 | `totalSize` | int64 | `chunksComplete = true` | 合并后文件字节数 |
 | `missingChunks` | int[] | `chunksComplete = false` | 缺失的分片序号（升序） |
+| `md5` | string | `chunksComplete = true` | 合并结果的 MD5（小写十六进制；无论请求里是否传 `md5` 都返回） |
 
 ### 行为说明
 
+- `totalChunks` 必须在 `1..65536`（含）；目标文件 0 字节直接拒绝（不会产出空文件）。
+- 合并前校验分片总和 ≤ 1 GB，且磁盘剩余 ≥ 总和 + 512 MB。
 - 按 `0 … totalChunks-1` 逐个 `stat` 分片；有缺失就返回 `missingChunks`，不合并、不清理，客户端补齐后重试即可。
-- 所有分片大小之和超过 1 GB 时返回「文件过大」，不合并。
+- 传了 `md5` 时边合并边算，落位前比对；不一致返回「MD5 校验失败」，清理 `.merging`、保留分片。
+- 同一目标文件的 complete 按文件加锁串行化：两个发布者并发合并不会互相清掉对方的分片。
 - 合并到 `{目标路径}.merging`，成功后 `rename` 到最终路径，再删除 `.chunks` 目录；任何一步失败都会清理临时文件。
 - 目标是覆盖写：重复上传同名文件会替换旧内容，`get_all_files` 的哈希随之变化。
+- 服务端启动时会清扫超龄（24 小时）的孤儿 `.chunks` / `.merging` 残留。
 
 ### 常见错误
 
@@ -200,6 +209,11 @@ curl -X POST http://127.0.0.1:2000/api/file/upload_chunk_complete \
 | `create dest file error: ...` | 临时文件创建失败 |
 | `open chunk N error: ...` / `copy chunk N error: ...` | 读取或写入分片失败 |
 | `close merged file error: ...` / `atomic rename merged file error: ...` | 关闭或重命名失败 |
+| `totalChunks 不合法: N（允许范围 1-65536）` | `totalChunks` 越界或 ≤ 0 |
+| `分片内容为空，拒绝合并（避免把目标文件清空）` | 所有分片合计 0 字节 |
+| `合并结果 MD5 不符: 期望 X，实际 Y（分片已保留，可重试）` | 传入 `md5` 与实际合并结果不一致 |
+| `磁盘空间不足: ...` | 目标磁盘剩余不足（含 512 MB 预留） |
+| `项目不存在: X（请先创建项目）` | 项目未创建或已软删除 |
 
 ## 获取文件列表
 
@@ -298,7 +312,7 @@ curl http://127.0.0.1:2000/api/file/get_release_manifest/demo
 - 清单文件为 `data/{projectName}/.updator_manifest.json`，由 `publish_version` 成功后在事务外写入，采用「临时文件 + rename」原子写。
 - 清单内容与 `get_all_files` 同口径过滤（中间态、忽略规则、清单自身都不入清单）。
 - 客户端在 `download_update` 末尾读取：清单之外的文件视为"发布端已删除"，在本地清理；服务端从未发布过时 `files` 为空，客户端跳过删除。
-- 项目从未发布、项目不存在、项目目录不存在时，都返回**成功 + 空数组**，不报错。这一行为用于兼容老服务器/老项目。
+- 从未发布过的项目返回**成功 + 空数组**（客户端跳过删除）；项目**不存在或已软删除**时返回失败「项目不存在」，不再静默返回空清单（审查 M2/N2）。
 - 清单只在发布时更新。发布后直接往 `data/` 里拷文件，`get_all_files` 能看到新文件，但清单不会变，客户端不会主动删除它们。
 
 ### 常见错误
@@ -307,6 +321,53 @@ curl http://127.0.0.1:2000/api/file/get_release_manifest/demo
 | --- | --- |
 | `项目名称包含非法字符或长度不在1-64范围内` | 名称非法 |
 | `unexpected end of JSON input` 等 | 清单文件被外部损坏，无法解析 |
+
+## 删除文件
+
+删除项目内的单个文件，供发布端做「本地已删除 → 服务端同步删除」。是**幂等**接口：文件本来就不存在也返回成功。
+
+| 项 | 值 |
+| --- | --- |
+| 方法 | `POST` |
+| 路径 | `/api/file/delete_file` |
+| Content-Type | `application/json` 或 `multipart/form-data` |
+
+### 请求字段
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `projectName` | string | 是 | 项目名称，必须存在且未软删除 |
+| `relativeFileName` | string | 是 | 相对项目目录的路径，规则与上传一致（`/` 或 `\`，越界拒绝） |
+
+### 请求示例
+
+```bash
+curl -X POST http://127.0.0.1:2000/api/file/delete_file \
+  -H "Content-Type: application/json" \
+  -d '{"projectName":"demo","relativeFileName":"old/legacy.dll"}'
+```
+
+### 响应
+
+```json
+{ "isSuccess": true, "errorMsg": "", "data": null }
+```
+
+### 行为说明
+
+- 删除前先做与上传相同的落点断言：路径必须严格位于项目目录内，且不能是项目根目录本身。
+- 顺手删除该文件可能残留的 `{目标路径}.chunks` 目录，并让该项目的文件列表缓存失效。
+- 服务端**不写发布清单**：清单仍由 `publish_version` 按磁盘实际内容固化。正常流程是「`delete_file` → `publish_version`」，客户端会在下一次 `download_update` 依新清单删掉本地旧文件。
+- 文件不存在、目录不存在都算成功；只有项目不存在、路径非法、I/O 失败才返回失败。
+
+### 常见错误
+
+| `errorMsg` | 触发条件 |
+| --- | --- |
+| `项目名称不能为空` / `文件路径不能为空` | 字段缺失 |
+| `非法的文件路径` | 路径逃出项目目录，或指向项目根 |
+| `项目不存在: X（请先创建项目）` | 项目未创建或已软删除 |
+| `remove ...` 等 I/O 错误 | 权限不足、文件被占用等 |
 
 ## 下载文件
 
@@ -352,13 +413,12 @@ curl -C - -o app.exe \
 成功返回 `200 OK`，响应头示例：
 
 ```http
-Content-Disposition: attachment; filename*=UTF-8''small.txt; filename=small.txt
-Content-Transfer-Encoding: binary
+Content-Disposition: attachment; filename=small.txt
 Accept-Ranges: bytes
 Content-Length: 25
 ```
 
-带 `Range` 时返回 `206 Partial Content` 与 `Content-Range: bytes 0-9/25`；范围越界返回 `416`。
+带 `Range` 时返回 `206 Partial Content` 与 `Content-Range: bytes 0-9/25`；多段 `Range`（如 `bytes=0-1,4-5`）返回 `206` + `multipart/byteranges`（服务端显式放开 Go 1.26 起「默认只处理 1 段」的限制，上限 200 段）；范围越界返回 `416`。
 
 ### 状态码
 
@@ -374,10 +434,10 @@ Content-Length: 25
 
 ### 行为说明
 
-- 用 `http.ServeContent` 实现，天然支持单段 `Range`、多段 `Range` 与 `If-Range`；
-- `Content-Disposition` 同时给出 RFC 6266 的 `filename*`（UTF-8，空格转 `%20`）与回退的 `filename`；
+- 用 `http.ServeContent` 实现，天然支持单段 `Range`、多段 `Range`（`multipart/byteranges`，上限 200 段）与 `If-Range`；
+- `Content-Disposition` 由 `mime.FormatMediaType` 生成，符合 RFC 6266/5987（非 ASCII 文件名走 `filename*` 百分号编码，引号/换行被转义）；
 - 服务端不预检文件存在性，直接打开后判断错误，避免 TOCTOU；
-- 服务端 `WriteTimeout` 为 60 秒（整次响应），慢链路上的超大文件可能被中途断开，客户端应使用续传重试。aly-client 对超过 100 MB 的文件启用 `.part` + `Range` 续传。
+- 全局 `WriteTimeout` 为 0（大文件不能有固定总时限）；单次下载按文件大小设置写期限：`5 分钟 + 每 MiB 1 秒`，上限 30 分钟，慢速读客户端不会长期占用连接。aly-client 对超过 100 MB 的文件启用 `.part` + `Range` 续传。
 
 ## 相关页面
 

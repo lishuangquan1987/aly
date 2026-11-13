@@ -276,7 +276,8 @@ curl http://127.0.0.1:2000/api/project/get_project_by_name/demo
 
 ### 行为说明
 
-- 该查询**不过滤 `is_deleted`**：项目被软删除后仍会返回，只是响应里带 `"is_deleted": true`。客户端（`FindProjectByName`）据此自行判断"不存在"。
+- 该查询**过滤 `is_deleted`**：项目被软删除后返回失败（错误文本 `ent: project not found`），与 `get_all_files`、`publish_version` 的可用性口径一致（审查 M2）。
+- 客户端不再需要自己判断 `is_deleted`：查不到即视为不存在。
 - 项目确实不存在时返回失败，错误文本是 ent 的原始信息。
 
 ### 常见错误
@@ -346,7 +347,7 @@ curl http://127.0.0.1:2000/api/project/get_project_change_logs/demo
 ### 行为说明
 
 - **不校验项目是否存在**：项目名不存在时返回成功 + 空数组 `[]`。
-- 项目被软删除后，日志仍可查到（只要日志自身未被软删除）。这与 `get_project_by_name` 的行为一致。
+- 项目被软删除后，日志仍可查到（只要日志自身未被软删除）；按名查询项目则会失败（见上文 `get_project_by_name` 的过滤口径）。
 - 客户端与服务端都按**版本号**取最新（版本号相同再比 `id`，取更大者）；服务端发布时的防倒退校验同样按版本比较，不看插入顺序。
 
 ### 常见错误
@@ -382,7 +383,7 @@ curl -X POST http://127.0.0.1:2000/api/project/delete_project/demo
 
 - 只改数据库标志位；`data/{projectName}` 下的文件、`.updator_manifest.json` 全部保留。
 - 删除前先释放该项目的文件列表缓存。
-- 删除后：`get_all_projects` 不再返回；`update_project`、`set_force_update`、`publish_version`、`get_project_os_info` 均报「项目不存在」；`get_project_by_name` 仍返回（带 `is_deleted: true`）；变更日志仍可查。
+- 删除后：`get_all_projects` 不再返回；`update_project`、`set_force_update`、`publish_version`、`get_project_os_info` 均报「项目不存在」；`get_project_by_name` 也不再返回；变更日志仍可查。
 - 同名项目无法重建（`create_project` 的唯一性校验不过滤软删除记录），需要先手工清理数据库记录。
 - 重复删除返回 `项目不存在: demo`。
 

@@ -84,6 +84,7 @@ public AlyUpdateClient(string updatorExePath = null)
 | `check_update` 成功 | 清空错误状态（此前有错误时触发一次 `ErrorStatusChanged(null)`） |
 | `has_update = false` | 状态复位为 `None`（必要时发一次事件），按空闲间隔睡眠 |
 | `has_update = true` 且 `need_download_update = true` | 状态 `DiscoveredUpdate`；非强更时先触发 `RequestDownloadUpdate`；然后 `DownloadingUpdate` 并下载 |
+| `has_update = true` 且 `need_download_update = false` | **直接 `ApplyUpdate`**：不下载、不询问（`force_update` 不参与该分支判断）。对应三种现场：已下载待应用（pending_apply）、apply 中断后的崩溃恢复（applying_recovery）、回滚中断续跑（rollback_resume）——后两者即使服务端不可达也必须上报，故同样走本分支 |
 | 下载失败且错误含 `already at latest version` | 视为无更新：状态复位 `None`，按空闲间隔睡眠（避免强更场景死循环报错） |
 | 下载失败（其他原因） | 触发错误，睡眠 1 秒后重试本轮 |
 | 下载成功 | 状态 `DownloadedUpdate`；非强更时触发 `RequestApplyUpdate`；随后 `ApplyUpdate` |
@@ -390,7 +391,7 @@ public enum AlyUpdateUiMode
 | 成员 | 类型 | JSON 字段 | 说明 |
 |---|---|---|---|
 | `HasUpdate` | `bool` | `has_update` | 是否有新版本。服务器不可达时为 `false` |
-| `NeedDownloadUpdate` | `bool` | `need_download_update` | 是否需要下载（已下载待应用时为 `false`） |
+| `NeedDownloadUpdate` | `bool` | `need_download_update` | 是否需要下载；`false` 表示"已下载待应用 / 中断恢复 / 回滚续跑"，宿主应直接 `apply_update`，不得再下载或询问 |
 | `CurrentVersion` | `string` | `current_version` | 当前版本 |
 | `NewVersion` | `string` | `new_version` | 新版本 |
 | `ForceUpdate` | `bool` | `force_update` | 强制更新：为 `true` 时不触发确认事件，直接下载并应用 |

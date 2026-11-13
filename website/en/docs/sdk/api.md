@@ -84,6 +84,7 @@ Event semantics in detail:
 | `check_update` succeeds | Clears the error state (fires `ErrorStatusChanged(null)` once if there was an error) |
 | `has_update = false` | Resets the status to `None` (emitting an event if necessary) and sleeps for the idle interval |
 | `has_update = true` and `need_download_update = true` | Status `DiscoveredUpdate`; for non-force updates fires `RequestDownloadUpdate` first; then `DownloadingUpdate` and the download |
+| `has_update = true` and `need_download_update = false` | **Call `ApplyUpdate` directly**: no download, no confirmation (`force_update` does not affect this branch). This covers three situations: downloaded and waiting to apply (`pending_apply`), crash recovery after an interrupted apply (`applying_recovery`), and resuming an interrupted rollback (`rollback_resume`); the latter two must be reported even when the server is unreachable, so they take this branch too |
 | Download fails and the error contains `already at latest version` | Treated as no update: status resets to `None` and sleeps for the idle interval (avoiding an endless error loop in force-update scenarios) |
 | Download fails (other reason) | Fires the error, sleeps 1 second, retries this round |
 | Download succeeds | Status `DownloadedUpdate`; for non-force updates fires `RequestApplyUpdate`; then `ApplyUpdate` |
@@ -386,7 +387,7 @@ Inherits `AlyResponse` and adds a strongly typed payload.
 | Member | Type | JSON field | Description |
 |---|---|---|---|
 | `HasUpdate` | `bool` | `has_update` | Whether a new version exists. `false` when the server is unreachable |
-| `NeedDownloadUpdate` | `bool` | `need_download_update` | Whether a download is needed (`false` when already downloaded and waiting to apply) |
+| `NeedDownloadUpdate` | `bool` | `need_download_update` | Whether a download is needed; `false` means "downloaded and waiting to apply / interrupted recovery / rollback resume", and the host must call `apply_update` directly without downloading or asking |
 | `CurrentVersion` | `string` | `current_version` | Current version |
 | `NewVersion` | `string` | `new_version` | New version |
 | `ForceUpdate` | `bool` | `force_update` | Force update: when `true`, confirmation events are not fired and the update is downloaded and applied directly |

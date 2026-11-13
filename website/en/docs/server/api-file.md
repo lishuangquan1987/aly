@@ -1,11 +1,11 @@
 ---
 title: File API
-description: "The 6 file endpoints of aly-server: whole-file upload, chunked upload and merge, file list (MD5/SHA256), release manifest, download by absolute path, and Range resumption."
+description: "The 7 file endpoints of aly-server: whole-file upload, chunked upload and merge, file list (MD5/SHA256), release manifest, file deletion, download by absolute path, and Range resumption."
 ---
 
 # File API
 
-The file endpoints receive release artifacts and serve file lists and byte streams to the updater. They all live under `/api/file`; there are 6 in total.
+The file endpoints receive release artifacts and serve file lists and byte streams to the updater. They all live under `/api/file`; there are 7 in total.
 
 All endpoints return the unified envelope (HTTP 200 + `isSuccess` / `errorMsg` / `data`), **with one exception: `download_file`**. It is a streaming download that uses real HTTP status codes and returns no JSON. For the envelope, see [API Overview](/en/docs/api).
 
@@ -16,7 +16,10 @@ All endpoints return the unified envelope (HTTP 200 + `isSuccess` / `errorMsg` /
 | Per-file limit | 1 GB (`1 << 30` bytes) |
 | Per-chunk limit | 64 MB (`64 << 20` bytes) |
 | Chunk numbering | Integer starting at `0`, `0 ≤ chunkIndex < totalChunks` |
-| Publisher chunk size | aly-publish uses a fixed 1 MiB; files over 1 MiB automatically use chunks |
+| Publisher chunk size | aly-publish defaults to 128 KiB (override with the `ALY_CHUNK_SIZE` environment variable); files larger than the chunk size use chunks |
+| Max chunk count | `totalChunks` must be within `1..65536` (inclusive) |
+| Free disk before upload | The target disk must have at least "upload bytes + 512 MB" free, otherwise the upload is rejected |
+| Project precondition | `projectName` must already exist (via `create_project`) and not be soft-deleted; otherwise the server returns "project does not exist" |
 | Upload field | `multipart/form-data`; the file field name is always `file` |
 
 The limit is applied to the entire request body (`Content-Length` pre-check + `MaxBytesReader` + the parsed multipart file size as a fallback), so **when the file itself approaches 1 GB, the multipart form overhead hits the limit first**; the effective usable file size is slightly less than 1 GB.
@@ -28,7 +31,7 @@ The server's two-phase write to disk:
 
 `.chunks` and `.merging` are filtered consistently by `get_all_files`, the release manifest, and `download_file`, so half-written files are never served to clients while an upload is in progress. Every successful upload invalidates the project's file-list cache, and the next `get_all_files` recomputes the hashes.
 
-If the directory for `projectName` does not exist it is created automatically, but the database project record is **not** created automatically: uploading to a nonexistent project succeeds, and a subsequent `get_all_files` reports `ent: project not found`. The normal flow is to call `create_project` first (see [Project API](/en/docs/server/api-project#create-project)).
+Before accepting an upload the server checks that the database project for `projectName` exists and is not soft-deleted (the same rule as `get_all_files`); otherwise it returns "project does not exist: X (create the project first)". The project data directory is no longer created implicitly by an upload. The normal flow is to call `create_project` first (see [Project API](/en/docs/server/api-project#create-project)).
 
 `relativeFileName` may use `/` or `\`; the server normalizes it to `/`. The path is normalized and must stay inside the project directory; out-of-bounds paths containing `..` return "invalid file path" (`非法的文件路径`).
 
@@ -148,6 +151,7 @@ Merges all uploaded chunks, verifies integrity, and atomically replaces the targ
 | `projectName` | string | Yes | Project name |
 | `relativeFileName` | string | Yes | Must match the value used for the chunk uploads |
 | `totalChunks` | int | Yes | Total number of chunks; must match the value used during upload |
+| `md5` | string | No | MD5 of the whole file (lowercase hex, 32 chars). When provided, the server verifies the merged result: on mismatch it keeps the chunks, deletes the merge temp file and reports an error |
 
 No `file` field is sent.
 
@@ -165,7 +169,7 @@ curl -X POST http://127.0.0.1:2000/api/file/upload_chunk_complete \
 Success:
 
 ```json
-{ "isSuccess": true, "errorMsg": "", "data": { "chunksComplete": true, "totalSize": 1500 } }
+{ "isSuccess": true, "errorMsg": "", "data": { "chunksComplete": true, "totalSize": 1500, "md5": "2e3587c7179025e801964d9babf8c70e" } }
 ```
 
 Chunks missing (**still a success response**; the caller must read `chunksComplete`):
@@ -179,13 +183,18 @@ Chunks missing (**still a success response**; the caller must read `chunksComple
 | `chunksComplete` | bool | Always | Whether all chunks are present and have been merged |
 | `totalSize` | int64 | `chunksComplete = true` | Size of the merged file in bytes |
 | `missingChunks` | int[] | `chunksComplete = false` | Missing chunk indices (ascending) |
+| `md5` | string | `chunksComplete = true` | MD5 of the merged result (lowercase hex; returned whether or not the request supplied `md5`) |
 
 ### Behavior
 
-- `stat`s each chunk from `0 … totalChunks-1`; if any are missing it returns `missingChunks` without merging or cleaning up, and the client can retry after filling the gaps.
-- If the sum of all chunk sizes exceeds 1 GB it returns "file too large" and does not merge.
-- Merges into `{target path}.merging`; on success it applies `rename` to move the file to the final path and then deletes the `.chunks` directory. A failure at any step cleans up the temporary files.
-- The target is overwritten: uploading a file with the same name again replaces the old content, and the hashes from `get_all_files` change accordingly.
+- `totalChunks` must be within `1..65536` (inclusive); a zero-byte target is rejected (no empty file is ever produced).
+- Before merging, the sum of chunk sizes must be ≤ 1 GB and the target disk must have at least that sum + 512 MB free.
+- The server `stat`s chunks `0 … totalChunks-1`; when some are missing it returns `missingChunks` without merging or cleaning up, so the client can upload them and retry.
+- When `md5` is provided the server hashes while merging and compares before the atomic rename; on mismatch it returns the server message `合并结果 MD5 不符: 期望 X，实际 Y（分片已保留，可重试）`, deletes the `.merging` temp file and **keeps the chunks**.
+- `complete` calls for the same target file are serialized by a per-file lock, so two publishers merging concurrently cannot wipe each other's chunks.
+- The server merges into `{target}.merging`, renames it to the final path on success and then deletes the `.chunks` directory; any failure cleans up the temporaries.
+- The write is an overwrite: uploading the same name again replaces the old content and changes the hashes reported by `get_all_files`.
+- On startup the server sweeps orphan `.chunks` / `.merging` entries older than 24 hours.
 
 ### Common errors
 
@@ -200,6 +209,11 @@ Chunks missing (**still a success response**; the caller must read `chunksComple
 | `create dest file error: ...` | Temporary file creation failed |
 | `open chunk N error: ...` / `copy chunk N error: ...` | Reading or writing a chunk failed |
 | `close merged file error: ...` / `atomic rename merged file error: ...` | Closing or renaming failed |
+| `totalChunks 不合法: N（允许范围 1-65536）` | `totalChunks` out of range or ≤ 0 |
+| `分片内容为空，拒绝合并（避免把目标文件清空）` | All chunks add up to 0 bytes |
+| `合并结果 MD5 不符: 期望 X，实际 Y（分片已保留，可重试）` | The provided `md5` does not match the merged result |
+| `磁盘空间不足: ...` | Not enough free space on the target disk (including the 512 MB reserve) |
+| `项目不存在: X（请先创建项目）` | The project was never created or is soft-deleted |
 
 ## Get File List
 
@@ -298,7 +312,7 @@ curl http://127.0.0.1:2000/api/file/get_release_manifest/demo
 - The manifest file is `data/{projectName}/.updator_manifest.json`, written outside the transaction after `publish_version` succeeds, using an atomic "temp file + rename" write.
 - The manifest contents are filtered by the same rules as `get_all_files` (intermediates, ignore rules, and the manifest itself are all excluded from the manifest).
 - The client reads it at the end of `download_update`: files outside the manifest are treated as "deleted on the publishing side" and cleaned up locally; when the server has never published, `files` is empty and the client skips deletion.
-- When the project has never published, the project does not exist, or the project directory does not exist, it returns **success + an empty array**, not an error. This behavior exists to remain compatible with old servers/old projects.
+- A project that has never published returns **success + an empty array** (the client skips deletion). When the project **does not exist or is soft-deleted**, the endpoint now returns an error ("project does not exist") instead of an empty manifest (review M2/N2).
 - The manifest is updated only on publish. If files are copied directly into `data/` after a publish, `get_all_files` will see the new files, but the manifest will not change, and clients will not proactively delete them.
 
 ### Common errors
@@ -307,6 +321,53 @@ curl http://127.0.0.1:2000/api/file/get_release_manifest/demo
 | --- | --- |
 | `项目名称包含非法字符或长度不在1-64范围内` | Invalid name |
 | `unexpected end of JSON input` and similar | The manifest file was corrupted externally and cannot be parsed |
+
+## Delete File
+
+Deletes a single file inside a project so the publisher can mirror "deleted locally → deleted on the server". The endpoint is **idempotent**: deleting a file that does not exist still succeeds.
+
+| Item | Value |
+| --- | --- |
+| Method | `POST` |
+| Path | `/api/file/delete_file` |
+| Content-Type | `application/json` or `multipart/form-data` |
+
+### Request fields
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `projectName` | string | Yes | Project name; must exist and not be soft-deleted |
+| `relativeFileName` | string | Yes | Path relative to the project directory; same rules as upload (`/` or `\`, traversal rejected) |
+
+### Request example
+
+```bash
+curl -X POST http://127.0.0.1:2000/api/file/delete_file \
+  -H "Content-Type: application/json" \
+  -d '{"projectName":"demo","relativeFileName":"old/legacy.dll"}'
+```
+
+### Response
+
+```json
+{ "isSuccess": true, "errorMsg": "", "data": null }
+```
+
+### Behavior
+
+- The same landing-point assertion as upload runs first: the path must be strictly inside the project directory and must not be the project root itself.
+- A leftover `{target}.chunks` directory for that file is removed, and the project's file-list cache is invalidated.
+- The server does **not** write the release manifest here; the manifest is still frozen by `publish_version` from what is actually on disk. The normal flow is `delete_file` → `publish_version`, after which clients remove their stale local copies on the next `download_update`.
+- Missing files or directories count as success; only a missing project, an illegal path or an I/O failure returns an error.
+
+### Common errors
+
+| `errorMsg` | Trigger condition |
+| --- | --- |
+| `project name must not be empty` / `file path must not be empty` | Missing field |
+| `illegal file path` | Path escapes the project directory, or points at the project root |
+| `project does not exist: X (create the project first)` | Project not created or soft-deleted |
+| `remove ...` and other I/O errors | Insufficient permissions, file locked, and so on |
 
 ## Download File
 
@@ -352,13 +413,12 @@ curl -C - -o app.exe \
 Success returns `200 OK`. Example response headers:
 
 ```http
-Content-Disposition: attachment; filename*=UTF-8''small.txt; filename=small.txt
-Content-Transfer-Encoding: binary
+Content-Disposition: attachment; filename=small.txt
 Accept-Ranges: bytes
 Content-Length: 25
 ```
 
-With `Range` it returns `206 Partial Content` and `Content-Range: bytes 0-9/25`; an out-of-range request returns `416`.
+With `Range` it returns `206 Partial Content` and `Content-Range: bytes 0-9/25`; a multipart `Range` (for example `bytes=0-1,4-5`) returns `206` plus `multipart/byteranges` (the server explicitly restores multi-range support that Go 1.26 disabled by default, capped at 200 ranges); an out-of-range request returns `416`.
 
 ### Status codes
 
@@ -374,10 +434,10 @@ With `Range` it returns `206 Partial Content` and `Content-Range: bytes 0-9/25`;
 
 ### Behavior
 
-- Implemented with `http.ServeContent`, so it naturally supports single-part `Range`, multipart `Range`, and `If-Range`;
-- `Content-Disposition` provides both the RFC 6266 `filename*` (UTF-8, spaces as `%20`) and a fallback `filename`;
+- Implemented with `http.ServeContent`, so it supports single-part `Range`, multipart `Range` (`multipart/byteranges`, capped at 200 ranges) and `If-Range`;
+- `Content-Disposition` is produced by `mime.FormatMediaType` and follows RFC 6266/5987 (non-ASCII names go through the `filename*` percent encoding; quotes and newlines are escaped);
 - The server does not pre-check file existence; it opens the file and then inspects the error, avoiding TOCTOU;
-- The server's `WriteTimeout` is 60 seconds (the whole response); very large files on slow links may be cut off midway, and clients should retry with resumption. aly-client enables `.part` + `Range` resumption for files over 100 MB.
+- The global `WriteTimeout` is 0 (large downloads must not have a fixed total limit); each download gets a write deadline based on file size — `5 minutes + 1 second per MiB`, capped at 30 minutes — so slow readers cannot hold a connection forever. aly-client enables `.part` + `Range` resumption for files over 100 MB.
 
 ## Related pages
 

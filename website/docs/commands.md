@@ -49,11 +49,23 @@ description: aly-client 更新器九个命令的完整参考，包含用途、�
 |---|---|
 | `0` | 命令已执行完毕，**包括 `isSuccess=false` 的业务失败** |
 | `1` | 未提供子命令、未知子命令；或 stdout JSON 序列化失败 |
-| `2` | 参数解析失败（Go `flag.ExitOnError`），如非法 `--close-timeout`、未知选项 |
+| `2` | 参数解析失败（`flag.ContinueOnError`），如非法 `--close-timeout`、未知选项；**同时输出一行 JSON 信封**（`isSuccess=false` + 具体错误），`-h`/`--help` 打印用法后退出 `0` |
 
 ::: warning
 不要用退出码判断业务成败。下载失败、没有待应用更新、锁被占用等都以退出码 `0` 结束，只在 JSON 的 `isSuccess` 与 `errorMsg` 中体现。宿主若只看退出码，会把失败当成功。
 :::
+
+### 日志文件与轮转
+
+| 日志 | 位置 | 主要内容 |
+| --- | --- | --- |
+| `update.log` | `UpdateFolder/update.log` | `apply_update` / `rollback` / `self_update` / 后置脚本的结果 |
+| `download.log` | `UpdateFolder/download.log` | `download_update` 的物化与删除同步细节 |
+| `check_diff.log` | `UpdateFolder/check_diff.log` | 本地 MD5 扫描告警 |
+
+- 单代轮转：文件超过 **5 MB** 时改名为 `<名字>.1`（旧 `.1` 先删除），新日志从空开始；轮转失败不阻断命令。
+- 日志固定写 `UpdateFolder`（不再写到进程工作目录），从任意目录启动都能找到。
+- 逻辑失败仍以退出码 `0` 结束，诊断信息只在这几个日志与 stderr 中。
 
 ### 配置加载与全局锁
 

@@ -54,7 +54,9 @@ PackageFolder/
     ├── client.json                    # Main program path, processes to close
     ├── version.json                   # Version state machine
     ├── .aly.lock                      # Update mutex (at runtime)
-    ├── update.log                     # Update log
+    ├── update.log                     # Update log (rotated to update.log.1 above 5 MB)
+├── download.log                   # Download, materialization and deletion-sync log (same 5 MB single-generation rotation)
+├── check_diff.log                 # Local MD5 scan warnings (same 5 MB single-generation rotation)
     ├── release_manifest.json          # Release manifest cache (used by delete sync)
     └── aly-client.exe.old             # Self-update backup (at runtime)
 ```

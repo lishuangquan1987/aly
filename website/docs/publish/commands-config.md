@@ -76,7 +76,7 @@ human 输出：
 
 限制与注意：
 
-- `--project` 是初始化的事实必填项：用它写入 `project_name`。CLI 没有把它做成 cobra 的必填校验，遗漏时命令仍会成功，但会写出空的 `project_name`，后续 `status`/`push` 会报“no project name configured”。始终显式传入。
+- `--project` 是必需项（或工作区既有的 `shared.json` 里已有 `project_name`）：两者都没有时命令**直接失败**并返回 `config init 必须通过 --project 指定项目名称`，不会写出空配置（2026-11-12 修复 M14）。
 - `config init` 只写本地文件，不校验项目名是否合法、也不创建服务端项目。名称规则由服务端在 `project create` / `push` 时检查。
 - 在已初始化的目录重复执行不会清空未指定的字段；要清空数组请用 `config set-array <key> --clear`，要清空标量可用 `config set <key> ""`。CLI 没有 `unset` 命令。
 - `publish.json` 当前没有可写字段，写入 `{}` 属正常现象。
@@ -270,7 +270,7 @@ JSON：
 | `set` / `get` 只支持两个标量键 | `server.url`、`project.name` |
 | 数组只能通过 `set-array` 修改 | `get` 读数组返回空字符串 |
 | `set-array` 每次只处理一个条目 | 重复 `--add` 只保留最后一个 |
-| `init` 必须显式传 `--project` | 否则会静默写入空 `project_name` |
+| `init` 必须提供项目名 | 缺 `--project` 且既有配置也没有 `project_name` 时直接报错（不再静默写空配置） |
 | 配置始终属于当前目录 | 没有 `--path` / `--cwd` |
 | 没有 `output.format` | 输出格式只由 `--json` 控制 |
 | 没有 `unset` / 删除键命令 | 需要清空时用 `set-array --clear` 或手动编辑 JSON |

@@ -264,7 +264,7 @@ JSON：
 
 ```bash
 aly-publish push --version <版本号> --message <说明> [--message <说明> ...] \
-  [--dry-run] [--force] [--after-apply-update-script <脚本>] [--set-force-update]
+  [--dry-run] [--force] [--after-apply-update-script <脚本>] [--set-force-update | --clear-force-update]
 ```
 
 | 参数 | 类型 | 必填 | 说明 |
@@ -274,7 +274,8 @@ aly-publish push --version <版本号> --message <说明> [--message <说明> ..
 | `--dry-run` | bool | 否 | 只列出将上传的文件与版本，不实际推送 |
 | `--force` | bool | 否 | 跳过暂存文件的 MD5 复核 |
 | `--after-apply-update-script` | string | 否 | 更新后执行的脚本，路径相对于应用目录 |
-| `--set-force-update` | bool | 否 | 推送成功后把项目标记为强制更新 |
+| `--set-force-update` | bool | 否 | 推送成功后把项目标记为强制更新；与 `--clear-force-update` 互斥 |
+| `--clear-force-update` | bool | 否 | 推送成功后清除强制更新标记；与 `--set-force-update` 互斥 |
 
 ### 前置条件与流程
 
@@ -288,16 +289,16 @@ aly-publish push --version <版本号> --message <说明> [--message <说明> ..
    ```
 
    `--force` 跳过这一步，直接上传当前文件。
-5. 并发上传。并发数为 CPU 数，限制在 3–16 之间。单文件不超过 1 MiB 时直传；大于 1 MiB 时按 1 MiB 分片上传，分片完成后通知服务端合并。单文件/单分片最多尝试 5 次（首次 + 4 次重试，退避 400/800/1600/3200 ms）。
+5. 并发上传。并发数为 CPU 数，限制在 3–16 之间。单文件不超过 128 KiB 时直传；大于 128 KiB 时按 128 KiB 分片上传（环境变量 `ALY_CHUNK_SIZE` 可调整分片大小），分片完成后通知服务端合并。单文件/单分片/合并请求最多尝试 5 次（首次 + 4 次重试，退避 400/800/1600/3200 ms）；合并返回 `chunksComplete=false` 时只重传缺失分片。
 6. 上传全部成功后调用 `POST /api/project/publish_version` 登记版本，时间为本地 `yyyy-MM-dd HH:mm:ss`。
-7. 登记成功后清空暂存区，并按 `--set-force-update` 的值更新项目强制更新标记。
+7. 登记成功后清空暂存区，并按三态更新项目强制更新标记（`--set-force-update` / `--clear-force-update` / 都不传=保持原值）。
 
 ### JSON 进度流
 
 `push --json` 不是单行输出，而是逐行 JSON：
 
 1. 所有文件的 `START` 行（按暂存顺序，先全部输出）；
-2. 每个文件的 `DONE` 或 `FAIL` 行（按原顺序）；
+2. 每个文件**完成时立即**输出 `DONE` 或 `FAIL` 行（并发上传，完成顺序不保证与暂存顺序一致；`deleted` 条目走删除调用，完成后同样输出 `DONE`/`FAIL`）；
 3. 一行最终结果（成功时 `data` 含 `version` 与 `files`；失败时 `isSuccess: false`）；
 4. 一行结束标记：`{"isSuccess":true,"errorMsg":"","data":null}`。
 
@@ -312,7 +313,7 @@ aly-publish push --version <版本号> --message <说明> [--message <说明> ..
 {"isSuccess":true,"errorMsg":"","data":null}
 ```
 
-进度数据的字段是 `index`、`total`、`file`、`status`、`file_size`、`error`（失败时才有）。`data.files` 在最终结果中是**字符串**。
+进度数据的字段是 `index`、`total`、`file`、`status`、`file_size`、`error`（失败时才有）。`data.files` 在最终结果中是**字符串**，含义是**本次处理的条目数（含 `deleted` 删除条目）**——不要把「含删除的发布」误读成多传了一个文件。
 
 上传失败示例：
 
@@ -356,10 +357,16 @@ aly-publish push --version <版本号> --message <说明> [--message <说明> ..
 
 ### 强制更新参数
 
-`--set-force-update` 表示“推送成功后把项目标记为强制更新”，客户端检查更新时不再询问直接更新。
+`--set-force-update` / `--clear-force-update` 控制推送成功后项目的强制更新标记；标记为 `true` 时客户端检查更新不再询问，直接下载并应用。
 
-::: warning 当前实现的行为
-成功推送后，CLI 总会调用 `set_force_update`，传入的值就是 `--set-force-update` 的当前值。也就是说，不传该参数的成功推送会把项目的强制更新标记置为 `false`。如果项目原本处于强制更新状态且需要保持，请显式传入 `--set-force-update`。
+::: tip 三态语义（2026-11-12 修复 B7）
+`push` 对强制更新标记是三态操作：
+
+- `--set-force-update`：推送成功后置 `true`；
+- `--clear-force-update`：推送成功后置 `false`；
+- 两个都不传：**保持服务端原值不变**（旧实现会无条件写入 `false`，等于"发布一次就悄悄关掉强更"）。
+
+两个参数互斥，同时传直接报错；`--dry-run` 不允许携带这两个参数。推送失败（含版本登记失败）时不会改动强制更新标记。
 :::
 
 ### 示例
@@ -374,6 +381,9 @@ aly-publish push --version V1.0.3 --message "重构上传" --dry-run
 # 脚本 + 强制更新
 aly-publish push --version V1.0.4 --message "升级数据库" \
   --after-apply-update-script update.bat --set-force-update
+
+# 清除强制更新标记
+aly-publish push --version V1.0.5 --message "常规发布" --clear-force-update
 ```
 
 ## log

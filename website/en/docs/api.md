@@ -9,7 +9,7 @@ aly-server exposes HTTP endpoints through Gin, all registered under the `/api` p
 
 If you just need an endpoint, jump to the [Endpoint Index](#endpoint-index); the shared conventions follow below.
 
-> **Who this is for**: developers implementing a custom publisher/updater or debugging the HTTP layer. After this page you can call all 16 endpoints and handle HTTP 200 + `isSuccess:false` correctly.
+> **Who this is for**: developers implementing a custom publisher/updater or debugging the HTTP layer. After this page you can call all 17 endpoints and handle HTTP 200 + `isSuccess:false` correctly.
 
 ::: tip Output language
 The server currently returns `errorMsg`, changelogs and some sample values in Chinese. JSON examples preserve that real output; endpoint paths, field names and the envelope are the stable contract.
@@ -123,6 +123,7 @@ For hardening and reverse-proxy configuration, see [Deploying aly-server](/en/do
 | POST | [`/api/file/upload_chunk_complete`](/en/docs/server/api-file#complete-chunked-upload) | Verifies and merges chunks | `{chunksComplete,totalSize}` or `{chunksComplete,missingChunks}` |
 | GET | [`/api/file/get_all_files/:projectName`](/en/docs/server/api-file#get-file-list) | File list including MD5 / SHA256 | `FileInfo[]` |
 | GET | [`/api/file/get_release_manifest/:projectName`](/en/docs/server/api-file#get-release-manifest) | Release manifest (relative paths only) | `{files:string[]}` |
+| POST | [`/api/file/delete_file`](/en/docs/server/api-file#delete-file) | Deletes a file inside a project (idempotent, used for deletion sync) | `null` |
 | GET | [`/api/file/download_file`](/en/docs/server/api-file#download-file) | Downloads by absolute path; supports Range | File byte stream |
 
 ### Server `/api/server`
@@ -148,9 +149,9 @@ What each step does:
 2. **`get_project_change_logs`**: fetches the latest server version and changelog, compares them with the local version to decide `has_update` / `need_download_update`, and also retrieves `after_apply_update_script`.
 3. **`get_all_files`**: fetches the file list and both hashes, deciding which files to download and which unchanged files must be materialized locally.
 4. **`download_file`**: downloads changed files one by one, passing the `fileAbsolutePath` returned by the previous step directly.
-5. **`get_release_manifest`**: **used only for deletion sync**. After downloading, files outside the manifest are considered "deleted on the publishing side" and are cleaned up locally; if the server has never published, it returns an empty `files` and the client skips deletion.
+5. **`get_release_manifest`**: **used only for deletion sync**. After downloading, files outside the manifest are considered "deleted on the publishing side" and are cleaned up locally; if the server has never published, it returns an empty `files` and the client skips deletion; if the project does not exist or is soft-deleted, the endpoint fails.
 
-The publishing side (aly-publish `push`) uses `upload_file` (≤ 1 MiB) or `upload_chunk` + `upload_chunk_complete` (> 1 MiB), then calls `publish_version` to register the version.
+The publishing side (aly-publish `push`) uses `upload_file` (≤ 128 KiB, adjustable via `ALY_CHUNK_SIZE`) or `upload_chunk` + `upload_chunk_complete` (> 128 KiB), then calls `publish_version` to register the version; staged `deleted` entries make `push` call `file/delete_file` first.
 
 `get_all_projects`, `set_force_update`, `get_project_os_info`, and `server/info` are used by aly-publish and the publish GUI; they are not on the client's main update path. For command-level details, see [aly-client command reference](/en/docs/commands) and [aly-publish](/en/docs/publish).
 

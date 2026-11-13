@@ -33,9 +33,12 @@ Go 驱动的 harness，不是脚本拼凑：
 | `cmd/` | 各命令 JSON 协议、锁语义、脚本执行 |
 | `config/` / `util/` / `model/` | 配置加载、平台工具函数 |
 | `linuxui` | 收尾进程、替换编排、参数解析 |
-| `publish-gui` tests | 配置、版本、CLI 输出解析等（38 个） |
+| `publish-gui` tests | 配置、版本、CLI 输出解析、payload 探测等（54 个） |
+| `server/controllers` | API 边界：路径穿越、分片边界（0 / -1 / 65537）、零字节合并、MD5 不符、并发合并、Range/If-Range、软删除过滤、幂等删除、changelog 上限（~40 例） |
+| `publish-cli`（api/diff/staging） | 分片上传与 complete 重试、ignore 规则归一化、deleted 暂存与清单判据、强制更新三态 |
+| SDK conformance | 7 语言各 17–18 例（TS / Rust / C++ / Pascal 18、Python 17、Java 17、Go 全绿；C# 由 E2E 78–94 覆盖） |
 
-XP 轨约束下的测试同样遵守 Go 1.10.8 兼容性（不使用 `t.Cleanup` 等新 API）。
+测试代码用**现代 Go（1.27）+ GOPATH 模式**运行，可以使用 `t.Cleanup` / `t.TempDir` 等新 API；生产二进制仍必须用 Go 1.10.8 / 386 构建（XP 兼容），因此 CI 的设计是「Go 1.10 构建 + 现代 Go 跑测试」。
 
 ## 运行
 

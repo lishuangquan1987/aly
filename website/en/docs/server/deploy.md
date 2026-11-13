@@ -278,7 +278,7 @@ sudo systemctl start aly-server
 | Upload returns "file too large" (`文件过大`) | The single file exceeds 1 GB, or the proxy's `client_max_body_size` is too small | Adjust the proxy limit; confirm this is a real business need |
 | The proxy returns 413 | Nginx's default 1 MB limit | Set `client_max_body_size 1050m` |
 | Download returns 404 | `path` is not an absolute path under `data/`, or the binary has moved | Request the `fileAbsolutePath` from `get_all_files` verbatim |
-| Download is cut off midway | The server's `WriteTimeout` is 60 seconds (cap for the whole response) | Large files on slow links get truncated; the client retries with Range resumption |
+| Download is cut off midway | Each download gets a write deadline based on file size (`5 minutes + 1 second per MiB`, capped at 30 minutes); the global `WriteTimeout` is 0 | Very large files on slow links can still hit the deadline; the client retries with Range resumption |
 | `database is locked` | The same database file is opened by multiple processes | Ensure only one aly-server instance is running |
 | Changelog time differs from local time | `time` is a string supplied by the publisher and stored verbatim by the server | Have the publisher consistently use `yyyy-MM-dd HH:mm:ss` and the same time zone |
 

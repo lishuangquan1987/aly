@@ -276,7 +276,8 @@ curl http://127.0.0.1:2000/api/project/get_project_by_name/demo
 
 ### Behavior
 
-- This query **does not filter on `is_deleted`**: a soft-deleted project is still returned, just with `"is_deleted": true` in the response. The client (`FindProjectByName`) uses that to decide "does not exist" on its own.
+- This query **filters on `is_deleted`**: a soft-deleted project now fails (error text `ent: project not found`), matching the availability rule used by `get_all_files` and `publish_version` (review M2).
+- Clients no longer need to inspect `is_deleted` themselves: a failed lookup means the project does not exist.
 - If the project genuinely does not exist, the call fails with ent's raw message.
 
 ### Common errors
@@ -346,7 +347,7 @@ curl http://127.0.0.1:2000/api/project/get_project_change_logs/demo
 ### Behavior
 
 - **Does not validate that the project exists**: an unknown project name returns success plus an empty array `[]`.
-- After a project is soft-deleted, its logs remain queryable (as long as the logs themselves are not soft-deleted). This matches the behavior of `get_project_by_name`.
+- After a project is soft-deleted, its logs remain queryable (as long as the logs themselves are not soft-deleted); looking the project up by name fails (see `get_project_by_name` above).
 - Both client and server pick the latest by **version number** (if versions are equal, the larger `id` wins); the anti-rollback check when publishing also compares versions and ignores insertion order.
 
 ### Common errors
@@ -382,7 +383,7 @@ curl -X POST http://127.0.0.1:2000/api/project/delete_project/demo
 
 - Only the database flag is changed; the files under `data/{projectName}` and `.updator_manifest.json` are all retained.
 - The project's file-list cache is released before deletion.
-- After deletion: `get_all_projects` no longer returns it; `update_project`, `set_force_update`, `publish_version`, and `get_project_os_info` all report "project does not exist"; `get_project_by_name` still returns it (with `is_deleted: true`); changelogs remain queryable.
+- After deletion: `get_all_projects` no longer returns it; `update_project`, `set_force_update`, `publish_version`, and `get_project_os_info` all report "project does not exist"; `get_project_by_name` no longer returns it; changelogs remain queryable.
 - A project with the same name cannot be recreated (`create_project`'s uniqueness check does not filter soft-deleted records); you must clean up the database record manually first.
 - Deleting again returns `项目不存在: demo`.
 

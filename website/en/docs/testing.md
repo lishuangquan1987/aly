@@ -33,9 +33,12 @@ A Go-driven harness, not a patchwork of scripts:
 | `cmd/` | JSON protocol of each command, lock semantics, script execution |
 | `config/` / `util/` / `model/` | Configuration loading, platform utility functions |
 | `linuxui` | Finisher process, replacement orchestration, argument parsing |
-| `publish-gui` tests | Configuration, versioning, CLI output parsing and more (38) |
+| `publish-gui` tests | Configuration, versioning, CLI output parsing, payload probing and more (54) |
+| `server/controllers` | API boundaries: path traversal, chunk boundaries (0 / -1 / 65537), zero-byte merge, MD5 mismatch, concurrent merges, Range/If-Range, soft-delete filtering, idempotent delete, changelog cap (~40 cases) |
+| `publish-cli` (api/diff/staging) | Chunked upload and complete retries, ignore-rule normalization, deleted staging and manifest criterion, force-update tri-state |
+| SDK conformance | 17-18 cases per language (TS / Rust / C++ / Pascal 18, Python 17, Java 17, Go all green; C# covered by E2E 78-94) |
 
-Tests running under the XP-track constraints also obey Go 1.10.8 compatibility (no `t.Cleanup` or other newer APIs).
+Test code runs on **modern Go (1.27) in GOPATH mode** and may use `t.Cleanup` / `t.TempDir`; production binaries must still be built with Go 1.10.8 / 386 for XP compatibility, so CI is designed as "build with Go 1.10, test with modern Go".
 
 ## Running
 

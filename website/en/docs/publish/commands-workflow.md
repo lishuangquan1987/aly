@@ -268,7 +268,7 @@ Entries are sorted by `relativePath`. When the staging area is empty, `data` is 
 
 ```bash
 aly-publish push --version <version> --message <message> [--message <message> ...] \
-  [--dry-run] [--force] [--after-apply-update-script <script>] [--set-force-update]
+  [--dry-run] [--force] [--after-apply-update-script <script>] [--set-force-update | --clear-force-update]
 ```
 
 | Flag | Type | Required | Description |
@@ -278,7 +278,8 @@ aly-publish push --version <version> --message <message> [--message <message> ..
 | `--dry-run` | bool | No | Only lists the files and the version that would be pushed; nothing is actually pushed |
 | `--force` | bool | No | Skips the MD5 re-check of staged files |
 | `--after-apply-update-script` | string | No | Script to run after the update; the path is relative to the application directory |
-| `--set-force-update` | bool | No | Marks the project as force update after a successful push |
+| `--set-force-update` | bool | No | Marks the project as force update after a successful push; mutually exclusive with `--clear-force-update` |
+| `--clear-force-update` | bool | No | Clears the force-update flag after a successful push; mutually exclusive with `--set-force-update` |
 
 ### Prerequisites and flow
 
@@ -292,16 +293,16 @@ aly-publish push --version <version> --message <message> [--message <message> ..
    ```
 
    `--force` skips this step and uploads the current files directly.
-5. Uploads run concurrently. The concurrency is the CPU count, clamped to 3–16. A file of at most 1 MiB is uploaded directly; a file larger than 1 MiB is uploaded in 1 MiB chunks, and the server is asked to merge them when the chunks are complete. Each file/chunk is attempted at most 5 times (first attempt + 4 retries, with backoff of 400/800/1600/3200 ms).
+5. Uploads run concurrently. The concurrency is the CPU count, clamped to 3–16. A file of at most 128 KiB is uploaded directly; a file larger than 128 KiB is uploaded in 128 KiB chunks (adjustable with the `ALY_CHUNK_SIZE` environment variable), and the server is asked to merge them when the chunks are complete. Each file/chunk/merge request is attempted at most 5 times (first attempt + 4 retries, with backoff of 400/800/1600/3200 ms); when the merge returns `chunksComplete=false` only the missing chunks are re-uploaded.
 6. After every upload succeeds it calls `POST /api/project/publish_version` to register the version, with the time taken from the local `yyyy-MM-dd HH:mm:ss`.
-7. After a successful registration it clears the staging area and updates the project's force-update flag according to the value of `--set-force-update`.
+7. After a successful registration it clears the staging area and updates the project's force-update flag with tri-state semantics (`--set-force-update` / `--clear-force-update` / neither keeps the current value).
 
 ### JSON progress stream
 
 `push --json` is not a single-line output but line-delimited JSON:
 
 1. The `START` line of every file (in staging order, all emitted up front);
-2. A `DONE` or `FAIL` line per file (in the original order);
+2. A `DONE` or `FAIL` line per file **as soon as that file finishes** (uploads run concurrently, so completion order is not guaranteed to match staging order; `deleted` entries go through the delete call and also emit `DONE`/`FAIL`);
 3. One final result line (on success `data` contains `version` and `files`; on failure `isSuccess: false`);
 4. One terminator line: `{"isSuccess":true,"errorMsg":"","data":null}`.
 
@@ -316,7 +317,7 @@ Success example (2 files):
 {"isSuccess":true,"errorMsg":"","data":null}
 ```
 
-The progress data fields are `index`, `total`, `file`, `status`, `file_size` and `error` (only present on failure). `data.files` in the final result is a **string**.
+The progress data fields are `index`, `total`, `file`, `status`, `file_size` and `error` (only present on failure). `data.files` in the final result is a **string** holding the number of **entries processed (including `deleted` entries)** — do not read a release that contains deletions as "one extra file uploaded".
 
 Upload failure example:
 
@@ -360,10 +361,16 @@ Limitations:
 
 ### Force-update flag
 
-`--set-force-update` means "mark the project as force update after a successful push", so the client updates without asking when it checks for updates.
+`--set-force-update` / `--clear-force-update` control the project's force-update flag after a successful push; when it is `true` the client downloads and applies without asking.
 
-::: warning Behavior of the current implementation
-After a successful push the CLI always calls `set_force_update`, passing the current value of `--set-force-update`. In other words, a successful push that omits the flag sets the project's force-update flag to `false`. If the project was already in force-update mode and needs to stay there, pass `--set-force-update` explicitly.
+::: tip Tri-state semantics (fixed 2026-11-12, B7)
+`push` handles the force-update flag as a tri-state operation:
+
+- `--set-force-update`: set it to `true` after a successful push;
+- `--clear-force-update`: set it to `false` after a successful push;
+- neither flag: **keep the server value unchanged** (the old implementation always wrote `false`, i.e. one publish silently disabled force update).
+
+The two flags are mutually exclusive; passing both is an error, and `--dry-run` rejects them. A failed push (including a failed version registration) never touches the flag.
 :::
 
 ### Examples
@@ -378,6 +385,9 @@ aly-publish push --version V1.0.3 --message "重构上传" --dry-run
 # Script + force update
 aly-publish push --version V1.0.4 --message "升级数据库" \
   --after-apply-update-script update.bat --set-force-update
+
+# Clear the force-update flag
+aly-publish push --version V1.0.5 --message "normal release" --clear-force-update
 ```
 
 ## log

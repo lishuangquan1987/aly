@@ -164,14 +164,15 @@ The publish panel on the right requires three conditions to be met at once:
 | Version | For example `V1.0.2`; when empty the button is disabled and shows "Enter a version" |
 | Next version | Increments the last numeric segment of the current version by one (`V1.0.2` → `V1.0.3`); disabled when the current version is missing or cannot be parsed |
 | Release notes | Required; the GUI submits them as **one** log entry — for multiple entries use repeated `--message` with the CLI |
-| Advanced | The post-update script (relative to the application directory) and the force-update checkbox |
+| Advanced | The post-update script (relative to the application directory) and the force-update checkbox (checked = on, unchecked = off; written explicitly to the server on publish) |
 | Publish button | The label follows the staged count ("Publish 3 files"); with nothing staged it prompts "Stage at least one file on the left first" |
 
 Publishing process:
 
 - The GUI invokes `push` with `--json`, parses START / DONE / FAIL line by line, and displays file names, sizes, statuses and overall progress;
 - It can be cancelled; cancelling terminates the CLI process. Files already uploaded are not rolled back, and the staging area is not cleared;
-- On success it clears the version, release notes, script and force-update checkbox, refreshes the status and the version history, and shows "Published: V1.0.2";
+- On success it clears the version, release notes and script; the force-update checkbox is **refilled from the server's actual state** (it is no longer hard-reset to unchecked), then the status and version history refresh and "Published: V1.0.2" is shown;
+- Force update is tri-state: sending `--set-force-update` when checked and `--clear-force-update` when unchecked; neither is sent only when the server value was never read (keep the current value and avoid clearing it by mistake);
 - On failure it shows the error message; the staging area is preserved and you can retry directly. If the files were uploaded but version registration failed, retry with a higher version number.
 
 The version history shows the 20 most recent entries, returned by the server with the newest first:

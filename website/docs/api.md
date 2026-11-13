@@ -9,7 +9,7 @@ aly-server 基于 Gin 提供 HTTP 接口，全部注册在 `/api` 前缀下（�
 
 如果你只想查某个接口，直接跳到[接口索引](#接口索引)；下面先说明所有接口共用的约定。
 
-> **适合谁**：要自己实现发布端/更新端、或排查 HTTP 层问题的开发者。读完可独立调用全部 16 个接口，并正确处理 HTTP 200 + `isSuccess:false`。
+> **适合谁**：要自己实现发布端/更新端、或排查 HTTP 层问题的开发者。读完可独立调用全部 17 个接口，并正确处理 HTTP 200 + `isSuccess:false`。
 
 | 项目 | 值 |
 | --- | --- |
@@ -119,6 +119,7 @@ aly-server 基于 Gin 提供 HTTP 接口，全部注册在 `/api` 前缀下（�
 | POST | [`/api/file/upload_chunk_complete`](/docs/server/api-file#完成分片上传) | 校验并合并分片 | `{chunksComplete,totalSize}` 或 `{chunksComplete,missingChunks}` |
 | GET | [`/api/file/get_all_files/:projectName`](/docs/server/api-file#获取文件列表) | 文件列表，含 MD5 / SHA256 | `FileInfo[]` |
 | GET | [`/api/file/get_release_manifest/:projectName`](/docs/server/api-file#获取发布清单) | 发布清单（仅相对路径） | `{files:string[]}` |
+| POST | [`/api/file/delete_file`](/docs/server/api-file#删除文件) | 删除项目内文件（幂等，供删除同步） | `null` |
 | GET | [`/api/file/download_file`](/docs/server/api-file#下载文件) | 按绝对路径下载，支持 Range | 文件字节流 |
 
 ### 服务端 `/api/server`
@@ -140,13 +141,13 @@ aly-server 基于 Gin 提供 HTTP 接口，全部注册在 `/api` 前缀下（�
 
 各步骤的作用：
 
-1. **`get_project_by_name`**：确认项目存在（客户端判断 `is_deleted`），取得项目当前版本。
+1. **`get_project_by_name`**：确认项目存在（服务端已过滤软删除，失败即视为不存在），取得项目当前版本。
 2. **`get_project_change_logs`**：取服务端最新版本号与变更日志，与本地版本比较决定 `has_update` / `need_download_update`；同时取 `after_apply_update_script`。
 3. **`get_all_files`**：取文件清单与双哈希，决定下载哪些文件、哪些未变化的文件需要在本地物化。
 4. **`download_file`**：逐个下载变更文件，参数直接使用上一步返回的 `fileAbsolutePath`。
-5. **`get_release_manifest`**：**只用于删除同步**。下载完成后，清单之外的文件被视为"发布端已删除"，在本地被清理；服务端从未发布过时返回空 `files`，客户端跳过删除。
+5. **`get_release_manifest`**：**只用于删除同步**。下载完成后，清单之外的文件被视为"发布端已删除"，在本地被清理；服务端从未发布过时返回空 `files`，客户端跳过删除；项目不存在/已软删除时该接口直接失败。
 
-上传侧（aly-publish `push`）使用 `upload_file`（≤ 1 MiB）或 `upload_chunk` + `upload_chunk_complete`（> 1 MiB），随后调用 `publish_version` 登记版本。
+上传侧（aly-publish `push`）使用 `upload_file`（≤ 128 KiB，可用 `ALY_CHUNK_SIZE` 调整）或 `upload_chunk` + `upload_chunk_complete`（> 128 KiB），随后调用 `publish_version` 登记版本；暂存区里的 `deleted` 条目会让 `push` 先调用 `file/delete_file` 同步删除。
 
 `get_all_projects`、`set_force_update`、`get_project_os_info`、`server/info` 由 aly-publish 与发布 GUI 使用，不在客户端更新主链上。命令层面的说明见 [aly-client 命令速查](/docs/commands) 与 [aly-publish 发布工具](/docs/publish)。
 

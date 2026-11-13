@@ -267,7 +267,7 @@ project_change_logs
 └── logs
 ```
 
-- 两张表都有 `is_deleted`，查询时按需过滤：`get_all_projects` 过滤，`get_project_by_name` 不过滤。
+- 两张表都有 `is_deleted`；对外查询口径一致地过滤：`get_all_projects` 与 `get_project_by_name` 都不返回软删除记录（`get_project_by_name` 改为返回失败，审查 M2）。
 - 服务端实际不物理删除任何行，`ON DELETE SET NULL` 只是外键定义层面的保护。
 - 表结构与列变更由 ent 在启动时自动迁移；老库的 `project_id` 列由一次性迁移补齐（见 [部署](/docs/server/deploy)）。
 

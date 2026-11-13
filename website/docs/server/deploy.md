@@ -277,7 +277,7 @@ sudo systemctl start aly-server
 | 上传返回「文件过大」 | 单文件超 1 GB，或代理 `client_max_body_size` 太小 | 调整代理限制；确认是业务需要 |
 | 代理返回 413 | Nginx 默认 1 MB 限制 | 设 `client_max_body_size 1050m` |
 | 下载 404 | `path` 不是 `data/` 下的绝对路径，或二进制搬过位置 | 用 `get_all_files` 的 `fileAbsolutePath` 原样请求 |
-| 下载到一半中断 | 服务端 `WriteTimeout` 为 60 秒（整次响应上限） | 慢链路大文件会被截断；客户端按 Range 续传重试 |
+| 下载到一半中断 | 单次下载按文件大小设置写期限（`5 分钟 + 每 MiB 1 秒`，上限 30 分钟），全局 `WriteTimeout` 为 0 | 慢链路超大文件仍可能超期断开；客户端按 Range 续传重试 |
 | `database is locked` | 同一库文件被多进程打开 | 保证只有一个 aly-server 实例 |
 | 变更日志时间与本地不一致 | `time` 由发布端传入字符串，服务端原样存储 | 发布端统一使用 `yyyy-MM-dd HH:mm:ss` 与同一时区 |
 

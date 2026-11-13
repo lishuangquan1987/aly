@@ -52,7 +52,9 @@ PackageFolder/
     ├── client.json                    # 主程序路径、需关闭的进程
     ├── version.json                   # 版本状态机
     ├── .aly.lock                      # 更新互斥锁（运行时）
-    ├── update.log                     # 更新日志
+    ├── update.log                     # 更新日志（超过 5 MB 轮转为 update.log.1）
+    ├── download.log                   # 下载、物化与删除同步日志（同样 5 MB 单代轮转）
+    ├── check_diff.log                 # 本地 MD5 扫描告警（同样 5 MB 单代轮转）
     ├── release_manifest.json          # 发布清单缓存（删除同步用）
     └── aly-client.exe.old             # 自更新备份（运行时）
 ```
