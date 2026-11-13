@@ -43,6 +43,40 @@ func TestCreateUpdateFolderWritesClientJSON(t *testing.T) {
 	}
 }
 
+func TestRefreshUpdatersKeepsClientJSON(t *testing.T) {
+	base := t.TempDir()
+	projectDir := filepath.Join(base, "App")
+	updateDir := filepath.Join(base, "UpdateFolder")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(updateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	clientPath := filepath.Join(updateDir, "client.json")
+	original := []byte(`{"main_exe_relative_path":"custom","must_close_process_name":["custom"]}`)
+	if err := os.WriteFile(clientPath, original, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := refreshUpdaters(projectDir); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(clientPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(original) {
+		t.Fatalf("client.json changed: %s", got)
+	}
+}
+
+func TestUpdaterNames(t *testing.T) {
+	names := updaterNames()
+	if len(names) != 2 || names[0] == "" || names[0] == names[1] {
+		t.Fatalf("updaterNames=%v", names)
+	}
+}
+
 func TestRefreshUpdatersWithoutFolderIsNoop(t *testing.T) {
 	projectDir := filepath.Join(t.TempDir(), "App")
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {

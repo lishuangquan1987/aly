@@ -29,6 +29,30 @@ func TestConfigRoundTrip(t *testing.T) {
 	}
 }
 
+func TestLoadProjectsMissingReturnsEmpty(t *testing.T) {
+	t.Setenv("ALYPUBLISH_CONFIG_DIR", t.TempDir())
+	if got := loadProjects(); len(got) != 0 {
+		t.Fatalf("projects=%+v", got)
+	}
+}
+
+func TestIsInitialized(t *testing.T) {
+	dir := t.TempDir()
+	if isInitialized(dir) {
+		t.Fatal("empty folder reported initialized")
+	}
+	updator := filepath.Join(dir, ".updator")
+	if err := os.MkdirAll(updator, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(updator, "shared.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !isInitialized(dir) {
+		t.Fatal("shared.json not detected")
+	}
+}
+
 func TestAppearanceSurvivesCSharpSettingsRewrite(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("ALYPUBLISH_CONFIG_DIR", dir)
