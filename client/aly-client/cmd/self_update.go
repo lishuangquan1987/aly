@@ -46,10 +46,11 @@ import (
 // 下的 .aly.lock；另一更新进行中时直接返回错误，避免边换更新器边读半换位的
 // 主目录。
 func SelfUpdate() {
-	fs := flag.NewFlagSet("self_update", flag.ExitOnError)
+	fs := flag.NewFlagSet("self_update", flag.ContinueOnError)
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
 	includeUiFlag := fs.Bool("include-ui", false, "同时补齐 aly-client-ui 副本（仅在缺失时落位）")
-	fs.Parse(os.Args[2:])
+	// A6：ContinueOnError + JSON 信封，参数解析失败 exit 2；-h 打印 usage 后 exit 0
+	parseCommandFlags(fs, os.Args[2:])
 
 	fc, err := loadFullConfig("", "", *mainExePathFlag)
 	if err != nil {

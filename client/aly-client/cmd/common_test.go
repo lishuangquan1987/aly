@@ -24,7 +24,7 @@ func TestBuildMainExeCmdDir(t *testing.T) {
 
 // writeScriptForPlatform 按当前平台写测试用后置脚本：
 // Windows 写 .bat（runScript 走 cmd /c，内容逐字节保持历史用例不变）；
-// Unix 写 .sh（runScript 走 sh -c，需可执行位、换行用 \n）。
+// Unix 写 .sh（runScript 直 exec sh scriptPath，换行用 \n）。
 // 两端语义对齐，保证同一用例在 Windows / Linux 都可运行。
 func writeScriptForPlatform(t *testing.T, dir, base, winBody, nixBody string) string {
 	t.Helper()
@@ -61,7 +61,10 @@ func TestRunScriptExecutesInWorkDir(t *testing.T) {
 		"@echo off\r\necho ok > out.txt\r\n",
 		"echo ok > out.txt\n")
 
-	runScript(scriptPath, workDir)
+	// 脚本成功执行：不应返回 error（B9 签名改造）
+	if err := runScript(scriptPath, workDir); err != nil {
+		t.Fatalf("脚本成功执行不应返回 error: %v", err)
+	}
 
 	// 脚本同步执行完成：workDir/out.txt 存在
 	if _, err := os.Stat(filepath.Join(workDir, "out.txt")); err != nil {
@@ -91,12 +94,15 @@ func TestRunScriptTimeout(t *testing.T) {
 	defer func() { scriptTimeout = orig }()
 
 	start := time.Now()
-	runScript(scriptPath, workDir)
+	runErr := runScript(scriptPath, workDir)
 	elapsed := time.Since(start)
 
-	// 超时后应快速返回（远小于脚本自身 30s 时长）
+	// 超时后应快速返回（远小于脚本自身 30s 时长），且必须返回 error（B9：会让恢复重跑）
 	if elapsed > 5*time.Second {
 		t.Errorf("脚本超时后未及时返回，耗时 %v", elapsed)
+	}
+	if runErr == nil {
+		t.Error("脚本超时被 Kill 应返回 error，实际 nil")
 	}
 }
 

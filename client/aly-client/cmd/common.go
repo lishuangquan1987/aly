@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -92,6 +95,93 @@ func loadFullConfig(url, projectName, mainExePath string) (*FullConfig, error) {
 // normalizePath 将反斜杠转为正斜杠
 func normalizePath(p string) string {
 	return strings.Replace(p, "\\", "/", -1)
+}
+
+// safeRelPath 判断服务端下发的"相对路径"能否安全地 Join 到本地版本目录（M12）。
+//
+// Go 1.10 没有 filepath.IsLocal（Go 1.20 才引入），这里手写等价校验：
+//   - 非空、不含 NUL；
+//   - 非绝对路径（不以 / 或 \ 开头）、非盘符开头（C:）、非 UNC（\\srv\share）；
+//   - 归一化为 / 分隔后每一段都非空，且不是 "." / ".."。
+//
+// 反斜杠会被统一成 / 再判断，因此 Windows 风格（a\b）与 POSIX 风格（a/b）都接受；
+// 调用方仍应用 filepathFromSlash 还原成本地分隔符再 Join。
+// 恶意服务端可用 FileRelativePath / after_apply_update_script 把写入/执行点
+// 引出主目录之外（与 M11 组合可成任意命令执行），本函数是下载/物化/后置脚本
+// 三条链路的统一入口校验（纵深防御）。
+func safeRelPath(rel string) bool {
+	if rel == "" {
+		return false
+	}
+	if strings.IndexByte(rel, 0) >= 0 {
+		return false // 含 NUL
+	}
+	p := normalizePath(rel)
+	if strings.HasPrefix(p, "/") {
+		return false // 绝对路径 / UNC（\\srv → //srv）
+	}
+	if len(p) >= 2 && p[1] == ':' &&
+		((p[0] >= 'a' && p[0] <= 'z') || (p[0] >= 'A' && p[0] <= 'Z')) {
+		return false // 盘符路径
+	}
+	segs := strings.Split(p, "/")
+	if len(segs) == 0 {
+		return false
+	}
+	for _, seg := range segs {
+		if seg == "" || seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+// statMissingOrErr 区分路径"确定缺失"与"状态不可读"（M9）：
+//   - missing=false, err=nil → 路径存在且可 stat；
+//   - missing=true,  err=nil → 路径确定不存在（os.IsNotExist）；
+//   - missing=false, err!=nil → 其它错误（网络盘瞬断 / ACL / 杀软锁等）。
+//
+// 调用方必须 fail-safe：只有 missing=true 才按"缺失"分支走（旁移/自愈/降级），
+// 其它错误一律报错返回。把 stat 错误当成"不存在"可能造成真实主目录被旁移成
+// {folderName}.old（无自动清理路径）等不可逆破坏。
+func statMissingOrErr(path string) (missing bool, err error) {
+	if _, statErr := os.Stat(path); statErr != nil {
+		if os.IsNotExist(statErr) {
+			return true, nil
+		}
+		return false, statErr
+	}
+	return false, nil
+}
+
+// parseCommandFlags 统一参数解析入口（A6）：9 个命令全部使用 flag.ContinueOnError +
+// SetOutput(ioutil.Discard)，避免 flag.ExitOnError 在未知参数时直接 os.Exit(2)
+// 且不输出 JSON（历史 #1 事故：C# SDK 传了 Go 端未定义的 flag，宿主只看到静默 exit 2）。
+//   - 解析失败：输出 JSON 错误信封到 stdout，随后 exit 2（保留宿主契约的参数错误码，
+//     宿主对"exit≠0 但 stdout 有 JSON"按业务失败处理，语义仍是"不要重试"）；
+//   - -h/--help：打印 usage 到 stdout，随后 exit 0。
+func parseCommandFlags(fs *flag.FlagSet, args []string) {
+	fs.SetOutput(ioutil.Discard)
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			printFlagSetUsage(fs)
+			os.Exit(0)
+		}
+		printOutput(false, fmt.Sprintf("参数解析失败: %v", err), nil)
+		os.Exit(2)
+	}
+}
+
+// printFlagSetUsage 打印命令用法与全部 flag（flag 包自身输出已被 Discard）。
+func printFlagSetUsage(fs *flag.FlagSet) {
+	var buf bytes.Buffer
+	fs.SetOutput(&buf)
+	fs.PrintDefaults()
+	fs.SetOutput(ioutil.Discard)
+	fmt.Printf("用法: aly-client %s [选项]\n", fs.Name())
+	if buf.Len() > 0 {
+		fmt.Print(buf.String())
+	}
 }
 
 // loadSharedFromVersionDirs 在 MainFolder 缺失（崩溃恢复）时，从 PackageFolder 下的
@@ -482,7 +572,7 @@ func closeProcessesGracefully(names []string, timeout time.Duration) {
 	for _, name := range names {
 		pids, err := util.FindProcessesByName(name)
 		if err != nil {
-			util.AppendToLog(".", "update.log", fmt.Sprintf("closeProcessesGracefully: find process %s failed: %v", name, err))
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("closeProcessesGracefully: find process %s failed: %v", name, err))
 			continue
 		}
 		for _, pid := range pids {
@@ -490,7 +580,7 @@ func closeProcessesGracefully(names []string, timeout time.Duration) {
 		}
 	}
 	if err := util.KillProcessesAndWait(names, timeout); err != nil {
-		util.AppendToLog(".", "update.log", fmt.Sprintf("closeProcessesGracefully: kill failed: %v", err))
+		util.AppendToLog(logDir(), "update.log", fmt.Sprintf("closeProcessesGracefully: kill failed: %v", err))
 	}
 }
 
@@ -501,7 +591,7 @@ func closeProcessesForApply(names []string) {
 	for _, name := range names {
 		found, err := util.FindProcessesByName(name)
 		if err != nil {
-			util.AppendToLog(".", "update.log", fmt.Sprintf("closeProcessesForApply: find process %s failed: %v", name, err))
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("closeProcessesForApply: find process %s failed: %v", name, err))
 			continue
 		}
 		for _, pid := range found {
@@ -626,6 +716,11 @@ func renameDirWithKillState(from, to string, timeout time.Duration, st *renamePr
 				// 旁移失败（被占用且杀不掉）：直接返回，重试无意义
 				return fmt.Errorf("move aside %s -> %s: %v", to, aside, asideErr)
 			}
+		} else if !os.IsNotExist(statErr) {
+			// M9：目标状态不可读（网络盘瞬断 / ACL / 杀软锁）不得当成"目标不存在"继续改名，
+			// 否则真实存在的目标（可能是 MainFolder 本体）会被隐式旁移成 {folderName}.old，
+			// 而该前缀不在 clean 的 {folderName}_ 规则内。fail-safe：直接报错返回。
+			return fmt.Errorf("stat rename target %s: %v", to, statErr)
 		}
 		// 3) 正式重命名（乐观模式：先直接试，失败才探测击杀）
 		err := os.Rename(from, to)
@@ -937,12 +1032,12 @@ func buildMainExeCmd(exePath, mainFolder string) *exec.Cmd {
 func launchMainExe(cfg *config.Config, mainFolder string) {
 	exeDir, err := config.ExeDir()
 	if err != nil {
-		util.AppendToLog(".", "update.log", fmt.Sprintf("launch main exe: get exe dir failed: %v", err))
+		util.AppendToLog(logDir(), "update.log", fmt.Sprintf("launch main exe: get exe dir failed: %v", err))
 		return
 	}
 	exePath, err := cfg.MainExeAbsPath()
 	if err != nil {
-		util.AppendToLog(".", "update.log", fmt.Sprintf("launch main exe: get exe path failed: %v", err))
+		util.AppendToLog(logDir(), "update.log", fmt.Sprintf("launch main exe: get exe path failed: %v", err))
 		return
 	}
 	cmd := buildMainExeCmd(exePath, mainFolder)
@@ -974,6 +1069,14 @@ func applyFailureFallback(fc *FullConfig, versionInfo *config.VersionInfo, failE
 			versionInfo.RollbackPrevious = ""
 			versionInfo.RollbackTarget = ""
 			versionInfo.VersionStatus = config.VersionStatusApplying
+			// M6：保持 applying 也要递增失败计数——否则反复失败时 check_update 的
+			// applying 早退分支没有熔断出口（每次 apply 都会再杀一次主程序）。
+			versionInfo.ApplyFailCount++
+			if versionInfo.ApplyFailCount >= MaxApplyFailCount {
+				util.AppendToLog(logDir(), "update.log",
+					fmt.Sprintf("keep applying failed %d times (>= %d), circuit broken: will not auto-apply until server publishes a newer version or re-download",
+						versionInfo.ApplyFailCount, MaxApplyFailCount))
+			}
 			if wErr := config.WriteVersion(versionInfo); wErr != nil {
 				util.AppendToLog(logDir(), "update.log",
 					fmt.Sprintf("keep applying: write version failed: %v", wErr))
@@ -1040,20 +1143,33 @@ func filepathFromSlash(path string) string {
 // 声明为 var 以便测试覆盖超时路径。
 var scriptTimeout = 60 * time.Second
 
-// runScript 同步执行 post-update 脚本并记录结果到 update.log。
+// scriptCmdFn 构造后置脚本执行命令（可被测试替换，用于注入 Start 失败等路径）。
+//
+// Windows：保持 cmd /c（.bat/.cmd/.exe 都能跑，带空格路径由 syscall 整体加引号），
+// 真风险（无空格但含 &/^/% 的路径）由 M12 的 safeRelPath 白名单从源头治理。
+// Unix：直 exec `sh scriptPath`（不经 -c，M11）——既消除 shell 元字符注入，
+// 也顺带修复"带空格路径被 shell 分词"的正确性 bug；脚本按 sh 语法解释，
+// 不要求可执行位。
+var scriptCmdFn = func(scriptPath string) *exec.Cmd {
+	if os.PathSeparator == '\\' {
+		return exec.Command("cmd", "/c", scriptPath)
+	}
+	return exec.Command("sh", scriptPath)
+}
+
+// runScript 同步执行 post-update 脚本并记录结果到 update.log（B9）。
 // 同步执行保证更新器进程退出前脚本已完成、结果已落盘（原异步 goroutine 会随进程退出被杀，
 // 导致脚本结果日志丢失，且脚本与主程序启动无先后保证，#11）。
 // 调用方应保证顺序：脚本先于主程序启动（保持既有语义）。
-func runScript(scriptPath, workDir string) {
+//
+// 返回值语义（B9）：脚本文件缺失 → nil（调用方另有 stat 门控，无需标记）；
+// Start 失败 / Wait 非零退出 / 超时被 Kill 均返回 error，调用方据此**不写 marker**，
+// 让崩溃恢复重跑该脚本（脚本须幂等）。
+func runScript(scriptPath, workDir string) error {
 	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-		return
+		return nil
 	}
-	var cmd *exec.Cmd
-	if os.PathSeparator == '\\' {
-		cmd = exec.Command("cmd", "/c", scriptPath)
-	} else {
-		cmd = exec.Command("sh", "-c", scriptPath)
-	}
+	cmd := scriptCmdFn(scriptPath)
 	cmd.Dir = workDir
 	if err := cmd.Start(); err != nil {
 		exeDir, dirErr := config.ExeDir()
@@ -1061,7 +1177,7 @@ func runScript(scriptPath, workDir string) {
 			util.AppendToLog(exeDir, "update.log",
 				fmt.Sprintf("script start failed: %s %v", scriptPath, err))
 		}
-		return
+		return fmt.Errorf("script start failed: %v", err)
 	}
 	done := make(chan error, 1)
 	go func() {
@@ -1071,15 +1187,16 @@ func runScript(scriptPath, workDir string) {
 	case err := <-done:
 		exeDir, dirErr := config.ExeDir()
 		if dirErr != nil {
-			return
+			return err
 		}
 		if err != nil {
 			util.AppendToLog(exeDir, "update.log",
 				fmt.Sprintf("script failed: %s %v", scriptPath, err))
-		} else {
-			util.AppendToLog(exeDir, "update.log",
-				fmt.Sprintf("script completed: %s", scriptPath))
+			return fmt.Errorf("script failed: %v", err)
 		}
+		util.AppendToLog(exeDir, "update.log",
+			fmt.Sprintf("script completed: %s", scriptPath))
+		return nil
 	case <-time.After(scriptTimeout):
 		cmd.Process.Kill()
 		// 回收已结束的 Wait goroutine，避免子进程句柄残留
@@ -1088,10 +1205,10 @@ func runScript(scriptPath, workDir string) {
 		case <-time.After(2 * time.Second):
 		}
 		exeDir, dirErr := config.ExeDir()
-		if dirErr != nil {
-			return
+		if dirErr == nil {
+			util.AppendToLog(exeDir, "update.log",
+				fmt.Sprintf("script timed out and killed: %s", scriptPath))
 		}
-		util.AppendToLog(exeDir, "update.log",
-			fmt.Sprintf("script timed out and killed: %s", scriptPath))
+		return fmt.Errorf("script timed out after %v and was killed: %s", scriptTimeout, scriptPath)
 	}
 }

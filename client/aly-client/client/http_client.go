@@ -21,10 +21,10 @@ var httpClient = &http.Client{
 	// DisableKeepAlives 避开 WinXP 下连接池复用失效；MaxIdleConns / IdleConnTimeout
 	// 在此处无效（需 keep-alive 时才生效），保留作为后续启用 keep-alive 时的参考
 	Transport: &http.Transport{
-		DisableKeepAlives:   true,
-		MaxIdleConns:        10,
-		IdleConnTimeout:     90 * time.Second,
-		DisableCompression:  false,
+		DisableKeepAlives:  true,
+		MaxIdleConns:       10,
+		IdleConnTimeout:    90 * time.Second,
+		DisableCompression: false,
 	},
 }
 
@@ -251,10 +251,17 @@ func DownloadFile(serverURL string, serverFilePath string, localPath string, onB
 	}
 
 	_, err = io.Copy(f, newProgressReader(resp.Body, onBytes))
+	// M10：rename 前先落盘（Windows 即 FlushFileBuffers）——否则断电可能出现
+	// "名字已原子替换、内容还没落盘"的截断文件，而 apply 阶段没有哈希复检。
+	syncErr := f.Sync()
 	closeErr := f.Close()
 	if err != nil {
 		os.Remove(partPath)
 		return fmt.Errorf("写入文件失败: %v", err)
+	}
+	if syncErr != nil {
+		os.Remove(partPath)
+		return fmt.Errorf("同步文件失败: %v", syncErr)
 	}
 	// Close 错误（如磁盘满 flush 失败）也会丢数据，不能吞掉
 	if closeErr != nil {
@@ -286,6 +293,17 @@ func DownloadFileWithResume(serverURL string, serverFilePath string, localPath s
 
 	// For files larger than threshold, check for existing partial download
 	partPath := localPath + ".part"
+	// 轻微项：.part 已完整（大小 == 服务端大小）时直接 rename，不再整文件重下。
+	// 旧条件只对"大小严格小于"的文件续传，完整 .part 反而被删掉重下（>100MB 白重传一次）。
+	// 完整性由调用方随后的 MD5+SHA256 校验兜底，误判只会导致校验失败后重下，安全。
+	if serverFileSize > 0 {
+		if partInfo, partErr := os.Stat(partPath); partErr == nil && !partInfo.IsDir() && partInfo.Size() == serverFileSize {
+			if rErr := os.Rename(partPath, localPath); rErr == nil {
+				return nil
+			}
+			os.Remove(partPath)
+		}
+	}
 	if serverFileSize > largeFileThreshold {
 		// Check if completed file already exists
 		if localInfo, localErr := os.Stat(localPath); localErr == nil && localInfo.Size() == serverFileSize {
@@ -307,36 +325,44 @@ func DownloadFileWithResume(serverURL string, serverFilePath string, localPath s
 			}
 			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", partInfo.Size()))
 
-		resp, err := downloadHTTPClient.Do(req) // 下载走连接级超时（#5）
-		if err != nil {
-			f.Close()
-			return fmt.Errorf("resume request failed: %v", err)
-		}
+			resp, err := downloadHTTPClient.Do(req) // 下载走连接级超时（#5）
+			if err != nil {
+				f.Close()
+				return fmt.Errorf("resume request failed: %v", err)
+			}
 
-		if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
-			f.Close()
-			// Server doesn't support resume, remove .part and start over
-			os.Remove(partPath)
-			return DownloadFile(serverURL, serverFilePath, localPath, onBytes)
-		}
-		if resp.StatusCode == http.StatusOK {
-			// 200（非 206）：中间代理剥离了 Range 头，返回的是完整文件。
-			// 旧实现把完整文件追加到半截 .part 后（大小超预期兜底重下，浪费带宽）。
-			// 正确语义（#10）：删掉 .part，走整文件重下。
-			resp.Body.Close()
-			f.Close()
-			os.Remove(partPath)
-			return DownloadFile(serverURL, serverFilePath, localPath, onBytes)
-		}
+			if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
+				resp.Body.Close()
+				f.Close()
+				// Server doesn't support resume, remove .part and start over
+				os.Remove(partPath)
+				return DownloadFile(serverURL, serverFilePath, localPath, onBytes)
+			}
+			if resp.StatusCode == http.StatusOK {
+				// 200（非 206）：中间代理剥离了 Range 头，返回的是完整文件。
+				// 旧实现把完整文件追加到半截 .part 后（大小超预期兜底重下，浪费带宽）。
+				// 正确语义（#10）：删掉 .part，走整文件重下。
+				resp.Body.Close()
+				f.Close()
+				os.Remove(partPath)
+				return DownloadFile(serverURL, serverFilePath, localPath, onBytes)
+			}
 
-		// 续传回调从既有 .part 大小起算（语义=该文件累计已写字节数）
-		_, copyErr := io.Copy(f, newProgressReader(resp.Body, offsetCallback(onBytes, partInfo.Size())))
-		resp.Body.Close()
-		f.Close()
+			// 续传回调从既有 .part 大小起算（语义=该文件累计已写字节数）
+			_, copyErr := io.Copy(f, newProgressReader(resp.Body, offsetCallback(onBytes, partInfo.Size())))
+			resp.Body.Close()
+			// M10：rename 前落盘（断电下防"名换内容截断"）。
+			syncErr := f.Sync()
+			closeErr := f.Close()
 
 			if copyErr != nil {
 				return fmt.Errorf("resume write failed: %v", copyErr)
+			}
+			if syncErr != nil {
+				return fmt.Errorf("resume sync failed: %v", syncErr)
+			}
+			if closeErr != nil {
+				return fmt.Errorf("resume close failed: %v", closeErr)
 			}
 
 			// Verify download is complete before renaming
@@ -376,11 +402,17 @@ func DownloadFileWithResume(serverURL string, serverFilePath string, localPath s
 
 	_, copyErr := io.Copy(f, newProgressReader(resp.Body, onBytes))
 	resp.Body.Close()
+	// M10：rename 前落盘（断电下防"名换内容截断"）。
+	syncErr := f.Sync()
 	closeErr := f.Close()
 
 	if copyErr != nil {
 		os.Remove(partPath)
 		return fmt.Errorf("write file failed: %v", copyErr)
+	}
+	if syncErr != nil {
+		os.Remove(partPath)
+		return fmt.Errorf("sync file failed: %v", syncErr)
 	}
 	if closeErr != nil {
 		os.Remove(partPath)

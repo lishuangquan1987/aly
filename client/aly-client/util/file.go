@@ -275,7 +275,15 @@ func CopyFile(src, dst string, overwrite bool) error {
 		os.Remove(dstTmp)
 		return fmt.Errorf("chmod failed %s: %v", dst, chmodErr)
 	}
+	// M10：rename 前先落盘（Windows 下即 FlushFileBuffers）。否则断电后可能出现
+	// "名字已原子替换、内容还没落盘"的截断文件，而 apply 阶段没有哈希复检。
+	// 对照 config.WriteVersion（version.json 写入）已有的 Sync 加固。
+	syncErr := dstFile.Sync()
 	closeErr := dstFile.Close()
+	if syncErr != nil {
+		os.Remove(dstTmp)
+		return fmt.Errorf("同步目标文件失败 %s: %v", dst, syncErr)
+	}
 	if closeErr != nil {
 		os.Remove(dstTmp)
 		return fmt.Errorf("关闭目标文件失败 %s: %v", dst, closeErr)
@@ -420,12 +428,29 @@ func CopyDirWithExclude(srcDir, dstDir string, shouldSkipFile func(relPath strin
 	})
 }
 
+// maxLogSize 常驻日志单代轮转阈值（5MB）。超过后把当前日志改名为 <name>.1
+// （覆盖上一代），保证 update.log / download.log / check_diff.log 不会无限增长；
+// clean 命令按 30 天 cutoff 回收常驻日志及其 .1 代（轻微项）。
+const maxLogSize = 5 * 1024 * 1024
+
+// rotateLogIfTooLarge 单代轮转：日志超过 maxLogSize 时改名 .1（尽力而为，失败不阻断写日志）。
+func rotateLogIfTooLarge(logPath string) {
+	info, err := os.Stat(logPath)
+	if err != nil || info.IsDir() || info.Size() <= maxLogSize {
+		return
+	}
+	rotated := logPath + ".1"
+	os.Remove(rotated) // Windows rename 目标已存在会失败，先清掉上一代
+	os.Rename(logPath, rotated)
+}
+
 // AppendToLog appends a line to a log file (creates it if needed).
 func AppendToLog(logDir, filename, line string) {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return
 	}
 	logPath := filepath.Join(logDir, filename)
+	rotateLogIfTooLarge(logPath)
 	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return

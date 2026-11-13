@@ -13,12 +13,13 @@ import (
 
 // Rollback reverts to a previous version (same procedure as apply_update)
 func Rollback() {
-	fs := flag.NewFlagSet("rollback", flag.ExitOnError)
+	fs := flag.NewFlagSet("rollback", flag.ContinueOnError)
 	versionFlag := fs.String("version", "", "target version to rollback to")
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
 	closeTimeoutFlag := fs.Int("close-timeout", 30, "timeout seconds")
 	mustCloseFlag := fs.String("must-close-process-name", "", "comma separated process names to close")
-	fs.Parse(os.Args[2:])
+	// A6：ContinueOnError + JSON 信封，参数解析失败 exit 2；-h 打印 usage 后 exit 0
+	parseCommandFlags(fs, os.Args[2:])
 
 	closeTimeout := time.Duration(*closeTimeoutFlag) * time.Second
 
@@ -46,6 +47,16 @@ func Rollback() {
 	versionInfo, err := config.ReadVersion()
 	if err != nil {
 		printOutput(false, fmt.Sprintf("read version: %v", err), nil)
+		return
+	}
+
+	// M7：downloaded 且 VersionPrevious == "" 时，"备份目录名"无从确定（旧实现会退化成
+	// 待应用版本号，把 MainFolder 的旧内容备份进 App_{待应用版本} 目录，目录名与内容错配，
+	// 与 F9 自述风险同型）。与 F4/F10 保守口径一致：直接拒绝并给出指引，不做任何改动。
+	if versionInfo.VersionStatus == config.VersionStatusDownloaded && versionInfo.VersionPrevious == "" {
+		util.AppendToLog(logDir(), "update.log",
+			"rollback 拒绝：downloaded 且 version_previous 为空（无法确定备份目录名）")
+		printOutput(false, "存在未应用的下载版本且无历史版本（version_previous 为空）：请先完成或放弃本次在途 apply（执行 apply_update，或删除待应用版本目录后用 download_update 重新下载），再执行回滚", nil)
 		return
 	}
 
@@ -143,12 +154,28 @@ func Rollback() {
 	// 之后已不可达，保留为防御性恢复路径（守卫若被改动仍能自愈）。
 	switch versionInfo.VersionStatus {
 	case config.VersionStatusApplying:
-		// Crash recovery
-		if _, statErr := os.Stat(fc.MainFolder); statErr == nil {
+		// Crash recovery（防御性路径：两道入口守卫之后已不可达，保留以防守卫被改动）。
+		// M9：stat 错误必须区分"确定缺失"与"状态不可读"，后者 fail-safe 报错返回，
+		// 否则真实存在的主目录可能被旁移成 {folderName}.old。
+		mainMissing, mainStatErr := statMissingOrErr(fc.MainFolder)
+		if mainStatErr != nil {
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("rollback 恢复拒绝：主目录状态不可读 %s: %v", fc.MainFolder, mainStatErr))
+			printOutput(false, fmt.Sprintf("主目录状态不可读，未做任何改动: %s（%v）", fc.MainFolder, mainStatErr), nil)
+			return
+		}
+		if !mainMissing {
 			// Main folder exists, redo replacement steps (fall through)
 		} else {
 			// Main folder doesn't exist, check if target version dir exists
-			if _, statErr := os.Stat(versionDir); statErr == nil {
+			targetMissing, targetStatErr := statMissingOrErr(versionDir)
+			if targetStatErr != nil {
+				util.AppendToLog(logDir(), "update.log",
+					fmt.Sprintf("rollback 恢复拒绝：目标版本目录状态不可读 %s: %v", versionDir, targetStatErr))
+				printOutput(false, fmt.Sprintf("目标版本目录状态不可读，未做任何改动: %s（%v）", versionDir, targetStatErr), nil)
+				return
+			}
+			if !targetMissing {
 				if err := renameDirWithKill(versionDir, fc.MainFolder, closeTimeout); err != nil {
 					printOutput(false, fmt.Sprintf("crash recovery failed: %v", err), nil)
 					return
@@ -158,7 +185,7 @@ func Rollback() {
 				clearUpdateTransientState(versionInfo)
 				versionInfo.VersionStatus = config.VersionStatusApplied
 				if wErr := config.WriteVersion(versionInfo); wErr != nil {
-					util.AppendToLog(".", "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
+					util.AppendToLog(logDir(), "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
 				}
 				cleanupOrphanBackupIfUnreferenced(fc, versionInfo)
 				runPostApplyScript(fc, versionInfo.AfterApplyUpdateScript, versionInfo.Version)
@@ -200,7 +227,7 @@ func Rollback() {
 		clearUpdateTransientState(versionInfo)
 		versionInfo.VersionStatus = preStatus
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
-			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after prevVersionDir err: write version failed: %v", wErr))
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback after prevVersionDir err: write version failed: %v", wErr))
 		}
 		printOutput(false, err.Error(), nil)
 		return
@@ -215,7 +242,7 @@ func Rollback() {
 			clearUpdateTransientState(versionInfo)
 			versionInfo.VersionStatus = preStatus
 			if wErr := config.WriteVersion(versionInfo); wErr != nil {
-				util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after backup aside fail: write version failed: %v", wErr))
+				util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback after backup aside fail: write version failed: %v", wErr))
 			}
 			printOutput(false, fmt.Sprintf("backup aside failed: %v", err), nil)
 			return
@@ -226,14 +253,14 @@ func Rollback() {
 	if err := renameDirWithKillState(fc.MainFolder, prevVersionDir, closeTimeout, st); err != nil {
 		if _, statErr := os.Stat(oldBackupTemp); statErr == nil {
 			if rErr := os.Rename(oldBackupTemp, prevVersionDir); rErr != nil {
-				util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: restore oldBackupTemp to prevVersionDir failed: %v", rErr))
+				util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback: restore oldBackupTemp to prevVersionDir failed: %v", rErr))
 			}
 		}
 		// F8：失败恢复回滚前状态（不是一律 applied）
 		clearUpdateTransientState(versionInfo)
 		versionInfo.VersionStatus = preStatus
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
-			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after backup rename fail: write version failed: %v", wErr))
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback after backup rename fail: write version failed: %v", wErr))
 		}
 		// 回滚失败：启动当前版本主程序（保持应用可用），并附带错误信息
 		launchMainExeFn(fc.ExeCfg, fc.MainFolder)
@@ -245,16 +272,16 @@ func Rollback() {
 	if err := renameDirWithKillState(versionDir, fc.MainFolder, closeTimeout, st); err != nil {
 		// Attempt rollback: rename prevVersionDir back to mainFolder
 		if rErr := os.Rename(prevVersionDir, fc.MainFolder); rErr != nil {
-			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: restore prevVersionDir to mainFolder failed: %v", rErr))
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback: restore prevVersionDir to mainFolder failed: %v", rErr))
 		}
 		if rErr := os.Rename(oldBackupTemp, prevVersionDir); rErr != nil {
-			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback: restore oldBackupTemp to prevVersionDir failed: %v", rErr))
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback: restore oldBackupTemp to prevVersionDir failed: %v", rErr))
 		}
 		// F8：失败恢复回滚前状态（不是一律 applied）
 		clearUpdateTransientState(versionInfo)
 		versionInfo.VersionStatus = preStatus
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
-			util.AppendToLog(".", "update.log", fmt.Sprintf("rollback after apply rename fail: write version failed: %v", wErr))
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("rollback after apply rename fail: write version failed: %v", wErr))
 		}
 		// 回滚失败：启动当前版本主程序（保持应用可用），并附带错误信息
 		launchMainExeFn(fc.ExeCfg, fc.MainFolder)
@@ -304,12 +331,20 @@ func resumeRollback(fc *FullConfig, vi *config.VersionInfo, closeTimeout time.Du
 
 	// 无法确定目标版本：安全放弃回滚 —— 若备份还在则恢复，随后归位到回滚前版本。
 	if target == "" {
-		if _, statErr := os.Stat(fc.MainFolder); os.IsNotExist(statErr) {
+		mainMissing, mainStatErr := statMissingOrErr(fc.MainFolder)
+		if mainStatErr != nil {
+			return rollbackRecoveryFailure(vi, fmt.Errorf("stat main folder: %v", mainStatErr))
+		}
+		if mainMissing {
 			if prevDir, err := fc.ExeCfg.AppVersionDir(oldVersion); err == nil {
-				if _, statErr2 := os.Stat(prevDir); statErr2 == nil {
+				prevMissing, prevStatErr := statMissingOrErr(prevDir)
+				if prevStatErr != nil {
+					return rollbackRecoveryFailure(vi, fmt.Errorf("stat rollback backup: %v", prevStatErr))
+				}
+				if !prevMissing {
 					closeProcessesGracefully(fc.ExeCfg.MustCloseProcessName, closeTimeout)
 					if err := renameDirWithKill(prevDir, fc.MainFolder, closeTimeout); err != nil {
-						return fmt.Errorf("restore rollback backup: %v", err)
+						return rollbackRecoveryFailure(vi, fmt.Errorf("restore rollback backup: %v", err))
 					}
 				}
 			}
@@ -324,16 +359,24 @@ func resumeRollback(fc *FullConfig, vi *config.VersionInfo, closeTimeout time.Du
 
 	targetDir, err := fc.ExeCfg.AppVersionDir(target)
 	if err != nil {
-		return err
+		return rollbackRecoveryFailure(vi, err)
 	}
 	prevDir, err := fc.ExeCfg.AppVersionDir(oldVersion)
 	if err != nil {
-		return err
+		return rollbackRecoveryFailure(vi, err)
 	}
 
-	if _, statErr := os.Stat(fc.MainFolder); statErr == nil {
+	mainMissing, mainStatErr := statMissingOrErr(fc.MainFolder)
+	if mainStatErr != nil {
+		return rollbackRecoveryFailure(vi, fmt.Errorf("stat main folder: %v", mainStatErr))
+	}
+	if !mainMissing {
 		// MainFolder 存在
-		if _, statErr2 := os.Stat(targetDir); os.IsNotExist(statErr2) {
+		targetMissing, targetStatErr := statMissingOrErr(targetDir)
+		if targetStatErr != nil {
+			return rollbackRecoveryFailure(vi, fmt.Errorf("stat rollback target: %v", targetStatErr))
+		}
+		if targetMissing {
 			// 分支 1：激活已完成（目标目录已被消耗）→ 补写 applied
 			vi.Version = target
 			vi.VersionPrevious = oldVersion
@@ -343,13 +386,18 @@ func resumeRollback(fc *FullConfig, vi *config.VersionInfo, closeTimeout time.Du
 			return finishRollbackRecovery(fc, vi)
 		}
 		// 分支 2：备份改名前的崩溃 → 重做回滚替换（仅重命名）
+		// M8：入口**不**清理 .old 残留 —— 崩溃点"旁移后/备份改名前"时该残留是尚未被本次
+		// 替换覆盖的历史快照；删掉会永久丢一个回滚点。清理只保留在成功路径（下方）。
 		closeProcessesGracefully(fc.ExeCfg.MustCloseProcessName, closeTimeout)
 		st := newRenameProbeState()
-		removeAsideVariants(prevDir)
 		oldBackupTemp := prevDir + ".old"
-		if _, statErr3 := os.Stat(prevDir); statErr3 == nil {
+		prevMissing, prevStatErr := statMissingOrErr(prevDir)
+		if prevStatErr != nil {
+			return rollbackRecoveryFailure(vi, fmt.Errorf("stat rollback backup: %v", prevStatErr))
+		}
+		if !prevMissing {
 			if err := renameDirWithKillState(prevDir, oldBackupTemp, closeTimeout, st); err != nil {
-				return fmt.Errorf("backup aside failed: %v", err)
+				return rollbackRecoveryFailure(vi, fmt.Errorf("backup aside failed: %v", err))
 			}
 		}
 		if err := renameDirWithKillState(fc.MainFolder, prevDir, closeTimeout, st); err != nil {
@@ -357,7 +405,7 @@ func resumeRollback(fc *FullConfig, vi *config.VersionInfo, closeTimeout time.Du
 			if _, statErr3 := os.Stat(oldBackupTemp); statErr3 == nil {
 				os.Rename(oldBackupTemp, prevDir)
 			}
-			return fmt.Errorf("backup rename failed: %v", err)
+			return rollbackRecoveryFailure(vi, fmt.Errorf("backup rename failed: %v", err))
 		}
 		if err := renameDirWithKillState(targetDir, fc.MainFolder, closeTimeout, st); err != nil {
 			// 回滚主目录
@@ -365,7 +413,7 @@ func resumeRollback(fc *FullConfig, vi *config.VersionInfo, closeTimeout time.Du
 			if _, statErr3 := os.Stat(oldBackupTemp); statErr3 == nil {
 				os.Rename(oldBackupTemp, prevDir)
 			}
-			return fmt.Errorf("apply rename failed: %v", err)
+			return rollbackRecoveryFailure(vi, fmt.Errorf("apply rename failed: %v", err))
 		}
 		removeAsideVariants(prevDir)
 		vi.Version = target
@@ -377,11 +425,15 @@ func resumeRollback(fc *FullConfig, vi *config.VersionInfo, closeTimeout time.Du
 	}
 
 	// MainFolder 缺失
-	if _, statErr := os.Stat(targetDir); statErr == nil {
+	targetMissing, targetStatErr := statMissingOrErr(targetDir)
+	if targetStatErr != nil {
+		return rollbackRecoveryFailure(vi, fmt.Errorf("stat rollback target: %v", targetStatErr))
+	}
+	if !targetMissing {
 		// 分支 3：备份改名后、激活前崩溃 → 激活目标
 		closeProcessesGracefully(fc.ExeCfg.MustCloseProcessName, closeTimeout)
 		if err := renameDirWithKill(targetDir, fc.MainFolder, closeTimeout); err != nil {
-			return fmt.Errorf("rollback crash recovery rename: %v", err)
+			return rollbackRecoveryFailure(vi, fmt.Errorf("rollback crash recovery rename: %v", err))
 		}
 		vi.Version = target
 		vi.VersionPrevious = oldVersion
@@ -390,11 +442,15 @@ func resumeRollback(fc *FullConfig, vi *config.VersionInfo, closeTimeout time.Du
 		vi.RollbackTarget = ""
 		return finishRollbackRecovery(fc, vi)
 	}
-	if _, statErr := os.Stat(prevDir); statErr == nil {
+	prevMissing, prevStatErr := statMissingOrErr(prevDir)
+	if prevStatErr != nil {
+		return rollbackRecoveryFailure(vi, fmt.Errorf("stat rollback backup: %v", prevStatErr))
+	}
+	if !prevMissing {
 		// 分支 4：目标已消耗（B2' 现场）→ 放弃回滚，恢复回滚前版本
 		closeProcessesGracefully(fc.ExeCfg.MustCloseProcessName, closeTimeout)
 		if err := renameDirWithKill(prevDir, fc.MainFolder, closeTimeout); err != nil {
-			return fmt.Errorf("restore rollback backup: %v", err)
+			return rollbackRecoveryFailure(vi, fmt.Errorf("restore rollback backup: %v", err))
 		}
 		vi.Version = oldVersion
 		vi.VersionPrevious = oldVersion
@@ -403,7 +459,58 @@ func resumeRollback(fc *FullConfig, vi *config.VersionInfo, closeTimeout time.Du
 		vi.RollbackTarget = ""
 		return finishRollbackRecovery(fc, vi)
 	}
-	return fmt.Errorf("rollback crash recovery failed: neither main folder, target dir, nor backup exists")
+	// 主目录、回滚目标、回滚前备份全都不在：现场无内容可恢复/可激活。仅报错会让
+	// check_update 的"回滚续跑"分支持续上报 has_update=true（熔断不可达的活锁，M6），
+	// 降级 downloaded + ApplyFailCount++：清空回滚现场，让 check 重下当前版本重建应用目录。
+	return degradeRollbackRecoveryToDownloaded(vi,
+		fmt.Errorf("rollback crash recovery failed: neither main folder, target dir, nor backup exists"))
+}
+
+// rollbackRecoveryFailure M6：回滚续跑失败但现场仍可重试：保持 applying（保留
+// rollback_previous / rollback_target 现场供下次续跑），递增 ApplyFailCount 并落盘。
+// 此前 RP 分支无条件早退、失败计数永不增长，熔断对回滚续跑路径完全无效。
+func rollbackRecoveryFailure(vi *config.VersionInfo, failErr error) error {
+	if vi == nil {
+		return failErr
+	}
+	vi.VersionStatus = config.VersionStatusApplying
+	vi.ApplyFailCount++
+	if vi.ApplyFailCount >= MaxApplyFailCount {
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("rollback crash recovery failed %d times (>= %d), circuit broken: will not auto-apply until server publishes a newer version or re-download",
+				vi.ApplyFailCount, MaxApplyFailCount))
+	}
+	if wErr := config.WriteVersion(vi); wErr != nil {
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("rollback crash recovery: keep applying, write version failed: %v", wErr))
+	}
+	util.AppendToLog(logDir(), "update.log",
+		fmt.Sprintf("rollback crash recovery failed, keep applying (fail_count=%d): %v", vi.ApplyFailCount, failErr))
+	return failErr
+}
+
+// degradeRollbackRecoveryToDownloaded M6：回滚续跑现场已无法挽救（主目录/目标/备份都不在）：
+// 清空回滚现场并降级 downloaded + ApplyFailCount++，让 check_update 重下当前版本重建主目录。
+func degradeRollbackRecoveryToDownloaded(vi *config.VersionInfo, failErr error) error {
+	if vi == nil {
+		return failErr
+	}
+	clearUpdateTransientState(vi)
+	vi.VersionStatus = config.VersionStatusDownloaded
+	vi.ApplyFailCount++
+	if vi.ApplyFailCount >= MaxApplyFailCount {
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("rollback crash recovery unsalvageable %d times (>= %d), circuit broken: will not auto-apply until server publishes a newer version or re-download",
+				vi.ApplyFailCount, MaxApplyFailCount))
+	}
+	if wErr := config.WriteVersion(vi); wErr != nil {
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("rollback crash recovery: degrade to downloaded, write version failed: %v", wErr))
+	}
+	util.AppendToLog(logDir(), "update.log",
+		fmt.Sprintf("rollback crash recovery unsalvageable (main folder / target / backup missing), degrade to downloaded (fail_count=%d): %v",
+			vi.ApplyFailCount, failErr))
+	return failErr
 }
 
 // finishRollbackRecovery 回滚崩溃恢复成功后收尾：写 applied 状态 + 后置脚本 + 启动主程序。

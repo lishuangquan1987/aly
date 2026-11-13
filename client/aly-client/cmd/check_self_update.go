@@ -10,9 +10,10 @@ import (
 
 // CheckSelfUpdate checks if updator itself needs to be updated
 func CheckSelfUpdate() {
-	fs := flag.NewFlagSet("check_self_update", flag.ExitOnError)
+	fs := flag.NewFlagSet("check_self_update", flag.ContinueOnError)
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
-	fs.Parse(os.Args[2:])
+	// A6：ContinueOnError + JSON 信封，参数解析失败 exit 2；-h 打印 usage 后 exit 0
+	parseCommandFlags(fs, os.Args[2:])
 
 	fc, err := loadFullConfig("", "", *mainExePathFlag)
 	if err != nil {

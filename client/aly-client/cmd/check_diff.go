@@ -15,10 +15,11 @@ import (
 
 // CheckDiff lists files that differ from server (only server-side files)
 func CheckDiff() {
-	fs := flag.NewFlagSet("check_diff", flag.ExitOnError)
+	fs := flag.NewFlagSet("check_diff", flag.ContinueOnError)
 	urlFlag := fs.String("url", "", "server url")
 	projectNameFlag := fs.String("project-name", "", "project name")
-	fs.Parse(os.Args[2:])
+	// A6：ContinueOnError + JSON 信封，参数解析失败 exit 2；-h 打印 usage 后 exit 0
+	parseCommandFlags(fs, os.Args[2:])
 
 	fc, err := loadFullConfig(*urlFlag, *projectNameFlag, "")
 	if err != nil {
@@ -59,6 +60,14 @@ func CheckDiff() {
 	var diffFiles []model.DiffFileItem
 	for i := range serverFiles {
 		relPath := normalizePath(serverFiles[i].FileRelativePath)
+		// M12：服务端下发的相对路径必须先过白名单，非法路径不参与比对（并告警留痕），
+		// 避免 filepath.Join 被 `..` 引出主目录（与下载/后置脚本同一口径）。
+		if !safeRelPath(serverFiles[i].FileRelativePath) {
+			exeDir, _ := config.ExeDir()
+			util.AppendToLog(exeDir, "check_diff.log",
+				fmt.Sprintf("skip unsafe relative path from server: %q", serverFiles[i].FileRelativePath))
+			continue
+		}
 		localFullPath := filepath.Join(fc.MainFolder, filepathFromSlash(relPath))
 		localMD5, localExists := localMD5Map[relPath]
 
@@ -101,7 +110,15 @@ func CheckDiff() {
 		go func(idx int) {
 			defer shaWg.Done()
 			localFullPath := filepath.Join(fc.MainFolder, filepathFromSlash(diffFiles[idx].Path))
-			sha256, _ := util.FileSHA256(localFullPath)
+			sha256, shaErr := util.FileSHA256(localFullPath)
+			// 轻微项：SHA256 计算失败不再静默吞掉（原先读失败输出空串，排障误导）。
+			// 单文件失败不中断整体比对：留痕后置空串，调用方按"无法计算"看待。
+			if shaErr != nil {
+				exeDir, _ := config.ExeDir()
+				util.AppendToLog(exeDir, "check_diff.log",
+					fmt.Sprintf("local sha256 failed for %s: %v", diffFiles[idx].Path, shaErr))
+				sha256 = ""
+			}
 			diffFiles[idx].LocalSHA256 = sha256
 		}(i)
 	}

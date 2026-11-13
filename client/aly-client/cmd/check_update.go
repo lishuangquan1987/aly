@@ -12,10 +12,11 @@ import (
 
 // CheckUpdate checks for new version
 func CheckUpdate() {
-	fs := flag.NewFlagSet("check_update", flag.ExitOnError)
+	fs := flag.NewFlagSet("check_update", flag.ContinueOnError)
 	urlFlag := fs.String("url", "", "server url")
 	projectNameFlag := fs.String("project-name", "", "project name")
-	fs.Parse(os.Args[2:])
+	// A6：ContinueOnError + JSON 信封，参数解析失败 exit 2；-h 打印 usage 后 exit 0
+	parseCommandFlags(fs, os.Args[2:])
 
 	fc, err := loadFullConfig(*urlFlag, *projectNameFlag, "")
 	if err != nil {
@@ -111,7 +112,19 @@ func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVe
 	// 回滚中断（status=applying && rollback_previous != ""）：优先完成回滚，
 	// 绝不因服务器发布新版本而转向下载/升级（修复 Bug#1/#5）。
 	// SDK 据此得到 NeedDownloadUpdate=false → 调用 apply_update → resumeRollback 续跑回滚。
+	// #2 熔断（M6）：回滚续跑连续失败达阈值后不再上报，否则该分支无条件早退会让
+	// resumeRollback 的失败计数毫无出口（主程序被反复杀/拉，永不收敛）。
 	if versionInfo.RollbackPrevious != "" {
+		if versionInfo.ApplyFailCount >= MaxApplyFailCount {
+			fmt.Fprintf(os.Stderr,
+				"check_update: rollback-resume circuit broken (fail_count=%d >= %d), not reporting pending rollback %s\n",
+				versionInfo.ApplyFailCount, MaxApplyFailCount, versionInfo.RollbackTarget)
+			printOutput(true, "", &model.CheckUpdateData{
+				HasUpdate:      false,
+				CurrentVersion: stripVPrefix(versionInfo.RollbackPrevious),
+			})
+			return
+		}
 		target := versionInfo.RollbackTarget
 		if target == "" {
 			target = versionInfo.Version // 老数据兜底：至少不下载、不升级
@@ -129,7 +142,18 @@ func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVe
 	// applying（更新中断，非回滚）：先完成/重试在途 apply，不因服务器新版本转向重下（修复 Bug#3）。
 	// 若 apply 失败且主目录/版本目录都不存在，applyFailureFallback 会降级为 downloaded，
 	// 下一轮 check 走下方 downloaded 分支即可下载新版本（逃生口保留）。
+	// #2 熔断（M6）：应用恢复连续失败达阈值后不再上报，终止"check→apply→失败→杀主程序→拉起"循环。
 	if versionInfo.VersionStatus == config.VersionStatusApplying {
+		if versionInfo.ApplyFailCount >= MaxApplyFailCount {
+			fmt.Fprintf(os.Stderr,
+				"check_update: apply-recovery circuit broken (fail_count=%d >= %d), not reporting pending apply %s\n",
+				versionInfo.ApplyFailCount, MaxApplyFailCount, versionInfo.Version)
+			printOutput(true, "", &model.CheckUpdateData{
+				HasUpdate:      false,
+				CurrentVersion: stripVPrefix(versionInfo.VersionPrevious),
+			})
+			return
+		}
 		currentVer := versionInfo.VersionPrevious
 		if currentVer == "" {
 			currentVer = versionInfo.Version
@@ -282,7 +306,11 @@ func needUpdate(serverVersion, localVersion string) bool {
 
 // findLatestLog 返回版本号最大的变更日志；版本相同则取 ID 最大（最新记录优先）。
 // 按版本号而非 ID 取最新，避免"回滚发布"（重发旧版本号生成新记录）时取到旧版本（#19）。
+// 空切片守卫（轻微项）：logs[0] 直接下标会 panic，调用约定不再作为唯一防线。
 func findLatestLog(logs []model.ProjectChangeLog) model.ProjectChangeLog {
+	if len(logs) == 0 {
+		return model.ProjectChangeLog{}
+	}
 	latest := logs[0]
 	for i := 1; i < len(logs); i++ {
 		c := compareVersion(stripVPrefix(logs[i].Version), stripVPrefix(latest.Version))

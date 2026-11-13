@@ -19,11 +19,12 @@ const largeFileThreshold = 100 * 1024 * 1024 // 100MB
 
 // DownloadUpdate downloads only changed files from server
 func DownloadUpdate() {
-	fs := flag.NewFlagSet("download_update", flag.ExitOnError)
+	fs := flag.NewFlagSet("download_update", flag.ContinueOnError)
 	urlFlag := fs.String("url", "", "server url")
 	projectNameFlag := fs.String("project-name", "", "project name")
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
-	fs.Parse(os.Args[2:])
+	// A6：ContinueOnError + JSON 信封，参数解析失败 exit 2；-h 打印 usage 后 exit 0
+	parseCommandFlags(fs, os.Args[2:])
 
 	// 全局更新锁：同一时刻只允许一个更新操作（下载/应用/回滚）
 	releaseLock, lockErr := AcquireUpdateLock("download_update")
@@ -185,8 +186,22 @@ func DownloadUpdate() {
 		serverFile model.FileInfo
 	}
 	var downloadList []fileToDownload
+	// 单文件失败不整体失败（计划条目 6）：记录失败清单，全部跑完统一输出。
+	// 下一轮 download 的断点续传语义天然支持"只重失败文件"（已成功的会被
+	// "目标目录已有正确文件"分支跳过）。M12 的非法相对路径也计入该清单。
+	var failedFiles []string
 	for i := range serverFiles {
 		relPath := normalizePath(serverFiles[i].FileRelativePath)
+
+		// M12：服务端下发的相对路径必须先过白名单——恶意/异常服务端可用 `..` 把
+		// 下载产物写出目标版本目录之外。不合法即记入失败清单，不下载。
+		if !safeRelPath(serverFiles[i].FileRelativePath) {
+			exeDir, _ := config.ExeDir()
+			util.AppendToLog(exeDir, "download.log",
+				fmt.Sprintf("skip unsafe relative path from server: %q", serverFiles[i].FileRelativePath))
+			failedFiles = append(failedFiles, relPath+" (unsafe path)")
+			continue
+		}
 
 		// 本地当前版本已匹配：非差异文件，无需下载
 		localMD5, localExists := localMD5Map[relPath]
@@ -258,13 +273,18 @@ func DownloadUpdate() {
 		return rate
 	}
 
-	// 单文件失败不整体失败（计划条目 6）：记录失败清单，全部跑完统一输出。
-	// 下一轮 download 的断点续传语义天然支持"只重失败文件"（已成功的会被
-	// "目标目录已有正确文件"分支跳过）。
-	var failedFiles []string
-
+	// 失败清单 failedFiles 已在收集下载列表前声明（非法相对路径也要计入）。
 	for _, dl := range downloadList {
 		relPath := normalizePath(dl.serverFile.FileRelativePath)
+		// 纵深防御（M12）：列表构建时已过滤，此处再校验一次，防未来改动绕过。
+		if !safeRelPath(dl.serverFile.FileRelativePath) {
+			lastErr := "unsafe relative path"
+			exeDir, _ := config.ExeDir()
+			util.AppendToLog(exeDir, fmt.Sprintf("update_%s_fail.log", newVersion), relPath+" "+lastErr)
+			printProgressFail(dl.idx, total, relPath, dl.serverFile.FileSize, lastErr)
+			failedFiles = append(failedFiles, relPath+" (unsafe path)")
+			continue
+		}
 		localPath := filepath.Join(targetDir, filepathFromSlash(relPath))
 
 		// START 行也带字节字段（downloaded/total_bytes/speed）：否则 UI 在
@@ -362,7 +382,23 @@ func DownloadUpdate() {
 	// 途径，因此失败必须让整轮下载失败（重试时已下载文件断点续传跳过，
 	// 已物化文件因 CopyFile 跳过语义同样空转，重试成本很低）。
 	// 排除规则与原 apply 侧一致：un_copy_folders / un_copy_files 不随迁。
-	if err := util.CopyDirWithExclude(fc.MainFolder, targetDir,
+	//
+	// M6：主目录缺失（applying 崩溃现场、等待重下补齐）时物化无源可拷：跳过复制并留痕，
+	// 而不是让整轮下载失败——否则"重下 → materialize 失败 → defer 清空目标目录"永不收敛，
+	// check_update 的"重下补齐"自愈出口被堵死。此时 LocalFileMD5Map 为空、下载列表天然
+	// 是全量服务端文件，产物依然完整，apply 激活后即可重建主目录。
+	mainMissing, mainStatErr := statMissingOrErr(fc.MainFolder)
+	if mainStatErr != nil {
+		util.AppendToLog(logDir(), "download.log",
+			fmt.Sprintf("stat main folder before materialize %s failed: %v", fc.MainFolder, mainStatErr))
+		printProgressFail(total, total, "materialize", 0,
+			fmt.Sprintf("stat main folder before materialize failed: %v", mainStatErr))
+		return
+	}
+	if mainMissing {
+		util.AppendToLog(logDir(), "download.log",
+			fmt.Sprintf("materialize skipped: main folder %s missing (crash recovery, downloaded full server file set)", fc.MainFolder))
+	} else if err := util.CopyDirWithExclude(fc.MainFolder, targetDir,
 		func(relPath string) bool {
 			return config.ShouldSkipFile(relPath, fc.Shared.UnCopyFiles)
 		},
@@ -456,7 +492,18 @@ func DownloadUpdate() {
 	versionInfo.ApplyFailCount = 0 // #2 熔断：新一轮下载成功，复位失败计数
 	// 新的待应用现场：清掉上一轮回滚/apply 留下的过渡字段（RollbackPrevious/RollbackTarget/ApplyStage，F7/F5）
 	clearUpdateTransientState(versionInfo)
-	versionInfo.AfterApplyUpdateScript = latestLog.AfterApplyUpdateScript
+	// M12：后置脚本路径来自服务端（after_apply_update_script），写入 version.json 前先过
+	// 白名单——apply 阶段会用 cmd /c / sh 执行它，`..` 逃逸即任意命令执行（与 M11 组合）。
+	// 不合法则丢弃该字段（不阻断下载），并留痕。
+	if safeRelPath(latestLog.AfterApplyUpdateScript) {
+		versionInfo.AfterApplyUpdateScript = latestLog.AfterApplyUpdateScript
+	} else {
+		versionInfo.AfterApplyUpdateScript = ""
+		if latestLog.AfterApplyUpdateScript != "" {
+			util.AppendToLog(logDir(), "download.log",
+				fmt.Sprintf("discard unsafe after_apply_update_script from server: %q (M12 whitelist)", latestLog.AfterApplyUpdateScript))
+		}
+	}
 	// 记录下载产物里的文件数（不含 .part/.tmp）：apply_update 据此识别"目录还在但文件被删/
 	// 重下中途被杀"的残缺现场，避免混装半成品（B2）。算不出来（读目录失败）时置 0 = 未知，
 	// apply 退化为"目录存在且非空"的弱校验。

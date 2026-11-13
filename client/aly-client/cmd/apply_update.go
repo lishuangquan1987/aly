@@ -38,11 +38,12 @@ func mergeMustCloseFlag(fc *FullConfig, flagValue string) {
 
 // ApplyUpdate applies a downloaded update with atomic replacement
 func ApplyUpdate() {
-	fs := flag.NewFlagSet("apply_update", flag.ExitOnError)
+	fs := flag.NewFlagSet("apply_update", flag.ContinueOnError)
 	mainExePathFlag := fs.String("main-exe-path", "", "main exe relative path")
 	closeTimeoutFlag := fs.Int("close-timeout", 30, "timeout seconds for process close")
 	mustCloseFlag := fs.String("must-close-process-name", "", "comma separated process names to close")
-	fs.Parse(os.Args[2:])
+	// A6：ContinueOnError + JSON 信封，参数解析失败 exit 2；-h 打印 usage 后 exit 0
+	parseCommandFlags(fs, os.Args[2:])
 
 	closeTimeout := time.Duration(*closeTimeoutFlag) * time.Second
 
@@ -92,8 +93,21 @@ func ApplyUpdate() {
 			printOutput(true, "", nil)
 			return
 		}
-		// Crash recovery
-		if _, statErr := os.Stat(fc.MainFolder); statErr == nil {
+		// 崩溃恢复。M9：stat 错误必须区分"确定缺失"与"状态不可读"——把后者当成缺失会
+		// 在真实主目录存在时把它旁移成 {folderName}.old（无自动清理路径），fail-safe 报错。
+		versionDir, verDirErr := fc.ExeCfg.AppVersionDir(versionInfo.Version)
+		if verDirErr != nil {
+			printOutput(false, verDirErr.Error(), nil)
+			return
+		}
+		mainMissing, mainStatErr := statMissingOrErr(fc.MainFolder)
+		if mainStatErr != nil {
+			util.AppendToLog(logDir(), "update.log",
+				fmt.Sprintf("apply 恢复拒绝：主目录状态不可读 %s: %v", fc.MainFolder, mainStatErr))
+			printOutput(false, fmt.Sprintf("主目录状态不可读，未做任何改动: %s（%v）", fc.MainFolder, mainStatErr), nil)
+			return
+		}
+		if !mainMissing {
 			// Main folder exists —— 需要区分两种情况：
 			//   1. versionDir 已不存在：说明 versionDir→mainFolder 重命名已完成，
 			//      新版本已就位，只差写 applied 状态。此时绝不能再跑替换流程——
@@ -101,12 +115,14 @@ func ApplyUpdate() {
 			//      回滚永久失效。
 			//   2. versionDir 仍存在：崩溃发生在重命名之前，mainFolder 还是旧版本，
 			//      走正常替换流程（fall through）。
-			versionDir, verDirErr := fc.ExeCfg.AppVersionDir(versionInfo.Version)
-			if verDirErr != nil {
-				printOutput(false, verDirErr.Error(), nil)
+			verMissing, verStatErr := statMissingOrErr(versionDir)
+			if verStatErr != nil {
+				util.AppendToLog(logDir(), "update.log",
+					fmt.Sprintf("apply 恢复拒绝：版本目录状态不可读 %s: %v", versionDir, verStatErr))
+				printOutput(false, fmt.Sprintf("版本目录状态不可读，未做任何改动: %s（%v）", versionDir, verStatErr), nil)
 				return
 			}
-			if _, statErr2 := os.Stat(versionDir); os.IsNotExist(statErr2) {
+			if verMissing {
 				// 新版本已应用完成：补齐状态、执行后置脚本、启动主程序。
 				if versionInfo.ApplyStage != config.ApplyStageActivating {
 					// F5：缺少"激活改名已开始"的证据（老版本写的状态 / 状态被手工改坏）。
@@ -115,6 +131,16 @@ func ApplyUpdate() {
 					util.AppendToLog(logDir(), "update.log",
 						"apply crash recovery: versionDir 缺失但缺少 apply_stage=activating 证据，按历史启发式判定为已完成")
 				}
+				// B8 弱校验：激活树由版本目录改名而来（脚本/运行只增不减），文件数少于
+				// 下载完成时记录的数量说明主目录内容可疑。保持 F5 启发式行为（不拒绝），
+				// 仅留痕便于事后核对（报告最终方案允许的弱校验口径）。
+				if versionInfo.DownloadedFileCount > 0 {
+					if cnt, cErr := countRegularFiles(fc.MainFolder); cErr == nil && cnt < versionInfo.DownloadedFileCount {
+						util.AppendToLog(logDir(), "update.log",
+							fmt.Sprintf("apply crash recovery: 主目录文件数(%d)少于下载记录(%d)，仍按已完成处理但请核对内容",
+								cnt, versionInfo.DownloadedFileCount))
+					}
+				}
 				clearUpdateTransientState(versionInfo)
 				versionInfo.VersionStatus = config.VersionStatusApplied
 				if wErr := config.WriteVersion(versionInfo); wErr != nil {
@@ -126,34 +152,59 @@ func ApplyUpdate() {
 				printOutput(true, "", nil)
 				return
 			}
-			// versionDir 存在：崩溃发生在替换前，重做替换步骤（fall through）
+			// versionDir 存在：崩溃发生在替换前。B8：重做替换前必须复核待应用现场完整性
+			// （F3/A1 此前只在 downloaded 分支校验，此窗口内产物被杀软隔离/误删会被直接激活）。
+			// 不完整 → 与 F3 相同自愈（此时 MainFolder 仍是 Previous 内容，自愈诚实）。
+			if handled, msg := healIncompletePendingAfterApplyCrash(fc, versionInfo, closeTimeout, true); handled {
+				printOutput(false, msg, nil)
+				return
+			}
+			// 产物完整：fall through 到下方替换流程
 		} else {
-			// Main folder doesn't exist, check if version dir exists
-			versionDir, verDirErr := fc.ExeCfg.AppVersionDir(versionInfo.Version)
-			if verDirErr != nil {
-				printOutput(false, verDirErr.Error(), nil)
+			// Main folder 缺失
+			verMissing, verStatErr := statMissingOrErr(versionDir)
+			if verStatErr != nil {
+				util.AppendToLog(logDir(), "update.log",
+					fmt.Sprintf("apply 恢复拒绝：版本目录状态不可读 %s: %v", versionDir, verStatErr))
+				printOutput(false, fmt.Sprintf("版本目录状态不可读，未做任何改动: %s（%v）", versionDir, verStatErr), nil)
 				return
 			}
-			if _, statErr := os.Stat(versionDir); statErr == nil {
-				// Rename AppVersionDir to MainExeFolderPath
-				if err := renameDirWithKill(versionDir, fc.MainFolder, closeTimeout); err != nil {
-					printOutput(false, fmt.Sprintf("crash recovery failed: %v", err), nil)
-					return
-				}
-				// Update status to applied
-				clearUpdateTransientState(versionInfo)
-				versionInfo.VersionStatus = config.VersionStatusApplied
-				if wErr := config.WriteVersion(versionInfo); wErr != nil {
-					util.AppendToLog(logDir(), "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
-				}
-				cleanupOrphanBackupIfUnreferenced(fc, versionInfo)
-				// Run post-update script and launch main exe
-				runPostApplyScript(fc, versionInfo.AfterApplyUpdateScript, versionInfo.Version)
-				launchMainExe(fc.ExeCfg, fc.MainFolder)
-				printOutput(true, "", nil)
+			if verMissing {
+				// M6：主目录与版本目录都不存在 → 无内容可恢复/可激活。只报错不写状态会让
+				// check_update 持续上报"继续 apply"，主程序永不启动（无限活锁）。降级为
+				// downloaded + ApplyFailCount++：check 走"产物丢失 → 重下同版本"，
+				// download 的 materialize 容忍主目录缺失，重下后 apply 可重建主目录。
+				degradeToDownloadedAfterRecoveryFailure(fc, versionInfo,
+					fmt.Errorf("neither main folder nor version folder exists"))
+				printOutput(false, "crash recovery failed: neither main folder nor version folder exists（已降级为 downloaded，等待重新下载）", nil)
 				return
 			}
-			printOutput(false, "crash recovery failed: neither main folder nor version folder exists", nil)
+			// B8：直改名激活分支同样必须复核产物完整性。不完整时**不得激活**——真崩溃窗内
+			// prevVersionDir（MainFolder 改名成的备份）存在，先恢复备份再自愈；照搬 downloaded
+			// 分支的"自愈 applied+Previous"在主目录缺失时是撒谎（无内容可声称新版本已生效）。
+			if handled, msg := healIncompletePendingAfterApplyCrash(fc, versionInfo, closeTimeout, false); handled {
+				printOutput(false, msg, nil)
+				return
+			}
+			// Rename AppVersionDir to MainExeFolderPath
+			if err := renameDirWithKill(versionDir, fc.MainFolder, closeTimeout); err != nil {
+				// M6：激活改名失败保持 applying（现场仍可重试）但递增失败计数，
+				// 让 check_update 的 applying 早退分支最终熔断，不再无限杀/拉主程序。
+				keepApplyingAfterRecoveryFailure(versionInfo, err)
+				printOutput(false, fmt.Sprintf("crash recovery failed: %v", err), nil)
+				return
+			}
+			// Update status to applied
+			clearUpdateTransientState(versionInfo)
+			versionInfo.VersionStatus = config.VersionStatusApplied
+			if wErr := config.WriteVersion(versionInfo); wErr != nil {
+				util.AppendToLog(logDir(), "update.log", fmt.Sprintf("crash recovery: write version failed: %v", wErr))
+			}
+			cleanupOrphanBackupIfUnreferenced(fc, versionInfo)
+			// Run post-update script and launch main exe
+			runPostApplyScript(fc, versionInfo.AfterApplyUpdateScript, versionInfo.Version)
+			launchMainExe(fc.ExeCfg, fc.MainFolder)
+			printOutput(true, "", nil)
 			return
 		}
 
@@ -184,26 +235,20 @@ func ApplyUpdate() {
 			printOutput(false, fmt.Sprintf("版本状态异常：Version == VersionPrevious(%s)，拒绝替换", versionInfo.Version), nil)
 			return
 		}
-		pendingDir, verErr := fc.ExeCfg.AppVersionDir(versionInfo.Version)
+		pendingDir, incomplete, verErr := validatePendingDir(fc, versionInfo)
 		if verErr != nil {
-			printOutput(false, verErr.Error(), nil)
-			return
-		}
-		pendingCount, countErr := countRegularFiles(pendingDir)
-		if countErr != nil && !os.IsNotExist(countErr) {
 			// A2：目录存在但读不到（ACL/杀软锁/慢盘超时）：不得据此自愈丢弃可能有效的待应用包
 			util.AppendToLog(logDir(), "update.log",
-				fmt.Sprintf("apply 拒绝：待应用版本目录不可读 %s: %v", pendingDir, countErr))
-			printOutput(false, fmt.Sprintf("待应用版本目录不可读: %s（%v），未做任何改动", pendingDir, countErr), nil)
+				fmt.Sprintf("apply 拒绝：待应用版本目录不可读 %s: %v", pendingDir, verErr))
+			printOutput(false, fmt.Sprintf("待应用版本目录不可读: %s（%v），未做任何改动", pendingDir, verErr), nil)
 			return
 		}
-		incomplete := countErr != nil /*目录缺失*/ || pendingCount == 0 ||
-			(versionInfo.DownloadedFileCount > 0 && pendingCount < versionInfo.DownloadedFileCount)
 		if incomplete {
 			// 下载产物缺失/为空/文件数少于下载完成时记录的数量：此前会把 MainFolder 自拷贝进
 			// 版本目录后整体改名，报"更新成功"但内容其实没变（或混装旧/新文件的半成品）。
 			// 这里拒绝替换，并把状态自愈成 applied + 真实内容版本 Previous，
 			// 让下一轮 check 重新下载（F3 逃生口）。
+			pendingCount, _ := countRegularFiles(pendingDir)
 			util.AppendToLog(logDir(), "update.log",
 				fmt.Sprintf("apply 拒绝：待应用版本目录缺失、为空或不完整 %s（现有文件 %d，记录 %d；回退为 applied/%s，等待重新下载）",
 					pendingDir, pendingCount, versionInfo.DownloadedFileCount, versionInfo.VersionPrevious))
@@ -369,4 +414,150 @@ func applyReplacement(fc *FullConfig, versionInfo *config.VersionInfo, versionDi
 	// Clean up old backup AND any aside variants AFTER successful rename（#18）
 	removeAsideVariants(prevVersionDir)
 	return nil
+}
+
+// validatePendingDir 校验"待应用现场"，从 downloaded 分支提取为独立函数供 applying 的两个
+// 恢复子路径复用（B8/A3）：
+//   - A1：Version 为空 → 视为异常/遗留状态，incomplete=true（调用方按"无有效待应用版本"自愈）；
+//   - A2：目录存在但读不到（ACL/杀软锁/慢盘超时）→ 返回硬错误 err，调用方不得据此丢弃
+//     可能有效的待应用包；
+//   - F3：目录缺失 / 为空 / 文件数少于下载完成时记录的 DownloadedFileCount → incomplete=true。
+//
+// 返回的 dir 在 Version 为空时为空串；硬错误时若已算出目录则一并返回（用于日志）。
+func validatePendingDir(fc *FullConfig, vi *config.VersionInfo) (dir string, incomplete bool, err error) {
+	if vi == nil {
+		return "", true, nil
+	}
+	if vi.Version == "" {
+		return "", true, nil
+	}
+	dir, dirErr := fc.ExeCfg.AppVersionDir(vi.Version)
+	if dirErr != nil {
+		return "", false, dirErr
+	}
+	count, countErr := countRegularFiles(dir)
+	if countErr != nil && !os.IsNotExist(countErr) {
+		return dir, false, countErr
+	}
+	incomplete = countErr != nil /*目录缺失*/ || count == 0 ||
+		(vi.DownloadedFileCount > 0 && count < vi.DownloadedFileCount)
+	return dir, incomplete, nil
+}
+
+// healIncompletePendingAfterApplyCrash B8：applying 崩溃恢复发现待应用产物不完整时的自愈。
+//
+//   - mainExists=true：主目录仍在（崩溃在替换前，内容仍是上一版本）→ 与 F3 相同自愈
+//     （写 applied + Previous，等下一轮 check 重新下载），此时自愈是诚实的。
+//   - mainExists=false：主目录已缺失，**不得凭空写 applied**（无内容可声称新版本已生效）。
+//     真崩溃窗内 prevVersionDir（MainFolder 改名成的备份）存在，先恢复备份再自愈；
+//     备份也缺失 → 降级 downloaded + ApplyFailCount++（M6，交由 check 重下补齐）；
+//     备份恢复失败 → 保持 applying + ApplyFailCount++（M6，可重试且可熔断）。
+//
+// 返回 (handled bool, msg string)：handled=false 表示产物完整，调用方继续原恢复流程。
+func healIncompletePendingAfterApplyCrash(fc *FullConfig, vi *config.VersionInfo,
+	closeTimeout time.Duration, mainExists bool) (bool, string) {
+	dir, incomplete, verr := validatePendingDir(fc, vi)
+	if verr != nil {
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("apply 恢复拒绝：待应用版本目录不可读 %s: %v", dir, verr))
+		return true, fmt.Sprintf("待应用版本目录不可读: %s（%v），未做任何改动", dir, verr)
+	}
+	if !incomplete {
+		return false, ""
+	}
+	if mainExists {
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("applying 恢复：待应用版本目录缺失、为空或不完整 %s（现有文件数与记录 %d 不符；回退为 applied/%s，等待重新下载）",
+				dir, vi.DownloadedFileCount, vi.VersionPrevious))
+		vi.Version = vi.VersionPrevious
+		clearUpdateTransientState(vi)
+		vi.VersionStatus = config.VersionStatusApplied
+		if wErr := config.WriteVersion(vi); wErr != nil {
+			util.AppendToLog(logDir(), "update.log", fmt.Sprintf("repair write version failed: %v", wErr))
+		}
+		return true, fmt.Sprintf("待应用版本目录缺失、为空或不完整: %s（已回退为 applied/%s，等待重新下载）",
+			dir, vi.Version)
+	}
+	// 主目录缺失：先恢复上一版本备份再自愈（不得凭空写 applied）。
+	prevDir, pErr := fc.ExeCfg.AppVersionDir(vi.VersionPrevious)
+	if pErr != nil {
+		keepApplyingAfterRecoveryFailure(vi, pErr)
+		return true, fmt.Sprintf("主目录缺失且无法定位上一版本备份，保持 applying 待重试: %v", pErr)
+	}
+	prevMissing, prevStatErr := statMissingOrErr(prevDir)
+	if prevStatErr != nil {
+		keepApplyingAfterRecoveryFailure(vi, prevStatErr)
+		return true, fmt.Sprintf("主目录与备份状态不可读，未做任何改动: %s（%v）", prevDir, prevStatErr)
+	}
+	if prevMissing {
+		// 主目录、版本目录、上一版本备份都不在：无内容可恢复/可激活 → 降级 downloaded（M6），
+		// 让 check 触发重下同版本，download 的 materialize 已容忍主目录缺失。
+		degradeToDownloadedAfterRecoveryFailure(fc, vi,
+			fmt.Errorf("main folder, version dir and previous backup all missing"))
+		return true, "主目录、待应用版本目录与上一版本备份均不存在：已降级为 downloaded，等待重新下载"
+	}
+	closeProcessesGracefully(fc.ExeCfg.MustCloseProcessName, closeTimeout)
+	if rErr := renameDirWithKill(prevDir, fc.MainFolder, closeTimeout); rErr != nil {
+		keepApplyingAfterRecoveryFailure(vi, rErr)
+		return true, fmt.Sprintf("恢复上一版本备份失败（保持 applying 待重试）: %v", rErr)
+	}
+	util.AppendToLog(logDir(), "update.log",
+		fmt.Sprintf("applying 恢复：待应用产物不完整，已恢复上一版本备份 %s → %s 并自愈为 applied/%s",
+			prevDir, fc.MainFolder, vi.VersionPrevious))
+	vi.Version = vi.VersionPrevious
+	clearUpdateTransientState(vi)
+	vi.VersionStatus = config.VersionStatusApplied
+	if wErr := config.WriteVersion(vi); wErr != nil {
+		util.AppendToLog(logDir(), "update.log", fmt.Sprintf("repair write version failed: %v", wErr))
+	}
+	cleanupOrphanBackupIfUnreferenced(fc, vi)
+	// 主目录刚从备份恢复出来，应用此前处于"目录缺失"状态：重新拉起旧版本保证可用。
+	launchMainExe(fc.ExeCfg, fc.MainFolder)
+	return true, fmt.Sprintf("applying 恢复：待应用产物不完整，已恢复上一版本 %s 到主目录（等待重新下载）", vi.Version)
+}
+
+// keepApplyingAfterRecoveryFailure M6：崩溃恢复失败但现场仍可重试（如激活改名被占用）：
+// 保持 applying 状态（保留恢复证据），递增 ApplyFailCount 并落盘，使 check_update 的
+// applying 早退分支最终熔断，终止"check→apply→失败→杀主程序→拉起→再 check"活锁。
+func keepApplyingAfterRecoveryFailure(vi *config.VersionInfo, failErr error) {
+	if vi == nil {
+		return
+	}
+	vi.VersionStatus = config.VersionStatusApplying
+	vi.ApplyFailCount++
+	if vi.ApplyFailCount >= MaxApplyFailCount {
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("apply recovery failed %d times (>= %d), circuit broken: will not auto-apply until server publishes a newer version or re-download",
+				vi.ApplyFailCount, MaxApplyFailCount))
+	}
+	if wErr := config.WriteVersion(vi); wErr != nil {
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("keep applying: write version failed: %v", wErr))
+	}
+	util.AppendToLog(logDir(), "update.log",
+		fmt.Sprintf("apply recovery failed, keep applying (fail_count=%d): %v", vi.ApplyFailCount, failErr))
+}
+
+// degradeToDownloadedAfterRecoveryFailure M6：恢复现场已无法挽救（主目录与版本目录/备份都不在）：
+// 降级 downloaded + ApplyFailCount++，让 check_update 走"产物丢失 → 重下同版本"，
+// download 的 materialize 容忍主目录缺失，重下后 apply 可重建主目录。
+func degradeToDownloadedAfterRecoveryFailure(fc *FullConfig, vi *config.VersionInfo, failErr error) {
+	if vi == nil {
+		return
+	}
+	clearUpdateTransientState(vi)
+	vi.VersionStatus = config.VersionStatusDownloaded
+	vi.ApplyFailCount++
+	if vi.ApplyFailCount >= MaxApplyFailCount {
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("apply recovery unsalvageable %d times (>= %d), circuit broken: will not auto-apply until server publishes a newer version or re-download",
+				vi.ApplyFailCount, MaxApplyFailCount))
+	}
+	if wErr := config.WriteVersion(vi); wErr != nil {
+		util.AppendToLog(logDir(), "update.log",
+			fmt.Sprintf("degrade to downloaded: write version failed: %v", wErr))
+	}
+	util.AppendToLog(logDir(), "update.log",
+		fmt.Sprintf("apply recovery unsalvageable (main folder / version dir / backup missing), degrade to downloaded (fail_count=%d): %v",
+			vi.ApplyFailCount, failErr))
 }

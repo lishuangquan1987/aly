@@ -26,10 +26,11 @@ import (
 // 两种模式都顺带清理：.old/.old.N 旁移残留、孤儿无版本号备份目录、
 // .part/.tmp 下载临时文件、超过 30 天的 update_*_fail.log。
 func Clean() {
-	fs := flag.NewFlagSet("clean", flag.ExitOnError)
+	fs := flag.NewFlagSet("clean", flag.ContinueOnError)
 	keepFlag := fs.Int("keep", 0, "保留最近 N 个版本快照（默认 3）")
 	allFlag := fs.Bool("all", false, "激进清理：只保留当前版本保护集")
-	fs.Parse(os.Args[2:])
+	// A6：ContinueOnError + JSON 信封，参数解析失败 exit 2；-h 打印 usage 后 exit 0
+	parseCommandFlags(fs, os.Args[2:])
 
 	// 复用全局更新锁：clean 与 apply/rollback 一样会动 PackageFolder，
 	// 不能与在途更新并发。
@@ -90,16 +91,25 @@ func cleanTempFiles(fc *FullConfig) error {
 		return err
 	}
 
-	// 1) 旁移残留：遍历 PackageFolder 下 {folderName}_{version}.old* 家族
+	// 1) 旁移残留：遍历 PackageFolder 下 {folderName}_{version}.old* 家族，
+	//    以及 MainFolder 本体被隐式旁移产生的 {folderName}.old / {folderName}.old.N
+	//    （M9：该名字不匹配 {folderName}_ 前缀规则，clean/prune 原有规则都收不到 → 永久泄漏）。
 	if folderName, fErr := fc.ExeCfg.MainExeFolderName(); fErr == nil {
 		prefix := folderName + "_"
+		mainAside := folderName + ".old"
 		if entries, rErr := readDirNames(pkgDir); rErr == nil {
 			for _, name := range entries {
+				full := filepath.Join(pkgDir, name)
+				if name == mainAside || strings.HasPrefix(name, mainAside+".") {
+					if rmErr := os.RemoveAll(full); rmErr == nil {
+						util.AppendToLog(exeDir, "update.log", fmt.Sprintf("clean: removed aside variant %s", full))
+					}
+					continue
+				}
 				if !strings.HasPrefix(name, prefix) {
 					continue
 				}
 				if strings.Contains(name, ".old") {
-					full := filepath.Join(pkgDir, name)
 					if rmErr := os.RemoveAll(full); rmErr == nil {
 						util.AppendToLog(exeDir, "update.log", fmt.Sprintf("clean: removed aside variant %s", full))
 					}
@@ -137,15 +147,27 @@ func cleanTempFiles(fc *FullConfig) error {
 	}
 	removeTempFilesNonRecursive(pkgDir)
 
-	// 4) 30 天前的更新失败日志（update_*.log 只保留近期排障价值）
+	// 4) 30 天前的更新失败日志与常驻日志（update.log / download.log / check_diff.log，
+	// 含 AppendToLog 轮转出的 .1 代）：只保留近期排障价值。
+	// 轻微项：原实现只清 update_*.log——常驻日志（update. vs update_）全部漏网，
+	// 无轮转时无限增长；现已纳入统一 cutoff（轮转代同样按修改时间回收）。
 	cutoff := time.Now().AddDate(0, 0, -30)
+	steadyLogs := map[string]bool{
+		"update.log":     true,
+		"download.log":   true,
+		"check_diff.log": true,
+	}
 	if entries, rErr := readDirNames(exeDir); rErr == nil {
 		for _, name := range entries {
-			if !strings.HasPrefix(name, "update_") || !strings.HasSuffix(name, ".log") {
+			// 去掉轮转代数后缀（update.log.1 → update.log）后判断是否属于清理范围
+			baseName := strings.TrimSuffix(name, ".1")
+			steadyLog := steadyLogs[baseName]
+			failureLog := strings.HasPrefix(name, "update_") && strings.HasSuffix(name, ".log")
+			if !steadyLog && !failureLog {
 				continue
 			}
 			full := filepath.Join(exeDir, name)
-			if info, sErr := os.Stat(full); sErr == nil && info.ModTime().Before(cutoff) {
+			if info, sErr := os.Stat(full); sErr == nil && !info.IsDir() && info.ModTime().Before(cutoff) {
 				if rmErr := os.Remove(full); rmErr == nil {
 					util.AppendToLog(exeDir, "update.log", fmt.Sprintf("clean: removed stale log %s", full))
 				}

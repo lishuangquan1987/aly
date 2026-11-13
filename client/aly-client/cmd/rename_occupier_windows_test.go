@@ -36,6 +36,9 @@ func startExplorerFor(t *testing.T, folder string) bool {
 }
 
 // startFileLock 启动子进程独占打开指定文件（FileShare.None，60 秒后自动释放）。
+// 注：固定 sleep 在高负载（整包并行执行/慢机器）下偶发不足——powershell 尚未真正拿到
+// 独占句柄，后续"预检"就会因 rename 意外成功而误报。改为轮询：直到本进程也无法以
+// 默认共享模式打开该文件（说明 FileShare.None 已生效）再返回。
 func startFileLock(t *testing.T, file string) *exec.Cmd {
 	t.Helper()
 	ps := fmt.Sprintf(
@@ -45,8 +48,19 @@ func startFileLock(t *testing.T, file string) *exec.Cmd {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("启动 powershell 保持文件句柄失败: %v", err)
 	}
-	// 等待句柄真正打开
-	time.Sleep(2 * time.Second)
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		f, openErr := os.OpenFile(file, os.O_RDWR, 0)
+		if openErr != nil {
+			break // 独占句柄已生效（本进程也无法打开）
+		}
+		f.Close()
+		if time.Now().After(deadline) {
+			_ = cmd.Process.Kill()
+			t.Fatalf("等待文件独占句柄超时（20s），powershell 未成功锁定 %s", file)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 	return cmd
 }
 
