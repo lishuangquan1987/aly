@@ -23,7 +23,7 @@ const (
 // detailView is the right-hand project page: header, changes above/below
 // split, publish panel and version history.
 func (a *app) detailView(c *ui.Context, d *detailState) {
-	root := ui.Column(c).Grow(1).FillHeight().Gap(12).Padding(detailPadding)
+	root := ui.Column(c).Grow(1).FillHeight().MinHeight(0).Gap(12).Padding(detailPadding)
 	root.Children(func() {
 		a.detailHeader(c, d)
 		if d.busy {
@@ -100,7 +100,7 @@ func (a *app) detailSplit(c *ui.Context, d *detailState, root ui.Element) {
 		a.changesView(c, d)
 	}, func() {
 		a.sidePanel(c, d)
-	}).Grow(1)
+	}).Grow(1).MinHeight(0)
 	// A divider drag wrote the first pane's width back: store it again as the
 	// side column's width so the clamp holds from frame to frame.
 	if total > detailSplitDivider {
@@ -153,7 +153,7 @@ func clampSideWidth(total, side float32) float32 {
 
 // sidePanel stacks the publish card over the growing history card.
 func (a *app) sidePanel(c *ui.Context, d *detailState) {
-	ui.Column(c).Grow(1).Shrink(0).FillHeight().Gap(12).Children(func() {
+	ui.Column(c).Grow(1).Shrink(1).FillHeight().MinHeight(0).Gap(12).Children(func() {
 		a.publishView(c, d)
 		a.historyView(c, d)
 	})
@@ -163,12 +163,12 @@ func (a *app) sidePanel(c *ui.Context, d *detailState) {
 // the first-load skeleton over it until the first refresh attempt ends.
 func (a *app) changesView(c *ui.Context, d *detailState) {
 	p := a.pal(c)
-	ui.Column(c).Grow(1).FillHeight().Background(p.card).Border(1, p.border).
+	ui.Column(c).Grow(1).FillHeight().MinHeight(0).Background(p.card).Border(1, p.border).
 		Radius(12).Shadow(0, 1, 3, 0, p.shadow).Clip().Children(func() {
 		ui.SplitVerticalPercent(c, &d.splitPercent,
 			func() { a.filesPanel(c, d, false) },
 			func() { a.filesPanel(c, d, true) },
-		).Grow(1)
+		).Grow(1).MinHeight(0)
 		if d.initialLoading {
 			a.detailSkeleton(c)
 		}
@@ -209,15 +209,15 @@ func (a *app) filesPanel(c *ui.Context, d *detailState, staged bool) {
 	disabled := d.busy || d.uploading || len(files) == 0
 	hasSelected := len(selectedFiles(files)) > 0
 	narrowPane := d.changesWidth > 0 && d.changesWidth < 560
-	collapsed := (staged && d.splitPercent > 70) || (!staged && d.splitPercent < 30)
 	panePercent := d.splitPercent
 	if staged {
 		panePercent = 100 - d.splitPercent
 	}
 	paneHeight := splitAreaHeight(c) * panePercent / 100
+	compactPane := paneHeight > 0 && paneHeight < 110
 	rowsHeight := float32(32 + 34*len(files))
 	showHint := len(files) > 0 && paneHeight-(42+24)-rowsHeight > 48
-	ui.Column(c).Grow(1).FillHeight().Children(func() {
+	ui.Column(c).Grow(1).FillHeight().MinHeight(0).Children(func() {
 		ui.Row(c).Wrap().Gap(6).Padding(8, 12).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(p.divider).Children(func() {
 			a.plainIcon(c, headerIcon, headerTone, 18)
@@ -290,14 +290,19 @@ func (a *app) filesPanel(c *ui.Context, d *detailState, staged bool) {
 			}
 		})
 		if len(files) == 0 {
-			if collapsed {
+			if compactPane {
+				// A collapsed half is a strip: one line says it is empty.
 				ui.Row(c).Padding(8, 12).AlignItems(ui.Center).Gap(6).Children(func() {
 					ui.Icon(c, emptyIcon).FontSize(13).TextColor(p.textThird)
 					ui.Text(c, empty).FontSize(fontCaption).TextColor(p.textThird).SingleLine()
 				})
 				return
 			}
-			a.emptyState(c, emptyIcon, empty, a.t("changes.emptyHint"), nil)
+			hint := a.t("changes.emptyHint")
+			if staged {
+				hint = a.t("changes.emptyStagedHint")
+			}
+			a.emptyState(c, emptyIcon, empty, hint, nil)
 			return
 		}
 		narrow := d.changesWidth > 0 && d.changesWidth < 560
@@ -351,10 +356,10 @@ func (a *app) filesPanel(c *ui.Context, d *detailState, staged bool) {
 		})
 		if showHint {
 			// The table keeps its rows' height; the hint uses the rest.
-			table.Height(rowsHeight).Shrink(0)
+			table.Height(rowsHeight).Shrink(0).KeepScrollbars(true)
 			a.panelHint(c, staged)
 		} else {
-			table.Grow(1)
+			table.Grow(1).MinHeight(0).KeepScrollbars(true)
 		}
 		a.divider(c)
 		summaryKey := "changes.panelSummary"
@@ -531,7 +536,7 @@ func (a *app) uploadCard(c *ui.Context, d *detailState) {
 // historyView lists releases; the newest version tag uses the accent colour.
 func (a *app) historyView(c *ui.Context, d *detailState) {
 	p := a.pal(c)
-	ui.Column(c).Grow(1).FillHeight().Background(p.card).Border(1, p.border).
+	ui.Column(c).Grow(1).FillHeight().MinHeight(0).Background(p.card).Border(1, p.border).
 		Radius(12).Shadow(0, 1, 3, 0, p.shadow).Clip().Children(func() {
 		ui.Row(c).Gap(8).Padding(8, 12).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(p.divider).Children(func() {
@@ -561,7 +566,12 @@ func (a *app) historyView(c *ui.Context, d *detailState) {
 			}
 		}
 		logs := d.logs
-		ui.Table(c, nil, cols, len(logs), func(row, col int) {
+		rowsHeight := float32(32 + 34*len(logs))
+		// The side column holds the publish card above this one; its height is
+		// stable enough to estimate the room the history table leaves.
+		historyRoom := splitAreaHeight(c) - 12 - 400 - 42 - 26
+		showHint := historyRoom-rowsHeight > 60
+		table := ui.Table(c, nil, cols, len(logs), func(row, col int) {
 			log := logs[row]
 			switch col {
 			case 0:
@@ -579,7 +589,28 @@ func (a *app) historyView(c *ui.Context, d *detailState) {
 					}
 				})
 			}
-		}).Grow(1)
+		})
+		if showHint {
+			table.Height(rowsHeight).Shrink(0).KeepScrollbars(true)
+			ui.Box(c).Grow(1).Center().Children(func() {
+				ui.Row(c).Gap(7).AlignItems(ui.Center).Children(func() {
+					ui.Icon(c, iconHistory).FontSize(15).TextColor(p.textThird)
+					ui.Text(c, a.t("history.hint")).FontSize(fontCaption).
+						TextColor(p.textThird).SingleLine()
+				})
+			})
+		} else {
+			table.Grow(1).MinHeight(0).KeepScrollbars(true)
+		}
+		a.divider(c)
+		ui.Row(c).Shrink(0).Padding(6, 12).AlignItems(ui.Center).Children(func() {
+			key := "history.countSummary"
+			if len(logs) == 1 {
+				key = "history.countSummaryOne"
+			}
+			ui.Text(c, a.tf(key, "count", fmt.Sprint(len(logs)))).
+				FontSize(fontMicro).TextColor(p.textThird).SingleLine()
+		})
 	})
 }
 

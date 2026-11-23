@@ -72,7 +72,7 @@ func (a *app) view(c *ui.Context) {
 		if !a.cli.available() {
 			a.cliBanner(c)
 		}
-		ui.Row(c).Grow(1).Shrink(1).FillWidth().Children(func() {
+		ui.Row(c).Grow(1).Shrink(1).FillWidth().MinHeight(0).Children(func() {
 			a.sidebar(c)
 			a.content(c)
 		})
@@ -308,7 +308,7 @@ func (a *app) sidebar(c *ui.Context) {
 		a.detail = nil
 	}
 	a.list.Selected = nil
-	ui.Column(c).Width(detailSidebarWidth).Shrink(0).FillHeight().
+	ui.Column(c).Width(detailSidebarWidth).Shrink(0).FillHeight().MinHeight(0).
 		Background(p.bgAlt).BorderWidth(0, 1, 0, 0).BorderColor(p.border).
 		Children(func() {
 			ui.Row(c).Height(48).PaddingX(16).AlignItems(ui.Center).Gap(6).Children(func() {
@@ -356,7 +356,7 @@ func (a *app) sidebar(c *ui.Context) {
 				a.list.Key = func(i int) any { return list[i].ProjectPath }
 				ui.List(c, &a.list, len(list), func(i int) {
 					a.projectRow(c, list[i], i == a.selected, i)
-				}).Grow(1)
+				}).Grow(1).MinHeight(0)
 			}
 			a.divider(c)
 			ui.Column(c).Children(func() {
@@ -420,7 +420,7 @@ func (a *app) projectRow(c *ui.Context, project ProjectConfig, selected bool, in
 }
 
 func (a *app) content(c *ui.Context) {
-	ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Children(func() {
+	ui.Column(c).Grow(1).Shrink(1).MinWidth(0).MinHeight(0).FillHeight().Children(func() {
 		if a.detail == nil {
 			p := a.pal(c)
 			_ = p

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -280,9 +281,52 @@ func TestDetailPanelsFillTheirRoom(t *testing.T) {
 		"1 file \u00b7 2 KB",
 		"Refresh (F5) after a build to pick up new files.",
 		"Files upload in order and can be cancelled at any time.",
+		"1 version",
+		"Recent releases are listed newest first.",
 	} {
 		if !tt.HasText(text) {
 			t.Errorf("missing %q; texts=%q", text, tt.Texts())
 		}
 	}
+}
+
+// TestDetailLargeTablesKeepLayout is the regression for min-content overflow:
+// with many changed files and a long version history, the page must keep its
+// header below the toolbar and its footer above the status bar instead of
+// being centered over them.
+func TestDetailLargeTablesKeepLayout(t *testing.T) {
+	for _, size := range []struct{ w, h int }{{1320, 840}, {1720, 1100}} {
+		a := bigDetailApp()
+		tt := ui.NewTesterWith(a.view, size.w, size.h, ui.TesterOptions{Dark: true})
+		if unstaged, ok := tt.Find("Unstaged"); !ok || unstaged.Y < toolbarHeight {
+			t.Fatalf("%dx%d: the changes card overlaps the toolbar: %+v", size.w, size.h, unstaged)
+		}
+		if !tt.HasText("30 files") {
+			t.Fatalf("%dx%d: the file summary is missing", size.w, size.h)
+		}
+	}
+}
+
+// bigDetailApp is a project with enough files and history to overflow a small
+// window's natural layout.
+func bigDetailApp() *app {
+	a := testApp()
+	a.detail.unstaged = nil
+	a.detail.logs = nil
+	for i := 0; i < 30; i++ {
+		a.detail.unstaged = append(a.detail.unstaged, fileItem{
+			RelativePath: fmt.Sprintf("bin/Yofc.Component%02d.dll", i),
+			Status:       "modified",
+			LocalSize:    55296,
+			ServerSize:   55296,
+		})
+	}
+	for i := 0; i < 30; i++ {
+		a.detail.logs = append(a.detail.logs, ChangeLog{
+			Version: fmt.Sprintf("V1.0.%d", i),
+			Time:    "2026-11-20 10:00:00",
+			Logs:    []string{"changes"},
+		})
+	}
+	return a
 }
