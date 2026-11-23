@@ -55,7 +55,12 @@ cd client/aly-client && go test ./cmd/ ./config/ ./util/ ./selfupdate/
 
 # 发布 GUI（Go 主实现）
 cd publish/publish-gui-go && go test ./... -count=1 && go tool mygo vet
+
+# 文档防漂移：CLI 命令/参数与服务端路由必须都能在网站文档里找到
+python3 website/scripts/check_docs.py
 ```
+
+文档核对由网站 CI（website.yml）在每次部署前自动执行：`aly-publish docs` 输出全部命令与参数、`server -print-routes` 输出全部路由，`check_docs.py` 逐一核对网站文档；缺一条即部署失败。确属不写入文档的项加进 `website/scripts/docs-whitelist.txt`。
 
 ## CI
 

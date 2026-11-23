@@ -31,9 +31,23 @@ func main() {
 	//使用flag包
 	var port int
 	var dbPath string
+	var printRoutes bool
 	flag.IntVar(&port, "p", 2000, "监听的端口")
 	flag.StringVar(&dbPath, "db", "", "数据库文件路径（默认程序根目录 aly.db）")
+	// 文档防漂移：只打印路由清单（METHOD PATH）就退出，不碰数据库、不监听；
+	// website/scripts/check_docs.py 用它核对网站 API 文档。
+	flag.BoolVar(&printRoutes, "print-routes", false, "打印全部路由后退出（供文档核对脚本使用）")
 	flag.Parse()
+
+	if printRoutes {
+		gin.SetMode(gin.ReleaseMode)
+		r := gin.New()
+		routers.InitRouter(r)
+		for _, route := range r.Routes() {
+			fmt.Printf("%s %s\n", route.Method, route.Path)
+		}
+		return
+	}
 
 	//初始化数据库
 	if dbPath != "" {

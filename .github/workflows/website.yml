@@ -43,6 +43,13 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: website/pnpm-lock.yaml
+      # 文档防漂移：二进制自述清单 vs 网站文档，缺一条即构建失败。
+      # CLI 走 `aly-publish docs`，服务端走 `-print-routes`，见 check_docs.py。
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+      - name: Docs drift check
+        run: python3 website/scripts/check_docs.py
       # 每次部署前拉取最新 Release 的资产清单，页面里的文件名/版本号/下载链接随之更新。
       - name: Generate release download links
         env:

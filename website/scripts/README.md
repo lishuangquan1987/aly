@@ -41,3 +41,12 @@ python website/scripts/capture_screenshots.py --keep
 `i18n_detail.go`、`i18n_edit.go` 键表里（zh/en 两套，键集一致性由测试保证）。新增语言时
 在 `main.go` 的 `--lang` 解析与 `newApp` 的语言判定处加入该语言，并补齐键表；随后用
 `--lang` 重新截图。
+
+## 文档防漂移 / Docs drift check
+
+\\powershell
+python website/scripts/check_docs.py
+\
+比对两个二进制的自述清单与网站文档：\ly-publish docs\（全部命令与参数）与
+\server -print-routes\（全部路由）。缺一条即退出码 1；确属不写入文档的项加到
+同目录 \docs-whitelist.txt\。网站 CI 在部署前自动执行本检查（需要 Go 工具链）。

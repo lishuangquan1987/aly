@@ -55,7 +55,12 @@ cd client/aly-client && go test ./cmd/ ./config/ ./util/ ./selfupdate/
 
 # Publish GUI (Go, primary)
 cd publish/publish-gui-go && go test ./... -count=1 && go tool mygo vet
+
+# Docs drift check: every CLI command/flag and server route must appear in the docs
+python3 website/scripts/check_docs.py
 ```
+
+The drift check runs automatically in the website CI (website.yml) before every deploy: `aly-publish docs` prints all commands and flags, `server -print-routes` prints all routes, and `check_docs.py` cross-checks them against the site; one missing item fails the deploy. Items intentionally left undocumented go into `website/scripts/docs-whitelist.txt`.
 
 ## CI
 
