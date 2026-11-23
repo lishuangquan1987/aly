@@ -265,12 +265,12 @@ func (c *Client) GetAllFiles(projectName string) ([]models.FileInfo, error) {
 // 分片越大，请求数越少。可用环境变量 ALY_CHUNK_SIZE（字节数）覆盖，生效值会写进上传日志。
 const defaultChunkSize = 128 * 1024
 
-// chunckSizeEnviron 覆盖分片大小的环境变量名（值为字节数；非法值退回默认值）。
-const chunckSizeEnviron = "ALY_CHUNK_SIZE"
+// chunkSizeEnviron 覆盖分片大小的环境变量名（值为字节数；非法值退回默认值）。
+const chunkSizeEnviron = "ALY_CHUNK_SIZE"
 
 // resolveChunkSize 解析生效的分片大小：环境变量优先，取不到或非法就用默认值。
 func resolveChunkSize() int64 {
-	raw := envar(chunckSizeEnviron)
+	raw := envar(chunkSizeEnviron)
 	if raw == "" {
 		return defaultChunkSize
 	}

@@ -55,9 +55,15 @@ func ScanDirectory(root string, ignoreFolders, ignoreFiles []string) ([]models.L
 		relPath, _ := filepath.Rel(root, absPath)
 		relPath = filepath.ToSlash(relPath)
 
-		// .updator/publish.json 是 CLI 专有配置，不上传到服务端
-		if relPath == ".updator/publish.json" {
-			return nil
+		// .updator/ 下的放行规则（审查修复 code-review-2026-11-23 #14）：
+		//   - 放行 shared.json（有意设计：client 端配置需要随包下发，见上方目录注释）
+		//   - 其余全部排除——旧实现只排除 publish.json，导致 shared.json.tmp /
+		//     shared.json.corrupted（损坏备份，同样含 server_url）等临时/备份
+		//     文件被打进版本包下发到所有客户端机器
+		if strings.HasPrefix(relPath, ".updator/") {
+			if relPath != ".updator/shared.json" {
+				return nil
+			}
 		}
 
 		for _, ignoreFile := range ignoreFiles {
@@ -109,7 +115,7 @@ func ScanDirectory(root string, ignoreFolders, ignoreFiles []string) ([]models.L
 				return
 			default:
 			}
-			md5Str, err := HashFileMD5(e.absPath)
+			md5Str, err := HashFileMD5Ctx(ctx, e.absPath)
 			// 扫描路径不再计算 SHA256（审查 publish 轻微②：零消费者，纯白耗 CPU）；
 			// LocalFile.SHA256 保持空串，需要时由调用方自行调 HashFile。
 			results <- hashResult{idx: idx, md5: md5Str, err: err}
@@ -222,7 +228,40 @@ func HashFile(path string) (md5Str, sha256Str string, err error) {
 	return fmt.Sprintf("%x", md5h.Sum(nil)), fmt.Sprintf("%x", sha256h.Sum(nil)), nil
 }
 
-// HashFileMD5 只计算 MD5（扫描/暂存校验用；SHA256 无消费者，省一次全文件哈希）
+// HashFileMD5 只计算 MD5（扫描/暂存校验用；SHA256 无消费者，省一次全文件哈希）。
+// 审查修复（code-review-2026-11-23 #16）：读取按块进行，每块检查 ctx——
+// 旧实现一旦开始哈希大文件，外层 ctx 取消无法中断，GUI 切页后哈希仍在空转。
+func HashFileMD5Ctx(ctx context.Context, path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	md5h := md5.New()
+	buf := make([]byte, 256*1024)
+	for {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		default:
+		}
+		n, rerr := f.Read(buf)
+		if n > 0 {
+			if _, werr := md5h.Write(buf[:n]); werr != nil {
+				return "", werr
+			}
+		}
+		if rerr == io.EOF {
+			return fmt.Sprintf("%x", md5h.Sum(nil)), nil
+		}
+		if rerr != nil {
+			return "", rerr
+		}
+	}
+}
+
+// HashFileMD5 只计算 MD5（无 ctx 版本，保持兼容）
 func HashFileMD5(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {

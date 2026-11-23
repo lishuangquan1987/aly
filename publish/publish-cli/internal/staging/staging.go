@@ -116,7 +116,9 @@ func AddWithStatus(projectPath string, relativePaths []string, statusMap map[str
 			continue
 		}
 		absPath := filepath.Join(projectPath, filepath.FromSlash(rp))
-		md5Str, _, err := diff.HashFile(absPath)
+		// 审查修复（code-review-2026-11-23 #10）：改用 HashFileMD5——SHA256 无消费者
+		//（scanner.go 注释明示），旧实现这里多算一次全文件 SHA256 纯白耗 CPU。
+		md5Str, err := diff.HashFileMD5(absPath)
 		if err != nil {
 			return fmt.Errorf("hash %s: %w", rp, err)
 		}
@@ -176,7 +178,8 @@ func Verify(projectPath string) (conflicts []string, err error) {
 			continue
 		}
 		absPath := filepath.Join(projectPath, filepath.FromSlash(f.RelativePath))
-		md5Str, _, err := diff.HashFile(absPath)
+		// 审查修复（#10）：同上，Verify 路径也只算 MD5
+		md5Str, err := diff.HashFileMD5(absPath)
 		if err != nil {
 			return nil, fmt.Errorf("hash %s: %w", f.RelativePath, err)
 		}

@@ -89,6 +89,16 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 		}
 		printHumanLn("[DRY RUN] 将创建版本 %s (%d 条日志)", version, len(messages))
 		printHumanLn("[DRY RUN] 未实际推送任何内容。")
+		// 审查修复（轻微①）：--json 模式下也要输出一行成功信封——
+		// GUI 的 parsePushLine 依赖看到结果行，否则误报 "publish.noResult"。
+		if jsonOutput {
+			printOutput(true, "", map[string]string{
+				"dryRun": "true",
+				"version": version,
+				"files":   fmt.Sprintf("%d", len(filesToUpload)),
+			})
+			printProgressDone()
+		}
 		return false
 	}
 
@@ -125,7 +135,6 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 			}()
 			// 审查 M18：每完成一个文件立即输出结果行（加锁避免多 goroutine 交错），
 			// 旧实现要等全部上传完才统一输出，GUI 进度条 0%→100% 跳变、上传期间无任何反馈。
-			defer func() {}()
 			absPath := filepath.Join(cfg.Path, filepath.FromSlash(relPath))
 			if !jsonOutput {
 				printHumanLn("Uploading: %s", relPath)
@@ -146,19 +155,28 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 	results := make([]uploadResult, len(filesToUpload))
 	var firstErr error
 	var failedPath string
+	// 审查修复（轻微③）：收集全部失败路径——旧实现只报第一个失败文件，
+	// 50 个失败只显示 1 个，用户重试前无法评估失败规模。
+	var failedPaths []string
 	for i := 0; i < len(filesToUpload); i++ {
 		r := <-uploadCh
 		results[r.index] = r
-		if r.err != nil && firstErr == nil {
-			firstErr = r.err
-			failedPath = r.path
+		if r.err != nil {
+			failedPaths = append(failedPaths, r.path)
+			if firstErr == nil {
+				firstErr = r.err
+				failedPath = r.path
+			}
 		}
 	}
 
 	// 审查 M18：结果已在 goroutine 内实时输出，这里只做汇总统计
 	_ = results
 	if firstErr != nil {
-		outputResult(false, fmt.Sprintf("上传失败 [%s]: %v", failedPath, firstErr), nil)
+		outputResult(false, fmt.Sprintf("上传失败 [%s]: %v", failedPath, firstErr), map[string]interface{}{
+			"failedCount": len(failedPaths),
+			"failedFiles": failedPaths,
+		})
 		printProgressDone()
 		return false
 	}
