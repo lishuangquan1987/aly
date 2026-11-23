@@ -24,8 +24,10 @@ func main() {
 	if *lang != "" {
 		if a.cli.available() {
 			a.status = a.tf("cli.found", "path", a.cli.exe)
+			a.statusTone = toneSuccess
 		} else {
 			a.status = a.t("toolbar.cliMissing")
+			a.statusTone = toneDanger
 		}
 	}
 

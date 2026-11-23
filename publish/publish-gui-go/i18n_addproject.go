@@ -6,6 +6,9 @@ func init() {
 	mergeTranslations(map[string]map[string]string{
 		"zh": {
 			"addProject.stepServer":          "服务端项目",
+			"addProject.serverSubtitle":      "选择服务器上的项目",
+			"addProject.localSubtitle":       "指向本地构建目录",
+			"addProject.createSubtitle":      "在服务端新建项目",
 			"addProject.stepLocal":           "本地目录",
 			"addProject.next":                "下一步",
 			"addProject.selectProject":       "请先选择一个服务端项目",
@@ -31,15 +34,15 @@ func init() {
 			"addProject.mainOutside":         "主程序必须位于项目目录内",
 			"addProject.closeProcess":        "关闭进程名",
 			"addProject.closeProcessHint":    "默认取主程序文件名（不含扩展名）",
-			"addProject.mainExeHint":         "从目录中选择可执行文件，或手动填写",
 			"addProject.dropHint":            "也可以把文件夹拖到目录框上。",
 			"addProject.initializing":        "正在初始化项目…",
-			"addProject.updatePolicy":        "更新策略",
 			"addProject.forceUpdateHint":     "发布后客户端不再询问用户是否更新",
-			"addProject.suggestions":         "建议",
 		},
 		"en": {
 			"addProject.stepServer":          "Server project",
+			"addProject.serverSubtitle":      "Choose a project on the server",
+			"addProject.localSubtitle":       "Point at the local build folder",
+			"addProject.createSubtitle":      "Create a project on the server",
 			"addProject.stepLocal":           "Local folder",
 			"addProject.next":                "Next",
 			"addProject.selectProject":       "Choose a server project first",
@@ -65,12 +68,9 @@ func init() {
 			"addProject.mainOutside":         "The main executable must be inside the project folder",
 			"addProject.closeProcess":        "Close process name",
 			"addProject.closeProcessHint":    "Defaults to the main executable name",
-			"addProject.mainExeHint":         "Pick an executable in the folder, or type a path",
 			"addProject.dropHint":            "You can also drop a folder on the folder field.",
 			"addProject.initializing":        "Initializing the project…",
-			"addProject.updatePolicy":        "Update policy",
 			"addProject.forceUpdateHint":     "Clients update without asking after a release",
-			"addProject.suggestions":         "Suggestions",
 		},
 	})
 }

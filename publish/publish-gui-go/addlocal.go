@@ -107,6 +107,19 @@ func (a *app) localPreviewStateText(p *localPreviewState) (text string, ok bool)
 	return a.t("addLocal.configFound"), true
 }
 
+// localPreviewStatus is the state line under the folder field, with the tone
+// it speaks in: a problem, a neutral hint, or the ready-to-add state.
+func (a *app) localPreviewStatus(p *localPreviewState) (text string, t tone) {
+	text, ok := a.localPreviewStateText(p)
+	if ok {
+		return text, toneSuccess
+	}
+	if p == nil || normalizeForCompare(p.path) == "" {
+		return text, toneNeutral
+	}
+	return text, toneDanger
+}
+
 // localPreviewReady reports whether the confirm button may add the project.
 func (a *app) localPreviewReady(p *localPreviewState) bool {
 	if p == nil || p.busy || !p.hasPreview() {
@@ -203,6 +216,7 @@ func (a *app) confirmLocalProject() {
 	a.filter = ""
 	a.selected = len(a.projects) - 1
 	a.status = a.t("addLocal.added")
+	a.statusTone = toneSuccess
 	a.toastMsg = a.status
 	p.error = ""
 	p.busy = true
@@ -214,6 +228,7 @@ func (a *app) confirmLocalProject() {
 		p.busy = false
 		if warning != "" {
 			a.status = warning
+			a.statusTone = toneWarning
 			a.toastMsg = warning
 		}
 		a.closeLocalPreview()

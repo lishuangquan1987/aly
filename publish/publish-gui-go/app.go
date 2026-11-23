@@ -25,13 +25,17 @@ type app struct {
 	removeOpen bool
 	clearOpen  bool
 
-	status     string
-	toastMsg   string
-	theme      string
-	accent     string
-	accentOpen bool
-	addOpen    bool
-	adding     *addProjectState
+	status      string
+	statusTone  tone
+	focusSearch bool
+	toastMsg    string
+	toastKind   toastKind
+	toasts      []toast
+	theme       string
+	accent      string
+	accentOpen  bool
+	addOpen     bool
+	adding      *addProjectState
 
 	localPreviewOpen bool
 	localPreview     *localPreviewState
@@ -65,8 +69,10 @@ func newApp() *app {
 	a.cli = &cliClient{exe: findCLI()}
 	if a.cli.available() {
 		a.status = a.tf("cli.found", "path", a.cli.exe)
+		a.statusTone = toneSuccess
 	} else {
 		a.status = a.t("toolbar.cliMissing")
+		a.statusTone = toneDanger
 	}
 	return a
 }
@@ -157,17 +163,6 @@ func accentHex(value string) string {
 		}
 	}
 	return "#2563eb"
-}
-
-func (a *app) applyAccent(c *ui.Context) {
-	base := *c.Theme()
-	accent := ui.Hex(accentHex(normalizeAccent(a.accent)))
-	base.Accent = accent
-	base.AccentHover = accent.MixOklab(ui.Hex("#ffffff"), 0.14)
-	base.AccentPressed = accent.MixOklab(ui.Hex("#000000"), 0.16)
-	base.AccentText = ui.Hex("#ffffff")
-	base.InactiveAccent = accent
-	c.SetTheme(&base)
 }
 
 func (a *app) cycleTheme() {
@@ -319,6 +314,7 @@ func (a *app) removeSelected() {
 		a.selected = 0
 	}
 	a.status = a.t("remove.done")
+	a.statusTone = toneSuccess
 	a.toastMsg = a.status
 	a.openSelected()
 }

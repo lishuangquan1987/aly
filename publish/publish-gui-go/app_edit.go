@@ -217,12 +217,15 @@ func (a *app) saveEdit() {
 			}
 			a.editOpen = false
 			a.status = a.t("edit.saved")
+			a.statusTone = toneSuccess
 			switch {
 			case syncWarning != "":
 				a.status = syncWarning
+				a.statusTone = toneWarning
 				a.toastMsg = syncWarning
 			case updaterWarning != "":
 				a.status = updaterWarning
+				a.statusTone = toneWarning
 				a.toastMsg = updaterWarning
 			default:
 				a.toastMsg = a.status

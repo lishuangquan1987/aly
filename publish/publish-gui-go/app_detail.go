@@ -52,12 +52,15 @@ type detailState struct {
 	initialLoading bool
 	loaded         bool
 	// splitW is the side column's width, like the C# GridSplitter column
-	// (380 default, clamped to 260..520). ui.Split wants the first pane's
+	// (380 default, clamped to 300..540). ui.Split wants the first pane's
 	// width, so the view converts it while building.
 	splitW float32
 	// splitTotal is the split's width as last laid out. The view measures it
 	// from the previous frame so the clamp stays exact after a window resize.
 	splitTotal float32
+	// changesWidth is the changes card's width in the last layout, so its
+	// tables can drop columns when the window is narrow.
+	changesWidth float32
 }
 
 func (a *app) refreshDetail() {
@@ -111,6 +114,7 @@ func (a *app) refreshDetail() {
 			}
 			if err != nil {
 				d.status = a.tf("status.refreshFailed", "error", err.Error())
+				a.statusTone = toneDanger
 				a.toastMsg = d.status
 				return
 			}
@@ -129,6 +133,7 @@ func (a *app) refreshDetail() {
 				d.forceUpdate = info.ForceUpdate
 				d.forceKnown = true
 			}
+			a.statusTone = toneSuccess
 			d.status = a.tf("status.refreshed",
 				"unstaged", fmt.Sprint(len(d.unstaged)),
 				"staged", fmt.Sprint(len(d.staged)))
@@ -208,9 +213,11 @@ func (a *app) stageAll(staged bool) {
 					key = "status.stageFailed"
 				}
 				d.status = a.tf(key, "error", err.Error())
+				a.statusTone = toneDanger
 				a.toastMsg = d.status
 				return
 			}
+			a.statusTone = toneSuccess
 			if staged {
 				a.status = a.t("status.staged")
 			} else {
@@ -354,24 +361,30 @@ func (a *app) publish() {
 			switch {
 			case err == context.Canceled:
 				d.status = a.t("publish.cancelled")
+				a.statusTone = toneWarning
 				a.toastMsg = d.status
 			case err == context.DeadlineExceeded:
 				d.status = a.t("publish.timeout")
+				a.statusTone = toneWarning
 				a.toastMsg = d.status
 			case err != nil:
 				d.status = a.t("publish.failedStatus")
+				a.statusTone = toneDanger
 				a.toastMsg = d.status + ": " + err.Error()
 			case failure != "":
 				d.status = a.t("publish.failedStatus")
+				a.statusTone = toneDanger
 				a.toastMsg = failure
 			case !sawResult:
 				d.status = a.t("publish.noResult")
+				a.statusTone = toneDanger
 				a.toastMsg = d.status
 			default:
 				d.newVersion = ""
 				d.notes = ""
 				d.script = ""
 				d.status = a.tf("publish.published", "version", version)
+				a.statusTone = toneSuccess
 				a.status = d.status
 				a.toastMsg = d.status
 				a.refreshDetail()

@@ -507,6 +507,7 @@ func (a *app) initializeAddProject() {
 			a.filter = ""
 			a.selected = len(a.projects) - 1
 			a.status = a.tf("addProject.added", "name", displayName)
+			a.statusTone = toneSuccess
 			a.toastMsg = a.status
 			if warnings != "" {
 				a.toastMsg = warnings

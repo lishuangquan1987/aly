@@ -228,3 +228,24 @@ func TestDetailBusyRow(t *testing.T) {
 		t.Fatalf("busy caption missing; texts=%q", tt.Texts())
 	}
 }
+
+// TestDetailTablesAdaptToPaneWidth checks the responsive table: the wide
+// changes pane lists both size columns, while a narrow one (the minimum
+// window) drops the server size to keep the file name readable.
+func TestDetailTablesAdaptToPaneWidth(t *testing.T) {
+	wide := detailTestApp()
+	wt := ui.NewTester(wide.view, 1440, 900)
+	if !wt.HasText("Server") {
+		t.Errorf("the wide changes table does not show the server column; texts=%q", wt.Texts())
+	}
+	narrow := detailTestApp()
+	nt := ui.NewTester(narrow.view, 1080, 640)
+	if nt.HasText("Server") {
+		t.Errorf("the narrow changes table still shows the server column")
+	}
+	for _, text := range []string{"Local", "Status", "File"} {
+		if !nt.HasText(text) {
+			t.Errorf("the narrow changes table lost %q", text)
+		}
+	}
+}

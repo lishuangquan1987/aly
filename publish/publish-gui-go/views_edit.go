@@ -8,7 +8,7 @@ import (
 
 // ignoreFolderSuggestions and ignoreFileSuggestions mirror the C# GUI's
 // AppConstants lists offered as one-click rule chips in the project settings
-// dialog.
+// dialog and the wizard.
 var ignoreFolderSuggestions = []string{"node_modules", ".git", ".vs", "bin", "obj", "dist", "logs"}
 var ignoreFileSuggestions = []string{"*.log", "*.tmp", "*.pdb", "Thumbs.db", ".DS_Store"}
 
@@ -20,100 +20,71 @@ func (a *app) editModal(c *ui.Context) {
 	if e == nil {
 		return
 	}
-	t := c.Theme()
 	disabled := e.loadError != ""
 	validation := a.editValidation(e)
 	e.validation = validation
-	w, h := dialogSize(c, 820, 700)
+	w, h := dialogSize(c, 880, 780)
 	a.formModal(c, &a.editOpen, func() {
-		ui.Column(c).Role(ui.RoleDialog).Width(w).Height(h).Gap(10).Padding(18).
-			Background(t.Surface).Radius(12).Border(1, t.Border).
-			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.08)).Children(func() {
-			a.editHeader(c, e)
-			if disabled {
-				a.noticeBox(c, iconWarning, e.loadError, t.Danger, true)
-			}
-			ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-				ui.Column(c).Gap(12).Disabled(disabled).Children(func() {
-					submitted := a.editLocalCard(c, e)
-					if a.editConfigCard(c, e, disabled) {
-						submitted = true
-					}
-					// Enter in the server, project or display name field saves,
-					// as the C# dialog's default button does.
-					if submitted && !disabled && !e.busy && a.editValidation(e) == "" {
-						a.saveEdit()
-					}
-				})
-			})
-			if e.error != "" {
-				ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
-					ui.Icon(c, iconWarning).FontSize(12).TextColor(t.Danger)
-					ui.Text(c, e.error).FontSize(11).TextColor(t.Danger).Wrap().Grow(1)
-				})
-			}
-			if e.busy {
-				a.busyRow(c, a.t("edit.saving"))
-			}
-			ui.Row(c).Gap(8).Shrink(0).AlignItems(ui.Center).Children(func() {
-				if validation != "" && !disabled {
-					ui.Icon(c, iconWarning).FontSize(12).TextColor(t.Warning)
-					ui.Text(c, validation).FontSize(11).TextColor(t.Warning).Wrap().Grow(1)
-				} else {
-					ui.Box(c).Grow(1)
-				}
-				if a.actionButton(c, a.t("edit.cancel"), iconX, false, e.busy) {
-					a.editOpen = false
-				}
-				if a.actionButton(c, a.t("edit.save"), iconCheck, true, e.busy || disabled || validation != "") {
-					a.saveEdit()
-				}
-			})
-		})
-	})
-}
-
-func (a *app) editHeader(c *ui.Context, e *editState) {
-	t := c.Theme()
-	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Icon(c, iconSettings).FontSize(18).TextColor(t.Accent)
-		ui.Text(c, a.t("edit.title")).FontSize(16).Bold()
-		ui.Box(c).Grow(1)
-		if a.ghostIconButton(c, a.t("edit.cancel"), iconX, e.busy) {
+		a.dialogShell(c, iconSettings, a.t("edit.title"), a.tf("edit.subtitle",
+			"project", e.project.DisplayName), w, h, e.busy, func() {
 			a.editOpen = false
-		}
+		}, func() {
+			if disabled {
+				a.notice(c, iconWarning, e.loadError, toneDanger)
+			}
+			submitted := a.editLocalCard(c, e, disabled)
+			if a.editConfigCard(c, e, disabled) {
+				submitted = true
+			}
+			// Enter in the server, project or display name field saves, as
+			// the C# dialog's default button does.
+			if submitted && !disabled && !e.busy && validation == "" {
+				a.saveEdit()
+			}
+		}, func() {
+			if e.error != "" {
+				a.inlineNotice(c, iconErrorCircle, e.error, toneDanger)
+			} else if validation != "" && !disabled {
+				a.inlineNotice(c, iconWarning, validation, toneWarning)
+			} else {
+				ui.Box(c).Grow(1)
+			}
+			if a.buttonSized(c, a.t("edit.cancel"), a.t("edit.cancel"), iconX, btnSecondary, e.busy, controlHeight) {
+				a.editOpen = false
+			}
+			if a.buttonSized(c, a.t("edit.save"), a.t("edit.save"), iconCheck, btnPrimary,
+				e.busy || disabled || validation != "", controlHeight) {
+				a.saveEdit()
+			}
+		})
 	})
 }
 
 // editLocalCard holds the bookmark fields: the list name and the main
 // executable the "Launch" action uses. Neither lives in shared.json.
-func (a *app) editLocalCard(c *ui.Context, e *editState) bool {
-	t := c.Theme()
+func (a *app) editLocalCard(c *ui.Context, e *editState, disabled bool) bool {
 	submitted := false
-	ui.Column(c).Gap(10).Padding(14, 12).Background(t.Background).
-		Border(1, t.Border).Radius(8).Children(func() {
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, iconMonitor).FontSize(14).TextColor(t.TextMuted)
-			ui.Text(c, a.t("edit.localDisplay")).FontSize(13).Bold()
-		})
-		ui.Form(c, func() {
-			ui.Field(c, a.t("edit.displayName"), func() {
-				in := ui.TextInput(c, &e.displayName).Grow(1)
-				if in.Submitted() {
-					submitted = true
+	ui.Column(c).Gap(8).Disabled(disabled).Children(func() {
+		a.cardSectionTitle(c, iconMonitor, toneInfo, a.t("edit.localDisplay"))
+		a.field(c, a.t("edit.displayName"), func() {
+			in := ui.TextInput(c, &e.displayName).Height(controlHeight).Radius(8).
+				Tooltip(a.t("edit.displayNameHint"))
+			if in.Submitted() {
+				submitted = true
+			}
+		}).Error(requiredText(a.t("edit.requireDisplayName"), e.displayName))
+		a.field(c, a.t("edit.mainExe"), func() {
+			ui.Row(c).Gap(6).Children(func() {
+				ui.TextInput(c, &e.mainExe).Placeholder(a.t("edit.mainExePlaceholder")).
+					Height(controlHeight).Radius(8).Grow(1).
+					Tooltip(a.mainExeHintText(e))
+				if a.buttonSized(c, a.t("edit.browse"), a.t("edit.browse"), iconFolder,
+					btnSecondary, e.busy || disabled, controlHeight) {
+					a.pickExecutable(a.t("edit.mainExe"), func(path string) {
+						e.mainExe = path
+					})
 				}
-			}).Description(a.t("edit.displayNameHint")).
-				Error(requiredText(a.t("edit.requireDisplayName"), e.displayName))
-			ui.Field(c, a.t("edit.mainExe"), func() {
-				ui.Row(c).Gap(6).Children(func() {
-					ui.TextInput(c, &e.mainExe).Placeholder(a.t("edit.mainExeHint")).Grow(1)
-					if a.actionButton(c, a.t("edit.browse"), iconFolder, false, e.busy) {
-						a.pickExecutable(a.t("edit.mainExe"), func(path string) {
-							e.mainExe = path
-						})
-					}
-				})
-			}).Description(a.mainExeHintText(e))
+			})
 		})
 	})
 	return submitted
@@ -122,80 +93,114 @@ func (a *app) editLocalCard(c *ui.Context, e *editState) bool {
 // editConfigCard holds the fields that live in .updator/shared.json: the
 // server target and the four ignore/not-copy rule lists.
 func (a *app) editConfigCard(c *ui.Context, e *editState, disabled bool) bool {
-	t := c.Theme()
 	submitted := false
-	ui.Column(c).Gap(10).Padding(14, 12).Background(t.Background).
-		Border(1, t.Border).Radius(8).Children(func() {
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, iconSettings).FontSize(14).TextColor(t.TextMuted)
-			ui.Text(c, a.t("edit.configSection")).FontSize(13).Bold()
-		})
-		ui.Form(c, func() {
-			ui.Field(c, a.t("edit.serverURL"), func() {
-				in := ui.TextInput(c, &e.serverURL).Placeholder(a.t("addProject.serverHint")).Grow(1)
-				if !disabled {
-					// The C# dialog focuses this field when it opens.
-					in.AutoFocus()
-				}
-				if in.Submitted() {
-					submitted = true
-				}
-				if chips := a.editKnownServers(e); len(chips) > 0 {
-					a.suggestionChips(c, chips, func(value string) {
-						e.serverURL = value
-					})
-				}
-			}).Error(requiredText(a.t("edit.requireServer"), e.serverURL))
-			ui.Field(c, a.t("edit.projectName"), func() {
-				in := ui.TextInput(c, &e.projectName).Placeholder(a.t("addProject.projectHint")).Grow(1)
-				if in.Submitted() {
-					submitted = true
-				}
-			}).Description(a.t("edit.projectNameHint")).
-				Error(requiredText(a.t("edit.requireProject"), e.projectName))
-		})
-		ui.Row(c).Gap(14).Children(func() {
-			ui.Column(c).Grow(1).Gap(8).Children(func() {
-				a.suggestionChips(c, ignoreFolderSuggestions, func(value string) {
-					e.ignoreFolders = appendUnique(e.ignoreFolders, value)
-				})
-				a.editGroup(c, a.t("edit.ignoreFolders"), &e.ignoreFolders, &e.newIgnoreFolder, func() {
-					a.pickFolder(true, a.t("edit.ignoreFolders"), func(paths []string) {
-						for _, path := range paths {
-							a.addProjectPath(&e.ignoreFolders, e.project.ProjectPath, path)
-						}
-					})
-				})
-				a.suggestionChips(c, ignoreFileSuggestions, func(value string) {
-					e.ignoreFiles = appendUnique(e.ignoreFiles, value)
-				})
-				a.editGroup(c, a.t("edit.ignoreFiles"), &e.ignoreFiles, &e.newIgnoreFile, func() {
-					a.pickFiles(a.t("edit.ignoreFiles"), func(paths []string) {
-						for _, path := range paths {
-							a.addProjectPath(&e.ignoreFiles, e.project.ProjectPath, path)
-						}
-					})
+	ui.Column(c).Gap(8).Disabled(disabled).Children(func() {
+		a.cardSectionTitle(c, iconServer, tonePrimary, a.t("edit.configSection"))
+		a.field(c, a.t("edit.serverURL"), func() {
+			in := ui.TextInput(c, &e.serverURL).Placeholder(a.t("addProject.serverHint")).
+				Height(controlHeight).Radius(8)
+			if !disabled {
+				// The C# dialog focuses the server field when it opens.
+				in.AutoFocus()
+			}
+			if in.Submitted() {
+				submitted = true
+			}
+		}).Error(requiredText(a.t("edit.requireServer"), e.serverURL))
+		if chips := a.editKnownServers(e); len(chips) > 0 {
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+				a.fieldLabel(c, a.t("edit.knownServers"))
+				a.suggestionTags(c, chips, disabled, func(value string) {
+					e.serverURL = value
 				})
 			})
-			ui.Column(c).Grow(1).Gap(8).Children(func() {
-				a.editGroup(c, a.t("edit.uncopyFolders"), &e.uncopyFolders, &e.newUncopyFolder, func() {
-					a.pickFolder(true, a.t("edit.uncopyFolders"), func(paths []string) {
-						for _, path := range paths {
-							a.addProjectPath(&e.uncopyFolders, e.project.ProjectPath, path)
-						}
-					})
-				})
-				a.editGroup(c, a.t("edit.uncopyFiles"), &e.uncopyFiles, &e.newUncopyFile, func() {
-					a.pickFiles(a.t("edit.uncopyFiles"), func(paths []string) {
-						for _, path := range paths {
-							a.addProjectPath(&e.uncopyFiles, e.project.ProjectPath, path)
-						}
-					})
-				})
-			})
-		})
+		}
+		a.field(c, a.t("edit.projectName"), func() {
+			in := ui.TextInput(c, &e.projectName).Placeholder(a.t("addProject.projectHint")).
+				Height(controlHeight).Radius(8)
+			if in.Submitted() {
+				submitted = true
+			}
+		}).Description(a.t("edit.projectNameHint")).
+			Error(requiredText(a.t("edit.requireProject"), e.projectName))
+		a.ruleGrid(c, disabled,
+			ruleGroup{a.t("edit.ignoreFolders"), &e.ignoreFolders, &e.newIgnoreFolder,
+				ignoreFolderSuggestions,
+				func() { a.pickFolderRules(&e.ignoreFolders, a.t("edit.ignoreFolders"), e.project.ProjectPath) }},
+			ruleGroup{a.t("edit.uncopyFolders"), &e.uncopyFolders, &e.newUncopyFolder,
+				ignoreFolderSuggestions,
+				func() { a.pickFolderRules(&e.uncopyFolders, a.t("edit.uncopyFolders"), e.project.ProjectPath) }},
+			ruleGroup{a.t("edit.ignoreFiles"), &e.ignoreFiles, &e.newIgnoreFile,
+				ignoreFileSuggestions,
+				func() { a.pickFileRules(&e.ignoreFiles, a.t("edit.ignoreFiles"), e.project.ProjectPath) }},
+			ruleGroup{a.t("edit.uncopyFiles"), &e.uncopyFiles, &e.newUncopyFile,
+				ignoreFileSuggestions,
+				func() { a.pickFileRules(&e.uncopyFiles, a.t("edit.uncopyFiles"), e.project.ProjectPath) }},
+		)
 	})
 	return submitted
+}
+
+// ruleGroup is one editable rule list for ruleGrid.
+type ruleGroup struct {
+	label       string
+	list        *[]string
+	input       *string
+	suggestions []string
+	pick        func()
+}
+
+// ruleGrid lays out rule groups in two aligned columns: folder rules in the
+// first row, file rules in the second. Every cell keeps the same structure
+// (label, suggestion chips, input) so the rows line up.
+func (a *app) ruleGrid(c *ui.Context, disabled bool, groups ...ruleGroup) {
+	ui.Column(c).Gap(8).Children(func() {
+		for row := 0; row+1 < len(groups); row += 2 {
+			left, right := groups[row], groups[row+1]
+			ui.Row(c).Gap(16).AlignItems(ui.Start).Children(func() {
+				a.ruleCell(c, disabled, left)
+				a.ruleCell(c, disabled, right)
+			})
+		}
+	})
+}
+
+func (a *app) ruleCell(c *ui.Context, disabled bool, g ruleGroup) {
+	ui.Column(c).Grow(1).Basis(0).Gap(5).Children(func() {
+		if len(g.suggestions) > 0 {
+			a.suggestionTags(c, g.suggestions, disabled, func(value string) {
+				*g.list = appendUnique(*g.list, value)
+			})
+		}
+		a.editGroup(c, g.label, g.list, g.input, disabled, g.pick)
+	})
+}
+
+// cardSectionTitle heads a block inside a dialog body with a tinted icon.
+func (a *app) cardSectionTitle(c *ui.Context, ic *ui.SVG, t tone, title string) {
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		a.iconTile(c, ic, t, 26)
+		a.sectionTitle(c, title)
+	})
+}
+
+// pickFolderRules opens the folder picker for one rule list, constraining the
+// choice to the project folder.
+func (a *app) pickFolderRules(list *[]string, title, projectPath string) {
+	a.pickFolder(true, title, func(paths []string) {
+		for _, path := range paths {
+			a.addProjectPath(list, projectPath, path)
+		}
+	})
+}
+
+// pickFileRules opens the file picker for one rule list.
+func (a *app) pickFileRules(list *[]string, title, projectPath string) {
+	a.pickFiles(title, func(paths []string) {
+		for _, path := range paths {
+			a.addProjectPath(list, projectPath, path)
+		}
+	})
 }
 
 // editKnownServers are the one-click server suggestions: computed once when the
