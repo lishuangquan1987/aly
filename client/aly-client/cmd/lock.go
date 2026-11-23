@@ -199,9 +199,13 @@ func releaseLock(path, token string) {
 func cleanStaleLock(path string) bool {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		// 读取失败（如刚被释放/被删）：清理后重试
-		os.Remove(path)
-		return true
+		// 读取失败但文件存在（如权限/IO 抖动）：视为锁仍有效，不抢占。
+		// 仅当确认文件已不存在时才视为可获取（此时 Remove 只是幂等兜底，不会误删他人锁）。
+		if os.IsNotExist(err) {
+			os.Remove(path)
+			return true
+		}
+		return false
 	}
 	var info updateLockInfo
 	if err := json.Unmarshal(data, &info); err != nil {

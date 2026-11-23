@@ -3,6 +3,7 @@ package cmd
 import (
 	"flag"
 	"os"
+	"path/filepath"
 
 	"aly/client/aly-client/model"
 	"aly/client/aly-client/util"
@@ -39,6 +40,10 @@ func CheckSelfUpdate() {
 	if err != nil {
 		printOutput(false, err.Error(), nil)
 		return
+	}
+	// 与 self_update.go 同款：先解析符号链接再取真实路径，避免对比对象不一致
+	if resolved, rErr := filepath.EvalSymlinks(selfPath); rErr == nil {
+		selfPath = resolved
 	}
 
 	selfSHA256, err := util.FileSHA256(selfPath)

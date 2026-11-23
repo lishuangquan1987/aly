@@ -51,6 +51,10 @@ func CheckDiff() {
 	}
 
 	// Build local file info maps
+	// 判定口径：差异初筛仅按 MD5（size+MD5 由服务器 manifest 同时下发，
+	// MD5 相同但 size 不同的场景实际上游校验阶段会再以 SHA256 兜底，
+	// 见 download_update 的 MD5+SHA256 双校验）；此处 LocalMD5Map 只存 MD5，
+	// 大小差异且 MD5 碰撞的概率工程上可忽略。
 	localMD5Map, localMD5Err := util.LocalFileMD5Map(fc.MainFolder)
 	if localMD5Err != nil {
 		exeDir, _ := config.ExeDir()

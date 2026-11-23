@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"aly/client/aly-client/config"
@@ -660,29 +659,9 @@ func newRenameProbeState() *renameProbeState {
 	}
 }
 
-// isRenameRetryableErr 判断重命名失败错误是否属于"占用类"错误（值得探测+击杀+重试）。
-// 占用类（可重试）：ERROR_SHARING_VIOLATION(32) / ERROR_LOCK_VIOLATION(33) /
-// ERROR_USER_MAPPED_FILE(1224) / ERROR_ACCESS_DENIED(5)。
-// 非占用类（重试无意义，立即失败）：ERROR_NOT_SAME_DEVICE(17 跨卷) /
-// ERROR_DIR_NOT_EMPTY(145) / ERROR_ALREADY_EXISTS(183 目标已存在，走旁移) /
-// ERROR_PATH_NOT_FOUND(3 源不存在)。
-// 无法分类时保守视为占用类（保持旧行为：探测→击杀→重试）。
-func isRenameRetryableErr(err error) bool {
-	le, ok := err.(*os.LinkError)
-	if !ok {
-		return true
-	}
-	errno, ok := le.Err.(syscall.Errno)
-	if !ok {
-		return true
-	}
-	switch errno {
-	case 32, 33, 1224, 5:
-		return true
-	default:
-		return false
-	}
-}
+// isRenameRetryableErr 按平台拆分实现：Windows 见 rename_retryable_windows.go，
+// Linux/Unix 见 rename_retryable_unix.go（审查修复 code-review-2026-11-23 #12：
+// Windows errno 数值在 Linux 下语义完全不同，不得共用一张表）。
 
 // renameDirWithKill 重命名文件夹（乐观模式），单次调用使用独立探测状态。
 // 约定：
@@ -1171,6 +1150,9 @@ func runScript(scriptPath, workDir string) error {
 	}
 	cmd := scriptCmdFn(scriptPath)
 	cmd.Dir = workDir
+	// Start 前设置平台进程属性（Unix Setpgid；Windows 无操作），
+	// 供超时路径 killScriptTree 整树终止。
+	setScriptProcAttr(cmd)
 	if err := cmd.Start(); err != nil {
 		exeDir, dirErr := config.ExeDir()
 		if dirErr == nil {
@@ -1198,7 +1180,9 @@ func runScript(scriptPath, workDir string) error {
 			fmt.Sprintf("script completed: %s", scriptPath))
 		return nil
 	case <-time.After(scriptTimeout):
-		cmd.Process.Kill()
+		// 整树终止（Windows taskkill /T /F；Unix 进程组 SIGKILL）：
+		// 脚本常派生孙进程，仅 Kill 直接子进程会留孤儿继续持锁/占资源。
+		killScriptTree(cmd)
 		// 回收已结束的 Wait goroutine，避免子进程句柄残留
 		select {
 		case <-done:
