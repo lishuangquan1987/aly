@@ -16,7 +16,7 @@ func (a *app) localPreviewModal(c *ui.Context) {
 	if p == nil {
 		return
 	}
-	w, h := dialogSize(c, 640, 560)
+	w, h := dialogSize(c, 640, 480)
 	a.formModal(c, &a.localPreviewOpen, func() {
 		a.dialogShell(c, iconFolderPlus, a.t("addLocal.previewTitle"), a.t("addLocal.subtitle"),
 			w, h, p.busy, func() {

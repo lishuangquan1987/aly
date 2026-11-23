@@ -179,7 +179,7 @@ func (a *app) ruleCell(c *ui.Context, disabled bool, g ruleGroup) {
 // cardSectionTitle heads a block inside a dialog body with a tinted icon.
 func (a *app) cardSectionTitle(c *ui.Context, ic *ui.SVG, t tone, title string) {
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		a.iconTile(c, ic, t, 26)
+		a.plainIcon(c, ic, t, 16)
 		a.sectionTitle(c, title)
 	})
 }

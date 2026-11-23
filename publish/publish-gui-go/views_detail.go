@@ -47,7 +47,7 @@ func (a *app) detailHeader(c *ui.Context, d *detailState) {
 	p := a.pal(c)
 	busy := d.busy || d.uploading
 	ui.Row(c).Gap(12).AlignItems(ui.Center).Shrink(0).Children(func() {
-		a.iconTile(c, iconFolderOpen, tonePrimary, 42)
+		a.plainIcon(c, iconFolderOpen, tonePrimary, 34)
 		ui.Column(c).Grow(1).Shrink(1).Gap(2).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, d.project.DisplayName).FontSize(fontTitle).FontWeight(650).
@@ -79,6 +79,7 @@ func (a *app) detailHeader(c *ui.Context, d *detailState) {
 
 // detailSplit puts the changes area left and the publish/history side right.
 func (a *app) detailSplit(c *ui.Context, d *detailState, root ui.Element) {
+	a.adjustChangesSplit(d)
 	total := root.Bounds().W - 2*detailPadding
 	if total <= 0 {
 		width, _ := c.Size()
@@ -104,6 +105,28 @@ func (a *app) detailSplit(c *ui.Context, d *detailState, root ui.Element) {
 	// side column's width so the clamp holds from frame to frame.
 	if total > detailSplitDivider {
 		d.splitW = clampSideWidth(total, total-detailSplitDivider-first)
+	}
+}
+
+// adjustChangesSplit gives the split to the half that has changes: an empty
+// unstaged or staged half collapses to a strip, so a full half fills the card
+// instead of both halves showing blank table. It only runs when the empty
+// state changes, so a divider drag survives until the files change again.
+func (a *app) adjustChangesSplit(d *detailState) {
+	unstaged, staged := len(d.unstaged) == 0, len(d.staged) == 0
+	if d.emptyKnown && unstaged == d.unstagedEmpty && staged == d.stagedEmpty {
+		return
+	}
+	d.emptyKnown, d.unstagedEmpty, d.stagedEmpty = true, unstaged, staged
+	switch {
+	case unstaged && staged:
+		d.splitPercent = 50
+	case unstaged:
+		d.splitPercent = 18
+	case staged:
+		d.splitPercent = 84
+	default:
+		d.splitPercent = 62
 	}
 }
 
@@ -185,10 +208,19 @@ func (a *app) filesPanel(c *ui.Context, d *detailState, staged bool) {
 	}
 	disabled := d.busy || d.uploading || len(files) == 0
 	hasSelected := len(selectedFiles(files)) > 0
+	narrowPane := d.changesWidth > 0 && d.changesWidth < 560
+	collapsed := (staged && d.splitPercent > 70) || (!staged && d.splitPercent < 30)
+	panePercent := d.splitPercent
+	if staged {
+		panePercent = 100 - d.splitPercent
+	}
+	paneHeight := splitAreaHeight(c) * panePercent / 100
+	rowsHeight := float32(32 + 34*len(files))
+	showHint := len(files) > 0 && paneHeight-(42+24)-rowsHeight > 48
 	ui.Column(c).Grow(1).FillHeight().Children(func() {
 		ui.Row(c).Wrap().Gap(6).Padding(8, 12).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(p.divider).Children(func() {
-			a.iconTile(c, headerIcon, headerTone, 24)
+			a.plainIcon(c, headerIcon, headerTone, 18)
 			ui.Text(c, title).FontSize(fontSection).FontWeight(600).TextColor(p.text)
 			a.countTag(c, len(files), toneNeutral)
 			ui.Box(c).Grow(1)
@@ -196,10 +228,10 @@ func (a *app) filesPanel(c *ui.Context, d *detailState, staged bool) {
 			if allSelected(files) {
 				label = a.t("changes.unselectAll")
 			}
-			if a.buttonSized(c, label, label, iconCheckSquare, btnGhost, disabled, 26) {
-				selectAll := !allSelected(files)
+			selectAll := func() {
+				choice := !allSelected(files)
 				for i := range files {
-					files[i].Selected = selectAll
+					files[i].Selected = choice
 				}
 				if staged {
 					d.staged = files
@@ -207,27 +239,64 @@ func (a *app) filesPanel(c *ui.Context, d *detailState, staged bool) {
 					d.unstaged = files
 				}
 			}
-			if staged {
-				if a.buttonSized(c, a.t("changes.unstage"), a.t("changes.unstage"), iconMinusCircle,
-					btnSecondary, d.busy || d.uploading || !hasSelected, 26) {
-					a.stageSelected(false)
+			// A narrow pane keeps the actions as icon buttons so the header
+			// stays one row high.
+			if narrowPane {
+				if a.iconButtonSize(c, label, iconCheckSquare, btnGhost, disabled, 26) {
+					selectAll()
 				}
-				if a.buttonSized(c, a.t("changes.clear"), a.t("changes.clear"), iconTrash,
-					btnDangerGhost, d.busy || d.uploading || len(files) == 0, 26) {
-					a.clearOpen = true
+				if staged {
+					if a.iconButtonSize(c, a.t("changes.unstage"), iconMinusCircle,
+						btnGhost, d.busy || d.uploading || !hasSelected, 26) {
+						a.stageSelected(false)
+					}
+					if a.iconButtonSize(c, a.t("changes.clear"), iconTrash,
+						btnDangerGhost, d.busy || d.uploading || len(files) == 0, 26) {
+						a.clearOpen = true
+					}
+				} else {
+					if a.iconButtonSize(c, a.t("changes.stageSelected"), iconCheck,
+						btnGhost, d.busy || d.uploading || !hasSelected, 26) {
+						a.stageSelected(true)
+					}
+					if a.iconButtonSize(c, a.t("changes.stageAll"), iconPlusCircle,
+						btnPrimary, d.busy || d.uploading || len(files) == 0, 26) {
+						a.stageAll(true)
+					}
 				}
 			} else {
-				if a.buttonSized(c, a.t("changes.stageSelected"), a.t("changes.stageSelected"),
-					iconCheck, btnSecondary, d.busy || d.uploading || !hasSelected, 26) {
-					a.stageSelected(true)
+				if a.buttonSized(c, label, label, iconCheckSquare, btnGhost, disabled, 26) {
+					selectAll()
 				}
-				if a.buttonSized(c, a.t("changes.stageAll"), a.t("changes.stageAll"),
-					iconPlusCircle, btnPrimary, d.busy || d.uploading || len(files) == 0, 26) {
-					a.stageAll(true)
+				if staged {
+					if a.buttonSized(c, a.t("changes.unstage"), a.t("changes.unstage"), iconMinusCircle,
+						btnSecondary, d.busy || d.uploading || !hasSelected, 26) {
+						a.stageSelected(false)
+					}
+					if a.buttonSized(c, a.t("changes.clear"), a.t("changes.clear"), iconTrash,
+						btnDangerGhost, d.busy || d.uploading || len(files) == 0, 26) {
+						a.clearOpen = true
+					}
+				} else {
+					if a.buttonSized(c, a.t("changes.stageSelected"), a.t("changes.stageSelected"),
+						iconCheck, btnSecondary, d.busy || d.uploading || !hasSelected, 26) {
+						a.stageSelected(true)
+					}
+					if a.buttonSized(c, a.t("changes.stageAll"), a.t("changes.stageAll"),
+						iconPlusCircle, btnPrimary, d.busy || d.uploading || len(files) == 0, 26) {
+						a.stageAll(true)
+					}
 				}
 			}
 		})
 		if len(files) == 0 {
+			if collapsed {
+				ui.Row(c).Padding(8, 12).AlignItems(ui.Center).Gap(6).Children(func() {
+					ui.Icon(c, emptyIcon).FontSize(13).TextColor(p.textThird)
+					ui.Text(c, empty).FontSize(fontCaption).TextColor(p.textThird).SingleLine()
+				})
+				return
+			}
 			a.emptyState(c, emptyIcon, empty, a.t("changes.emptyHint"), nil)
 			return
 		}
@@ -250,7 +319,11 @@ func (a *app) filesPanel(c *ui.Context, d *detailState, staged bool) {
 				{Title: "", Width: 30, Fixed: true},
 			}
 		}
-		ui.Table(c, nil, cols, len(files), func(row, col int) {
+		var totalSize int64
+		for _, f := range files {
+			totalSize += f.LocalSize
+		}
+		table := ui.Table(c, nil, cols, len(files), func(row, col int) {
 			f := &files[row]
 			switch col {
 			case 0:
@@ -275,7 +348,47 @@ func (a *app) filesPanel(c *ui.Context, d *detailState, staged bool) {
 					a.openFileLocation(*f)
 				}
 			}
-		}).Grow(1)
+		})
+		if showHint {
+			// The table keeps its rows' height; the hint uses the rest.
+			table.Height(rowsHeight).Shrink(0)
+			a.panelHint(c, staged)
+		} else {
+			table.Grow(1)
+		}
+		a.divider(c)
+		summaryKey := "changes.panelSummary"
+		if len(files) == 1 {
+			summaryKey = "changes.panelSummaryOne"
+		}
+		ui.Row(c).Shrink(0).Padding(6, 12).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, a.tf(summaryKey,
+				"count", fmt.Sprint(len(files)),
+				"size", formatSize(totalSize))).FontSize(fontMicro).
+				TextColor(p.textThird).SingleLine()
+		})
+	})
+}
+
+// splitAreaHeight is the height of the changes split: the window minus the
+// toolbar, the status bar, the detail header, the page padding and the gaps.
+func splitAreaHeight(c *ui.Context) float32 {
+	_, height := c.Size()
+	return float32(height) - toolbarHeight - statusHeight - 2*detailPadding - 40 - 12
+}
+
+// panelHint fills the room a short file list leaves, with what to do next.
+func (a *app) panelHint(c *ui.Context, staged bool) {
+	p := a.pal(c)
+	ic, text := iconRefresh, a.t("changes.hintUnstaged")
+	if staged {
+		ic, text = iconUpload, a.t("changes.hintStaged")
+	}
+	ui.Box(c).Grow(1).Center().Children(func() {
+		ui.Row(c).Gap(7).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, ic).FontSize(15).TextColor(p.textThird)
+			ui.Text(c, text).FontSize(fontCaption).TextColor(p.textThird).SingleLine()
+		})
 	})
 }
 
@@ -422,7 +535,7 @@ func (a *app) historyView(c *ui.Context, d *detailState) {
 		Radius(12).Shadow(0, 1, 3, 0, p.shadow).Clip().Children(func() {
 		ui.Row(c).Gap(8).Padding(8, 12).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(p.divider).Children(func() {
-			a.iconTile(c, iconHistory, toneInfo, 24)
+			a.plainIcon(c, iconHistory, toneInfo, 18)
 			ui.Text(c, a.t("history.title")).FontSize(fontSection).FontWeight(600).TextColor(p.text)
 			a.countTag(c, len(d.logs), toneNeutral)
 			ui.Box(c).Grow(1)

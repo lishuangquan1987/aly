@@ -359,9 +359,24 @@ func (a *app) sidebar(c *ui.Context) {
 				}).Grow(1)
 			}
 			a.divider(c)
-			ui.Row(c).Padding(9, 14).AlignItems(ui.Center).Gap(6).Children(func() {
-				ui.Icon(c, iconArrowRight).FontSize(11).TextColor(p.textThird)
-				ui.Text(c, a.t("projects.searchKey")).FontSize(fontMicro).TextColor(p.textThird).SingleLine()
+			ui.Column(c).Children(func() {
+				ui.Row(c).Padding(6, 14).AlignItems(ui.Center).Gap(6).Children(func() {
+					dot := p.success
+					label := a.t("sidebar.cliReady")
+					if !a.cli.available() {
+						dot, label = p.danger, a.t("sidebar.cliMissing")
+					}
+					ui.Box(c).Size(6, 6).Radius(3).Background(dot)
+					ui.Text(c, label).FontSize(fontMicro).TextColor(p.textThird).SingleLine()
+					ui.Box(c).Grow(1)
+					ui.Text(c, a.tf("sidebar.projectCount", "count", fmt.Sprint(len(a.projects)))).
+						FontSize(fontMicro).TextColor(p.textThird).SingleLine()
+				})
+				ui.Row(c).Padding(6, 14).AlignItems(ui.Center).Gap(6).Children(func() {
+					ui.Icon(c, iconArrowRight).FontSize(11).TextColor(p.textThird)
+					ui.Text(c, a.t("projects.searchKey")).FontSize(fontMicro).
+						TextColor(p.textThird).SingleLine()
+				})
 			})
 		})
 }

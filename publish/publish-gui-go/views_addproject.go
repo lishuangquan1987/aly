@@ -66,7 +66,7 @@ func (a *app) addProjectServerModal(c *ui.Context, s *addProjectState) {
 	}, func() {
 		w, h := dialogSize(c, 840, 560)
 		busy := s.busy || s.creating
-		a.dialogShell(c, iconServer, a.t("addProject.title"), a.t("addProject.serverSubtitle"),
+		a.dialogShellFill(c, iconServer, a.t("addProject.title"), a.t("addProject.serverSubtitle"),
 			w, h, busy, func() { a.closeAddProject() }, func() {
 				a.addProjectStepper(c, addStageServer)
 				urlChanged, urlSubmitted := false, false
@@ -117,18 +117,32 @@ func (a *app) addProjectServerModal(c *ui.Context, s *addProjectState) {
 					s.clampSelection()
 					s.list.Selected = &s.selected
 					s.list.Key = func(i int) any { return filtered[i].Name }
-					list := ui.List(c, &s.list, len(filtered), func(i int) {
-						a.addProjectRow(c, filtered[i], i == s.selected)
-					}).Height(180)
-					if list.Changed() {
-						if project, ok := s.selectedProject(); ok {
-							s.chooseProject(project)
+					ui.Column(c).Grow(1).MinHeight(60).Background(p.fill).Border(1, p.border).
+						Radius(10).Clip().Children(func() {
+						list := ui.List(c, &s.list, len(filtered), func(i int) {
+							a.addProjectRow(c, filtered[i], i == s.selected)
+						}).Grow(1).MinHeight(40)
+						if list.Changed() {
+							if project, ok := s.selectedProject(); ok {
+								s.chooseProject(project)
+							}
 						}
-					}
+						a.divider(c)
+						ui.Row(c).Shrink(0).Padding(6, 10).AlignItems(ui.Center).Children(func() {
+							ui.Text(c, a.tf("addProject.listCount", "count", fmt.Sprint(len(filtered)))).
+								FontSize(fontMicro).TextColor(p.textThird).SingleLine()
+						})
+					})
 				} else if len(s.allProjects) > 0 {
-					ui.Text(c, a.t("addProject.noMatch")).FontSize(fontCaption).TextColor(p.textThird)
+					ui.Box(c).Grow(1).Center().Children(func() {
+						ui.Text(c, a.t("addProject.noMatch")).FontSize(fontCaption).TextColor(p.textThird)
+					})
 				} else if s.fetchError == "" && !s.fetching {
-					a.addProjectEmptyBox(c, iconServer, a.t("addProject.emptyTitle"), a.t("addProject.emptyHint"))
+					ui.Box(c).Grow(1).Center().Children(func() {
+						a.addProjectEmptyBox(c, iconServer, a.t("addProject.emptyTitle"), a.t("addProject.emptyHint"))
+					})
+				} else {
+					ui.Box(c).Grow(1)
 				}
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					if a.buttonSized(c, a.t("addProject.create"), a.t("addProject.create"), iconPlus,
@@ -224,7 +238,7 @@ func (a *app) addProjectSelectedCard(c *ui.Context, project ProjectInfo) {
 	}
 	ui.Row(c).Gap(10).Padding(12).Shrink(0).Background(bg).Border(1, border).
 		Radius(10).AlignItems(ui.Center).Children(func() {
-		a.iconTile(c, iconServer, tonePrimary, 30)
+		a.plainIcon(c, iconServer, tonePrimary, 22)
 		ui.Column(c).Grow(1).Gap(1).Children(func() {
 			ui.Text(c, project.Name).FontSize(fontBody).FontWeight(600).TextColor(p.text).SingleLine()
 			if project.Title != "" {
@@ -244,7 +258,7 @@ func (a *app) addProjectLocalModal(c *ui.Context, s *addProjectState) {
 		}
 		a.addProjectStage(addStageServer)
 	}, func() {
-		w, h := dialogSize(c, 800, 700)
+		w, h := dialogSize(c, 800, 620)
 		a.dialogShell(c, iconFolderPlus, a.t("addProject.title"), a.t("addProject.localSubtitle"),
 			w, h, s.busy, func() {
 				if !s.busy {
@@ -378,7 +392,7 @@ func (a *app) addProjectRulesModal(c *ui.Context, s *addProjectState) {
 		}
 		a.addProjectStage(addStageLocal)
 	}, func() {
-		w, h := dialogSize(c, 840, 420)
+		w, h := dialogSize(c, 840, 380)
 		a.dialogShellTone(c, iconSettings, toneInfo, a.t("addProject.ignoreTitle"),
 			a.t("addProject.ignoreHint"), w, h, s.busy, func() {
 				if !s.busy {
@@ -462,7 +476,7 @@ func (a *app) addProjectCreateModal(c *ui.Context, s *addProjectState) {
 		}
 		a.addProjectStage(addStageServer)
 	}, func() {
-		w, h := dialogSize(c, 800, 620)
+		w, h := dialogSize(c, 800, 520)
 		a.dialogShell(c, iconCloud, a.t("addProject.createHeading"), a.t("addProject.createSubtitle"),
 			w, h, s.creating, func() {
 				if !s.creating {

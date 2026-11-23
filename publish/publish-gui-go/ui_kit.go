@@ -325,7 +325,9 @@ func (a *app) card(c *ui.Context, build func()) ui.Element {
 	return e
 }
 
-// iconTile is the tinted rounded square that names a section.
+// iconTile is the tinted rounded square inside an interactive row (a sidebar
+// project, a fetched server project). Decorative headers use plainIcon, which
+// never changes under the pointer: only icon buttons answer hover.
 func (a *app) iconTile(c *ui.Context, ic *ui.SVG, t tone, size float32) {
 	p := a.pal(c)
 	bg, fg, _ := toneColors(p, t)
@@ -334,20 +336,27 @@ func (a *app) iconTile(c *ui.Context, ic *ui.SVG, t tone, size float32) {
 	})
 }
 
-// brandTile is the app mark in the toolbar.
-func (a *app) brandTile(c *ui.Context, size float32) {
+// plainIcon is a decorative icon: a colour of its own, no face, and no hover
+// state, so it does not read as a button.
+func (a *app) plainIcon(c *ui.Context, ic *ui.SVG, t tone, size float32) {
 	p := a.pal(c)
-	ui.Box(c).Size(size, size).Radius(size*0.3).
-		Gradient(p.primary, p.pressColor(p.primary), 135).Center().Children(func() {
-		ui.Icon(c, iconCloud).FontSize(size * 0.52).TextColor(p.onPrimary)
-	})
+	fg := p.primary
+	if t != tonePrimary {
+		_, fg, _ = toneColors(p, t)
+	}
+	ui.Icon(c, ic).FontSize(size).TextColor(fg)
 }
 
-// cardHeader is the title row of a card: tinted icon, title, count, actions.
+// brandTile is the app mark in the toolbar.
+func (a *app) brandTile(c *ui.Context, size float32) {
+	a.plainIcon(c, iconCloud, tonePrimary, size*0.94)
+}
+
+// cardHeader is the title row of a card: icon, title, count, actions.
 func (a *app) cardHeader(c *ui.Context, ic *ui.SVG, title string, count int, actions func()) {
 	p := a.pal(c)
 	ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-		a.iconTile(c, ic, tonePrimary, 26)
+		a.plainIcon(c, ic, tonePrimary, 18)
 		ui.Text(c, title).FontSize(fontSection).FontWeight(600).TextColor(p.text).SingleLine()
 		if count >= 0 {
 			a.countTag(c, count, toneNeutral)
@@ -432,10 +441,7 @@ func (a *app) busyRow(c *ui.Context, s string) {
 func (a *app) emptyState(c *ui.Context, ic *ui.SVG, title, hint string, actions func()) {
 	p := a.pal(c)
 	ui.Column(c).Grow(1).Center().Gap(8).Children(func() {
-		bg, fg, _ := toneColors(p, tonePrimary)
-		ui.Box(c).Size(44, 44).Radius(14).Background(bg).Center().Children(func() {
-			ui.Icon(c, ic).FontSize(21).TextColor(fg)
-		})
+		ui.Icon(c, ic).FontSize(34).TextColor(p.textThird)
 		ui.Text(c, title).FontSize(fontSection).FontWeight(600).TextColor(p.textSecond)
 		if hint != "" {
 			ui.Text(c, hint).FontSize(fontCaption).TextColor(p.textThird).MaxWidth(340).Wrap()
@@ -449,22 +455,35 @@ func (a *app) emptyState(c *ui.Context, ic *ui.SVG, title, hint string, actions 
 
 // -------------------------------------------------------------- dialog shell --
 
-// dialogShell is the frame every modal shares: tinted title tile, heading and
-// caption, a scrollable body, and a footer separated by a hairline.
+// dialogShell is the frame every modal shares: heading, a scrollable body and
+// a footer separated by hairlines.
 func (a *app) dialogShell(c *ui.Context, ic *ui.SVG, title, subtitle string,
 	width, height float32, busy bool, onClose func(), body, footer func()) {
-	a.dialogShellTone(c, ic, tonePrimary, title, subtitle, width, height, busy, onClose, body, footer)
+	a.dialogChrome(c, ic, tonePrimary, title, subtitle, width, height, busy, onClose, body, footer, false)
 }
 
 func (a *app) dialogShellTone(c *ui.Context, ic *ui.SVG, t tone, title, subtitle string,
 	width, height float32, busy bool, onClose func(), body, footer func()) {
+	a.dialogChrome(c, ic, t, title, subtitle, width, height, busy, onClose, body, footer, false)
+}
+
+// dialogShellFill is the variant whose body hands its remaining room to the
+// content (a list, a preview), so the page uses the dialog's height instead of
+// leaving a gap above the footer.
+func (a *app) dialogShellFill(c *ui.Context, ic *ui.SVG, title, subtitle string,
+	width, height float32, busy bool, onClose func(), body, footer func()) {
+	a.dialogChrome(c, ic, tonePrimary, title, subtitle, width, height, busy, onClose, body, footer, true)
+}
+
+func (a *app) dialogChrome(c *ui.Context, ic *ui.SVG, t tone, title, subtitle string,
+	width, height float32, busy bool, onClose func(), body, footer func(), fill bool) {
 	p := a.pal(c)
 	ui.Column(c).Role(ui.RoleDialog).Width(width).Height(height).Background(p.card).
 		Border(1, p.borderStrong).Radius(14).Shadow(0, 22, 52, 0, p.shadowStrong).
 		Children(func() {
-			// Title row.
+			// Title row: a decorative icon, the heading and its caption.
 			ui.Row(c).Padding(12, 20).Shrink(0).AlignItems(ui.Center).Gap(10).Children(func() {
-				a.iconTile(c, ic, t, 34)
+				a.plainIcon(c, ic, t, 24)
 				ui.Column(c).Grow(1).Shrink(1).Gap(2).Children(func() {
 					ui.Text(c, title).FontSize(fontTitle).FontWeight(650).TextColor(p.text).SingleLine()
 					if subtitle != "" {
@@ -479,9 +498,13 @@ func (a *app) dialogShellTone(c *ui.Context, ic *ui.SVG, t tone, title, subtitle
 			})
 			a.divider(c)
 			// Body.
-			ui.Scroll(c).Grow(1).MinHeight(0).Shrink(1).KeepScrollbars(true).Children(func() {
-				ui.Column(c).Padding(12, 20).Gap(12).Children(body)
-			})
+			if fill {
+				ui.Column(c).Grow(1).MinHeight(0).Shrink(1).Padding(12, 20).Gap(12).Children(body)
+			} else {
+				ui.Scroll(c).Grow(1).MinHeight(0).Shrink(1).KeepScrollbars(true).Children(func() {
+					ui.Column(c).Padding(12, 20).Gap(12).Children(body)
+				})
+			}
 			a.divider(c)
 			// Footer.
 			ui.Row(c).Padding(10, 16).Shrink(0).Background(p.card).AlignItems(ui.Center).Gap(8).Children(footer)

@@ -61,6 +61,12 @@ type detailState struct {
 	// changesWidth is the changes card's width in the last layout, so its
 	// tables can drop columns when the window is narrow.
 	changesWidth float32
+	// emptyKnown, unstagedEmpty and stagedEmpty remember which half of the
+	// changes card was empty, so the split can give its room to the other half
+	// when that changes without fighting a drag in between.
+	emptyKnown    bool
+	unstagedEmpty bool
+	stagedEmpty   bool
 }
 
 func (a *app) refreshDetail() {

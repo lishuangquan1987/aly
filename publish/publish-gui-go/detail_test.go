@@ -249,3 +249,40 @@ func TestDetailTablesAdaptToPaneWidth(t *testing.T) {
 		}
 	}
 }
+
+// TestDetailSplitCollapsesEmptyHalf checks the adaptive split: when only one
+// half of the changes card has files, it takes the room the empty half would
+// otherwise show blank.
+func TestDetailSplitCollapsesEmptyHalf(t *testing.T) {
+	stagedOnly := detailTestApp()
+	stagedOnly.detail.unstaged = nil
+	ui.NewTester(stagedOnly.view, 1320, 840)
+	if stagedOnly.detail.splitPercent > 30 {
+		t.Fatalf("split = %v with only staged files, want the unstaged half collapsed",
+			stagedOnly.detail.splitPercent)
+	}
+
+	unstagedOnly := detailTestApp()
+	unstagedOnly.detail.staged = nil
+	ui.NewTester(unstagedOnly.view, 1320, 840)
+	if unstagedOnly.detail.splitPercent < 70 {
+		t.Fatalf("split = %v with only unstaged files, want the staged half collapsed",
+			unstagedOnly.detail.splitPercent)
+	}
+}
+
+// TestDetailPanelsFillTheirRoom checks the summary line under a table and the
+// hint that fills what a short file list leaves, so the panes read as full.
+func TestDetailPanelsFillTheirRoom(t *testing.T) {
+	a := detailTestApp()
+	tt := ui.NewTester(a.view, 1320, 840)
+	for _, text := range []string{
+		"1 file \u00b7 2 KB",
+		"Refresh (F5) after a build to pick up new files.",
+		"Files upload in order and can be cancelled at any time.",
+	} {
+		if !tt.HasText(text) {
+			t.Errorf("missing %q; texts=%q", text, tt.Texts())
+		}
+	}
+}
