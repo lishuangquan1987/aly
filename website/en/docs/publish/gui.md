@@ -175,7 +175,7 @@ The publish panel on the right requires three conditions to be met at once:
 |---|---|
 | Version | For example `V1.0.2`; when empty the button is disabled and shows "Enter a version" |
 | Next version | Increments the last numeric segment of the current version by one (`V1.0.2` → `V1.0.3`); disabled when the current version is missing or cannot be parsed |
-| Release notes | Required; the GUI submits them as **one** log entry — for multiple entries use repeated `--message` with the CLI. Long notes scroll inside the input and never squeeze the version history |
+| Release notes | Required; **one entry per line** (blank lines are ignored), equivalent to the CLI's repeated `--message`. Long notes scroll inside the input and never squeeze the version history |
 | Advanced | The post-update script (relative to the application directory) and the force-update checkbox (checked = on, unchecked = off; written explicitly to the server on publish) |
 | Publish button | The label follows the staged count ("Publish 3 files"); with nothing staged it prompts "Stage at least one file on the left first" |
 

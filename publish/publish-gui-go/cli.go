@@ -270,19 +270,25 @@ func (c *cliClient) configSetArray(ctx context.Context, projectPath, key string,
 	return c.checked(ctx, projectPath, []string{"config", "set-array", key, flag, item})
 }
 
-// push runs `push --json` and streams each JSON line to onLine. It returns
-// context.Canceled / context.DeadlineExceeded, or the CLI's error otherwise.
-func (c *cliClient) push(
-	ctx context.Context,
-	projectPath, version, message, afterApply string,
-	force *bool,
-	onLine func(string),
-) error {
-	if !c.available() {
-		return errCLIMissing
+// pushArgs assembles the push command line: one --message per non-empty
+// entry, so a multi-line release note becomes multiple changelog entries
+// (the CLI's --message is repeatable). force mirrors the tri-state: set,
+// clear, or leave the server value untouched.
+func pushArgs(version string, messages []string, afterApply string, force *bool) []string {
+	args := []string{"--json", "push", "--version", version}
+	for _, message := range messages {
+		message = strings.TrimSpace(message)
+		if message == "" {
+			continue
+		}
+		args = append(args, "--message", message)
 	}
-	args := []string{"--json", "push", "--version", version, "--message", message}
-	log.Printf("aly-publish push %s (%s)", version, projectPath)
+	if len(args) == 4 { // no usable message: keep one empty --message so the
+		args = append(args, "--message", "") // CLI's required check explains it
+	}
+	if strings.TrimSpace(afterApply) != "" {
+		args = append(args, "--after-apply-update-script", afterApply)
+	}
 	if force != nil {
 		if *force {
 			args = append(args, "--set-force-update")
@@ -290,9 +296,22 @@ func (c *cliClient) push(
 			args = append(args, "--clear-force-update")
 		}
 	}
-	if strings.TrimSpace(afterApply) != "" {
-		args = append(args, "--after-apply-update-script", afterApply)
+	return args
+}
+
+// push runs `push --json` and streams each JSON line to onLine. It returns
+// context.Canceled / context.DeadlineExceeded, or the CLI's error otherwise.
+func (c *cliClient) push(
+	ctx context.Context,
+	projectPath, version string, messages []string, afterApply string,
+	force *bool,
+	onLine func(string),
+) error {
+	if !c.available() {
+		return errCLIMissing
 	}
+	args := pushArgs(version, messages, afterApply, force)
+	log.Printf("aly-publish push %s (%s)", version, projectPath)
 	cmd := exec.CommandContext(ctx, c.exe, args...)
 	hideConsole(cmd)
 	cmd.Dir = projectPath

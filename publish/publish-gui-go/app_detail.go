@@ -317,6 +317,13 @@ func (a *app) publish() {
 
 	path := d.project.ProjectPath
 	script := strings.TrimSpace(d.script)
+	// 每行一条变更记录：多行说明拆成多条 --message（与 CLI 语义一致）。
+	var messages []string
+	for _, line := range strings.Split(strings.ReplaceAll(d.notes, "\r\n", "\n"), "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			messages = append(messages, trimmed)
+		}
+	}
 	var force *bool
 	if d.forceKnown {
 		value := d.forceUpdate
@@ -327,7 +334,7 @@ func (a *app) publish() {
 	go func() {
 		failure := ""
 		sawResult := false
-		err := cli.push(ctx, path, version, notes, script, force, func(line string) {
+		err := cli.push(ctx, path, version, messages, script, force, func(line string) {
 			ev := parsePushLine(line)
 			switch ev.Kind {
 			case pushFailure:
