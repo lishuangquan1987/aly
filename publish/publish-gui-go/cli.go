@@ -56,6 +56,7 @@ type UploadProgress struct {
 }
 
 type ProjectInfo struct {
+	ID          int    `json:"id"`
 	Name        string `json:"name"`
 	Title       string `json:"title"`
 	Version     string `json:"version"`

@@ -53,11 +53,14 @@ func TestViewRendersInLightAndDark(t *testing.T) {
 
 func TestViewRendersAtMinimumSize(t *testing.T) {
 	a := testApp()
-	tt := ui.NewTester(a.view, 1280, 720)
+	tt := ui.NewTester(a.view, 1080, 640)
 	for _, text := range []string{"Projects", "Unstaged", "Publish"} {
 		if !tt.HasText(text) {
 			t.Errorf("missing %q at minimum size", text)
 		}
+	}
+	if img := tt.Image(); img == nil {
+		t.Error("no rendered image at minimum size")
 	}
 }
 
@@ -118,14 +121,14 @@ func TestAddProjectModalRenders(t *testing.T) {
 		serverURL:   "http://127.0.0.1:2000",
 		projectName: "demo",
 		title:       "Demo",
-		path:        `C:\demo`,
 		displayName: "demo",
-		projects: []ProjectInfo{
-			{Name: "demo", Title: "Demo"},
+		allProjects: []ProjectInfo{
+			{ID: 1, Name: "demo", Title: "Demo"},
 		},
+		selected: 0,
 	}
-	tt := ui.NewTester(a.view, 1440, 900)
-	for _, text := range []string{"Add server project", "Server URL", "Create project", "Initialize and add", "demo"} {
+	tt := ui.NewTester(a.view, 1320, 840)
+	for _, text := range []string{"Add server project", "Server URL", "Create project", "Fetch projects", "demo"} {
 		if !tt.HasText(text) {
 			t.Errorf("missing %q; texts=%q", text, tt.Texts())
 		}
@@ -164,15 +167,15 @@ func TestAddProjectIgnoreModalRenders(t *testing.T) {
 	a := testApp()
 	a.addOpen = true
 	a.adding = &addProjectState{
+		stage:         addStageRules,
 		serverURL:     "http://127.0.0.1:2000",
 		projectName:   "demo",
 		path:          `C:\demo`,
-		advancedOpen:  true,
 		ignoreFolders: []string{"Log", "Config"},
 		ignoreFiles:   []string{"a.log"},
 		uncopyFolders: []string{"TestData"},
 	}
-	tt := ui.NewTester(a.view, 1440, 900)
+	tt := ui.NewTester(a.view, 1320, 840)
 	for _, text := range []string{"Ignore rules", "Ignored folders", "Folders not to copy", "Back"} {
 		if !tt.HasText(text) {
 			t.Errorf("missing %q; texts=%q", text, tt.Texts())
@@ -225,6 +228,65 @@ func TestThemeCycle(t *testing.T) {
 	}
 	if normalizeTheme("bogus") != "system" {
 		t.Fatal("invalid theme should normalize to system")
+	}
+}
+
+// TestSidebarClearSearch covers the no-match empty state's call to action:
+// clicking it drops the filter and the project comes back, as the C# view's
+// ClearProjectFilterCommand does.
+func TestSidebarClearSearch(t *testing.T) {
+	a := testApp()
+	a.cli = &cliClient{} // unavailable, so the refresh path starts no goroutine
+	a.filter = "zzz"
+	tt := ui.NewTester(a.view, 1320, 840)
+	for _, text := range []string{"No matching projects", "Clear search"} {
+		if !tt.HasText(text) {
+			t.Fatalf("missing %q; texts=%q", text, tt.Texts())
+		}
+	}
+	if err := tt.Click("Clear search"); err != nil {
+		t.Fatalf("clicking Clear search failed: %v", err)
+	}
+	if a.filter != "" {
+		t.Fatalf("filter = %q after Clear search, want empty", a.filter)
+	}
+	if !tt.HasText("demo") {
+		t.Fatalf("the project did not come back; texts=%q", tt.Texts())
+	}
+}
+
+// TestEmptyProjectListShowsActions checks the C# empty state's two calls to
+// action: initialize a server project or add an initialized local one.
+func TestEmptyProjectListShowsActions(t *testing.T) {
+	a := testApp()
+	a.projects = nil
+	a.detail = nil
+	a.selected = -1
+	tt := ui.NewTester(a.view, 1320, 840)
+	for _, text := range []string{"No projects yet", "Add server project", "Add local project"} {
+		if !tt.HasText(text) {
+			t.Errorf("missing %q; texts=%q", text, tt.Texts())
+		}
+	}
+}
+
+// TestWindowBusyCaption checks the window-level busy hint: the status bar shows
+// a spinner and the label while a background operation runs, and neither after
+// it finishes.
+func TestWindowBusyCaption(t *testing.T) {
+	a := testApp()
+	a.beginBusy("Updating the updater package…")
+	tt := ui.NewTester(a.view, 1320, 840)
+	if !tt.HasText("Updating the updater package…") {
+		t.Fatalf("the busy caption is not shown; texts=%q", tt.Texts())
+	}
+	a.endBusy()
+	tt.Frame()
+	if tt.HasText("Updating the updater package…") {
+		t.Fatalf("the busy caption stayed after endBusy; texts=%q", tt.Texts())
+	}
+	if !tt.HasText("Ready") {
+		t.Errorf("the status message did not come back; texts=%q", tt.Texts())
 	}
 }
 

@@ -32,7 +32,7 @@ type payloadManifest struct {
 // host-based fallback in cliRIDs / updaterRIDsFor still resolves the binaries.
 func loadPayloadManifest(baseDir string) payloadManifest {
 	path := filepath.Join(baseDir, payloadManifestName)
-	raw, err := os.ReadFile(path)
+	raw, err := readConfigFile(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Printf("读取 %s 失败: %v", path, err)

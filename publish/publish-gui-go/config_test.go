@@ -123,3 +123,52 @@ func TestSettingsRoundTrip(t *testing.T) {
 		t.Fatalf("appearance=%+v want=%+v", got, appearance)
 	}
 }
+
+// TestConfigLoadToleratesBOM covers files an editor saved with a UTF-8 byte
+// order mark: the C# GUI reads them with File.ReadAllText, which strips the
+// mark, so the Go GUI must strip it too instead of reading an empty config.
+func TestConfigLoadToleratesBOM(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALYPUBLISH_CONFIG_DIR", dir)
+	bom := []byte{0xEF, 0xBB, 0xBF}
+
+	projects := append(append([]byte{}, bom...),
+		[]byte("[{\"DisplayName\":\"demo\",\"ProjectPath\":\"C:\\\\demo\"}]")...)
+	if err := os.WriteFile(configPath(), projects, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadProjects(); len(got) != 1 || got[0].DisplayName != "demo" {
+		t.Fatalf("projects with a BOM = %+v", got)
+	}
+
+	settings := append(append([]byte{}, bom...), []byte("{\"language\":\"en-US\"}")...)
+	if err := os.WriteFile(settingsPath(), settings, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadSettings(); got.Language != "en-US" {
+		t.Fatalf("settings with a BOM = %+v", got)
+	}
+
+	project := t.TempDir()
+	updator := filepath.Join(project, ".updator")
+	if err := os.MkdirAll(updator, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shared := append(append([]byte{}, bom...),
+		[]byte("{\"server_url\":\"http://server:2000\",\"project_name\":\"demo\"}")...)
+	if err := os.WriteFile(filepath.Join(updator, "shared.json"), shared, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := loadShared(project); err != nil || got.ServerURL != "http://server:2000" {
+		t.Fatalf("shared.json with a BOM = %+v, %v", got, err)
+	}
+
+	manifest := append(append([]byte{}, bom...),
+		[]byte("{\"cli_rid\":\"windows-amd64\",\"client_rid\":\"windows-x86\"}")...)
+	if err := os.WriteFile(filepath.Join(dir, "payload.json"), manifest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadPayloadManifest(dir); got.CliRid != "windows-amd64" {
+		t.Fatalf("payload.json with a BOM = %+v", got)
+	}
+}

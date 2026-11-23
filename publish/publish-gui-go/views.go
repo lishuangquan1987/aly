@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -39,19 +38,33 @@ func (a *app) textButton(c *ui.Context, label string, ic *ui.SVG, disabled bool)
 	return b.Clicked()
 }
 
-// formModal draws a form dialog over the window. The backdrop consumes
-// pointer input (so clicking beside the form does nothing) while Escape still
-// closes it; ui.Modal cannot separate those two dismiss sources.
+// formModal draws a form dialog over the window. The backdrop keeps the
+// pointer above the window, so a press beside the form goes nowhere, while
+// Escape still closes it.
+//
+// Never give the backdrop HandleInput: MyGo routes a press to the innermost
+// element that handles input (ui/handler.go, engine.pointerDown), so a
+// handler on this ancestor would take every press before the dialog's own
+// buttons could, leaving the dialog's controls unclickable.
 func (a *app) formModal(c *ui.Context, open *bool, build func()) {
+	a.formModalEsc(c, open, nil, build)
+}
+
+// formModalEsc is formModal with a say in what Escape does: onEscape nil
+// closes the dialog, and a wizard's sub-page sets it to go back one step.
+func (a *app) formModalEsc(c *ui.Context, open *bool, onEscape func(), build func()) {
 	if !*open {
 		return
 	}
 	ui.Overlay(c, func() {
 		backdrop := ui.Box(c).Absolute().Left(0).Top(0).Right(0).Bottom(0).Center().
-			Background(ui.RGBA(0, 0, 0, 0.4)).Modal().
-			HandleInput(func(ui.InputEvent) bool { return true })
+			Background(ui.RGBA(0, 0, 0, 0.4)).Modal()
 		if backdrop.OverlayShortcut(0, ui.KeyEscape) {
-			*open = false
+			if onEscape != nil {
+				onEscape()
+			} else {
+				*open = false
+			}
 			return
 		}
 		backdrop.Children(build)
@@ -94,15 +107,6 @@ func (a *app) countPill(c *ui.Context, n int) {
 	ui.Badge(c, fmt.Sprint(n))
 }
 
-func (a *app) sectionHeader(c *ui.Context, ic *ui.SVG, title string, count int) {
-	t := c.Theme()
-	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Icon(c, ic).FontSize(15).TextColor(t.TextMuted)
-		ui.Text(c, title).FontSize(13).Bold()
-		a.countPill(c, count)
-	})
-}
-
 func (a *app) fieldLabel(c *ui.Context, text string) {
 	t := c.Theme()
 	ui.Text(c, text).FontSize(10).Bold().TextColor(t.TextMuted)
@@ -114,10 +118,13 @@ func (a *app) statusDot(c *ui.Context, col ui.Color) {
 
 func (a *app) versionPill(c *ui.Context, version string) {
 	t := c.Theme()
+	// The pill sets its own text colors: a selected list row tints the text
+	// of its children, which would make this pill's label vanish on its own
+	// background.
 	ui.Row(c).Gap(4).Padding(8, 3).Background(t.Background).Border(1, t.Border).
-		Radius(999).AlignItems(ui.Center).Children(func() {
+		Radius(999).AlignItems(ui.Center).TextColor(t.Text).Children(func() {
 		ui.Icon(c, iconTag).FontSize(11).TextColor(t.TextMuted)
-		ui.Text(c, version).FontSize(11).Bold()
+		ui.Text(c, version).FontSize(11).Bold().TextColor(t.Text)
 	})
 }
 
@@ -132,11 +139,86 @@ func (a *app) emptyState(c *ui.Context, ic *ui.SVG, title, hint string) {
 	})
 }
 
+// emptyStateActions is emptyState with a row of calls to action under it.
+func (a *app) emptyStateActions(c *ui.Context, ic *ui.SVG, title, hint string, actions func()) {
+	t := c.Theme()
+	ui.Column(c).Grow(1).Center().Gap(10).Children(func() {
+		ui.Icon(c, ic).FontSize(30).TextColor(t.TextMuted)
+		ui.Text(c, title).FontSize(13).TextColor(t.TextMuted)
+		if hint != "" {
+			ui.Text(c, hint).FontSize(11).TextColor(t.TextMuted).MaxWidth(340).Wrap()
+		}
+		actions()
+	})
+}
+
+// dialogSize clamps a dialog's wanted size to the window, so a form still
+// fits a small window and its content scrolls instead of overflowing.
+func dialogSize(c *ui.Context, wantW, wantH float32) (w, h float32) {
+	winW, winH := c.Size()
+	return max(min(wantW, winW-48), 360), max(min(wantH, winH-48), 260)
+}
+
+// busyRow shows work of unknown length: a spinner and what it is.
+func (a *app) busyRow(c *ui.Context, text string) {
+	t := c.Theme()
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Spinner(c).Label(text)
+		ui.Text(c, text).FontSize(11).TextColor(t.TextMuted).SingleLine()
+	})
+}
+
+// stepBadge numbers a wizard step; active marks the step the user is on.
+func (a *app) stepBadge(c *ui.Context, n int, active bool) {
+	t := c.Theme()
+	background, border, text := t.Background, t.Border, t.TextMuted
+	if active {
+		background, border, text = t.Accent, t.Accent, t.AccentText
+	}
+	ui.Box(c).Size(24, 24).Radius(12).Background(background).Border(1, border).Center().Children(func() {
+		ui.Text(c, fmt.Sprint(n)).FontSize(11).Bold().TextColor(text)
+	})
+}
+
+// suggestionChips offers one-click values for a rule list, as the C# dialogs do.
+func (a *app) suggestionChips(c *ui.Context, values []string, pick func(string)) {
+	t := c.Theme()
+	ui.Row(c).Wrap().Gap(4).Children(func() {
+		for _, value := range values {
+			value := value
+			b := ui.ButtonBase(c).Label(value).Tooltip(value).Height(20).Padding(6, 0).
+				Border(1, t.Border).Radius(4)
+			b.Children(func() {
+				ui.Text(c, value).FontSize(10).TextColor(t.TextMuted).SingleLine()
+			})
+			if b.Clicked() {
+				pick(value)
+			}
+		}
+	})
+}
+
+// noticeBox shows a hint, a warning or an error under a dialog's header.
+func (a *app) noticeBox(c *ui.Context, ic *ui.SVG, text string, col ui.Color, wrap bool) {
+	t := c.Theme()
+	ui.Row(c).Gap(6).Padding(10, 8).Background(t.Surface).Border(1, col).Radius(6).
+		AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, ic).FontSize(13).TextColor(col)
+		label := ui.Text(c, text).FontSize(11).TextColor(col)
+		if wrap {
+			label.Grow(1).Wrap()
+		}
+	})
+}
+
 func (a *app) view(c *ui.Context) {
 	a.applyAccent(c)
 	t := c.Theme()
 	ui.Column(c).Fill().Background(t.Background).Children(func() {
 		a.toolbar(c)
+		if a.busyText != "" {
+			ui.Progress(c, -1).Height(2).Shrink(0)
+		}
 		if !a.cli.available() {
 			a.cliBanner(c)
 		}
@@ -156,14 +238,20 @@ func (a *app) view(c *ui.Context) {
 			a.localPreviewModal(c)
 		}
 		if a.removeOpen {
-			switch ui.AlertDialog(c, &a.removeOpen,
-				a.t("remove.title"),
-				a.t("remove.message"),
-				a.t("common.cancel"),
-				a.t("common.remove"),
-			) {
-			case 1:
-				a.removeSelected()
+			if a.detail == nil {
+				// The dialog has no project to name; drop it instead of
+				// showing a message with an empty name.
+				a.removeOpen = false
+			} else {
+				switch ui.AlertDialog(c, &a.removeOpen,
+					a.t("remove.title"),
+					a.tf("remove.message", "name", a.detail.project.DisplayName),
+					a.t("common.cancel"),
+					a.t("common.remove"),
+				) {
+				case 1:
+					a.removeSelected()
+				}
 			}
 		}
 		if a.clearOpen {
@@ -212,11 +300,11 @@ func (a *app) toolbar(c *ui.Context) {
 	detailBusy := a.detail != nil && (a.detail.busy || a.detail.uploading)
 	ui.Row(c).Height(56).Shrink(0).Gap(8).Padding(14, 10).Background(t.Surface).
 		BorderWidth(0, 0, 1, 0).BorderColor(t.Border).AlignItems(ui.Center).Children(func() {
-		if a.actionButton(c, a.t("toolbar.addLocal"), iconFolderPlus, true, false) {
-			a.addLocalProject()
-		}
-		if a.actionButton(c, a.t("toolbar.addServer"), iconCloud, false, false) {
+		if a.actionButton(c, a.t("toolbar.addServer"), iconCloud, true, false) {
 			a.openAddProject()
+		}
+		if a.actionButton(c, a.t("toolbar.addLocal"), iconFolderPlus, false, false) {
+			a.addLocalProject()
 		}
 		a.toolbarSeparator(c)
 		if a.actionButton(c, a.t("toolbar.edit"), iconSettings, false, a.detail == nil) {
@@ -293,9 +381,7 @@ func (a *app) accentPanel(c *ui.Context) {
 				if sw.Clicked() {
 					a.accent = opt.ID
 					a.savePrefs()
-					if a.win != nil {
-						a.win.Update(func() {})
-					}
+					a.post(func() {})
 				}
 			}
 		})
@@ -305,15 +391,18 @@ func (a *app) accentPanel(c *ui.Context) {
 func (a *app) cliBanner(c *ui.Context) {
 	t := c.Theme()
 	ui.Row(c).Gap(8).Padding(14, 8).Shrink(0).Background(t.Surface).
-		BorderWidth(0, 0, 1, 0).BorderColor(t.Danger).AlignItems(ui.Center).Children(func() {
-		ui.Icon(c, iconWarning).FontSize(15).TextColor(t.Danger)
-		ui.Text(c, a.t("cli.banner")).FontSize(11).TextColor(t.Danger).Grow(1).Wrap()
+		BorderWidth(0, 0, 1, 0).BorderColor(t.Warning).AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, iconWarning).FontSize(15).TextColor(t.Warning)
+		ui.Text(c, a.t("cli.banner")).FontSize(11).TextColor(t.Warning).Grow(1).Wrap()
 		if a.actionButton(c, a.t("toolbar.retry"), iconRefresh, false, false) {
 			a.cli = &cliClient{exe: findCLI()}
 			if a.cli.available() {
 				a.status = a.tf("cli.found", "path", a.cli.exe)
 				a.refreshDetail()
 			}
+		}
+		if a.actionButton(c, a.t("cli.openFolder"), iconFolder, false, false) {
+			a.openCLIFolder()
 		}
 	})
 }
@@ -326,6 +415,12 @@ func (a *app) sidebar(c *ui.Context) {
 	}
 	if a.selected < 0 && len(list) > 0 {
 		a.selected = 0
+	}
+	if len(list) == 0 && a.detail != nil {
+		// A filter with no matches clears the selection, as the C# view's
+		// ApplyProjectFilter leaves no SelectedTab. The tab state stays
+		// cached in a.details for when a project matches again.
+		a.detail = nil
 	}
 	a.list.Selected = &a.selected
 	ui.Column(c).Width(300).Shrink(0).FillHeight().Gap(10).Padding(14).
@@ -341,9 +436,26 @@ func (a *app) sidebar(c *ui.Context) {
 		}
 		switch {
 		case len(a.projects) > 0 && len(list) == 0 && strings.TrimSpace(a.filter) != "":
-			a.emptyState(c, iconInbox, a.t("projects.noMatch"), "")
+			a.emptyStateActions(c, iconInbox, a.t("projects.noMatch"), "", func() {
+				ui.Row(c).Wrap().Gap(6).Justify(ui.Center).Children(func() {
+					if a.actionButton(c, a.t("projects.clearSearch"), iconX, false, false) {
+						a.filter = ""
+						a.selected = 0
+						a.openSelected()
+					}
+				})
+			})
 		case len(list) == 0:
-			a.emptyState(c, iconFolderPlus, a.t("projects.emptyTitle"), a.t("projects.emptyHint"))
+			a.emptyStateActions(c, iconFolderPlus, a.t("projects.emptyTitle"), a.t("projects.emptyHint"), func() {
+				ui.Row(c).Wrap().Gap(6).Justify(ui.Center).Children(func() {
+					if a.actionButton(c, a.t("toolbar.addServer"), iconCloud, true, false) {
+						a.openAddProject()
+					}
+					if a.actionButton(c, a.t("toolbar.addLocal"), iconFolderPlus, false, false) {
+						a.addLocalProject()
+					}
+				})
+			})
 		default:
 			if ui.List(c, &a.list, len(list), func(i int) {
 				p := list[i]
@@ -377,263 +489,6 @@ func (a *app) content(c *ui.Context) {
 	a.detailView(c, a.detail)
 }
 
-func (a *app) detailView(c *ui.Context, d *detailState) {
-	t := c.Theme()
-	ui.Column(c).Grow(1).FillHeight().Gap(12).Padding(16).Children(func() {
-		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, iconFolderOpen).FontSize(20).TextColor(t.Accent)
-			ui.Column(c).Grow(1).Gap(2).Children(func() {
-				ui.Text(c, d.project.DisplayName).FontSize(17).Bold().SingleLine()
-				ui.Text(c, d.project.ProjectPath).FontSize(10).TextColor(t.TextMuted).
-					SingleLine().Tooltip(d.project.ProjectPath)
-			})
-			if d.currentVersion != "" {
-				a.versionPill(c, d.currentVersion)
-			} else {
-				ui.Text(c, a.t("history.none")).FontSize(11).TextColor(t.TextMuted)
-			}
-			ui.Box(c).Width(1).Height(18).Background(t.Border).Margin(2, 0)
-			if a.ghostIconButton(c, a.t("actions.folder"), iconFolder, false) {
-				a.openProjectFolder()
-			}
-			if a.ghostIconButton(c, a.t("actions.launch"), iconPlay, false) {
-				a.launchMain()
-			}
-		})
-		if d.busy {
-			ui.Progress(c, -1).Width(160)
-		}
-		ui.Row(c).Grow(1).Gap(14).Children(func() {
-			ui.Column(c).Grow(1).FillHeight().Children(func() {
-				a.changesView(c, d)
-			})
-			ui.Column(c).Width(420).Shrink(0).FillHeight().Gap(10).Children(func() {
-				a.publishView(c, d)
-				a.historyView(c, d)
-			})
-		})
-	})
-}
-
-func (a *app) changesView(c *ui.Context, d *detailState) {
-	t := c.Theme()
-	ui.Column(c).Grow(1).FillHeight().Background(t.Surface).Border(1, t.Border).
-		Radius(10).Shadow(0, 1, 3, 0, cardShadow).Children(func() {
-		ui.SplitVerticalPercent(c, &d.splitPercent,
-			func() { a.filesPanel(c, d, false) },
-			func() { a.filesPanel(c, d, true) },
-		).Grow(1)
-	})
-}
-
-func (a *app) filesPanel(c *ui.Context, d *detailState, staged bool) {
-	t := c.Theme()
-	files := d.unstaged
-	title := a.t("changes.unstaged")
-	empty := a.t("changes.emptyUnstaged")
-	icon := iconFile
-	if staged {
-		files = d.staged
-		title = a.t("changes.staged")
-		empty = a.t("changes.emptyStaged")
-		icon = iconCheckSquare
-	}
-	disabled := d.busy || d.uploading || len(files) == 0
-	hasSelected := len(selectedFiles(files)) > 0
-	ui.Column(c).Grow(1).FillHeight().Gap(8).Padding(12).Children(func() {
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			a.sectionHeader(c, icon, title, len(files))
-			ui.Box(c).Grow(1)
-			label := a.t("changes.selectAll")
-			if allSelected(files) {
-				label = a.t("changes.unselectAll")
-			}
-			if a.actionButton(c, label, iconCheckSquare, false, disabled) {
-				selectAll := !allSelected(files)
-				for i := range files {
-					files[i].Selected = selectAll
-				}
-				if staged {
-					d.staged = files
-				} else {
-					d.unstaged = files
-				}
-			}
-			if staged {
-				if a.actionButton(c, a.t("changes.unstage"), iconMinusCircle, false, d.busy || d.uploading || !hasSelected) {
-					a.stageSelected(false)
-				}
-				if a.actionButton(c, a.t("changes.clear"), iconTrash, false, d.busy || d.uploading || len(files) == 0) {
-					a.clearOpen = true
-				}
-			} else {
-				if a.actionButton(c, a.t("changes.stageSelected"), iconCheck, false, d.busy || d.uploading || !hasSelected) {
-					a.stageSelected(true)
-				}
-				if a.actionButton(c, a.t("changes.stageAll"), iconPlusCircle, true, d.busy || d.uploading || len(files) == 0) {
-					a.stageAll(true)
-				}
-			}
-		})
-		if len(files) == 0 {
-			a.emptyState(c, iconInbox, empty, a.t("changes.emptyHint"))
-			return
-		}
-		cols := []ui.TableColumn{
-			{Title: a.t("table.select"), Width: 84},
-			{Title: a.t("table.file"), Width: 0},
-			{Title: a.t("table.status"), Width: 92},
-			{Title: a.t("table.local"), Width: 84, Align: ui.End},
-			{Title: a.t("table.server"), Width: 84, Align: ui.End},
-			{Title: "", Width: 56},
-		}
-		ui.Table(c, nil, cols, len(files), func(row, col int) {
-			f := &files[row]
-			switch col {
-			case 0:
-				ui.Checkbox(c, &f.Selected, "").Label(a.t("table.select"))
-			case 1:
-				ui.Text(c, f.RelativePath).FontSize(12).SingleLine().Tooltip(f.RelativePath)
-			case 2:
-				ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
-					a.statusDot(c, statusColor(t, f.Status))
-					ui.Text(c, statusDisplay(f.Status, a.lang)).FontSize(11).
-						TextColor(statusColor(t, f.Status))
-				})
-			case 3:
-				ui.Text(c, formatSize(f.LocalSize)).FontSize(11).TextColor(t.TextMuted)
-			case 4:
-				ui.Text(c, formatSize(f.ServerSize)).FontSize(11).TextColor(t.TextMuted)
-			case 5:
-				if a.ghostIconButton(c, a.t("table.open"), iconExternal, false) {
-					a.openFileLocation(*f)
-				}
-			}
-		}).Grow(1)
-	})
-}
-
-func (a *app) publishView(c *ui.Context, d *detailState) {
-	t := c.Theme()
-	canPublish := !d.busy && !d.uploading && len(d.staged) > 0 &&
-		strings.TrimSpace(d.newVersion) != "" && strings.TrimSpace(d.notes) != ""
-	ui.Column(c).Gap(10).Padding(14).Background(t.Surface).
-		Border(1, t.Border).Radius(10).Shadow(0, 1, 3, 0, cardShadow).Children(func() {
-		a.sectionHeader(c, iconUpload, a.t("publish.title"), len(d.staged))
-		a.fieldLabel(c, a.t("publish.version"))
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.TextInput(c, &d.newVersion).Placeholder(a.t("publish.versionHint")).Grow(1)
-			nextVersion := suggestVersion(d.currentVersion)
-			if a.ghostIconButton(c, a.t("publish.nextVersion"), iconPlus, d.busy || nextVersion == "") {
-				d.newVersion = nextVersion
-			}
-		})
-		a.fieldLabel(c, a.t("publish.notes"))
-		ui.TextArea(c, &d.notes).Placeholder(a.t("publish.notesHint")).MinHeight(80)
-		ui.Collapsible(c, a.t("publish.advanced"), &d.advancedOpen, func() {
-			ui.Column(c).Gap(8).Children(func() {
-				a.fieldLabel(c, a.t("publish.script"))
-				ui.TextInput(c, &d.script).Placeholder(a.t("publish.scriptHint"))
-				ui.Checkbox(c, &d.forceUpdate, a.t("publish.force"))
-			})
-		})
-		pub := ui.PrimaryButton(c, "").Label(a.t("publish.publish")).Tooltip(a.t("publish.publish")).
-			Disabled(!canPublish).Height(36).FillWidth()
-		pub.Children(func() {
-			ui.Icon(c, iconUpload).FontSize(15)
-			ui.Text(c, a.t("publish.publish")).FontSize(12).SingleLine()
-		})
-		if pub.Clicked() {
-			a.publish()
-		}
-		hint := ""
-		switch {
-		case len(d.staged) == 0:
-			hint = a.t("publish.stageFirst")
-		case strings.TrimSpace(d.newVersion) == "":
-			hint = a.t("publish.needVersion")
-		case strings.TrimSpace(d.notes) == "":
-			hint = a.t("publish.needNotes")
-		}
-		if hint != "" {
-			ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, iconInfo).FontSize(12).TextColor(t.Warning)
-				ui.Text(c, hint).FontSize(11).TextColor(t.Warning).Wrap()
-			})
-		}
-		if d.uploading || len(d.uploadItems) > 0 {
-			ui.Box(c).Height(1).Background(t.Border)
-		}
-		if d.uploading || len(d.uploadItems) > 0 {
-			ui.Text(c, d.uploadText).FontSize(11).TextColor(t.TextMuted).SingleLine()
-			progress := -1.0
-			if d.uploadTotal > 0 {
-				progress = float64(d.uploadDone+d.uploadFailed) / float64(d.uploadTotal)
-			}
-			ui.Progress(c, progress)
-			if d.uploadSummary != "" {
-				ui.Text(c, d.uploadSummary).FontSize(11).TextColor(t.TextMuted)
-			}
-			uploadCols := []ui.TableColumn{
-				{Title: a.t("table.file"), Width: 0},
-				{Title: a.t("table.local"), Width: 70, Align: ui.End},
-				{Title: a.t("table.status"), Width: 112},
-			}
-			items := d.uploadItems
-			ui.Table(c, nil, uploadCols, len(items), func(row, col int) {
-				item := items[row]
-				switch col {
-				case 0:
-					ui.Text(c, item.File).FontSize(11).SingleLine().Tooltip(item.File)
-				case 1:
-					ui.Text(c, formatSize(item.FileSize)).FontSize(11).TextColor(t.TextMuted)
-				case 2:
-					ui.Text(c, uploadStatusText(item, a.lang)).FontSize(11).
-						TextColor(uploadStatusColor(t, item.Status))
-				}
-			}).MaxHeight(150)
-			if d.uploading {
-				if a.actionButton(c, a.t("publish.cancel"), iconX, false, false) {
-					a.cancelPublish()
-				}
-			}
-		}
-	})
-}
-
-func (a *app) historyView(c *ui.Context, d *detailState) {
-	t := c.Theme()
-	ui.Column(c).Grow(1).FillHeight().Gap(8).Padding(12).Background(t.Surface).
-		Border(1, t.Border).Radius(10).Shadow(0, 1, 3, 0, cardShadow).Children(func() {
-		a.sectionHeader(c, iconHistory, a.t("history.title"), len(d.logs))
-		if len(d.logs) == 0 {
-			a.emptyState(c, iconHistory, a.t("history.empty"), "")
-			return
-		}
-		cols := []ui.TableColumn{
-			{Title: a.t("history.version"), Width: 82},
-			{Title: a.t("history.time"), Width: 126},
-			{Title: a.t("history.notes"), Width: 0},
-		}
-		logs := d.logs
-		ui.Table(c, nil, cols, len(logs), func(row, col int) {
-			log := logs[row]
-			switch col {
-			case 0:
-				ui.Text(c, log.Version).FontSize(11).Bold()
-			case 1:
-				ui.Text(c, log.Time).FontSize(10).TextColor(t.TextMuted)
-			case 2:
-				ui.Column(c).Gap(2).Children(func() {
-					for _, line := range log.Logs {
-						ui.Text(c, line).FontSize(11).TextColor(t.TextMuted).Wrap()
-					}
-				})
-			}
-		}).Grow(1)
-	})
-}
-
 func (a *app) statusBar(c *ui.Context) {
 	t := c.Theme()
 	status := a.status
@@ -644,246 +499,61 @@ func (a *app) statusBar(c *ui.Context) {
 	if !a.cli.available() {
 		col = t.Danger
 	}
-	ui.Row(c).Height(40).Shrink(0).Padding(14, 0).Background(t.Surface).
+	ui.Row(c).Height(40).Shrink(0).Gap(6).Padding(14, 0).Background(t.Surface).
 		BorderWidth(1, 0, 0, 0).BorderColor(t.Border).AlignItems(ui.Center).Children(func() {
-		a.statusDot(c, col)
-		ui.Text(c, status).FontSize(11).TextColor(t.TextMuted).SingleLine().Grow(1)
+		if a.busyText != "" {
+			ui.Spinner(c).Label(a.busyText)
+			ui.Text(c, a.busyText).FontSize(11).TextColor(t.TextMuted).SingleLine().Grow(1)
+		} else {
+			a.statusDot(c, col)
+			ui.Text(c, status).FontSize(11).TextColor(t.TextMuted).SingleLine().Grow(1)
+		}
 		if a.detail != nil {
-			ui.Text(c, a.detail.project.ProjectPath).FontSize(10).TextColor(t.TextMuted).SingleLine().
-				MaxWidth(460).Tooltip(a.detail.project.ProjectPath)
+			ui.Text(c, a.detail.project.ProjectPath).FontSize(10).TextColor(t.TextMuted).
+				SingleLine().Selectable().MaxWidth(420).Tooltip(a.detail.project.ProjectPath)
+		}
+		if a.ghostIconButton(c, a.t("status.logs"), iconFileText, false) {
+			a.openLogFolder()
 		}
 	})
 }
 
-func (a *app) addProjectModal(c *ui.Context) {
-	s := a.adding
-	if s == nil {
-		return
-	}
-	if s.advancedOpen {
-		a.addProjectIgnoresModal(c, s)
-		return
-	}
+func (a *app) editGroup(c *ui.Context, label string, list *[]string, input *string, pick func()) {
 	t := c.Theme()
-	a.formModal(c, &a.addOpen, func() {
-		ui.Column(c).Role(ui.RoleDialog).Width(780).MaxHeight(680).Gap(10).Padding(18).
-			Background(t.Surface).Radius(12).Border(1, t.Border).
-			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.08)).Children(func() {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, iconCloud).FontSize(18).TextColor(t.Accent)
-				ui.Text(c, a.t("addProject.title")).FontSize(16).Bold()
-				ui.Box(c).Grow(1)
-				if a.ghostIconButton(c, a.t("edit.cancel"), iconX, s.busy) {
-					a.closeAddProject()
-				}
-			})
-			a.fieldLabel(c, a.t("addProject.server"))
-			ui.Row(c).Gap(6).Children(func() {
-				ui.TextInput(c, &s.serverURL).Placeholder(a.t("addProject.serverHint")).Grow(1).AutoFocus()
-				if a.actionButton(c, a.t("addProject.fetch"), iconRefresh, false, s.fetching || s.busy || strings.TrimSpace(s.serverURL) == "") {
-					a.fetchServerProjects()
-				}
-			})
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				a.fieldLabelBox(c, a.t("addProject.project"))
-				ui.TextInput(c, &s.projectName).Placeholder(a.t("addProject.projectHint")).Grow(1)
-				if a.actionButton(c, a.t("addProject.create"), iconCloud, false, s.busy || s.fetching || strings.TrimSpace(s.serverURL) == "" || strings.TrimSpace(s.projectName) == "") {
-					a.createServerProject()
-				}
-			})
-			if len(s.projects) > 0 {
-				s.list.Selected = &s.selected
-				if ui.List(c, &s.list, len(s.projects), func(i int) {
-					p := s.projects[i]
-					ui.Column(c).Gap(1).Padding(8, 4).Children(func() {
-						ui.Text(c, p.Name).FontSize(12).Bold().SingleLine()
-						if p.Title != "" && p.Title != p.Name {
-							ui.Text(c, p.Title).FontSize(10).TextColor(t.TextMuted).SingleLine()
-						}
-					})
-				}).Height(112).Changed() {
-					if s.selected >= 0 && s.selected < len(s.projects) {
-						p := s.projects[s.selected]
-						s.projectName = p.Name
-						s.title = p.Title
-						s.forceUpdate = p.ForceUpdate
-						if s.displayName == "" {
-							s.displayName = p.Name
-						}
+	ui.Column(c).Gap(4).Children(func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, label).FontSize(11).Bold().TextColor(t.TextMuted)
+			a.countPill(c, len(*list))
+		})
+		items := append([]string(nil), (*list)...)
+		ui.Row(c).Wrap().Gap(4).Children(func() {
+			for _, value := range items {
+				value := value
+				ui.Row(c).Gap(1).AlignItems(ui.Center).Height(18).Padding(5, 0).Background(t.Text.Alpha(0.06)).
+					Border(1, t.Border).Radius(4).MaxWidth(280).Children(func() {
+					ui.Text(c, value).FontSize(10).SingleLine().Tooltip(value)
+					if a.ghostIconButtonSize(c, a.t("edit.remove"), iconX, false, 14, 14) {
+						*list = removeValue(*list, value)
 					}
-				}
-			} else if s.fetching {
-				ui.Text(c, a.t("addProject.fetching")).FontSize(11).TextColor(t.TextMuted)
-			} else {
-				ui.Text(c, a.t("addProject.listEmpty")).FontSize(11).TextColor(t.TextMuted)
-			}
-			ui.Checkbox(c, &s.forceUpdate, a.t("addProject.forceUpdate"))
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				a.fieldLabelBox(c, a.t("addProject.titleField"))
-				ui.TextInput(c, &s.title).Placeholder(a.t("addProject.titleHint")).Grow(1)
-			})
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				a.fieldLabelBox(c, a.t("addProject.path"))
-				ui.TextInput(c, &s.path).Placeholder(a.t("addProject.pathHint")).Grow(1)
-				if a.actionButton(c, a.t("edit.browse"), iconFolder, false, false) {
-					a.pickFolder(false, a.t("addProject.path"), func(paths []string) {
-						if len(paths) == 0 {
-							return
-						}
-						s.path = paths[0]
-						if s.displayName == "" {
-							s.displayName = filepath.Base(normalizePath(paths[0]))
-						}
-					})
-				}
-			})
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				a.fieldLabelBox(c, a.t("addProject.displayName"))
-				ui.TextInput(c, &s.displayName).Placeholder(a.t("addProject.displayNameHint")).Grow(1)
-			})
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				a.fieldLabelBox(c, a.t("edit.mainExe"))
-				ui.TextInput(c, &s.mainExe).Placeholder(a.t("edit.mainExeHint")).Grow(1)
-				if a.actionButton(c, a.t("edit.browse"), iconFolder, false, false) {
-					a.pickExecutable(a.t("edit.mainExe"), func(path string) {
-						s.mainExe = path
-					})
-				}
-			})
-			if a.textButton(c, a.t("addProject.advanced"), iconSettings, false) {
-				s.advancedOpen = true
-			}
-			if s.error != "" {
-				ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
-					ui.Icon(c, iconWarning).FontSize(12).TextColor(t.Danger)
-					ui.Text(c, s.error).FontSize(11).TextColor(t.Danger).Wrap()
 				})
 			}
-			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-				if a.actionButton(c, a.t("edit.cancel"), iconX, false, s.busy) {
-					a.closeAddProject()
-				}
-				if a.actionButton(c, a.t("addProject.initialize"), iconCheck, true, s.busy || s.fetching || strings.TrimSpace(s.path) == "") {
-					a.initializeAddProject()
-				}
-			})
 		})
-	})
-}
-
-func (a *app) fieldLabelBox(c *ui.Context, text string) {
-	ui.Text(c, text).FontSize(11).TextColor(c.Theme().TextMuted).Width(104).SingleLine()
-}
-
-func (a *app) localPreviewModal(c *ui.Context) {
-	p := a.localPreview
-	if p == nil {
-		return
-	}
-	t := c.Theme()
-	a.formModal(c, &a.localPreviewOpen, func() {
-		ui.Column(c).Role(ui.RoleDialog).Width(560).Gap(10).Padding(18).
-			Background(t.Surface).Radius(12).Border(1, t.Border).
-			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.08)).Children(func() {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, iconFolderPlus).FontSize(18).TextColor(t.Accent)
-				ui.Text(c, a.t("addLocal.previewTitle")).FontSize(16).Bold()
-				ui.Box(c).Grow(1)
-				if a.ghostIconButton(c, a.t("edit.cancel"), iconX, false) {
-					a.closeLocalPreview()
+		ui.Row(c).Gap(5).Children(func() {
+			if ui.TextInput(c, input).Placeholder(label).Grow(1).Submitted() {
+				if v := strings.TrimSpace(*input); v != "" {
+					*list = appendUnique(*list, v)
+					*input = ""
 				}
-			})
-			ui.Text(c, p.path).FontSize(11).TextColor(t.TextMuted).SingleLine()
-			ui.Row(c).Gap(8).Children(func() {
-				a.fieldLabelBox(c, a.t("addLocal.server"))
-				ui.Text(c, p.shared.ServerURL).FontSize(12).Grow(1).SingleLine()
-			})
-			ui.Row(c).Gap(8).Children(func() {
-				a.fieldLabelBox(c, a.t("addLocal.project"))
-				ui.Text(c, p.shared.ProjectName).FontSize(12).Grow(1).SingleLine()
-			})
-			ui.Row(c).Gap(8).Children(func() {
-				a.fieldLabelBox(c, a.t("addLocal.ignored"))
-				ui.Text(c, a.tf("addLocal.previewCount",
-					"folders", fmt.Sprint(len(p.shared.IgnoreFolders)+len(p.shared.UnCopyFolders)),
-					"files", fmt.Sprint(len(p.shared.IgnoreFiles)+len(p.shared.UnCopyFiles)))).
-					FontSize(12).TextColor(t.TextMuted).Grow(1)
-			})
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				a.fieldLabelBox(c, a.t("edit.displayName"))
-				ui.TextInput(c, &p.displayName).Grow(1).AutoFocus()
-			})
-			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-				if a.actionButton(c, a.t("edit.cancel"), iconX, false, false) {
-					a.closeLocalPreview()
+			}
+			if a.actionButton(c, a.t("edit.add"), iconPlus, false, false) {
+				if v := strings.TrimSpace(*input); v != "" {
+					*list = appendUnique(*list, v)
+					*input = ""
 				}
-				if a.actionButton(c, a.t("addLocal.confirm"), iconCheck, true, false) {
-					a.confirmLocalProject()
-				}
-			})
-		})
-	})
-}
-
-func (a *app) addProjectIgnoresModal(c *ui.Context, s *addProjectState) {
-	t := c.Theme()
-	a.formModal(c, &a.addOpen, func() {
-		ui.Column(c).Role(ui.RoleDialog).Width(780).MaxHeight(340).Gap(8).Padding(18).
-			Background(t.Surface).Radius(12).Border(1, t.Border).
-			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.08)).Children(func() {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, iconSettings).FontSize(18).TextColor(t.Accent)
-				ui.Text(c, a.t("addProject.ignoreTitle")).FontSize(16).Bold()
-				ui.Box(c).Grow(1)
-				if a.ghostIconButton(c, a.t("edit.cancel"), iconX, false) {
-					a.closeAddProject()
-				}
-			})
-			ui.Text(c, a.t("addProject.ignoreHint")).FontSize(11).TextColor(t.TextMuted).Wrap()
-			ui.Scroll(c).Height(165).Children(func() {
-				ui.Row(c).Gap(14).Children(func() {
-					ui.Column(c).Grow(1).Gap(10).Children(func() {
-						a.editGroup(c, a.t("edit.ignoreFolders"), &s.ignoreFolders, &s.newIgnoreFolder, func() {
-							a.pickFolder(true, a.t("edit.ignoreFolders"), func(paths []string) {
-								for _, path := range paths {
-									a.addProjectPath(&s.ignoreFolders, s.path, path)
-								}
-							})
-						})
-						a.editGroup(c, a.t("edit.ignoreFiles"), &s.ignoreFiles, &s.newIgnoreFile, func() {
-							a.pickFiles(a.t("edit.ignoreFiles"), func(paths []string) {
-								for _, path := range paths {
-									a.addProjectPath(&s.ignoreFiles, s.path, path)
-								}
-							})
-						})
-					})
-					ui.Column(c).Grow(1).Gap(10).Children(func() {
-						a.editGroup(c, a.t("edit.uncopyFolders"), &s.uncopyFolders, &s.newUncopyFolder, func() {
-							a.pickFolder(true, a.t("edit.uncopyFolders"), func(paths []string) {
-								for _, path := range paths {
-									a.addProjectPath(&s.uncopyFolders, s.path, path)
-								}
-							})
-						})
-						a.editGroup(c, a.t("edit.uncopyFiles"), &s.uncopyFiles, &s.newUncopyFile, func() {
-							a.pickFiles(a.t("edit.uncopyFiles"), func(paths []string) {
-								for _, path := range paths {
-									a.addProjectPath(&s.uncopyFiles, s.path, path)
-								}
-							})
-						})
-					})
-				})
-			})
-			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-				if a.actionButton(c, a.t("addProject.back"), iconArrowLeft, false, false) {
-					s.advancedOpen = false
-				}
-				if a.actionButton(c, a.t("addProject.done"), iconCheck, true, false) {
-					s.advancedOpen = false
-				}
-			})
+			}
+			if a.actionButton(c, a.t("edit.pick"), iconFolder, false, false) {
+				pick()
+			}
 		})
 	})
 }

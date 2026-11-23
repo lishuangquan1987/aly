@@ -40,10 +40,10 @@ func main() {
 		a.applyTheme()
 		a.win = mygo.NewWindow(mygo.WindowOptions{
 			Title:           a.t("app.title"),
-			Width:           1440,
-			Height:          900,
-			MinWidth:        1280,
-			MinHeight:       720,
+			Width:           1320,
+			Height:          840,
+			MinWidth:        1080,
+			MinHeight:       640,
 			Content:         ui.View(a.view),
 			BackgroundColor: "light-dark(#f7f8fa, #1e1e1e)",
 		})

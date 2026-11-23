@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -102,7 +104,7 @@ func logDir() string {
 }
 
 func loadProjects() []ProjectConfig {
-	raw, err := os.ReadFile(configPath())
+	raw, err := readConfigFile(configPath())
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			log.Printf("读取项目配置失败: %v", err)
@@ -139,7 +141,7 @@ func saveProjects(projects []ProjectConfig) error {
 }
 
 func loadSettings() appSettings {
-	raw, err := os.ReadFile(settingsPath())
+	raw, err := readConfigFile(settingsPath())
 	if err != nil {
 		return appSettings{}
 	}
@@ -160,7 +162,7 @@ func saveSettings(s appSettings) error {
 }
 
 func loadAppearance() appearanceSettings {
-	raw, err := os.ReadFile(appearancePath())
+	raw, err := readConfigFile(appearancePath())
 	if err == nil {
 		var s appearanceSettings
 		if json.Unmarshal(raw, &s) == nil {
@@ -169,7 +171,7 @@ func loadAppearance() appearanceSettings {
 	}
 	// One-time migration from the legacy Go settings.json fields. The C#
 	// GUI never wrote these, so this cannot resurrect a C# preference.
-	raw, err = os.ReadFile(settingsPath())
+	raw, err = readConfigFile(settingsPath())
 	if err != nil {
 		return appearanceSettings{}
 	}
@@ -194,6 +196,21 @@ func saveAppearance(s appearanceSettings) error {
 		return err
 	}
 	return writeFileAtomic(appearancePath(), raw)
+}
+
+// utf8BOM is the byte order mark a Windows editor may leave at the start of a
+// JSON file. The C# GUI reads its files with File.ReadAllText, which strips it,
+// so the Go GUI must strip it too: json.Unmarshal rejects the mark, and a
+// bookmarked config saved by Notepad would otherwise read as empty.
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
+
+// readConfigFile reads a JSON config file, without a leading UTF-8 BOM.
+func readConfigFile(path string) ([]byte, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return bytes.TrimPrefix(raw, utf8BOM), nil
 }
 
 func writeFileAtomic(path string, data []byte) error {
@@ -226,7 +243,7 @@ func sharedConfigPath(projectPath string) string {
 
 func loadShared(projectPath string) (SharedConfig, error) {
 	var shared SharedConfig
-	raw, err := os.ReadFile(sharedConfigPath(projectPath))
+	raw, err := readConfigFile(sharedConfigPath(projectPath))
 	if err != nil {
 		return shared, fmt.Errorf("读取 .updator/shared.json 失败: %w", err)
 	}
@@ -239,6 +256,121 @@ func loadShared(projectPath string) (SharedConfig, error) {
 func isInitialized(projectPath string) bool {
 	_, err := os.Stat(sharedConfigPath(projectPath))
 	return err == nil
+}
+
+// knownServerURLs lists the server addresses the bookmarked projects point at,
+// most useful first, so the wizards can offer them as one-click choices. A
+// project whose shared.json cannot be read is skipped, as the C# GUI does.
+func knownServerURLs(projects []ProjectConfig) []string {
+	seen := map[string]bool{}
+	var urls []string
+	for _, project := range projects {
+		shared, err := loadShared(project.ProjectPath)
+		if err != nil {
+			continue
+		}
+		url := strings.TrimSpace(shared.ServerURL)
+		if url == "" || seen[strings.ToLower(url)] {
+			continue
+		}
+		seen[strings.ToLower(url)] = true
+		urls = append(urls, url)
+		if len(urls) == 5 {
+			break
+		}
+	}
+	return urls
+}
+
+// mainExeCandidates lists the top-level executables of a project folder
+// without installer noise, for the add wizard's main-executable picker. It
+// mirrors ProjectInputHelper.FindMainExeCandidates in the C# GUI.
+func mainExeCandidates(projectPath string) []string {
+	entries, err := os.ReadDir(projectPath)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".exe") {
+			continue
+		}
+		name := entry.Name()
+		lower := strings.ToLower(name)
+		if strings.HasPrefix(lower, "unins") || strings.HasPrefix(lower, "setup") {
+			continue
+		}
+		out = append(out, name)
+	}
+	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i]) < strings.ToLower(out[j]) })
+	return out
+}
+
+// normalizeForCompare cleans a path for bookmark comparisons: trimmed,
+// absolute where possible, and without a trailing separator. Comparisons of
+// the result use strings.EqualFold, as the C# GUI compares OrdinalIgnoreCase.
+func normalizeForCompare(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+	path = filepath.Clean(path)
+	if len(path) > 1 && strings.HasSuffix(path, string(filepath.Separator)) {
+		path = path[:len(path)-1]
+	}
+	return path
+}
+
+// pathState is the live verdict of the add wizard's folder field.
+type pathState int
+
+const (
+	pathEmpty pathState = iota
+	pathMissing
+	pathInitialized
+	pathListed
+	pathUsable
+)
+
+// projectPathState reports whether a folder can be initialized and added as a
+// wizard target: it must exist, not carry .updator/shared.json yet, and not be
+// bookmarked already.
+func projectPathState(path string, projects []ProjectConfig) pathState {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return pathEmpty
+	}
+	if info, err := os.Stat(path); err != nil || !info.IsDir() {
+		return pathMissing
+	}
+	if isInitialized(path) {
+		return pathInitialized
+	}
+	for _, project := range projects {
+		if strings.EqualFold(normalizeForCompare(project.ProjectPath), normalizeForCompare(path)) {
+			return pathListed
+		}
+	}
+	return pathUsable
+}
+
+// pathStateText is the message the wizard shows under its folder field.
+func pathStateText(lang string, state pathState) string {
+	switch state {
+	case pathMissing:
+		return translate(lang, "addProject.pathNotExist")
+	case pathInitialized:
+		return translate(lang, "addProject.pathInitialized")
+	case pathListed:
+		return translate(lang, "addProject.pathListed")
+	case pathUsable:
+		return translate(lang, "addProject.pathWillInitialize")
+	default:
+		return translate(lang, "addProject.pathSelect")
+	}
 }
 
 func hostRIDs() []string {
