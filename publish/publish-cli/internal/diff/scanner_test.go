@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"aly/publish-cli/pkg/models"
 )
 
 // buildScanTree 创建如下测试目录结构并返回根路径：
@@ -122,5 +124,30 @@ func TestScanDirectoryNoIgnore(t *testing.T) {
 		if !set[rel] {
 			t.Errorf("期望文件列表包含 %s", rel)
 		}
+	}
+}
+
+// TestDiffKeepsServerOnlyFiles is the regression for removing delete sync:
+// a file that exists only on the server must not become a difference (it used
+// to be "deleted", which made the publisher delete it from the server).
+func TestDiffKeepsServerOnlyFiles(t *testing.T) {
+	local := []models.LocalFile{
+		{RelativePath: "keep.txt", MD5: "aaa", Size: 3},
+		{RelativePath: "changed.txt", MD5: "new", Size: 3},
+	}
+	server := []models.FileInfo{
+		{FileRelativePath: "keep.txt", MD5: "aaa", FileSize: 3},
+		{FileRelativePath: "changed.txt", MD5: "old", FileSize: 3},
+		{FileRelativePath: "server-only.dll", MD5: "bbb", FileSize: 5},
+	}
+	diffs := Diff(local, server)
+	if len(diffs) != 2 {
+		t.Fatalf("diff 返回 %d 项，服务端独有文件不应出现: %+v", len(diffs), diffs)
+	}
+	if diffs[0].RelativePath != "changed.txt" || diffs[0].Status != "modified" {
+		t.Fatalf("第一项应为 changed.txt/modified: %+v", diffs[0])
+	}
+	if diffs[1].RelativePath != "keep.txt" || diffs[1].Status != "unchanged" {
+		t.Fatalf("第二项应为 keep.txt/unchanged: %+v", diffs[1])
 	}
 }

@@ -36,8 +36,6 @@ func InitRouter(r *gin.Engine) {
 			fileGroup.POST("upload_file", controllers.UploadFile)
 			fileGroup.POST("upload_chunk", controllers.UploadChunk)
 			fileGroup.POST("upload_chunk_complete", controllers.UploadChunkComplete)
-			// 审查 B6：删除同步链路
-			fileGroup.POST("delete_file", controllers.DeleteFile)
 			fileGroup.GET("get_all_files/:projectName", controllers.GetAllFilesByProjectName)
 			fileGroup.GET("get_release_manifest/:projectName", controllers.GetReleaseManifest)
 		}

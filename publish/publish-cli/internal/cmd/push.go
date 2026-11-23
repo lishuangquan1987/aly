@@ -116,7 +116,7 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 
 	for i, f := range filesToUpload {
 		sem <- struct{}{}
-		go func(idx int, relPath string, status string, size int64) {
+		go func(idx int, relPath string, size int64) {
 			defer func() {
 				if r := recover(); r != nil {
 					uploadCh <- uploadResult{path: relPath, index: idx, err: fmt.Errorf("panic: %v", r)}
@@ -126,21 +126,6 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 			// 审查 M18：每完成一个文件立即输出结果行（加锁避免多 goroutine 交错），
 			// 旧实现要等全部上传完才统一输出，GUI 进度条 0%→100% 跳变、上传期间无任何反馈。
 			defer func() {}()
-			if status == "deleted" {
-				if !jsonOutput {
-					printHumanLn("Deleting: %s", relPath)
-				}
-				err := client.DeleteFile(cfg.Shared.ProjectName, relPath)
-				outMu.Lock()
-				if err != nil {
-					printProgressFail(idx+1, total, relPath, size, err.Error())
-				} else {
-					printProgress(idx+1, total, relPath, "DONE", size, "")
-				}
-				outMu.Unlock()
-				uploadCh <- uploadResult{path: relPath, index: idx, err: err}
-				return
-			}
 			absPath := filepath.Join(cfg.Path, filepath.FromSlash(relPath))
 			if !jsonOutput {
 				printHumanLn("Uploading: %s", relPath)
@@ -154,7 +139,7 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 			}
 			outMu.Unlock()
 			uploadCh <- uploadResult{path: relPath, index: idx, err: err}
-		}(i, f.RelativePath, f.Status, f.LocalSize)
+		}(i, f.RelativePath, f.LocalSize)
 	}
 
 	// 收集所有上传结果（按原始顺序存储）
@@ -226,6 +211,25 @@ func setProjectForceUpdate(cfg RuntimeConfig, forceUpdate bool) {
 	}
 }
 
+// dropLegacyDeleted removes staged entries left by older CLIs that still used
+// the deleted status. Publishing no longer deletes server files, so such an
+// entry must never turn into a delete request; it is reported and dropped.
+func dropLegacyDeleted(items []staging.StagedFile) []staging.StagedFile {
+	var kept []staging.StagedFile
+	dropped := 0
+	for _, item := range items {
+		if item.Status == "deleted" {
+			dropped++
+			continue
+		}
+		kept = append(kept, item)
+	}
+	if dropped > 0 {
+		fmt.Fprintf(os.Stderr, "Warning: 忽略 %d 个历史遗留的已删除文件：发布不再删除服务端文件\n", dropped)
+	}
+	return kept
+}
+
 func runPush(cmd *cobra.Command, args []string) {
 	cfg, err := resolveConfig()
 	if err != nil {
@@ -255,8 +259,9 @@ func runPush(cmd *cobra.Command, args []string) {
 		outputResult(false, fmt.Sprintf("读取暂存区失败: %v", loadErr), nil)
 		return
 	}
+	stagedFiles = dropLegacyDeleted(stagedFiles)
 	if len(stagedFiles) == 0 {
-		outputResult(false, "暂存区为空，请先 add 文件", nil)
+		outputResult(false, "暂存区没有可上传的文件（删除同步已移除，服务端文件不会再被删除）", nil)
 		return
 	}
 

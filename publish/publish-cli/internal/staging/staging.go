@@ -105,8 +105,8 @@ func AddWithStatus(projectPath string, relativePaths []string, statusMap map[str
 				status = s
 			}
 		}
-		// 审查 B6：deleted 文件本地已不存在，不能去 Hash/Stat——
-		// 旧实现会让"删除同步"在 add 阶段就报错，链路永远走不通。
+		// 兼容旧暂存条目：deleted 文件本地已不存在，不能去 Hash/Stat。
+		// 新版本不再产生该状态（发布不再删除服务端文件），push/status 会忽略。
 		if status == "deleted" {
 			current = append(current, StagedFile{
 				RelativePath: rp,
@@ -171,7 +171,7 @@ func Verify(projectPath string) (conflicts []string, err error) {
 		return nil, nil
 	}
 	for _, f := range current {
-		// 审查 B6：deleted 文件本地已不存在，无从 Verify
+		// 兼容旧暂存条目：deleted 文件本地已不存在，无从 Verify
 		if f.Status == "deleted" {
 			continue
 		}

@@ -10,7 +10,6 @@ package controllers_test
 //   - M2  软删除项目不再对外服务
 //   - M3  并发 complete 的互斥与合并结果校验
 //   - M5  上传要求项目存在
-//   - B6  delete_file 删除同步（含幂等与穿越防护）
 //   - B11 Range 断点续传 206/416
 //   - 轻微 get_project_change_logs 条数上限
 //
@@ -550,47 +549,6 @@ func TestSoftDeletedProjectStopsServing(t *testing.T) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// B6 delete_file
-// ────────────────────────────────────────────────────────────────
-
-func TestDeleteFile(t *testing.T) {
-	r := newRouter()
-	const proj = "tc-b6-delete"
-	publishedFile(t, r, proj, "keep.txt", []byte("keep"))
-	target := publishedFile(t, r, proj, "sub/drop.txt", []byte("drop"))
-
-	resp := doJSON(t, r, http.MethodPost, "/api/file/delete_file", map[string]string{
-		"projectName":      proj,
-		"relativeFileName": "sub/drop.txt",
-	})
-	if !resp.IsSuccess {
-		t.Fatalf("删除文件失败: %s", resp.ErrorMsg)
-	}
-	if _, err := os.Stat(target); err == nil {
-		t.Fatal("删除后文件仍存在")
-	}
-	// 幂等：再删一次仍成功
-	resp = doJSON(t, r, http.MethodPost, "/api/file/delete_file", map[string]string{
-		"projectName":      proj,
-		"relativeFileName": "sub/drop.txt",
-	})
-	if !resp.IsSuccess {
-		t.Fatalf("重复删除应幂等成功，实际: %s", resp.ErrorMsg)
-	}
-	// 其它文件不受影响
-	if _, err := os.Stat(filepath.Join(dataDirOf(t, proj), "keep.txt")); err != nil {
-		t.Fatalf("删除不应影响同项目其它文件: %v", err)
-	}
-	// 穿越防护
-	resp = doJSON(t, r, http.MethodPost, "/api/file/delete_file", map[string]string{
-		"projectName":      proj,
-		"relativeFileName": "../../aly.db",
-	})
-	if resp.IsSuccess {
-		t.Fatal("delete_file 应拒绝路径穿越")
-	}
-}
-
 // ────────────────────────────────────────────────────────────────
 // 轻微：changelog 条数上限
 // ────────────────────────────────────────────────────────────────

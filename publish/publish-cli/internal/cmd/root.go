@@ -210,10 +210,16 @@ func mergeStagedIntoStatusData(sd *models.StatusData, projectPath string) {
 		return
 	}
 	stagedPaths := make(map[string]bool, len(stagedItems))
+	visible := make([]models.FileStatusItem, 0, len(stagedItems))
 	for _, s := range stagedItems {
+		// 删除同步已移除：旧版本留下的 deleted 暂存条目不再展示，push 时忽略。
+		if s.Status == "deleted" {
+			continue
+		}
 		stagedPaths[s.RelativePath] = true
+		visible = append(visible, s)
 	}
-	sd.Staged = stagedItems
+	sd.Staged = visible
 
 	var filtered []models.FileStatusItem
 	for _, u := range sd.Unstaged {

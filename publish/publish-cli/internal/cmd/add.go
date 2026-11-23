@@ -66,8 +66,7 @@ func runAdd(cmd *cobra.Command, args []string) {
 		var paths []string
 		statusMap := make(map[string]string)
 		for _, f := range sd.Unstaged {
-			// 审查 B6：deleted 也要进暂存区，否则"本地删除"永远无法同步到服务端
-			if f.Status == "new" || f.Status == "modified" || f.Status == "deleted" {
+			if f.Status == "new" || f.Status == "modified" {
 				paths = append(paths, f.RelativePath)
 				statusMap[f.RelativePath] = f.Status
 			}

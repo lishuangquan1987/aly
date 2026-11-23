@@ -61,7 +61,7 @@ func TestAddWithStatusNormalizes(t *testing.T) {
 	}
 }
 
-// TestAddWithStatusAcceptsDeleted 审查 B6：删除的文件必须能进暂存区
+// TestAddWithStatusAcceptsDeleted 兼容旧暂存条目：deleted 文件不参与 Hash
 // （旧实现会去 HashFile 已不存在的文件而直接报错）
 func TestAddWithStatusAcceptsDeleted(t *testing.T) {
 	root := t.TempDir()
@@ -78,7 +78,7 @@ func TestAddWithStatusAcceptsDeleted(t *testing.T) {
 	}
 }
 
-// TestVerifySkipsDeleted 审查 B6：Verify 不得对已删除文件重新计算哈希
+// TestVerifySkipsDeleted 兼容旧暂存条目：Verify 跳过已删除文件
 func TestVerifySkipsDeleted(t *testing.T) {
 	root := t.TempDir()
 	if err := AddWithStatus(root, []string{"gone.txt"}, map[string]string{"gone.txt": "deleted"}); err != nil {

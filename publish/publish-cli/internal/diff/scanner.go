@@ -171,6 +171,13 @@ func Diff(localFiles []models.LocalFile, serverFiles []models.FileInfo) []models
 		local, hasLocal := localMap[path]
 		server, hasServer := serverMap[path]
 
+		// 发布不再同步删除：服务端有、本地没有的文件保持原样，不算差异。
+		// 旧实现把它标成 deleted 并删除服务端文件，会误删只存在于服务端的
+		// 资源；现在由服务端永久保留，客户端更新清单时也不会再收到删除。
+		if !hasLocal && hasServer {
+			continue
+		}
+
 		d := models.FileDiff{RelativePath: path}
 		if hasLocal {
 			d.LocalMd5 = local.MD5
@@ -184,8 +191,6 @@ func Diff(localFiles []models.LocalFile, serverFiles []models.FileInfo) []models
 		switch {
 		case hasLocal && !hasServer:
 			d.Status = "new"
-		case !hasLocal && hasServer:
-			d.Status = "deleted"
 		case hasLocal && hasServer && local.MD5 == server.MD5:
 			d.Status = "unchanged"
 		case hasLocal && hasServer && local.MD5 != server.MD5:
@@ -257,7 +262,7 @@ func RunStatus(projectPath string, ignoreFolders []string, ignoreFiles []string,
 			ServerSize:   d.ServerSize,
 		}
 		switch d.Status {
-		case "new", "modified", "deleted":
+		case "new", "modified":
 			sd.Unstaged = append(sd.Unstaged, item)
 		case "unchanged":
 			sd.Unchanged = append(sd.Unchanged, item)

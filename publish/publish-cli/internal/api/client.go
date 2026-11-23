@@ -218,15 +218,6 @@ func (c *Client) GetReleaseManifest(projectName string) ([]string, error) {
 	return manifest.Files, nil
 }
 
-// DeleteFile 删除服务端项目内的一个文件（审查 B6：删除同步链路）。
-// 服务端语义为幂等删除（文件不存在也返回成功）。
-func (c *Client) DeleteFile(projectName, relativeFileName string) error {
-	return c.post("/api/file/delete_file", map[string]string{
-		"projectName":      projectName,
-		"relativeFileName": relativeFileName,
-	}, nil)
-}
-
 // GetProjectOSInfo 获取服务端系统信息（按项目名称）
 func (c *Client) GetProjectOSInfo(projectName string) ([]models.ServerOSInfo, error) {
 	var info []models.ServerOSInfo

@@ -111,7 +111,7 @@ type Output struct {
 // FileStatusItem status/diff 输出中的单个文件状态
 type FileStatusItem struct {
 	RelativePath string `json:"relativePath"`
-	Status       string `json:"status"` // new / modified / deleted / unchanged
+	Status       string `json:"status"` // new / modified / unchanged（deleted 仅旧暂存条目）
 	LocalMd5     string `json:"localMd5"`
 	LocalSize    int64  `json:"localSize"`
 	ServerMd5    string `json:"serverMd5,omitempty"`
@@ -139,7 +139,7 @@ type LocalFile struct {
 // FileDiff 文件差异（内部比对用）
 type FileDiff struct {
 	RelativePath string
-	Status       string // new / modified / deleted / unchanged
+	Status       string // new / modified / unchanged（deleted 仅旧暂存条目）
 	LocalMd5     string
 	LocalSize    int64
 	ServerMd5    string
