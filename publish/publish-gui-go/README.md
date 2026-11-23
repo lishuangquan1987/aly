@@ -144,7 +144,10 @@ linux-amd64、linux-arm64 三个目标，并执行 fmt/vet/test）。
 - 详情页（首次加载遮罩、发布按钮计数与提示、上传进度计数、历史最新标记、分栏夹取、
   忙碌行、中英文与深浅色渲染）；
 - `payload.json` 驱动与 manifest 字段一致性、快捷键、`UpdateFolder`、设置隔离、
-  BOM 配置读取、配置/初始化/更新器回归测试。
+  BOM 配置读取、配置/初始化/更新器回归测试；
+- 偏好与 i18n 回归（`prefs_test.go`）：语言切换写 `settings.json` 并可读回、
+  主题/主题色写 `appearance.json` 且不被 settings 重写覆盖、书签移除即时落盘
+  （被移除项目的文件与 `.updator/` 原样保留）、zh/en 键集完全一致。
 
 另在 Windows 上以临时配置目录与临时服务端（`server.exe -p … -db <copy>`）做过实机
 端到端验证：启动加载书签 → 刷新（status/log） → 全部暂存 → 清空暂存确认框 →

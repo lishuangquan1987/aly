@@ -6,7 +6,7 @@
 >   修复后全量回归 **147 PASS / 1 SKIP / 0 FAIL**，明细见附录 B）
 > - 更新日期：2026-11-13
 > - 被测版本：2026-11-13 工作区（按全仓库审查报告修复后的未提交状态）
-> - 新增：**125–127**（publish-gui-csharp 初始化：布局 / 三件套 / 原子写，2026-11-04 加入；2026-11-12 全量回归 3/3 PASS（先修正首发版本号 1.0.0→1.0.1），见 §十一·补四）
+> - 新增：**125–127**（发布 GUI 初始化：布局 / 三件套 / 原子写，2026-11-04 加入；2026-11-23 随主实现切换改写为对 publish-gui-go 的等价断言并复验 3/3 PASS，见 §十一·补四）
 > - 新增：**130–135**（自更新统一：`self_update` 执行命令、UI/SDK 委派与兜底、
 >   UI 防循环、UI 自身 `-finish-self-update` 收尾，2026-11-09 加入并已在 Windows
 >   实机执行；见 §十一·补五）
@@ -41,7 +41,7 @@
 - [十一·补、更新锁缺陷（105）](#十一补更新锁缺陷105)
 - [十一·补二、判据红线的边界补齐（106–115）](#十一补二判据红线的边界补齐106115)
 - [十一·补三、尚未覆盖的 8 类缺口（116–124）](#十一补三尚未覆盖的-8-类缺口116124)
-- [十一·补四、publish-gui-csharp 初始化（125–127）](#十一补四publish-gui-csharp-初始化125127)
+- [十一·补四、发布 GUI 初始化（125–127）](#十一补四发布-gui-初始化125127)
 - [十一·补五、自更新统一与防循环（130–135）](#十一补五自更新统一与防循环130135)
 - [附录 A：故障注入手法速查](#附录-a故障注入手法速查)
 - [附录 B：结果记录表](#附录-b结果记录表)
@@ -67,14 +67,14 @@
 | `test/tc/cases_105_test.go` | 已有 | 用例 105（更新锁空窗期与崩溃残留） |
 | `test/tc/cases_106_115_test.go` | 已有（~850 行） | 用例 106–115（判据红线的边界补齐） |
 | `test/tc/cases_116_124_test.go` | 新增（~960 行） | 用例 116–124（并发 / ACL / 自愈链 / Range / i18n / SDK 失败路径） |
-| `test/tc/cases_125_127_test.go` | 新增（~190 行） | 用例 125–127（publish-gui-csharp 初始化：布局 / 三件套 / 原子写，**未执行**） |
+| `test/tc/cases_125_127_test.go` | 改写（~210 行） | 用例 125–127（发布 GUI 初始化：布局 / 三件套 / 原子写；2026-11-23 起断言对象为 publish-gui-go） |
 | `test/tc/cases_130_135_test.go` | 新增（~420 行） | 用例 130–135（自更新统一：`self_update` 执行、UI 委派/自身收尾 + 防循环、SDK 委派） |
 | `client/aly-client-ui/aly-client-linuxui/*_test.go` | 新增 | **Linux UI 自身测试**（独立 Go module，不在 `test/tc` 的 135 条内）：client JSON 解析、flow 决策、i18n、journal、路径/复制、UI 自更新派生、收尾参数/改名、`ui.NewTester` 视图 |
 
-> **125–127 的两层钉法**：publish-gui-csharp 是 C#/Avalonia 的 UI 程序，框架跑不了它的窗口，
-> 所以每条都分两层——**源码契约**（读 C# 源码断言关键调用形态，与用例 104 的 ① 段同法）
+> **125–127 的两层钉法**：发布 GUI 是 UI 程序，框架跑不了它的窗口，
+> 所以每条都分两层——**源码契约**（读 publish-gui-go 源码断言关键调用形态，与用例 104 的 ① 段同法）
 > 和**消费侧功能**（用真实 aly-client 消费 GUI 写出的那套目录布局与 `client.json`）。
-> 只在 Go 里把 C# 的路径算法重算一遍是自证自话，钉不住任何回归。
+> 只在测试里把实现侧的路径算法重算一遍是自证自话，钉不住任何回归。
 
 截至 v11，用例总数 **135**（131 PASS / 0 FAIL / 1 SKIP / 3 未执行）；最近一次为
 2026-11-09 定点回归（130–135 + 42/94），全量历史数据见附录 B。
@@ -393,9 +393,9 @@ func TestCase01(t *testing.T) {
 | 122 | `-lang en-US` 文案与回落 | 边界 | 不崩 + 未知语言回落 ZH |
 | 123 | 多段 Range / If-Range | 边界 | `multipart/byteranges` + 200 全文回退 |
 | 124 | SDK Launch 失败路径 | SDK | UI 缺失 → NG 不抛异常 |
-| 125 | publish-gui-csharp 初始化：UpdateFolder 位置 | publish-gui-csharp | 与主程序目录**同级**，不在其内部 |
-| 126 | publish-gui-csharp 初始化：三件套与相对路径 | publish-gui-csharp | aly-client.exe + aly-client-ui.exe + client.json；`..\<目录>\<exe>` 可被 client 消费 |
-| 127 | publish-gui-csharp 原子写：先 Move 后 Replace | publish-gui-csharp | 首次写不得只留 `client.json.tmp` |
+| 125 | 发布 GUI 初始化：UpdateFolder 位置 | publish-gui-go | 与主程序目录**同级**，不在其内部 |
+| 126 | 发布 GUI 初始化：三件套与相对路径 | publish-gui-go | aly-client.exe + aly-client-ui.exe + client.json；`..\<目录>\<exe>` 可被 client 消费 |
+| 127 | 发布 GUI 原子写：先 `.tmp` 后 Rename | publish-gui-go | 首次写不得只留 `client.json.tmp` |
 | 128 | 客户端真实分片上传路径 | 边界 | publish-cli 推 >1MiB 文件必须走通 `upload_chunk` → `upload_chunk_complete` |
 | 129 | 分片阈值边界 | 边界 | `chunkSize` 走直传、`chunkSize+1` 走分片，两路都逐字节落地 |
 | 130 | self_update 一致跳过 | 自更新 | `updated=false` + `already_up_to_date` + `.new/.old` 残留清理 |
@@ -7361,15 +7361,18 @@ for _, want := range []string{
 
 ---
 
-## 十一·补四、publish-gui-csharp 初始化（125–127）
+## 十一·补四、发布 GUI 初始化（125–127）
 
-> 本节来自一次**真机实测**（2026-11-04）：在 publish-gui-csharp 里对一个真实项目执行"初始化项目"之后，
-> 磁盘上得到的更新器目录三处都不对——位置、内容、以及 `client.json` 的相对路径。
-> 实现见 `test/tc/cases_125_127_test.go`；被测源码 `publish/publish-gui-csharp/src/AlyPublish/Services/ConfigService.cs`。
+> 本节来自一次**真机实测**（2026-11-04）：在历史 C# 版（publish-gui-csharp）里对一个真实项目
+> 执行"初始化项目"之后，磁盘上得到的更新器目录三处都不对——位置、内容、以及 `client.json`
+> 的相对路径。实现见 `test/tc/cases_125_127_test.go`。
 >
-> 三条用例都分两层钉：**源码契约**（读 C# 源码断言关键调用形态）+ **消费侧功能**
-> （用真实 aly-client 消费 GUI 写出的那套布局与 `client.json`）。为什么不能只在 Go 里把 C# 的
-> 路径算法重算一遍：那是自证自话，C# 侧改回旧写法时重算照样通过。
+> **2026-11-23 起发布 GUI 主实现切换为 publish-gui-go**（历史 C# 版保留在仓库但不再默认
+> 构建发布），三条用例随之改写为对 publish-gui-go 源码的等价断言；缺陷背景与红线不变。
+>
+> 三条用例都分两层钉：**源码契约**（读 Go 源码断言关键调用形态）+ **消费侧功能**
+> （用真实 aly-client 消费 GUI 写出的那套布局与 `client.json`）。为什么不能只在测试里把
+> 实现侧的路径算法重算一遍：那是自证自话，实现改回旧写法时重算照样通过。
 >
 > 被测对象是"更新器目录的布局"，它的口径在 `README.md` / `client/aly-client-ui/aly-client-winui/DEVELOPMENT_PLAN.md §3.0`
 > 定死：**`PackageFolder/{ApplicationFolder, UpdateFolder}`**——更新器目录与主程序目录**同级**，
@@ -7382,7 +7385,7 @@ for _, want := range []string{
 > 且 `aly-client.exe` 与 `aly-client-ui.exe` 两件套都投放到该目录（UI 缺失只警告，不阻断构建）。
 > 本节 126 的期望值与之逐字对应。
 
-### 缺陷现场回放（真机）
+### 缺陷现场回放（真机，历史 C# 版）
 
 ```
 …\WinFormsApp1\WinFormsApp1\bin\Debug\net8.0-windows\        ← 主程序目录（内含 .updator/）
@@ -7393,7 +7396,7 @@ for _, want := range []string{
     └── client.json.tmp              ← ❌ client.json 从未生成，只剩临时文件
 ```
 
-日志证据（publish-gui-csharp 自己的日志 `bin/Debug/net8.0/logs/log20261104.log`）：
+日志证据（历史 C# 版自己的日志 `bin/Debug/net8.0/logs/log20261104.log`）：
 
 ```
 [INF] 自动检测主程序: …\bin\Debug\net8.0-windows\WinFormsApp1.exe, 进程名: WinFormsApp1
@@ -7406,81 +7409,84 @@ System.IO.FileNotFoundException: Unable to find the specified file.
    at AlyPublish.Services.ConfigService.WriteAllTextAtomic(…) in ConfigService.cs:line 197
 ```
 
-三处根因（彼此独立，修一处不够）：
+三处根因（彼此独立，修一处不够；均属历史 C# 版）：
 
 | # | 现象 | 根因 |
 |---|---|---|
 | ① | `UpdateFolder` 落在主程序目录**内** | `Path.GetDirectoryName(Path.GetFullPath(projectPath))`：`projectPath` 带结尾 `\` 时 `GetDirectoryName` 回退成"目录自身"，于是"上级目录"算成了项目目录本身 |
 | ② | `main_exe_relative_path = ..\WinFormsApp1.exe` | 基准目录是①里那个错的 `UpdateFolder`，相对路径自然少了主程序目录名；正确值 = `..\net8.0-windows\WinFormsApp1.exe` |
-| ③ | 只剩 `client.json.tmp` | `WriteAllTextAtomic` 无条件 `File.Replace(tmp, path, null)`，而 `ReplaceFile` **要求目标已存在**，首次写必抛 → `.tmp` 成了唯一残留（不是文件名拼错） |
+| ③ | 只剩 `client.json.tmp` | C# 的 `WriteAllTextAtomic` 无条件 `File.Replace(tmp, path, null)`，而 `ReplaceFile` **要求目标已存在**，首次写必抛 → `.tmp` 成了唯一残留（不是文件名拼错） |
 
-修复口径（`ConfigService.cs`）：归一化后再取上级目录（`NormalizeDirectoryPath`）；复制
-`aly-client` + `aly-client-ui` 两件套；`WriteAllTextAtomic` 目标不存在时走 `File.Move`（对齐 SDK 自更新 `UpdateSelf` 的写法）。
+C# 版当年在 `ConfigService.cs` 归一化后取上级目录并改 `WriteAllTextAtomic` 修复。Go 主实现
+（`publish/publish-gui-go`）从第一天起就按正确口径实现：`updatefolder.go` 的
+`createUpdateFolder` 先 `filepath.Clean` 归一化再取上级目录；`config.go` 的 `writeFileAtomic`
+先写 `.tmp` 再 `os.Rename` 一步落位（`os.Rename` 在所有支持平台上都按"替换目标"语义执行，
+Windows 走 `MoveFileEx`，目标不存在与已存在都能成，天然规避 ③）。
 
 ---
 
-### 用例 125 — publish-gui-csharp 初始化：UpdateFolder 与主程序目录同级
+### 用例 125 — 发布 GUI 初始化：UpdateFolder 与主程序目录同级
 
 **前置条件**
 
-1. 仓库里有 `publish/publish-gui-csharp`（C#/Avalonia 源码）。
+1. 仓库里有 `publish/publish-gui-go`（Go 主实现源码）。
 2. **不需要**服务端、构建产物：本用例只读源码钉契约（与用例 104 的 ① 段同法），故不建 `Env`。
 
 **步骤**
 
-1. 读 `Services/ConfigService.cs`。
-2. 钉"归一化 → 取上级目录 → `Combine(parentDir, "UpdateFolder")`"三步的调用形态。
-3. 反证：不得再出现历史 bug 的两种形态（带尾分隔符的上级目录推导、把 UpdateFolder 建在主程序目录内）。
+1. 读 `publish/publish-gui-go/updatefolder.go`。
+2. 钉"`filepath.Clean` 归一化 → 取上级目录 → `Join(parent, "UpdateFolder")`"三步的调用形态。
+3. 反证：不得把 `UpdateFolder` 建在主程序目录内。
 
 ```go
 func TestCase125(t *testing.T) {
-	svc := ReadText(filepath.Join(RepoRoot, "publish", "publish-gui-csharp",
-		"src", "AlyPublish", "Services", "ConfigService.cs"))
+	svc := ReadText(guiUpdateFolderSource(t))
 
-	Contains(t, svc, "CreateUpdateFolder", "初始化后产出 UpdateFolder 的入口")
-	// ① 归一化：去掉结尾分隔符（浏览对话框返回的路径带结尾 '\'）
-	Contains(t, svc, "NormalizeDirectoryPath(projectPath)", "必须先把 projectPath 归一化")
-	Contains(t, svc, "TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)",
-		"归一化 = 去掉结尾分隔符")
+	Contains(t, svc, "func createUpdateFolder(projectPath, mainExePath, closeProcessName string) (string, error)",
+		"初始化后产出 UpdateFolder 的入口")
+	// ① 归一化：filepath.Clean 去掉结尾分隔符
+	Contains(t, svc, "projectDir := filepath.Clean(projectPath)",
+		"必须先把 projectPath 归一化（浏览对话框返回的路径可能带结尾反斜杠）")
 	// ② 上级目录必须取自归一化后的值
-	Contains(t, svc, "Path.GetDirectoryName(projectDir)",
-		"上级目录必须取自归一化后的主程序目录")
-	NotContains(t, svc, "Path.GetDirectoryName(Path.GetFullPath(projectPath))",
-		"历史 bug 形态：带尾分隔符的路径会让 GetDirectoryName 回退成目录自身")
-	// ③ 同级：UpdateFolder 挂在上级目录下
-	Contains(t, svc, `Path.Combine(parentDir, "UpdateFolder")`,
-		"UpdateFolder 必须挂在主程序目录的上级目录下（同级）")
-	NotContains(t, svc, `Path.Combine(projectDir, "UpdateFolder")`,
-		"❌ 放进主程序目录：apply/rollback 给主目录改名会把更新器与 .updator 一起搬走")
+	Contains(t, svc, "parent := filepath.Dir(projectDir)",
+		"上级目录必须取自归一化后的项目目录")
+	// ③ 同级：UpdateFolder 挂在项目目录的上级目录下
+	Contains(t, svc, `updateFolder := filepath.Join(parent, "UpdateFolder")`,
+		"UpdateFolder 必须挂在项目目录的上级目录下（与主程序目录同级）")
+	NotContains(t, svc, `filepath.Join(projectDir, "UpdateFolder")`,
+		"❌ 放进主程序目录内：apply/rollback 给主目录改名会把更新器与 .updator 一起卷走")
 }
 ```
 
 **期望结果**
 
-- `CreateUpdateFolder`：先归一化 `projectPath` → 由归一化值取上级目录 → `Combine(parentDir, "UpdateFolder")`
-- 源码里**没有**带结尾分隔符的上级目录推导，也**没有**把 `UpdateFolder` 建在主程序目录内的写法
+- `createUpdateFolder`：先 `filepath.Clean` 归一化 → 由归一化值取上级目录 → `Join(parent, "UpdateFolder")`
+- 源码里**没有**把 `UpdateFolder` 建在主程序目录内的写法
 
 **失败判定**
 
-- 两条 `NotContains` 任一条命中 → 布局回退成"更新器住在主程序目录内"（本用例的核心红线）
+- `NotContains` 命中 → 布局回退成"更新器住在主程序目录内"（本用例的核心红线）
 - 任一条 `Contains` 落空 → 归一化被删掉，带 `\` 的路径会再次把 `UpdateFolder` 放进主程序目录
 
-PASS（2026-11-12 全量回归；已修正首发版本号）
+PASS（2026-11-23 改写为 Go 断言后复验）
 
 ---
 
-### 用例 126 — publish-gui-csharp 初始化：三件套与 `client.json` 的相对路径可被真实 client 消费
+### 用例 126 — 发布 GUI 初始化：三件套与 `client.json` 的相对路径可被真实 client 消费
 
 **前置条件**
 
 1. 服务端已就绪（`NewEnv(t, true, 0)`），项目 `tc-gui-init` 已发布 `1.0.0`，数据目录内有 `WinFormsApp1.exe`。
-2. `publish/publish-gui-csharp/src/AlyPublish/Services/ConfigService.cs` 在位。
+2. `publish/publish-gui-go`（`updatefolder.go` / `cli.go` / `app_detail.go`）在位。
 
 **步骤**
 
 1. **源码契约**：`UpdateFolder` 内必须齐 `aly-client.exe`、`aly-client-ui.exe`、`client.json` 三件套；
-   `client.json` 的目标名不得带临时后缀；相对路径必须以纠正后的 `UpdateFolder` 为基准。
-2. **消费侧**：造一套"GUI 形状"的现场——主程序目录名改成真实发布产物的名字（`net8.0-windows`），
+   更新器从安装包 payload（`client/<rid>/`）取；`client.json` 的目标名不得带临时后缀；
+   相对路径必须以同级 `UpdateFolder` 为基准。
+2. **①b 强制更新三态**：复选框必须翻译成 `--set` / `--clear` 的显式一侧，且只在读到过
+   服务端现值时才发（未知时保持原值）。
+3. **消费侧**：造一套"GUI 形状"的现场——主程序目录名改成真实发布产物的名字（`net8.0-windows`），
    `UpdateFolder` 与它**同级**，`client.json` 写成 GUI 会写的那种相对路径（`../net8.0-windows/WinFormsApp1.exe`），
    然后用**真实 aly-client** 跑 check → download → apply，看新内容落在哪个目录。
 
@@ -7490,75 +7496,41 @@ func TestCase126(t *testing.T) {
 	const proj = "tc-gui-init"
 	e.EnsureProject(t, proj, false, nil, nil)
 	e.PutFile(t, proj, "WinFormsApp1.exe", "app-100")
-	True(t, e.Publish(t, proj, "1.0.1", []string{"初始"}, "", "").IsSuccess, "发布 1.0.1")
+	True(t, e.Publish(t, proj, "1.0.1", []string{"初始"}, "", "").IsSuccess, "发布 1.0.1 失败")
 
-	// ── ① 源码契约（GUI 侧三件套 + 相对路径基准）──
-	guiRoot := filepath.Join(RepoRoot, "publish", "publish-gui-csharp")
-	svc := ReadText(filepath.Join(guiRoot,
-		"src", "AlyPublish", "Services", "ConfigService.cs"))
-	Contains(t, svc, "PkHelper.FindUp(",
-		"更新器必须从安装包 payload（client/<rid>/）取，调用方不再自带二进制")
-	Contains(t, svc, "HostHelper.UpBaseNames",
+	// ── ① 源码契约（GUI 侧三件套 + 相对路径基准 + 更新器来自安装包 payload）──
+	svc := ReadText(guiUpdateFolderSource(t))
+	Contains(t, svc, "updaterRIDsFor(app)",
+		"更新器必须按包内 payload 的 client_rid 取（client/<rid>/），与 findCLI 同一套口径")
+	Contains(t, svc, `filepath.Join(dir, "client", rid, name)`,
+		"更新器来源必须是安装包 payload 的 client/<rid>/（缺省回退开发树）")
+	Contains(t, svc, "func updaterNames() []string",
 		"两个更新器走同一循环：aly-client 与 aly-client-ui 必须同进同退")
-	Contains(t, svc, `Path.Combine(updateFolder, fileName)`,
-		"必须复制到 UpdateFolder 下的同名文件（两件套错位即失败）")
-	Contains(t, svc, `Path.Combine(updateFolder, "client.json")`,
+	Contains(t, svc, "filepath.Join(updateFolder, name)",
+		"必须复制到 UpdateFolder 下的同名文件（两件套同名不同名都不许错位）")
+	Contains(t, svc, `filepath.Join(updateFolder, "client.json")`,
 		"client.json 的目标必须是 UpdateFolder/client.json（不得带临时后缀）")
-	Contains(t, svc, "GetRelativePath(updateFolder, mainExeFullPath)",
-		"相对路径必须以纠正后的 UpdateFolder 为基准、以绝对主程序路径为目标")
+	Contains(t, svc, "filepath.Rel(updateFolder, mainExeFull)",
+		"相对路径必须以同级 UpdateFolder 为基准、以绝对主程序路径为目标")
 	Contains(t, svc, "MustCloseProcessName", "必须写 must_close_process_name")
-	Contains(t, svc, "GetFileNameWithoutExtension",
+	Contains(t, svc, "strings.TrimSuffix(filepath.Base(mainExeFull), filepath.Ext(mainExeFull))",
 		"关进程名缺省时必须从主程序名推导（否则更新前不会关掉主程序）")
 
 	// ── ①b 强制更新三态（审查 B7）：复选框必须翻译成 --set / --clear 的显式一侧 ──
-	cliSvc := ReadText(filepath.Join(guiRoot,
-		"src", "AlyPublish", "Services", "CliService.cs"))
-	Contains(t, cliSvc, `AddFlag(arguments, "--set-force-update", setForceUpdate)`,
+	guiRoot := filepath.Join(RepoRoot, "publish", "publish-gui-go")
+	cliSrc := ReadText(filepath.Join(guiRoot, "cli.go"))
+	Contains(t, cliSrc, `args = append(args, "--set-force-update")`,
 		"GUI 推送必须能把强制更新显式置 true")
-	Contains(t, cliSvc, `AddFlag(arguments, "--clear-force-update", clearForceUpdate)`,
+	Contains(t, cliSrc, `args = append(args, "--clear-force-update")`,
 		"GUI 推送必须能把强制更新显式置 false（不能靠不传参数）")
-	vmSrc := ReadText(filepath.Join(guiRoot,
-		"src", "AlyPublish", "ViewModels", "ProjectTabViewModel.cs"))
-	Contains(t, vmSrc, "!SetForceUpdate && _forceUpdateKnown",
+	detailSrc := ReadText(filepath.Join(guiRoot, "app_detail.go"))
+	Contains(t, detailSrc, "if d.forceKnown {",
 		"取消勾选时只在已知服务端现值时才发 --clear（未知时保持原值）")
 
 	// ── ② 消费侧：GUI 形状的布局必须真能被 aly-client 消费 ──
-	c := e.NewClient(t, NewClientOpts{
-		Version: "1.0.0", Status: StatusApplied, Previous: "1.0.0",
-		Project: proj, MainFile: "app-100", DirName: "gui-site",
-	})
-	// 主程序目录改用真实发布产物的名字（"…\bin\Debug\net8.0-windows"）
-	guiDir := filepath.Join(c.Pkg, "net8.0-windows")
-	if err := os.Rename(c.Main(), guiDir); err != nil {
-		t.Fatalf("改名主程序目录失败: %v", err)
-	}
-	if err := os.Rename(filepath.Join(guiDir, "app.exe"),
-		filepath.Join(guiDir, "WinFormsApp1.exe")); err != nil {
-		t.Fatalf("改名主程序失败: %v", err)
-	}
-	// GUI 会写的那种 client.json：相对 UpdateFolder 指回同级主程序目录
-	WriteJSON(t, filepath.Join(c.Up(), "client.json"), map[string]interface{}{
-		"main_exe_relative_path":  "../net8.0-windows/WinFormsApp1.exe",
-		"must_close_process_name": []string{"WinFormsApp1"},
-	})
-
-	// 服务端演进一版
-	e.PutFile(t, proj, "WinFormsApp1.exe", "app-110")
-	True(t, e.Publish(t, proj, "1.1.0", []string{"演进"}, "", "").IsSuccess, "发布 1.1.0")
-
-	True(t, e.RunLast(t, c, "check_update").IsSuccess,
-		"check_update 失败：GUI 产出的布局/相对路径不被更新器认可")
-	True(t, e.RunLast(t, c, "download_update").IsSuccess, "download_update 失败")
-	True(t, e.RunLast(t, c, "apply_update").IsSuccess, "apply_update 失败")
-
-	Eq(t, "新内容落到同级主程序目录",
-		ReadText(filepath.Join(guiDir, "WinFormsApp1.exe")), "app-110")
-	if _, err := os.Stat(filepath.Join(c.Pkg, "net8.0-windows_1.0.0")); err != nil {
-		t.Fatalf("备份目录应按主程序目录名命名（net8.0-windows_1.0.0）: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(c.Up(), "client.json")); err != nil {
-		t.Fatalf("apply 之后 client.json 必须仍在 UpdateFolder（更新器目录没被卷走）: %v", err)
-	}
+	// （与 C# 版用例相同：net8.0-windows 主目录 + 同级 UpdateFolder + GUI 形状的 client.json，
+	//   真实 aly-client 跑 check → download → apply，断言新内容落点与备份目录名。）
+	// ……（完整代码见 test/tc/cases_125_127_test.go）
 }
 ```
 
@@ -7578,72 +7550,56 @@ func TestCase126(t *testing.T) {
 - 真实 client 跑不通 check / download / apply → FAIL（GUI 写出的布局不被更新器认可）
 - apply 之后 `UpdateFolder` 被卷走 → FAIL（更新器自毁，下次更新不可用）
 
-PASS（2026-11-12 全量回归；已修正首发版本号）
+PASS（2026-11-23 改写为 Go 断言后复验）
 
 ---
 
-### 用例 127 — publish-gui-csharp 原子写：目标不存在时必须 `File.Move`，首次写不得只留 `.tmp`
+### 用例 127 — 发布 GUI 原子写：先写 `.tmp` 再 `Rename` 落位，首次写不得只留 `.tmp`
 
 **前置条件**
 
-1. 源码同用例 125。
+1. 源码 `publish/publish-gui-go/config.go`。
 2. 客户端现场由 `NewClient` 造出（`UpdateFolder/client.json` 存在）。
 
 **步骤**
 
-1. **源码契约**：钉住 `WriteAllTextAtomic` 的"先写 `.tmp` → 判目标是否存在 → `Move` / `Replace`"形态，含非 Windows 回退。
+1. **源码契约**：钉住 `writeFileAtomic` 的"`CreateTemp` 写 `.tmp` → `Sync` → `os.Rename` 落位"形态。
 2. **消费侧**：把 `client.json` 改名成 `client.json.tmp`（**复现缺陷留下的现场**），再跑 `check_update`——
    必须明确失败并把原因指向 `client.json`，不得静默。
 
 ```go
 func TestCase127(t *testing.T) {
-	// ── ① 源码契约：目标不存在时不能 Replace（第一次写必抛）──
-	svc := ReadText(filepath.Join(RepoRoot, "publish", "publish-gui-csharp",
-		"src", "AlyPublish", "Services", "ConfigService.cs"))
-	Contains(t, svc, `var tmpPath = path + ".tmp"`, "原子写先写 .tmp")
-	Contains(t, svc, "if (!File.Exists(path))", "必须先判目标是否存在")
-	Contains(t, svc, "File.Move(tmpPath, path)",
-		"目标不存在 → 改名（ReplaceFile 要求目标已存在，首次写必抛）")
-	Contains(t, svc, "File.Replace(tmpPath, path, null)", "目标存在 → 原子替换")
-	Contains(t, svc, "PlatformNotSupportedException",
-		"非 Windows 平台不支持原子替换 → 删目标 + 改名回退")
+	// ── ① 源码契约：先写 .tmp、再一步落位，失败不留 .tmp ──
+	svc := ReadText(guiConfigSource(t))
+	Contains(t, svc, "func writeFileAtomic(path string, data []byte) error",
+		"配置落盘必须走统一的原子写入口")
+	Contains(t, svc, `os.CreateTemp(dir, filepath.Base(path)+".*.tmp")`,
+		"原子写先写 .tmp（同目录临时文件，保证 rename 同盘原子）")
+	Contains(t, svc, "tmp.Sync()", "临时文件必须 Sync 落盘后再 rename（崩溃安全）")
+	Contains(t, svc, "os.Rename(name, path)",
+		"落位必须用 Rename：目标不存在与已存在都要能成，首次写不得只留 .tmp")
+	Contains(t, svc, "defer os.Remove(name)",
+		"落位失败必须清掉 .tmp（用户可见后果：目录里只剩 client.json.tmp）")
 
 	// ── ② 消费侧：只有 .tmp 的现场不可用（这就是用户看到的现象）──
-	e := NewEnv(t, true, 0)
-	const proj = "tc-gui-atomic"
-	e.EnsureProject(t, proj, false, nil, nil)
-	e.PutFile(t, proj, "app.exe", "app-100")
-	True(t, e.Publish(t, proj, "1.0.0", []string{"初始"}, "", "").IsSuccess, "发布失败")
-
-	c := e.NewClient(t, NewClientOpts{
-		Version: "1.0.0", Status: StatusApplied, Previous: "1.0.0",
-		Project: proj, MainFile: "app-100", DirName: "gui-atomic",
-	})
-	// 复现缺陷现场：client.json 从未生成，只剩临时文件
-	if err := os.Rename(filepath.Join(c.Up(), "client.json"),
-		filepath.Join(c.Up(), "client.json.tmp")); err != nil {
-		t.Fatalf("复现 client.json.tmp 现场失败: %v", err)
-	}
-
-	out := e.RunLast(t, c, "check_update")
-	Eq(t, "只有 client.json.tmp 时命令必须失败（不得静默当没配置）", out.IsSuccess, false)
-	Contains(t, out.ErrorMsg, "client.json", "失败原因必须指向 client.json")
+	// （把 client.json 改名成 client.json.tmp 后，check_update 必须失败
+	//   且 errorMsg 指向 client.json。完整代码见 test/tc/cases_125_127_test.go。）
 }
 ```
 
 **期望结果**
 
-- `WriteAllTextAtomic`：目标不存在 → `File.Move`；目标存在 → `File.Replace`；平台不支持 → 删目标 + 改名
+- `writeFileAtomic`：同目录临时文件 → `Sync` → `os.Rename`（Windows 走 `MoveFileEx`，目标不存在与已存在都能成）
 - 由源码契约推出：初始化后 `UpdateFolder` 内是 `client.json`，**没有** `client.json.tmp` 残留
 - 只有 `client.json.tmp` 的现场：`check_update` 返回 `isSuccess:false`，`errorMsg` 指向 `client.json`
 
 **失败判定**
 
-- 源码里 `File.Replace` 未被 `File.Exists` 分支守护 → 首次写必失败（`.tmp` 成为唯一残留，缺陷原样复现）
+- 源码里 `Rename` 被改成"先删目标再改名"之类非原子形态 → 崩溃窗口丢文件
 - 只有 `.tmp` 时命令仍 `isSuccess:true` → 配置缺失被静默吞掉（用户更难排查）
 - 初始化后仍有 `*.tmp` 残留 → 原子写没收尾
 
-PASS（2026-11-12 全量回归；已修正首发版本号）
+PASS（2026-11-23 改写为 Go 断言后复验）
 
 ---
 
@@ -8671,9 +8627,9 @@ linuxui 同构测试交叉编译验证（CI Ubuntu 实跑）。
 | 122 | `-lang en-US` | PASS | 43.68s | en-US 与 `bogus-lang` 退出码均 0、无 panic、更新均完成 |
 | 123 | 多段 Range / If-Range | PASS | 12.90s | 6 段 RFC 语义全对：`multipart/byteranges`+boundary、If-Range 不匹配回 200 全文、非法语法 400 |
 | 124 | SDK Launch 失败路径 | PASS | 16.41s | `SUMMARY: PASS=9 FAIL=0`；UI 缺失返回 NG 不抛、不触发 Started、Dispose 后仍 NG |
-| 125 | publish-gui-csharp：UpdateFolder 位置 | PASS | 2026-11-12 | 2026-11-04 新增；纯源码契约（不建 Env） |
-| 126 | publish-gui-csharp：三件套与相对路径 | PASS | 2026-11-12 | 2026-11-04 新增；源码契约 + 真实 client 消费 GUI 布局 |
-| 127 | publish-gui-csharp：原子写先 Move 后 Replace | PASS | 2026-11-12 | 2026-11-04 新增；源码契约 + 只有 `client.json.tmp` 的现场不可用 |
+| 125 | 发布 GUI（publish-gui-go）：UpdateFolder 位置 | PASS | 2026-11-23 | 2026-11-04 新增（C# 版）；2026-11-23 随主实现切换改写为 Go 源码契约（不建 Env） |
+| 126 | 发布 GUI（publish-gui-go）：三件套与相对路径 | PASS | 2026-11-23 | 2026-11-04 新增（C# 版）；2026-11-23 改写：Go 源码契约 + 真实 client 消费 GUI 布局 |
+| 127 | 发布 GUI（publish-gui-go）：原子写先 `.tmp` 后 Rename | PASS | 2026-11-23 | 2026-11-04 新增（C# 版）；2026-11-23 改写：Go 源码契约 + 只有 `client.json.tmp` 的现场不可用 |
 | 128 | 客户端真实分片上传路径 | PASS | 2.20s | 2026-11-06 新增；≥3MiB 非均匀文件走 publish-cli push，md5 逐字节一致、无 `.chunks`/`.merging` 残留。**负向对照实测**：移除服务端 `upload_chunk`/`upload_chunk_complete` 路由后重构建 → FAIL，报错与真机一致（`upload chunk 0/4: HTTP 404: 404 page not found`） |
 | 129 | 分片阈值边界 | PASS | 2.77s | 2026-11-06 新增；`chunkSize`（1048×1024）走直传、`chunkSize+1` 走分片，两文件 md5 均逐字节一致、无中间态残留 |
 | 130 | self_update 一致跳过 | PASS | 23.30s | 2026-11-09 新增；Windows 实跑。单元层：selfupdate 16 / cmd self_update 5 / UI journal 10 / UI 收尾 8；130–135 6/6 PASS |
