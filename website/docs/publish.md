@@ -13,7 +13,7 @@ description: aly-publish 的职责、CLI 与 GUI 的分工、全局参数、命�
 
 | 对比项 | `aly-publish`（CLI） | `AlyPublish.exe`（GUI） |
 |---|---|---|
-| 形态 | 单文件命令行程序 | Avalonia 桌面程序（默认；Go/MyGo 实现可替换） |
+| 形态 | 单文件命令行程序 | Go/MyGo native 桌面程序（默认；C#/Avalonia 为历史实现） |
 | 适用场景 | CI、脚本、批量发布 | 人工日常发版 |
 | 配置 | 直接读写当前目录的 `.updator/` | 调用 CLI，读写同一份配置 |
 | 输出 | human 文本或 `--json` | 解析 CLI 的 `--json` 输出并展示进度 |

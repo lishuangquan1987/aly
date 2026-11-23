@@ -13,7 +13,7 @@ It does not compile or package, and it does not create projects on the server â€
 
 | Aspect | `aly-publish` (CLI) | `AlyPublish.exe` (GUI) |
 |---|---|---|
-| Form | Single-file command-line program | Avalonia desktop app (default; Go/MyGo replacement available) |
+| Form | Single-file command-line program | Go/MyGo native desktop app (default; C#/Avalonia is historical) |
 | Best for | CI, scripts, batch publishing | Day-to-day manual releases |
 | Config | Reads and writes `.updator/` in the current directory directly | Calls the CLI; reads and writes the same config |
 | Output | human text or `--json` | Parses the CLI's `--json` output and displays progress |

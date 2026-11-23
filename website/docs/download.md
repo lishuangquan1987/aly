@@ -13,7 +13,7 @@ Aly 的客户端与发布 CLI 都打进 **AlyPublish 安装包**：装一个包�
 
 ## 第一步：装 AlyPublish（一个包搞定）
 
-Windows 下载 <ReleaseLink asset="AlyPublish-Setup.exe" />（安装包：开始菜单入口，自包含 .NET 8，装到 `Program Files\AlyPublish`）或 <ReleaseLink asset="AlyPublish-win-x64.zip" />（便携包：解压即用）；Linux 下载 <ReleaseLink asset="AlyPublish-linux-x64.zip" />（x64）或 <ReleaseLink asset="AlyPublish-linux-arm64.zip" />（arm64）。完整清单与文件大小见上表。
+Windows 下载 <ReleaseLink asset="AlyPublish-Setup.exe" />（安装包：开始菜单入口，装到 `Program Files\AlyPublish`）或 <ReleaseLink asset="AlyPublish-win-x64.zip" />（便携包：解压即用）；Linux 下载 <ReleaseLink asset="AlyPublish-linux-x64.zip" />（x64）或 <ReleaseLink asset="AlyPublish-linux-arm64.zip" />（arm64）。完整清单与文件大小见上表。
 
 ```powershell [Windows]
 Invoke-WebRequest -Uri "https://github.com/lishuangquan1987/aly/releases/latest/download/AlyPublish-Setup.exe" -OutFile "AlyPublish-Setup.exe"
@@ -32,14 +32,13 @@ chmod +x install.sh                                 # zip 不保留可执行位
 
 装好后启动 `AlyPublish`（Linux 装在前缀目录里的 `AlyPublish`，`install.sh` 也会在 `$HOME/.local/bin` 写一个启动器），接着走[快速开始](/docs/getting-started)。
 
-::: tip 发布 GUI 的两种实现
-默认发布的是 C# / Avalonia 版（自包含 .NET 8）。仓库另有 Go / MyGo 版
-`publish-gui-go`：在 Release Build 工作流里把 `gui` 选为 `go`（「一键全部构建」里
-同样有该输入），即可产出**同名**的 4 个资产。包内布局、`payload.json`、配置格式与
-下载链接完全一致，可直接替换。若要让**正式发版**（release 事件）默认用 Go 版，把仓库
-变量 `PUBLISH_GUI` 设为 `go` 即可；`gui=auto`（默认）会跟随该变量。
-Go 版在 Linux 上额外需要 GTK3（`libgtk-3.so.0`），安装脚本会在缺库时给出提示；
-Windows 版无额外运行依赖。详见
+::: tip 发布 GUI 的实现
+默认发布 Go / MyGo 版：Windows 无额外运行依赖，Linux 需要 GTK3
+（`libgtk-3.so.0`，安装脚本会在缺库时给出提示）。历史 C# / Avalonia 版
+（自包含 .NET 8）仍保留在仓库中：在 Release Build 工作流里把 `gui` 选为 `csharp`
+（「一键全部构建」里同样有该输入），或把仓库变量 `PUBLISH_GUI` 设为 `csharp`，
+即可产出**同名**的 4 个资产。包内布局、`payload.json`、配置格式与下载链接完全一致。
+详见
 [publish-gui-go/README](https://github.com/lishuangquan1987/aly/tree/master/publish/publish-gui-go)。
 :::
 

@@ -47,7 +47,7 @@ When the server creates a project, the initial version is **V1.0.0**, and `publi
 
 ## Does the publish GUI support English?
 
-Yes. `AlyPublish` uses Irihi.Lingua and JSON resources; the toolbar switches between Chinese and English, and `--lang zh-CN|en-US` can set the startup language. The choice is stored in `%LOCALAPPDATA%\AlyPublish\settings.json`.
+Yes. `AlyPublish` ships with built-in Chinese/English (Go i18n key tables); the toolbar switches between the two, and `--lang zh-CN|en-US` can set the startup language. The choice is stored in `%LOCALAPPDATA%\AlyPublish\settings.json`.
 
 ## What dependencies does the Linux GUI need?
 

@@ -49,7 +49,7 @@ description: 平台、宿主语言、停机时间、断电恢复、回滚、认�
 
 ## 发布 GUI 支持英文吗？
 
-支持。`AlyPublish` 基于 Irihi.Lingua + JSON 资源，工具栏可切换中文/English，也可用 `--lang zh-CN|en-US` 启动；选择保存在 `%LOCALAPPDATA%\AlyPublish\settings.json`。
+支持。`AlyPublish` 内建中英双语（Go i18n 键表），工具栏可切换中文/English，也可用 `--lang zh-CN|en-US` 启动；选择保存在 `%LOCALAPPDATA%\AlyPublish\settings.json`。
 
 ## Linux GUI 需要装什么依赖？
 

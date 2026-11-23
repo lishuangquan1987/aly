@@ -5,15 +5,15 @@ description: AlyPublish.exe's runtime requirements, project bookmarks, initializ
 
 # Publish GUI (AlyPublish)
 
-::: info Two implementations
-This page describes the C# / Avalonia 12.1 build shipped by default (`publish-gui-csharp`). A Go / MyGo
-build, `publish-gui-go`, is feature- and config-compatible: select `gui=go` in the Release Build workflow
-to produce the **same four asset names** as a drop-in replacement. It has no extra runtime dependency on
-Windows and needs GTK3 (`libgtk-3.so.0`, with a warning from `install.sh` when missing) on Linux. Both
-share the same `payload.json` and installer scripts; see [Download & Install](/en/docs/download).
+::: info Implementation and historical build
+This page describes the **primary** Go / MyGo build (`publish-gui-go`, pure-Go native UI). The historical
+C# / Avalonia build (`publish-gui-csharp`) is kept in the repository but is no longer built or released by
+default: select `gui=csharp` in the Release Build workflow (or set the repository variable `PUBLISH_GUI`
+to `csharp`) to produce the **same four asset names**. Both share the same `payload.json` and installer
+scripts with identical config files; see [Download & Install](/en/docs/download).
 :::
 
-`AlyPublish.exe` is the Avalonia desktop front end (.NET 8) for `aly-publish`, aimed at release engineers who are not comfortable with the command line. It does not reimplement the publishing logic: every operation goes through `aly-publish.exe --json` in the same directory, so the `.updator/` config, the staging area and the version rules are exactly the same as the CLI's.
+`AlyPublish.exe` is the Go / MyGo native UI desktop front end for `aly-publish`, aimed at release engineers who are not comfortable with the command line. It does not reimplement the publishing logic: every operation goes through `aly-publish.exe --json` in the same directory, so the `.updator/` config, the staging area and the version rules are exactly the same as the CLI's.
 
 <ScreenshotFrame src="/images/publish-gui-overview.webp" alt="AlyPublish main window in English: project list on the left, unstaged and staged files in the middle, publish panel and version history on the right" caption="AlyPublish main window (English)" wide />
 
@@ -25,7 +25,7 @@ For the Chinese UI, see [publish-gui-overview-zh.webp](/images/publish-gui-overv
 |---|---|
 | Executable | `AlyPublish(.exe)` |
 | Required dependency | `publish-cli/<cli_rid>/aly-publish(.exe)` inside the package; `cli_rid` comes from the package's `payload.json` |
-| Runtime | Release installer/portable zip is self-contained on .NET 8; a source `dotnet build` is framework-dependent |
+| Runtime | Single Go binary: no extra runtime dependency on Windows; GTK3 (`libgtk-3.so.0`) required on Linux, with a warning from `install.sh` when missing |
 | Minimum window | 1080 × 640; default 1320 × 840 |
 
 Download the package (click a file name):
@@ -37,7 +37,7 @@ The in-package payload layout and platform selection are in [Download & Install]
 1. `publish-cli/<cli_rid>/aly-publish(.exe)` named by `payload.json`;
 2. The other platform directories in the package (fallback in `payload_rids` order; a warning is logged when a non-native build is used);
 3. `aly-publish(.exe)` next to `AlyPublish` (the old manual layout still works);
-4. The project directory, then the development tree's `publish/publish-cli/` (local development only).
+4. The `ALY_PUBLISH` environment variable, the project directory, then the development tree's `publish/publish-cli/` (local development only).
 
 When `payload.json` is missing or invalid, the GUI falls back to platform detection (Windows → `windows-amd64`, Linux → `linux-amd64` / `linux-arm64`) and logs a line explaining why.
 
@@ -67,7 +67,7 @@ Example content:
 ]
 ```
 
-- `DisplayName` is used only in the left-hand list; the search box matches both display names and paths.
+- `DisplayName` is used only in the left-hand list; the search box matches both display names and paths (Ctrl+F focuses the search box).
 - `MainExePath` may be a path relative to the project directory; when the executable is outside the project directory, only an absolute path can be stored.
 - "Remove" deletes the bookmark only and asks for confirmation; it does not delete project files or `.updator/`.
 - Once a project is selected, the right-hand side reads `status` and the 20 most recent version log entries; the first load shows "Reading project status…".
@@ -111,9 +111,10 @@ aly-publish config init --server <server-url> --project <name> \
 
 If a main executable was provided, an `UpdateFolder/` is also created **next to** the project directory (as a sibling):
 
-- Find and copy `aly-client.exe` / `aly-client-ui.exe` from the GUI directory, the project directory or the development tree;
-- Write `client.json` containing the main executable's relative path and the names of the processes to close;
-- If the updater cannot be found, only a warning is shown and initialization is not blocked; a cross-drive setup fails because the main executable's relative path cannot be computed.
+- The updaters are taken from the **package payload** `client/<client_rid>/` (the platform is decided by the package's `payload.json`) and written unconditionally;
+- `client.json` is written containing the main executable's relative path and the names of the processes to close;
+- If the updater cannot be found, only a warning is shown and initialization is not blocked; a cross-drive setup fails because the main executable's relative path cannot be computed;
+- To ship updaters for another platform, take them from the package's other `client/<rid>/` directories (see [Download & Install](/en/docs/download)).
 
 After initialization the project is added to the left-hand list and selected. It does **not** upload any files and does not create a server project automatically.
 
@@ -128,7 +129,8 @@ The server already occupies V1.0.0 when the project is created. After initializa
 - The directory must already contain `.updator/shared.json`;
 - It reads and displays the server URL, the project name and the number of ignore rules;
 - The display name defaults to the server project name, otherwise to the folder name;
-- It only saves a bookmark: no files are copied, `.updator/` is not modified, and the CLI is not called.
+- It only saves a bookmark: no files are copied, `.updator/` is not modified, and the CLI is not called;
+- If the project already has a sibling `UpdateFolder/`, the two updaters inside are refreshed to the package payload's files with the same names (`client.json` is untouched); without an `UpdateFolder/` nothing happens.
 
 The same directory cannot be added twice; a directory that is already a bookmark reports "This project is already in the list".
 
@@ -147,16 +149,18 @@ Behavior:
 - As soon as at least one item in `shared.json` changes, the local ignore rules are synced to the server project while the server-side title and force-update flag are preserved; a failed sync only warns and does not block the local save.
 - Changing the project name does not rename the server project; it only makes the client connect under the new name, so a server project with that name must already exist.
 - An empty server URL or project name prevents saving.
+- When saving with a main executable and no sibling `UpdateFolder/` yet, the folder is created (the same code path as initialization: copy updaters from the package payload + write `client.json`); an existing `UpdateFolder/` is left alone to avoid overwriting user configuration.
 
 ## Reviewing changes
 
 The upper half of the right-hand side is the changes area:
 
-- The "Unstaged" table lists the additions and modifications returned by `status`; **deleted items are not shown**, and the GUI cannot stage deletions manually. Deletion is performed by the client, driven by the manifest frozen by the server after a release.
+- The "Unstaged" table lists the additions and modifications returned by `status`. Files that exist only on the server are treated as **kept by the server**: they are not a difference, no "deleted" rows are shown, and publishing **never deletes server files** (staging entries left over from older builds that carried the deleted status are ignored with a warning).
 - The "Staged" table lists staging entries; the "Server" column of a staged entry is empty (`—`), because only the local snapshot is recorded when a file is staged.
 - Columns: Select, File, Status, Local, Server. Status badges distinguish new / modified.
 - Each row offers "Show in folder"; the top buttons support refresh, settings, opening the project directory and launching the main executable.
 - The unstaged area provides "Select all / Unselect all", "Stage selected" and "Stage all"; the staged area provides "Select all / Unselect all", "Unstage" and "Clear" (clearing asks for confirmation).
+- Unstaged and staged are **fixed-ratio panes** (half each by default, draggable, remembered per project); the bottom of each table shows an "N files · total size" summary. On narrow windows the table drops the "Server" column automatically.
 - Selecting a project for the first time and any manual refresh both re-read `status` and the log; the status bar at the bottom shows "N unstaged, M staged", the project path and the log shortcut.
 
 ## Publishing and version history
@@ -171,7 +175,7 @@ The publish panel on the right requires three conditions to be met at once:
 |---|---|
 | Version | For example `V1.0.2`; when empty the button is disabled and shows "Enter a version" |
 | Next version | Increments the last numeric segment of the current version by one (`V1.0.2` → `V1.0.3`); disabled when the current version is missing or cannot be parsed |
-| Release notes | Required; the GUI submits them as **one** log entry — for multiple entries use repeated `--message` with the CLI |
+| Release notes | Required; the GUI submits them as **one** log entry — for multiple entries use repeated `--message` with the CLI. Long notes scroll inside the input and never squeeze the version history |
 | Advanced | The post-update script (relative to the application directory) and the force-update checkbox (checked = on, unchecked = off; written explicitly to the server on publish) |
 | Publish button | The label follows the staged count ("Publish 3 files"); with nothing staged it prompts "Stage at least one file on the left first" |
 
@@ -196,6 +200,7 @@ The version history shows the 20 most recent entries, returned by the server wit
 | F5 | Refresh the current project (same as the "Refresh" button) |
 | Ctrl+Enter | Publish the current project (triggered only when the publish button is enabled) |
 | Ctrl+E | Open the settings for the current project |
+| Ctrl+F | Focus the search box on the left |
 
 ## UI language
 
@@ -217,34 +222,24 @@ The language button in the upper-right corner shows the **target language**: the
 
 - `--lang` only affects the current launch and is not written to the settings file.
 
-Translations use the JSON scheme of Irihi.Lingua:
-
-| File | Purpose |
-|---|---|
-| `Resources/Strings.json` | Default (English) resources |
-| `Resources/Strings.zh-Hans.json` | Simplified Chinese resources |
-
-`LanguageManager` generates the key class and the observable strings at compile time through `[LinguaManager("./Resources/Strings.json")]`; XAML uses:
-
-```xml
-Text="{Translate {x:Static loc:LanguageManager+Keys.S009}}"
-```
-
-When adding new text, add the same key to both JSON files and then rebuild to generate the `Keys` member; switching language at runtime is driven by `UpdateCulture` and needs no restart.
+Translations are built into the program (Go key tables such as `i18n.go`, one zh/en pair), switchable at runtime with no rebuild. The theme (light/dark) and accent color are stored in `appearance.json` in the same directory, independently of the language setting.
 
 ## Logging and troubleshooting
 
-The GUI writes file logs with Serilog. The files live in a `logs/` directory, roll daily, and are named like `log20261110.log` (multiple processes on the same day may add a suffix such as `_001`). The log directory is chosen in the following order, taking the first writable one:
+The GUI writes file logs with the Go standard library: it appends to `log.log` and mirrors the same lines to stderr. The log directory is chosen in the following order, taking the first writable one:
 
 1. `logs/` in the directory containing `AlyPublish.exe`;
-2. `%LOCALAPPDATA%\AlyPublish\logs\`;
+2. `logs/` in the config directory (`%LOCALAPPDATA%\AlyPublish\logs\` on Windows);
 3. `AlyPublish\logs\` under the temp directory.
 
 The "Logs" button in the status bar opens that directory directly.
 
 | Symptom | Likely cause and fix |
 |---|---|
-| The banner says `aly-publish.exe` was not found | Put the CLI in the same directory as the GUI and click "Detect again" |
+| The banner says `aly-publish.exe` was not found | The package's `publish-cli/<rid>/` is missing or `payload.json` does not match: reinstall AlyPublish and click "Detect again"; in the old manual layout a CLI next to the GUI is still recognized |
+| No updater in `UpdateFolder` after initialization | The package is missing `client/<rid>/` (reinstall); if the main executable and the project directory are on different drives, `main_exe_relative_path` cannot be computed and the operation fails |
+| Linux startup reports a missing GTK library | Install GTK3 (e.g. `apt install libgtk-3-0`); `install.sh` warns when the library is missing |
+| The CLI/updater taken from the package cannot be executed on Linux | The zip does not preserve the executable bit: `chmod 0755`; `install.sh` does this for you |
 | The directory is already initialized, so initialization cannot continue | Use "Add local project" instead |
 | The server project list is empty | "Create a server project" first, or check the server URL |
 | Publish rejected: the version is not greater than the latest version | Use a higher version number; the first publish must be at least V1.0.1 |
@@ -254,27 +249,42 @@ The "Logs" button in the status bar opens that directory directly.
 
 ## Building and distribution
 
-The Release workflow now builds and uploads two GUI assets (see `.github/workflows/release.yml`):
+The Release workflow builds and uploads **four GUI assets** (see `.github/workflows/release.yml`):
 
-- `AlyPublish-Setup.exe`: a Windows x64 installer, self-contained on .NET 8, bundling `aly-publish.exe`;
-- `AlyPublish-win-x64.zip`: a portable bundle that runs after extraction.
+- `AlyPublish-Setup.exe`: a Windows x64 installer bundling the GUI, `publish-cli/`, `client/` and `payload.json`;
+- `AlyPublish-win-x64.zip`: a portable bundle that runs after extraction;
+- `AlyPublish-linux-x64.zip`, `AlyPublish-linux-arm64.zip`: Linux packages (with `install.sh` / `uninstall.sh` inside); after extraction run `chmod +x install.sh` first (the zip does not preserve the executable bit), then `./install.sh` to install into `/opt/aly/AlyPublish` (`--prefix` can override; `install.sh` also restores the 0755 bits on the payload executables).
 
-The installer is produced with Inno Setup, installs into `Program Files\AlyPublish`, and creates Start Menu and optional desktop shortcuts. Neither artifact requires a separate .NET runtime on the target machine.
+The publish CLI and the terminal updaters are **not** uploaded as standalone assets: they ship only inside the GUI package (one package is all a user needs).
+
+The payload is staged by the inline pwsh step in the release workflow (`Stage the package payload`): it lays out the downloaded per-platform artifacts into the layout above, copies the platform's `payload.json`, and asserts that all 10 items (9 binaries + the manifest) are present (any miss fails the build). For local development `publish/deploy-publish.bat` copies the same file names into the GUI output directory.
 
 Build from source:
 
 ```bash
-# Day-to-day debug build (framework-dependent; needs .NET 8 locally)
-dotnet build publish/publish-gui-csharp/src/AlyPublish/AlyPublish.csproj -c Release
+cd publish/publish-gui-go
 
-# Self-contained single file (same shape as the CI portable bundle)
-dotnet publish publish/publish-gui-csharp/src/AlyPublish/AlyPublish.csproj \
-  -c Release -r win-x64 --self-contained true \
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
-  -o publish/publish-gui-csharp/artifacts/app
+# Tests and static checks
+go test ./... -count=1
+go tool mygo vet
+
+# Windows single file (-H windowsgui removes the console window)
+go build -trimpath -ldflags "-H windowsgui" -o build/windows-amd64/AlyPublish.exe .
+
+# Linux cross-compile (same source, switch GOOS/GOARCH; CI adds install.sh and zips on top)
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o build/linux-amd64/AlyPublish .
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o build/linux-arm64/AlyPublish .
 ```
 
-When distributing manually, keep `AlyPublish.exe` and `aly-publish.exe` in the same directory. If the initialization wizard should also generate `UpdateFolder` automatically, place `aly-client.exe` / `aly-client-ui.exe` in the GUI directory (or the project directory).
+(Or run `build.ps1` / `build.sh` directly: one run of fmt/vet/test plus all three platform binaries.)
+
+When distributing manually, keep `AlyPublish.exe` together with `payload.json`, `publish-cli/` and `client/` in the same directory (the initialization wizard picks the updaters from that layout).
+
+The historical C# build from source (kept, no longer released by default):
+
+```bash
+cd publish/publish-gui-csharp && dotnet build
+```
 
 ## Next steps
 

@@ -8,7 +8,7 @@ description: Aly's components, the data flow from publishing to application, the
 ```text
 Publisher (developer / CI / release manager)      End-user machine
 ┌────────────────────────────────────────┐      ┌────────────────────────────────────────────────────────────┐
-│ AlyPublish.exe (C# or Go, optional)    │      │  Host application YourApp.exe                              │
+│ AlyPublish.exe (Go / MyGo)             │      │  Host application YourApp.exe                              │
 │      │ subprocess + --json             │      │      │ subprocess / C# SDK / GUI                           │
 │      ▼                                 │      │      ▼                                                     │
 │ aly-publish (cobra CLI)────────────────┼──┐   │  aly-client-ui (optional window)                           │
@@ -59,7 +59,7 @@ The C# and other language SDKs, plus the GUI, follow the same protocol; see [Lan
 
 ## Publish GUI Languages
 
-`AlyPublish` supports Chinese/English through Irihi.Lingua and JSON resources: the language can be switched in the toolbar, and `--lang zh-CN|en-US` selects the startup language. The choice is stored in `%LOCALAPPDATA%\AlyPublish\settings.json`.
+`AlyPublish` ships with built-in Chinese/English (Go i18n key tables): the toolbar switches the language, and `--lang zh-CN|en-US` selects the startup language. The choice is stored in `%LOCALAPPDATA%\AlyPublish\settings.json`; theme and accent color live in `appearance.json` in the same directory.
 
 ## Repository Layout
 
@@ -78,8 +78,8 @@ aly/
 │   └── aly-client-sdk/         # multi-language SDKs (C#/TS/Go/Python/Java/Rust/C++/Pascal/COM)
 ├── publish/
 │   ├── publish-cli/            # publish CLI (cobra)
-│   ├── publish-gui-csharp/     # publish desktop app (Avalonia 12.1 · .NET 8, shipped by default)
-│   └── publish-gui-go/         # publish desktop app (Go / MyGo, selectable replacement)
+│   ├── publish-gui-go/         # publish desktop app (Go / MyGo, shipped by default)
+│   └── publish-gui-csharp/     # publish desktop app (Avalonia 12.1 · .NET 8, historical)
 ├── test/tc/                    # 148 end-to-end cases
 ├── deploy/                     # deployment scripts
 └── website/                    # this site (VitePress)

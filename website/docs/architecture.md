@@ -8,7 +8,7 @@ description: Aly 的组件、发布到应用的数据流、双轨工具链与 GU
 ```text
 发布方（开发者 / CI / 发布员）                    终端用户机器
 ┌──────────────────────────────────────┐      ┌────────────────────────────────────┐
-│  AlyPublish.exe（C# 或 Go，可选）    │      │  宿主应用 YourApp.exe              │
+│  AlyPublish.exe（Go / MyGo）         │      │  宿主应用 YourApp.exe              │
 │      │ 子进程 + --json                │      │      │ 子进程 / C# SDK / GUI     │
 │      ▼                               │      │      ▼                             │
 │  aly-publish（cobra CLI）────────────┼──┐   │  aly-client-ui（可选窗口）         │
@@ -59,7 +59,7 @@ C# 与其它语言 SDK、GUI 遵循同一协议，见 [多语言 SDK](/docs/sdk/
 
 ## 发布 GUI 的语言
 
-`AlyPublish` 通过 Irihi.Lingua + JSON 资源支持中文/English：工具栏可切换，`--lang zh-CN|en-US` 可指定启动语言。语言选择保存在 `%LOCALAPPDATA%\AlyPublish\settings.json`。
+`AlyPublish` 内建中英双语（Go i18n 键表）：工具栏可切换，`--lang zh-CN|en-US` 可指定启动语言。语言选择保存在 `%LOCALAPPDATA%\AlyPublish\settings.json`，主题与主题色保存在同目录的 `appearance.json`。
 
 ## 仓库结构
 
@@ -78,8 +78,8 @@ aly/
 │   └── aly-client-sdk/         # 多语言 SDK（C#/TS/Go/Python/Java/Rust/C++/Pascal/COM）
 ├── publish/
 │   ├── publish-cli/            # 发布 CLI（cobra）
-│   ├── publish-gui-csharp/     # 发布桌面端（Avalonia 12.1 · .NET 8，默认发布）
-│   └── publish-gui-go/         # 发布桌面端（Go / MyGo，可选替换实现）
+│   ├── publish-gui-go/         # 发布桌面端（Go / MyGo，默认发布）
+│   └── publish-gui-csharp/     # 发布桌面端（Avalonia 12.1 · .NET 8，历史实现）
 ├── test/tc/                    # 148 条端到端用例
 ├── deploy/                     # 部署脚本
 └── website/                    # 本站点（VitePress）
