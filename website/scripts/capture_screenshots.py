@@ -747,6 +747,17 @@ def capture_client_ui(
         set_topmost(hwnd, True)
         time.sleep(0.8)
         capture_window(hwnd, OUT_DIR / dest_name, max_width=1200)
+        # A blank grab (single-colour frame) means the window had not painted
+        # yet; give it another beat and capture once more.
+        from PIL import Image as _Image
+
+        with _Image.open(OUT_DIR / dest_name) as check:
+            colours = len(set(check.convert("RGB").getdata()))
+        if colours < 10:
+            time.sleep(2.5)
+            bring_to_front(hwnd, x=180, y=140)
+            time.sleep(1.0)
+            capture_window(hwnd, OUT_DIR / dest_name, max_width=1200)
         close_window(hwnd, proc.pid)
     finally:
         if proc.poll() is None:
