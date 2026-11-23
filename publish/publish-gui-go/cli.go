@@ -39,11 +39,14 @@ type StatusData struct {
 }
 
 type ChangeLog struct {
-	ID      int      `json:"id"`
-	Project int      `json:"project_id"`
-	Version string   `json:"version"`
+	ID      int    `json:"id"`
+	Project int    `json:"project_id"`
+	Version string `json:"version"`
 	Logs    []string `json:"logs"`
-	Time    string   `json:"time"`
+	Time    string `json:"time"`
+	// 审查修复（code-review-2026-11-23 #17）：服务端/CLI 均已支持该字段，
+	// GUI 模型此前缺失导致详情页永远显示不出"更新后脚本"配置。
+	AfterApplyUpdateScript string `json:"after_apply_update_script"`
 }
 
 type UploadProgress struct {
@@ -248,18 +251,37 @@ func (c *cliClient) resetAll(ctx context.Context, projectPath string) error {
 	return c.checked(ctx, projectPath, []string{"reset", "--all"})
 }
 
+// maxArgsPerCommand 单次 exec 携带的最大路径数（审查修复 code-review-2026-11-23 #4）。
+// Windows CreateProcess 命令行上限 32767 字符；全选几千个文件时单次 exec
+// 直接失败且报错晦涩。按条数分批（每条路径按 ~150 字符保守估计，
+// 200 条 ≈ 30K 字符，仍在限额内）。
+const maxArgsPerCommand = 200
+
 func (c *cliClient) addFiles(ctx context.Context, projectPath string, files []string) error {
-	if len(files) == 0 {
-		return nil
-	}
-	return c.checked(ctx, projectPath, append([]string{"add", "--"}, files...))
+	return c.filesInBatches(ctx, projectPath, "add", files)
 }
 
 func (c *cliClient) resetFiles(ctx context.Context, projectPath string, files []string) error {
+	return c.filesInBatches(ctx, projectPath, "reset", files)
+}
+
+// filesInBatches 把路径列表按 maxArgsPerCommand 分批调用 CLI（#4）。
+// 每批独立 exec；某批失败立即返回（后续批次不再执行）。
+func (c *cliClient) filesInBatches(ctx context.Context, projectPath, verb string, files []string) error {
 	if len(files) == 0 {
 		return nil
 	}
-	return c.checked(ctx, projectPath, append([]string{"reset", "--"}, files...))
+	for start := 0; start < len(files); start += maxArgsPerCommand {
+		end := start + maxArgsPerCommand
+		if end > len(files) {
+			end = len(files)
+		}
+		batch := files[start:end]
+		if err := c.checked(ctx, projectPath, append([]string{verb, "--"}, batch...)); err != nil {
+			return fmt.Errorf("批次 %d-%d/%d 失败: %w", start+1, end, len(files), err)
+		}
+	}
+	return nil
 }
 
 func (c *cliClient) configSetArray(ctx context.Context, projectPath, key string, add bool, item string) error {

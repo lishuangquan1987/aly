@@ -142,6 +142,9 @@ func createUpdateFolder(projectPath, mainExePath, closeProcessName string) (stri
 // ensureUpdatersFor creates the sibling UpdateFolder when the project has a
 // main executable and no UpdateFolder yet, matching the C# EnsureUpdaters
 // path. A missing main executable is skipped just like C# does.
+// 审查修复（code-review-2026-11-23 #15）：目录存在但 client.json 缺失
+//（首次创建中途失败的半成品）此前被静默跳过且永远不自愈——client.json
+// 缺失的 UpdateFolder 是不可用的，这里补齐检查并走完整创建。
 func ensureUpdatersFor(projectPath, mainExePath string) string {
 	if strings.TrimSpace(mainExePath) == "" {
 		return ""
@@ -153,7 +156,10 @@ func ensureUpdatersFor(projectPath, mainExePath string) string {
 	}
 	updateFolder := filepath.Join(parent, "UpdateFolder")
 	if info, err := os.Stat(updateFolder); err == nil && info.IsDir() {
-		return ""
+		// 目录已存在：client.json 也在则无事可做；缺失则是半成品，补建
+		if fileExists(filepath.Join(updateFolder, "client.json")) {
+			return ""
+		}
 	}
 	mainExeFull := resolveProjectPath(projectDir, mainExePath)
 	if !fileExists(mainExeFull) {

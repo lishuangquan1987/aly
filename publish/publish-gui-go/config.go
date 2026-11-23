@@ -70,6 +70,14 @@ func configDir() string {
 			return filepath.Join(home, ".local", "share", "AlyPublish")
 		}
 	}
+	// 兜底（审查修复 code-review-2026-11-23 轻微⑤）：优先 exe 同目录而非
+	// 临时目录——书签/设置写进 TempDir 重启即丢（临时目录会被系统清理）。
+	// exe 目录至少随安装包存续。
+	if exe, err := os.Executable(); err == nil {
+		if dir := filepath.Dir(exe); dir != "" {
+			return filepath.Join(dir, "AlyPublish-config")
+		}
+	}
 	return filepath.Join(os.TempDir(), "AlyPublish")
 }
 

@@ -599,6 +599,12 @@ func (a *app) historyView(c *ui.Context, d *detailState) {
 					for _, line := range log.Logs {
 						ui.Text(c, line).FontSize(fontMicro).TextColor(p.textSecond).Wrap()
 					}
+					// 审查修复（code-review-2026-11-23 #17）：服务端已支持
+					// after_apply_update_script，CLI/模型均已携带，这里补展示。
+					if log.AfterApplyUpdateScript != "" {
+						ui.Text(c, a.t("history.afterScript")+": "+log.AfterApplyUpdateScript).
+							FontSize(fontMicro).TextColor(p.textThird).Wrap()
+					}
 				})
 			}
 		})
