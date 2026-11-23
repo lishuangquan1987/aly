@@ -8,9 +8,9 @@ the real end-user update window.
 
 Requirements:
   - Windows interactive desktop
-  - .NET 8 runtime (for AlyPublish.exe)
+  - the publish GUI built from publish/publish-gui-go (build/windows-amd64/AlyPublish.exe)
   - Python 3.9+ with Pillow
-  - the repository binaries built (dist-test/ and the publish-gui-csharp Debug output)
+  - the repository binaries built (dist-test/)
 
 Usage:
   python website/scripts/capture_screenshots.py
@@ -46,7 +46,7 @@ OUT_DIR = WEBSITE / "public" / "images"
 TMP_DIR = Path(os.environ.get("ALY_SCREENSHOT_TMP", r"C:\AlyDemo"))
 
 DIST_BIN = ROOT / "dist-test"
-PUBLISH_GUI_BIN = ROOT / "publish" / "publish-gui-csharp" / "src" / "AlyPublish" / "bin" / "Debug" / "net8.0"
+PUBLISH_GUI_BIN = ROOT / "publish" / "publish-gui-go" / "build" / "windows-amd64"
 CLIENT_UI_EXE = ROOT / "client" / "aly-client-ui" / "aly-client-winui" / "aly-client-ui.exe"
 
 SERVER_PORT = 29100
@@ -55,8 +55,8 @@ PROJECT_NAME = "demo-app"
 PROJECT_TITLE = "演示应用"
 PROJECT_TITLE_EN = "Demo App"
 
-UI_TITLE_ZH = "AlyPublish - 版本发布工具"
-UI_TITLE_EN = "AlyPublish - Release Publisher"
+UI_TITLE_ZH = "AlyPublish"
+UI_TITLE_EN = "AlyPublish"
 
 # ── Win32 helpers ─────────────────────────────────────────────────────
 
@@ -679,6 +679,9 @@ def capture_publish_gui(
     env = os.environ.copy()
     env["LOCALAPPDATA"] = str(tmp / "localappdata")
     (tmp / "localappdata").mkdir(parents=True, exist_ok=True)
+    # The Go GUI resolves the CLI through ALY_PUBLISH first; point it at the
+    # dist-test binary so the package payload layout is not required.
+    env["ALY_PUBLISH"] = str(DIST_BIN / "aly-publish.exe")
     proc = subprocess.Popen(
         [str(PUBLISH_GUI_BIN / "AlyPublish.exe"), "--lang", language],
         cwd=str(PUBLISH_GUI_BIN),
@@ -769,7 +772,6 @@ def main() -> int:
         DIST_BIN / "aly-client.exe",
         DIST_BIN / "fake_main.exe",
         PUBLISH_GUI_BIN / "AlyPublish.exe",
-        PUBLISH_GUI_BIN / "aly-publish.exe",
         CLIENT_UI_EXE,
     ]
     missing = [str(p) for p in required if not p.exists()]

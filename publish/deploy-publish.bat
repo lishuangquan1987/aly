@@ -321,7 +321,8 @@ echo [成功] publish-cli 编译完成
 
 
 
-echo ===== 复制 aly-publish.exe 到 publish-gui-csharp 输出目录 =====
+echo ===== 复制 aly-publish.exe 到 publish-gui-go 输出目录 =====
+if not exist "%SCRIPT_DIR%publish-gui-go\build\windows-amd64\" mkdir "%SCRIPT_DIR%publish-gui-go\build\windows-amd64\"
 
 
 
@@ -337,7 +338,7 @@ echo ===== 复制 aly-publish.exe 到 publish-gui-csharp 输出目录 =====
 
 
 
-copy /y "%SCRIPT_DIR%publish-cli\aly-publish.exe" "%SCRIPT_DIR%publish-gui-csharp\src\AlyPublish\bin\Debug\net8.0\" >nul
+copy /y "%SCRIPT_DIR%publish-cli\aly-publish.exe" "%SCRIPT_DIR%publish-gui-go\build\windows-amd64\" >nul
 
 
 
@@ -417,7 +418,7 @@ if %ERRORLEVEL% neq 0 (
 
 
 
-echo [成功] 已复制到 publish-gui-csharp 输出目录
+echo [成功] 已复制到 publish-gui-go 输出目录
 
 
 
@@ -449,7 +450,7 @@ echo [成功] 已复制到 publish-gui-csharp 输出目录
 
 
 
-echo ===== 复制 aly-client.exe / aly-client-ui.exe 到 publish-gui-csharp 输出目录 =====
+echo ===== 复制 aly-client.exe / aly-client-ui.exe 到 publish-gui-go 输出目录 =====
 
 
 
@@ -473,7 +474,7 @@ REM 两个 exe 由deploy 目录下的 deploy-client.bat（WSL + Go 1.10）编译
 
 
 
-REM client\aly-client\ 与 client\aly-client-ui\aly-client-winui\，需先运行 deploy-client.bat。publish-gui-csharp 初始化项目时
+REM client\aly-client\ 与 client\aly-client-ui\aly-client-winui\，需先运行 deploy-client.bat。publish-gui-go 初始化项目时
 
 
 
@@ -537,7 +538,7 @@ if not exist "%SCRIPT_DIR%..\client\aly-client\aly-client.exe" (
 
 
 
-copy /y "%SCRIPT_DIR%..\client\aly-client\aly-client.exe" "%SCRIPT_DIR%publish-gui-csharp\src\AlyPublish\bin\Debug\net8.0\" >nul
+copy /y "%SCRIPT_DIR%..\client\aly-client\aly-client.exe" "%SCRIPT_DIR%publish-gui-go\build\windows-amd64\" >nul
 
 
 
@@ -673,7 +674,7 @@ if not exist "%SCRIPT_DIR%..\client\aly-client-ui\aly-client-winui\aly-client-ui
 
 
 
-copy /y "%SCRIPT_DIR%..\client\aly-client-ui\aly-client-winui\aly-client-ui.exe" "%SCRIPT_DIR%publish-gui-csharp\src\AlyPublish\bin\Debug\net8.0\" >nul
+copy /y "%SCRIPT_DIR%..\client\aly-client-ui\aly-client-winui\aly-client-ui.exe" "%SCRIPT_DIR%publish-gui-go\build\windows-amd64\" >nul
 
 
 
@@ -801,7 +802,7 @@ echo [成功] 已复制 aly-client-ui.exe
 
 
 
-echo ===== 编译 publish-gui-csharp =====
+echo ===== 编译 publish-gui-go =====
 
 
 
@@ -817,7 +818,7 @@ echo ===== 编译 publish-gui-csharp =====
 
 
 
-cd /d "%SCRIPT_DIR%publish-gui-csharp\src\AlyPublish"
+cd /d "%SCRIPT_DIR%publish-gui-go"
 
 
 
@@ -833,7 +834,7 @@ cd /d "%SCRIPT_DIR%publish-gui-csharp\src\AlyPublish"
 
 
 
-dotnet build -c Debug --no-restore
+go build -trimpath -ldflags "-H windowsgui" -o build\windows-amd64\AlyPublish.exe .
 
 
 
@@ -865,7 +866,7 @@ if %ERRORLEVEL% neq 0 (
 
 
 
-    echo [失败] publish-gui-csharp 编译失败
+    echo [失败] publish-gui-go 编译失败
 
 
 
@@ -913,7 +914,7 @@ if %ERRORLEVEL% neq 0 (
 
 
 
-echo [成功] publish-gui-csharp 编译完成
+echo [成功] publish-gui-go 编译完成
 
 
 

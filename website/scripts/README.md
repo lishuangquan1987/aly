@@ -5,11 +5,10 @@
 ## 前置条件 / Prerequisites
 
 - Windows 交互式桌面（脚本会移动窗口并截屏）。
-- .NET 8 运行时（启动 `AlyPublish.exe`）。
 - Python 3.9+ 与 Pillow。
 - 仓库内已有构建产物：
   - `dist-test/server.exe`、`dist-test/aly-publish.exe`、`dist-test/aly-client.exe`、`dist-test/fake_main.exe`
-  - `publish/publish-gui-csharp/src/AlyPublish/bin/Debug/net8.0/AlyPublish.exe`（及同目录 `aly-publish.exe`）
+  - `publish/publish-gui-go/build/windows-amd64/AlyPublish.exe`（Go 主实现；脚本通过 `ALY_PUBLISH` 指向 `dist-test/aly-publish.exe`）
   - `client/aly-client-ui/aly-client-winui/aly-client-ui.exe`
 
 ## 用法 / Usage
@@ -38,6 +37,7 @@ python website/scripts/capture_screenshots.py --keep
 
 ## 新增语言后 / After adding a language
 
-发布 GUI 的文案在 `publish/publish-gui-csharp/src/AlyPublish/Resources/Strings.json` 与
-`Strings.zh-Hans.json`。新增语言时复制一份 `Strings.<culture>.json`，保持键集合完全一致，
-并在 `LanguageManager` 的语言解析处加入该 culture；随后用 `--lang` 重新截图。
+发布 GUI 的文案内建在 `publish/publish-gui-go` 的 `i18n.go`、`i18n_addproject.go`、
+`i18n_detail.go`、`i18n_edit.go` 键表里（zh/en 两套，键集一致性由测试保证）。新增语言时
+在 `main.go` 的 `--lang` 解析与 `newApp` 的语言判定处加入该语言，并补齐键表；随后用
+`--lang` 重新截图。

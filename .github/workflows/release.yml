@@ -25,14 +25,15 @@ on:
         default: auto
 
 # 统一决定本次发布用哪个 GUI 实现。优先级：手动显式选 go/csharp > 仓库变量
-# PUBLISH_GUI > csharp。release 事件没有 inputs（inputs.gui 为空），会落到仓库变量；
-# 把仓库变量 PUBLISH_GUI 设为 go，即可让正式发版默认使用 publish-gui-go，无需改代码。
+# PUBLISH_GUI > go。release 事件没有 inputs（inputs.gui 为空），会落到仓库变量；
+# 主实现是 publish-gui-go（默认），需要回退到历史 C# 版时把仓库变量 PUBLISH_GUI
+# 设为 csharp，或手动触发时显式选 csharp。
 # 手动触发默认 auto = 跟随仓库变量，也可显式选 go/csharp 覆盖，避免 default 把
 # 仓库变量静默盖掉。
 # 注意：job 级 name 不允许使用 env 上下文，所以下游 job 名显示的 GUI 标签由
 # resolve-version 的 gui_label 输出提供（取值同样来自 PUBLISH_GUI）。
 env:
-  PUBLISH_GUI: ${{ (inputs.gui == 'go' || inputs.gui == 'csharp') && inputs.gui || vars.PUBLISH_GUI || 'csharp' }}
+  PUBLISH_GUI: ${{ (inputs.gui == 'go' || inputs.gui == 'csharp') && inputs.gui || vars.PUBLISH_GUI || 'go' }}
 
 # 统一解析版本号：release 事件用 tag；手动触发有 version 用 version；
 # 否则生成临时构建版本号（仅构建模式）。格式必须同时满足
@@ -339,11 +340,11 @@ jobs:
             aly-client-linux-arm64/aly-client-linux-arm64
             aly-client-linux-arm64/aly-client-ui-linux-arm64
 
-  # AlyPublish GUI 由顶层 env.PUBLISH_GUI 统一切换：csharp（Avalonia）或 go（MyGo）。
-  # 两种实现都产出同名的单文件 AlyPublish.exe，后续的 payload 铺装、Inno Setup
-  # 安装器与便携 zip 全部复用同一套逻辑，产物名与包内布局完全一致 —— 因此
-  # 手动选 gui=go、或把仓库变量 PUBLISH_GUI 设为 go，即可用 publish-gui-go 直接
-  # 替换 C# 版，网站下载链接与包内布局都无需改动。
+  # AlyPublish GUI 由顶层 env.PUBLISH_GUI 统一切换：go（MyGo，主实现，默认）或
+  # csharp（Avalonia，历史实现）。两种实现都产出同名的单文件 AlyPublish.exe，后续的
+  # payload 铺装、Inno Setup 安装器与便携 zip 全部复用同一套逻辑，产物名与包内布局
+  # 完全一致 —— 因此需要回退时把仓库变量 PUBLISH_GUI 设为 csharp（或手动选
+  # gui=csharp）即可切回 C# 版，网站下载链接与包内布局都无需改动。
   build-publish-gui-windows:
     name: "Build AlyPublish for Windows (${{ needs.resolve-version.outputs.gui_label }} GUI)"
     runs-on: windows-latest
