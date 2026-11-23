@@ -1,9 +1,9 @@
 # publish-gui-go
 
-`AlyPublish` 发布 GUI 的 Go / MyGo native UI 实现，用于替换 C# / Avalonia 版
-`publish-gui-csharp`。两者共用同一套发布包布局（`payload.json`、Inno Setup 安装器、
-Linux `install.sh`）与同一组 release 资产名，配置格式也完全一致，因此切换实现
-对使用者透明。
+`AlyPublish` 发布 GUI 的**主实现**（Go / MyGo native UI）。历史上的 C# / Avalonia 版
+`publish-gui-csharp` 仍保留在仓库中，但不再默认构建与发布。两者共用同一套发布包
+布局（`payload.json`、Inno Setup 安装器、Linux `install.sh`）与同一组 release 资产名，
+配置格式完全一致，替换对使用者透明。
 
 ## 发布与替换
 
@@ -11,11 +11,11 @@ Release Build 工作流提供 `gui` 输入，最终生效值由顶层 `env.PUBLI
 
 | 取值 | 行为 |
 |---|---|
-| `auto`（默认） | 跟随仓库变量 `PUBLISH_GUI`；未设置时为 `csharp` |
-| `csharp` | 强制发布 Avalonia 版，现有流程不变 |
+| `auto`（默认） | 跟随仓库变量 `PUBLISH_GUI`；未设置时为 `go` |
 | `go` | 强制用本目录构建 GUI 本体，产出**同名**的 4 个资产 |
+| `csharp` | 强制发布历史 Avalonia 版（需要回退时使用） |
 
-优先级：手动显式选 `go` / `csharp` > 仓库变量 `PUBLISH_GUI` > `csharp`。
+优先级：手动显式选 `go` / `csharp` > 仓库变量 `PUBLISH_GUI` > `go`。
 `release` 事件没有 inputs，会落到仓库变量。
 
 手动触发：仓库 Actions → Release Build → Run workflow，`gui` 选 `go`；正式发版时
@@ -25,11 +25,10 @@ Release Build 工作流提供 `gui` 输入，最终生效值由顶层 `env.PUBLI
 `AlyPublish-linux-arm64.zip` —— 与 C# 版同名，网站下载链接无需改动。两个打包 job
 的 payload 铺装、安装器、zip 逻辑完全复用，只是 GUI 二进制的产出步骤二选一。
 
-要把 Go 版设为**默认**实现（含 `release` 事件自动发布），在仓库
-Settings → Secrets and variables → Actions → Variables 新增仓库变量
-`PUBLISH_GUI=go` 即可，无需改代码；临时验证用手动触发选 `gui=go`。
-注意 `workflow_dispatch` 的 `default` 只影响手动触发，且只有 `auto` 会读取仓库变量
-—— 把 `default` 改成 `go` 并不会让 `release` 事件生效。
+Go 版已是**默认**实现（含 `release` 事件自动发布）。如需临时切回 C# 历史版，
+在仓库 Settings → Secrets and variables → Actions → Variables 设置仓库变量
+`PUBLISH_GUI=csharp`，或手动触发 Release Build 时选 `gui=csharp`。
+注意 `workflow_dispatch` 的 `default` 只影响手动触发，且只有 `auto` 会读取仓库变量。
 
 替换前提（均已落实）：
 

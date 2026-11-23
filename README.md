@@ -17,8 +17,8 @@ aly/
 │   └── aly-client-sdk/      # C# / TypeScript / Go / Python / Java / Rust / C++ / Pascal + VB.NET/F#/COM samples
 ├── publish/
 │   ├── publish-cli/         # CLI publish engine (Go, cobra)
-│   ├── publish-gui-csharp/  # Desktop GUI (Avalonia 12.1, .NET 8) — default release
-│   └── publish-gui-go/      # Go/MyGo GUI — selectable replacement (Release Build gui=go)
+│   ├── publish-gui-go/      # Desktop GUI (Go/MyGo native UI) — default release
+│   └── publish-gui-csharp/  # Historical GUI (Avalonia 12.1, .NET 8) — kept, not built by default
 ├── spec/           # JSON protocol schema, host contract and fixture scenarios (single source of truth)
 ├── test/           # E2E harness (test/tc: 148 cases) and integration tests
 ├── tools/          # Protocol model generator, fake client, SDK packaging and release scripts
@@ -33,7 +33,7 @@ aly/
 |--------|------|----------|
 | **aly-server** | Stores project metadata & files, serves REST API | Deploy on your infrastructure |
 | **aly-publish** | CLI tool to init configs, scan files, and publish versions | Developers / CI |
-| **aly-publish-gui** | Desktop GUI wrapping aly-publish via subprocess | Non-technical publishers |
+| **aly-publish-gui** | Desktop GUI wrapping aly-publish via subprocess (Go/MyGo build; historical C# build kept) | Non-technical publishers |
 | **aly-client** | The updater executable — runs on end-user machines | End users (via your app) |
 | **aly-client-ui** | Optional GUI front-end for aly-client (bottom-right, topmost, XP-compatible) | End users (via your app) |
 
@@ -262,8 +262,19 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o aly-server-li
 ### Publish GUI
 
 ```bash
-cd publish/publish-gui-csharp && dotnet build
+cd publish/publish-gui-go
+go test ./... -count=1          # windowless view tests
+go tool mygo vet                # MyGo static checks
+go build -trimpath -ldflags "-H windowsgui" -o build/windows-amd64/AlyPublish.exe .
+
+# Cross-compile for Linux (static, no CGO)
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o build/linux-amd64/AlyPublish .
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o build/linux-arm64/AlyPublish .
 ```
+
+The historical C#/Avalonia implementation (`publish/publish-gui-csharp`) is kept in the
+repository but is no longer built or released by default; select `gui=csharp` in the
+Release Build workflow to produce it.
 
 ### Client Updater
 

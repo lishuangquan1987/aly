@@ -4,7 +4,7 @@
 
 ---
 
-## 一、命名规则（publish-gui-csharp）
+## 一、命名规则（publish-gui-csharp — 历史实现）
 
 ### 1.1 文件命名
 
@@ -33,7 +33,7 @@
 
 ---
 
-## 二、模型设计规则（publish-gui-csharp）
+## 二、模型设计规则（publish-gui-csharp — 历史实现）
 
 ### 2.1 DTO（`AlyPublish.Models.Cli`）
 
@@ -47,7 +47,7 @@
 
 ---
 
-## 三、UI 组件设计原则
+## 三、UI 组件设计原则（publish-gui-csharp 历史实现；Go 版遵循 MyGo 控件原则，见 §八）
 
 - **能用系统/库自带控件的，绝不自定义 UserControl**
 - 自定义只用于组合多个控件形成有意义的业务单元
@@ -103,13 +103,16 @@
 
 ---
 
-## 八、MyGo 实验模块（publish/publish-gui-go）
+## 八、MyGo 主实现（publish/publish-gui-go）
 
+- `publish/publish-gui-go` 是发布 GUI 的**主实现**（文档、网站与 Release Build 默认都指向它）；
+  `publish-gui-csharp` 为历史实现，仅保留源码，不再默认构建发布。
 - 使用 MyGo（`github.com/egoist/mygo`）开发、修改或审查 `publish/publish-gui-go/` 时，**必须先加载技能**：
   `C:\Users\5001494\.agents\skills\mygo`（DeepSeek Harness 中对应技能名 `mygo`）。
 - 技能内的 `reference/architecture.md`、`reference/views.md`、`reference/controls/*.md` 是 native UI
   的权威参考；API 以 `go.mod` 锁定的 MyGo 版本（当前 v0.8.3）源码为准，技能按更新版本编写时注意核对差异。
 - 约束：Go 1.27.3；纯 Go、无 cgo；只用 native UI（`ui` 包），不使用 WebView/HTML/JS。
-- 本模块遵循 Go 规范，不套用上面的 C#/XAML 命名规则；它是实验项目，稳定前不同步到网站/根 README。
+- 本模块遵循 Go 规范，不套用上面的 C#/XAML 命名规则；构建、测试与发布口径见
+  `publish/publish-gui-go/README.md` 与根 `README.md`。
 
-> **版本**: 2.2 | **适用范围**: publish/publish-gui-csharp/（C#/Avalonia）与 publish/publish-gui-go/（MyGo 实验；Go 规范，见 §八）
+> **版本**: 2.3 | **适用范围**: publish/publish-gui-go/（MyGo 主实现，见 §八）与 publish/publish-gui-csharp/（C#/Avalonia 历史实现，见 §一/§二）
