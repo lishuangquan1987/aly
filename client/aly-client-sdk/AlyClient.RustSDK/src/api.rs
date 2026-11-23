@@ -313,7 +313,19 @@ impl Api {
                         };
                         let _ = child.kill();
                         let _ = child.wait();
-                        return Response::ng(message);
+                        // 协议 #3：进度行（含 FAIL）isSuccess 恒为 true；data:null 的
+                        // 失败行才是终态。带 data 的失败行（旧版 FAIL 进度行）当普通
+                        // 进度行继续读；终态解出 data.reason 机器码（#13）。
+                        match envelope.data {
+                            None => return Response::ng(message),
+                            Some(value) => {
+                                let reason = value
+                                    .get("reason")
+                                    .and_then(|r| r.as_str())
+                                    .map(|s| s.to_string());
+                                return Response::ng_with_reason(message, reason);
+                            }
+                        }
                     }
                     match envelope.data {
                         None => {
@@ -497,6 +509,7 @@ fn parse<T: DeserializeOwned>(result: RunResult, timeout: Duration) -> Response<
                     is_success: false,
                     error_msg: envelope.error_msg,
                     data: None,
+                    reason: None,
                 };
             }
             match envelope.data {
@@ -504,12 +517,14 @@ fn parse<T: DeserializeOwned>(result: RunResult, timeout: Duration) -> Response<
                     is_success: true,
                     error_msg: envelope.error_msg,
                     data: None,
+                    reason: None,
                 },
                 Some(value) => match serde_json::from_value::<T>(value) {
                     Ok(data) => Response {
                         is_success: true,
                         error_msg: envelope.error_msg,
                         data: Some(data),
+                        reason: None,
                     },
                     Err(err) => Response::ng(err.to_string()),
                 },

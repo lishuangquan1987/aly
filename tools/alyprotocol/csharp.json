@@ -31,6 +31,11 @@
       "name": "DownloadProgressData",
       "namespace": "AlyClient.CSharpSDK",
       "visibility": "internal"
+    },
+    "DownloadUpdateData": {
+      "name": "DownloadUpdateData",
+      "namespace": "AlyClient.CSharpSDK",
+      "visibility": "internal"
     }
   },
   "properties": {

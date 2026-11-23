@@ -53,12 +53,14 @@ struct CheckDiffData {
     std::vector<DiffFileItem> files;
 };
 
-/// download_update 命令的 data：仅在部分文件下载失败时出现。成功完成行的 data 为 null。
+/// download_update 命令的 data：仅在失败（部分文件下载失败/已是最新/物化或状态写入失败）时出现。成功完成行的 data 为 null。
 struct DownloadUpdateData {
     /// 本次下载的目标版本。
     std::string version;
-    /// 最终失败的文件相对路径清单。全部成功时缺省。
+    /// 最终失败的文件相对路径清单。非部分失败原因时缺省。
     Optional<std::vector<std::string>> failed_files;
+    /// 失败原因机器码（#13）：宿主/SDK 机器判定以此为准，不匹配 errorMsg 人类文案。取值：already_latest（已是最新）/ partial_failure（部分文件失败，断点续传可重试）/ materialize_failed（物化失败）/ version_state_failed（版本状态写入失败）。未知值必须被容忍。
+    Optional<std::string> reason;
 };
 
 /// download_update 的进度行 data。每行都是一个 Output 信封；status 的取值含义见 host-contract.md。
@@ -69,7 +71,7 @@ struct DownloadProgress {
     long long total;
     /// 当前文件相对路径；BEGIN 行为空串。
     std::string file;
-    /// 行类型。未知值必须被宿主容忍。
+    /// 行类型。FAIL 行 isSuccess=true，仅表达该文件下载失败，不表达整轮成败；未知值必须被宿主容忍。
     std::string status;
     /// 当前文件字节数。
     long long file_size;
@@ -165,6 +167,7 @@ inline void CheckDiffDataFromJson(const JsonValue& value, CheckDiffData& out) {
 inline void DownloadUpdateDataFromJson(const JsonValue& value, DownloadUpdateData& out) {
     out.version = jsonString(value, "version");
     out.failed_files = jsonOptStringList(value, "failed_files");
+    out.reason = jsonOptString(value, "reason");
 }
 
 inline void DownloadProgressFromJson(const JsonValue& value, DownloadProgress& out) {

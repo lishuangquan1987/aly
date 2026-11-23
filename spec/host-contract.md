@@ -1,7 +1,7 @@
 # aly-client 宿主行为契约
 
 - **状态**：规范性（normative）
-- **协议版本**：`1.0.0`（见 `spec/aly-protocol.schema.json` 的 `x-protocol-version`）
+- **协议版本**：`1.2.0`（见 `spec/aly-protocol.schema.json` 的 `x-protocol-version`）
 - **适用对象**：所有语言/框架的宿主 SDK 实现者，以及 `aly-client-ui` 等内置调用方
 
 本文件规定 `aly-client` 子进程协议里 **schema 表达不了** 的部分：调用方式、超时、
@@ -144,27 +144,42 @@ None ──check: has_update && need_download──▶ DiscoveredUpdate
 ```text
 {"isSuccess":true,"errorMsg":"","data":{"index":0,"total":3,"file":"","status":"BEGIN","file_size":0,"total_bytes":123}}
 {"isSuccess":true,"errorMsg":"","data":{"index":1,"total":3,"file":"a.dll","status":"START","file_size":50,"downloaded_bytes":0,"total_bytes":123,"speed_bps":0}}
-{"isSuccess":true,"errorMsg":"","data":{"index":1,"total":3,"file":"a.dll","status":"PROGRESS","file_size":50,"downloaded_bytes":30,"total_bytes":123,"speed_bps":1024}}
 {"isSuccess":true,"errorMsg":"","data":{"index":1,"total":3,"file":"a.dll","status":"DONE","file_size":50,"downloaded_bytes":50,"total_bytes":123,"speed_bps":1024}}
 {"isSuccess":true,"errorMsg":"","data":null}
+```
+
+失败时（部分文件失败）：
+
+```text
+{"isSuccess":true,"errorMsg":"","data":{"index":1,"total":2,"file":"a.dll","status":"FAIL","file_size":50,"error":"checksum mismatch"}}
+{"isSuccess":false,"errorMsg":"下载完成但有 1 个文件失败: a.dll","data":{"version":"1.0.1","failed_files":["a.dll"],"reason":"partial_failure"}}
 ```
 
 解析规则：
 
 1. 逐行解析（按 `\n`；空行跳过），每行都是一个 `Output` 信封。
-2. 任一行的 `isSuccess=false` 表示本轮失败；SDK **可以**立即停止读取并返回该行
-   `errorMsg`（C# SDK 即如此）。若需要完整的 `failed_files`，应继续读到最终行或进程退出；
-   这不是必须行为。
-3. `data == null` 且 `isSuccess=true` 是**唯一**的完成信号：返回成功，不要等待进程退出
+2. **进度行（含 `status:"FAIL"` 行）的 `isSuccess` 恒为 `true`**：进度行只承载信息，
+   不表达整轮成败（#3）。旧版客户端会输出 `isSuccess=false` 的 FAIL 行，宿主遇到时
+   **不要**据此终止——把它当普通进度行继续读，最终成败由最后一行信封表达
+   （SDK 见 `isSuccess=false` 即终止会导致：GoSDK 杀进程拿不到 `failed_files`；
+   C#/TS 提前返回后 stdout 失去消费者，客户端管道写满挂死）。
+3. `data == null` 且 `isSuccess=true` 是**唯一**的成功完成信号：返回成功，不要等待进程退出
    （进程随后自行退出）。
-4. `status` 只用于展示：进度只统计 `status=DONE` 且 `total>0` 的行；
+4. 最后一行 `isSuccess=false` 且 data 带 `reason` 时是失败终态：
+   - `reason == "already_latest"`：无更新，复位空闲（机器判定用 reason 码，
+     **不要**匹配 `already at latest version` 人类文案，#13）；
+   - `reason == "partial_failure"`：部分文件失败，`failed_files` 列出清单；
+     下一轮直接重试（断点续传，已成功文件全部跳过）；
+   - 其他/未知 reason：按普通失败处理，未知值必须被容忍。
+5. `status` 只用于展示：进度只统计 `status=DONE` 且 `total>0` 的行；
    `index/total` 是**文件计数**进度。字节级进度优先用 `downloaded_bytes/total_bytes`，
    缺失时回退到 `index/total`。
-5. `status` 未知值必须被容忍（忽略该行），不得崩溃或判失败。
-6. 进程在完成行之前退出 → 失败（`download interrupted`）；看门狗杀进程 → 失败
+6. `status` 未知值必须被容忍（忽略该行），不得崩溃或判失败。
+7. 进程在完成行之前退出 → 失败（`download interrupted`）；看门狗杀进程 → 失败
    （`download stalled`）。
-7. 单文件失败不整体中止：客户端会继续下载其余文件，最后输出带 `failed_files` 的失败结果。
-   已成功的文件在下一轮会因校验通过被跳过（断点续传），宿主可直接重试。
+8. 单文件失败不整体中止：客户端输出 `status:"FAIL"` 进度行（`isSuccess=true`）后
+   继续下载其余文件，最后输出带 `failed_files` + `reason:"partial_failure"` 的失败终态。
+   宿主可直接重试。
 
 ---
 
@@ -279,15 +294,21 @@ PackageFolder/
 
 ## 12. 错误分类
 
-宿主应按下表决定“上报 / 重试 / 复位状态”。匹配基于 `errorMsg` 文本，**不要**依赖退出码。
+宿主应按下表决定“上报 / 重试 / 复位状态”。**不要**依赖退出码。
 
-| `errorMsg` 特征 | 分类 | 建议动作 |
+优先用机器码判定（#13）：`download_update` 失败终态的 `data.reason`
+（`already_latest` / `partial_failure` / `materialize_failed` / `version_state_failed`）
+优先于 `errorMsg` 文本匹配；`errorMsg` 文本仅作为旧版客户端（无 reason 字段）的
+兼容回退，且只匹配下表列出的稳定前缀。
+
+| 判定依据 | 分类 | 建议动作 |
 |---|---|---|
-| `already at latest version` | 无更新 | 复位 `None`，按空闲间隔继续 |
-| `no pending update to apply` | 无待应用 | 终止本轮 apply，复位状态 |
-| `下载完成但有 N 个文件失败` | 部分失败 | 上报；下一轮直接重试（断点续传） |
-| `download stalled: no output for ...` | 停流 | 上报；按失败重试 |
-| `download interrupted (aly-client exited before finish line)` | 进程提前退出 | 上报；重试 |
+| `reason == "already_latest"`（回退：`errorMsg` 含 `already at latest version`） | 无更新 | 复位 `None`，按空闲间隔继续 |
+| `errorMsg` 含 `no pending update to apply` | 无待应用 | 终止本轮 apply，复位状态 |
+| `reason == "partial_failure"`（回退：`errorMsg` 含 `下载完成但有 N 个文件失败`） | 部分失败 | 上报；下一轮直接重试（断点续传） |
+| `reason == "materialize_failed"` / `"version_state_failed"` | 下载收尾失败 | 上报；按失败重试 |
+| `errorMsg` 含 `download stalled: no output for ...` | 停流 | 上报；按失败重试 |
+| `errorMsg` 含 `download interrupted (aly-client exited before finish line)` | 进程提前退出 | 上报；重试 |
 | 网络错误（连接失败、超时、5xx） | 可重试 | 5 s（检查）/ 1 s（下载）后重试 |
 | 锁被占用（`lock` / 占用相关） | 并发 | 5 s 后重试，不要杀进程绕过 |
 | `no server url configured` / `no project name configured` | 配置缺失 | 上报一次，**不要**高频重试 |
@@ -299,7 +320,7 @@ PackageFolder/
 
 ## 13. 版本与兼容
 
-- 协议版本在 schema 的 `x-protocol-version`，当前 `1.0.0`。目前**没有**运行时握手命令；
+- 协议版本在 schema 的 `x-protocol-version`，当前 `1.2.0`。目前**没有**运行时握手命令；
   宿主应通过自更新保证更新器副本与 SDK 兼容。
 - 兼容规则：新增可选字段 = MINOR；删除/改名/改类型/改语义 = MAJOR。
 - **客户端严格、宿主宽松**：schema 用 `additionalProperties:false` 抓客户端漂移；

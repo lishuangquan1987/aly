@@ -196,8 +196,8 @@ public final class UpdateClient {
                     return;
                 }
                 if (!downloaded.isSuccess) {
-                    if (downloaded.errorMsg != null
-                            && downloaded.errorMsg.contains("already at latest version")) {
+                    // 协议 #13：机器判定优先 reason 码，文案匹配仅作旧版客户端兼容回退
+                    if (downloaded.isAlreadyLatest()) {
                         setStatus(Status.NONE, "Update status cleared");
                         if (sleep(idleDelayMillis())) {
                             return;

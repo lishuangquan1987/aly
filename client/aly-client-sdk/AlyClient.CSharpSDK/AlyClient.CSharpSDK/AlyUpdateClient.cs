@@ -295,12 +295,13 @@ namespace AlyClient.CSharpSDK
                             }).Result;
                             if (!downloadResult.IsSuccess)
                             {
-                                // #6 防御：client 已是最新版本时 download_update 返回
-                                // "already at latest version"（文案与
-                                // client/aly-client/cmd/download_update.go 保持一致），
-                                // 应视为无需更新而非错误，避免强制更新场景下死循环报错。
-                                if (downloadResult.ErrorMsg != null &&
-                                    downloadResult.ErrorMsg.Contains("already at latest version"))
+                                // 协议 #13：机器判定优先用 data.reason 码（already_latest），
+                                // errorMsg 文案匹配仅作旧版客户端（无 reason 字段）的兼容回退。
+                                // "已是最新"应视为无需更新而非错误，避免强制更新场景下死循环报错。
+                                if (downloadResult.Reason == "already_latest" ||
+                                    (string.IsNullOrEmpty(downloadResult.Reason) &&
+                                     downloadResult.ErrorMsg != null &&
+                                     downloadResult.ErrorMsg.Contains("already at latest version")))
                                 {
                                     ClearError();
                                     // 状态复位，避免宿主 UI 停留在 "Downloading..."（#6 审查发现）

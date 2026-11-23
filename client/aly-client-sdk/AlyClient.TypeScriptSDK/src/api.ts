@@ -352,8 +352,29 @@ export function downloadUpdate(
       }
 
       if (!env.isSuccess) {
-        // 与 C# SDK 一致：任一行失败即返回该行 errorMsg（host-contract §6）。
-        finish(ng(env.errorMsg || "download failed"));
+        // 协议 #3：进度行（含 status:"FAIL" 行）isSuccess 恒为 true，只承载信息，
+        // 终态由最后一行信封表达。旧写法"见 isSuccess=false 即 finish+kill"会让
+        // stdout 失去消费者，客户端管道写满后挂死；带 data 的 isSuccess=false 行
+        // （旧版 FAIL 进度行）当普通进度行继续读。data:null 的失败行才是终态
+        //（host-contract.md §6）。
+        if (env.data === null || env.data === undefined) {
+          finish(ng(env.errorMsg || "download failed"));
+          try {
+            child.kill();
+          } catch {
+            /* already gone */
+          }
+          return;
+        }
+        // 终态失败：解出 data.reason 机器码（#13）
+        let failReason: string | undefined;
+        try {
+          const failData = env.data as { reason?: string };
+          failReason = failData.reason;
+        } catch {
+          /* ignore */
+        }
+        finish(ng(env.errorMsg || "download failed", failReason));
         try {
           child.kill();
         } catch {

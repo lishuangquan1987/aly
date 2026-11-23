@@ -216,7 +216,10 @@ begin
     Options := DefaultDownloadOptions;
     Response := Api.DownloadUpdate(Options);
     AssertTrue(not Response.IsSuccess, 'expected failure');
-    AssertTrue(Pos('checksum mismatch', Response.ErrorMsg) > 0, Response.ErrorMsg);
+    (* 协议 #3：FAIL 进度行不再终止读取，ErrorMsg 来自终态信封（聚合文案）；
+       Reason 机器码供宿主机器判定（#13）。 *)
+    AssertTrue(Pos('1', Response.ErrorMsg) > 0, Response.ErrorMsg);
+    AssertTrue(Response.Reason = 'partial_failure', 'reason=' + Response.Reason);
   finally
     Api.Free;
   end;

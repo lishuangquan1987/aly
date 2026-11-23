@@ -64,7 +64,10 @@ test("downloadUpdate surfaces partial failure", async () => {
     const progress = [];
     const response = await downloadUpdate(client, (p) => progress.push(p));
     assert.equal(response.isSuccess, false);
-    assert.match(response.errorMsg, /checksum mismatch/);
+    // 协议 #3：FAIL 进度行不再终止读取，errorMsg 来自终态信封（聚合文案）；
+    // reason 机器码供宿主机器判定（#13）。
+    assert.match(response.errorMsg, /1 个文件失败/);
+    assert.equal(response.reason, "partial_failure");
     assert.equal(progress.length, 0);
   });
 });

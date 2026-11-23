@@ -309,13 +309,31 @@ func (a *API) DownloadUpdate(ctx context.Context, options DownloadOptions) Respo
 				_ = cmd.Process.Kill()
 				return NG[Empty]("invalid progress line: " + err.Error())
 			}
+			// 协议 #3：进度行（含 status:"FAIL" 行）isSuccess 恒为 true，
+			// 只承载信息，不表达整轮成败——终态由最后一行信封表达
+			//（data:null 成功，或 isSuccess=false + reason/failed_files 失败）。
+			// 见到 isSuccess=false 就 Kill 会让聚合失败清单永远到不了宿主。
+			// 旧版客户端可能输出 isSuccess=false 的 FAIL 进度行：当普通进度行继续读
+			//（与 host-contract.md §6 一致）；data:null 的失败行才是终态。
 			if !env.IsSuccess {
-				// 与 C#/TS 一致：任一行失败即返回该行 errorMsg。
-				_ = cmd.Process.Kill()
-				if env.ErrorMsg == "" {
-					return NG[Empty]("download failed")
+				if len(bytes.TrimSpace(env.Data)) == 0 || string(bytes.TrimSpace(env.Data)) == "null" {
+					// isSuccess=false 且 data:null：终态失败（旧版客户端写法）
+					if env.ErrorMsg == "" {
+						return NG[Empty]("download failed")
+					}
+					return NG[Empty](env.ErrorMsg)
 				}
-				return NG[Empty](env.ErrorMsg)
+				// 带 data 的 isSuccess=false 行：旧版 FAIL 进度行，当普通进度行继续读
+			}
+			// 终态失败行（isSuccess=false，data 带 reason/failed_files）：
+			// 解出 reason 供宿主机器判定（#13），errorMsg 保持人类文案。
+			if !env.IsSuccess {
+				var failData DownloadUpdateData
+				_ = json.Unmarshal(env.Data, &failData)
+				if env.ErrorMsg == "" {
+					return Response[Empty]{IsSuccess: false, ErrorMsg: "download failed", Data: Empty{}, reason: failData.Reason}
+				}
+				return Response[Empty]{IsSuccess: false, ErrorMsg: env.ErrorMsg, Data: Empty{}, reason: failData.Reason}
 			}
 			if len(bytes.TrimSpace(env.Data)) == 0 || string(bytes.TrimSpace(env.Data)) == "null" {
 				return OK(Empty{})

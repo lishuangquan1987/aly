@@ -92,8 +92,13 @@ func TestDownloadPartialFailure(t *testing.T) {
 	if response.IsSuccess {
 		t.Fatal("partial failure should be NG")
 	}
-	if !strings.Contains(response.ErrorMsg, "checksum mismatch") {
+	// 协议 #3：FAIL 进度行不再终止下载，errorMsg 来自终态信封（聚合文案），
+	// 单文件失败原因（checksum mismatch）只出现在 FAIL 进度行的 data.error 里。
+	if !strings.Contains(response.ErrorMsg, "1 个文件失败") {
 		t.Fatalf("errorMsg = %q", response.ErrorMsg)
+	}
+	if response.Reason() != DownloadFailReasonPartialFailure {
+		t.Fatalf("reason = %q", response.Reason())
 	}
 }
 

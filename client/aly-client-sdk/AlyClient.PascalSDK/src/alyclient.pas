@@ -73,6 +73,12 @@ type
   TBasicResponse = record
     IsSuccess: Boolean;
     ErrorMsg: string;
+    /// download_update 失败终态的原因机器码（协议 #13）：
+    /// already_latest / partial_failure / materialize_failed / version_state_failed。
+    /// 机器判定优先于 ErrorMsg 文案匹配；空串表示未知/旧版客户端。
+    Reason: string;
+    /// 便捷判定：下载失败是否"已是最新"（#13：Reason 优先，文案匹配兼容回退）。
+    function IsAlreadyLatest: Boolean;
   end;
 
   TCheckUpdateResponse = record
@@ -342,6 +348,13 @@ end;
 destructor TApi.Destroy;
 begin
   inherited Destroy;
+end;
+
+function TBasicResponse.IsAlreadyLatest: Boolean;
+begin
+  if Reason = 'already_latest' then
+    Exit(True);
+  Result := (Reason = '') and (Pos('already at latest version', ErrorMsg) > 0);
 end;
 
 function TApi.Path: string;
@@ -878,6 +891,7 @@ var
 begin
   Result.IsSuccess := False;
   Result.ErrorMsg := '';
+  Result.Reason := '';
   Proc := nil;
   Queue := nil;
   Reader := nil;
@@ -927,9 +941,17 @@ begin
           try
             if not JsonBool(Root, 'isSuccess') then
             begin
+              // 协议 #3：进度行（含 FAIL）isSuccess 恒为 true；data 为 null 的失败行
+              // 才是终态。带 data 的失败行（旧版 FAIL 进度行）当普通进度行继续读；
+              // 终态解出 data.reason 机器码（#13）。
               Result.ErrorMsg := JsonStr(Root, 'errorMsg');
               if Result.ErrorMsg = '' then
                 Result.ErrorMsg := 'download failed';
+              if ExtractData(Root, DataObj) then
+              try
+                Result.Reason := JsonStr(DataObj, 'reason');
+              finally
+              end;
               Cleanup;
               Exit;
             end;
@@ -1317,7 +1339,8 @@ begin
         Exit;
       if not Downloaded.IsSuccess then
       begin
-        if Pos('already at latest version', Downloaded.ErrorMsg) > 0 then
+        // 协议 #13：机器判定优先 Reason 码，文案匹配仅作旧版客户端兼容回退
+        if Downloaded.IsAlreadyLatest then
         begin
           SetStatus(StatusNone, 'Update status cleared');
           if not SleepFor(IdleDelayMs) then

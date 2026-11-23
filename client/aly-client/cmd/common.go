@@ -404,16 +404,23 @@ func printProgressBytes(index, total int, file, status string, fileSize int64,
 	})
 }
 
-// printProgressFail 输出失败的进度行（isSuccess: false），后跟最终结果。
+// printProgressFail 输出单文件失败的进度行（协议 #3）。
+// FAIL 行 isSuccess=true（进度行只承载信息，不表达整轮成败）：
+//   - GoSDK 见 isSuccess=false 即 Kill，聚合清单永远到不了宿主；
+//   - CSharpSDK 见 isSuccess=false 即 return（不 Kill），stdout 失去消费者，
+//     管道写满后 aly-client 永久阻塞挂死。
+//
+// 终态成败由 download_update 最后一行信封（data:null 或带 failed_files 的失败行）表达，
+// 见 host-contract.md §6。注意：调用方在 FAIL 行之后必须继续输出终态信封再退出。
 func printProgressFail(index, total int, file string, fileSize int64, errMsg string) {
 	emitLine(&model.Output{
-		IsSuccess: false,
-		ErrMsg:    fmt.Sprintf("%s: %s", file, errMsg),
+		IsSuccess: true,
+		ErrMsg:    "",
 		Data: model.DownloadProgress{
 			Index:    index,
 			Total:    total,
 			File:     file,
-			Status:   "FAIL",
+			Status:   model.DownloadProgressStatusFail,
 			FileSize: fileSize,
 			Error:    errMsg,
 		},

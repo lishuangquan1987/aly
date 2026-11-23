@@ -2,8 +2,8 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/lishuangquan1987/aly/blob/master/spec/aly-protocol.schema.json",
   "title": "Aly client protocol",
-  "description": "aly-client 命令行输出协议的唯一真源。所有命令输出单行 JSON 信封；download_update 额外先输出多行进度（同样是信封）。本 schema 对客户端严格（additionalProperties=false），用于在 CI 中拦截协议漂移；宿主/SDK 反序列化必须忽略未知字段，以保证前向兼容。字段语义、超时、状态机与错误处理见同目录 host-contract.md。",
-  "x-protocol-version": "1.1.0",
+  "description": "aly-client 命令行输出协议的唯一真源。所有命令输出单行 JSON 信封；download_update 额外先输出多行进度（同样是信封，全部 isSuccess=true，含 FAIL 状态行——进度行只承载信息，终态成败由最后一行信封表达）。本 schema 对客户端严格（additionalProperties=false），用于在 CI 中拦截协议漂移；宿主/SDK 反序列化必须忽略未知字段，以保证前向兼容。字段语义、超时、状态机与错误处理见同目录 host-contract.md。",
+  "x-protocol-version": "1.2.0",
   "$defs": {
     "Output": {
       "type": "object",
@@ -17,7 +17,7 @@
       "properties": {
         "isSuccess": {
           "type": "boolean",
-          "description": "业务是否成功。宿主必须以此判断结果，不要用退出码判断。"
+          "description": "业务是否成功。宿主必须以此判断结果，不要用退出码判断。download_update 的进度行恒为 true（含 FAIL 状态行），终态成败看最后一行。"
         },
         "errorMsg": {
           "type": "string",
@@ -135,7 +135,7 @@
     },
     "DownloadUpdateData": {
       "type": "object",
-      "description": "download_update 命令的 data：仅在部分文件下载失败时出现。成功完成行的 data 为 null。",
+      "description": "download_update 命令的 data：仅在失败（部分文件下载失败/已是最新/物化或状态写入失败）时出现。成功完成行的 data 为 null。",
       "additionalProperties": false,
       "required": [
         "version"
@@ -147,10 +147,14 @@
         },
         "failed_files": {
           "type": "array",
-          "description": "最终失败的文件相对路径清单。全部成功时缺省。",
+          "description": "最终失败的文件相对路径清单。非部分失败原因时缺省。",
           "items": {
             "type": "string"
           }
+        },
+        "reason": {
+          "type": "string",
+          "description": "失败原因机器码（#13）：宿主/SDK 机器判定以此为准，不匹配 errorMsg 人类文案。取值：already_latest（已是最新）/ partial_failure（部分文件失败，断点续传可重试）/ materialize_failed（物化失败）/ version_state_failed（版本状态写入失败）。未知值必须被容忍。"
         }
       }
     },
@@ -180,7 +184,7 @@
         },
         "status": {
           "type": "string",
-          "description": "行类型。未知值必须被宿主容忍。",
+          "description": "行类型。FAIL 行 isSuccess=true，仅表达该文件下载失败，不表达整轮成败；未知值必须被宿主容忍。",
           "enum": [
             "BEGIN",
             "START",

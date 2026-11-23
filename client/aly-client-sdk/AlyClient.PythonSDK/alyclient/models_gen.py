@@ -95,17 +95,20 @@ class DiffFileItem:
 
 @dataclass
 class DownloadUpdateData:
-    """download_update 命令的 data：仅在部分文件下载失败时出现。成功完成行的 data 为 null。"""
+    """download_update 命令的 data：仅在失败（部分文件下载失败/已是最新/物化或状态写入失败）时出现。成功完成行的 data 为 null。"""
     # 本次下载的目标版本。
     version: str
-    # 最终失败的文件相对路径清单。全部成功时缺省。
+    # 最终失败的文件相对路径清单。非部分失败原因时缺省。
     failed_files: Optional[list[str]] = None
+    # 失败原因机器码（#13）：宿主/SDK 机器判定以此为准，不匹配 errorMsg 人类文案。取值：already_latest（已是最新）/ partial_failure（部分文件失败，断点续传可重试）/ materialize_failed（物化失败）/ version_state_failed（版本状态写入失败）。未知值必须被容忍。
+    reason: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "DownloadUpdateData":
         return cls(
             version=str(data.get("version", "")),
             failed_files=[str(v) for v in (data.get("failed_files") or [])] if data.get("failed_files") is not None else None,
+            reason=str(data["reason"]) if data.get("reason") is not None else None,
         )
 
 @dataclass
@@ -117,7 +120,7 @@ class DownloadProgress:
     total: int
     # 当前文件相对路径；BEGIN 行为空串。
     file: str
-    # 行类型。未知值必须被宿主容忍。
+    # 行类型。FAIL 行 isSuccess=true，仅表达该文件下载失败，不表达整轮成败；未知值必须被宿主容忍。
     status: str
     # 当前文件字节数。
     file_size: int

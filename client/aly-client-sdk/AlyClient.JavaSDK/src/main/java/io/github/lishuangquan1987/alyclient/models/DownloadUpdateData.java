@@ -7,17 +7,20 @@ import io.github.lishuangquan1987.alyclient.Json;
 import java.util.List;
 import java.util.Map;
 
-/** download_update 命令的 data：仅在部分文件下载失败时出现。成功完成行的 data 为 null。 */
+/** download_update 命令的 data：仅在失败（部分文件下载失败/已是最新/物化或状态写入失败）时出现。成功完成行的 data 为 null。 */
 public final class DownloadUpdateData {
     // 本次下载的目标版本。
     public String version;
-    // 最终失败的文件相对路径清单。全部成功时缺省。
+    // 最终失败的文件相对路径清单。非部分失败原因时缺省。
     public List<String> failedFiles;
+    // 失败原因机器码（#13）：宿主/SDK 机器判定以此为准，不匹配 errorMsg 人类文案。取值：already_latest（已是最新）/ partial_failure（部分文件失败，断点续传可重试）/ materialize_failed（物化失败）/ version_state_failed（版本状态写入失败）。未知值必须被容忍。
+    public String reason;
 
     public static DownloadUpdateData fromMap(Map<String, Object> data) {
         DownloadUpdateData value = new DownloadUpdateData();
         value.version = Json.str(data, "version");
         value.failedFiles = Json.optStrList(data, "failed_files");
+        value.reason = Json.optStr(data, "reason");
         return value;
     }
 }

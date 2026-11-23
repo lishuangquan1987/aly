@@ -132,9 +132,29 @@ namespace AlyClient.CSharpSDK
                                 }
 
                                 var result = JsonConvert.DeserializeObject<AlyResponse<DownloadProgressData>>(stdoutTask);
+                                // 协议 #3：进度行（含 status:"FAIL" 行）IsSuccess 恒为 true，
+                                // 只承载信息，不表达整轮成败——终态由最后一行信封表达
+                                //（data:null 成功，或 IsSuccess=false + reason/failed_files 失败）。
+                                // 旧写法"见到 IsSuccess=false 即 return"会让 stdout 失去消费者，
+                                // 客户端管道写满后永久阻塞挂死；带 data 的 IsSuccess=false 行
+                                // （旧版 FAIL 进度行）当普通进度行继续读（host-contract.md §6）。
+                                if (!result.IsSuccess && result.Data == null)
+                                {
+                                    // 终态失败（旧版客户端以 data:null 失败行收尾）
+                                    return AlyResponse.NG(result.ErrorMsg);
+                                }
                                 if (!result.IsSuccess)
                                 {
-                                    return AlyResponse.NG(result.ErrorMsg);
+                                    // 终态失败：解出 data.reason 机器码（#13）。
+                                    // data 是 DownloadProgressData（缺 reason 字段），重按终态载荷解析。
+                                    string reason = null;
+                                    try
+                                    {
+                                        var failData = JsonConvert.DeserializeObject<AlyResponse<DownloadUpdateData>>(stdoutTask);
+                                        reason = failData != null && failData.Data != null ? failData.Data.Reason : null;
+                                    }
+                                    catch { }
+                                    return AlyResponse.NG(result.ErrorMsg, reason);
                                 }
 
                                 if (result.Data == null)// finish

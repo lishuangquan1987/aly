@@ -9,6 +9,14 @@ namespace AlyClient.CSharpSDK.Models
     /// </summary>
     public partial class AlyResponse
     {
+        /// <summary>
+        /// download_update 失败终态的原因机器码（协议 #13，非 JSON 字段，
+        /// 由 SDK 从终态 data.reason 解出；机器判定优先于此字段，
+        /// errorMsg 文案匹配仅作旧版客户端兼容回退）。
+        /// 取值：already_latest / partial_failure / materialize_failed / version_state_failed。
+        /// </summary>
+        public string Reason { get; set; }
+
         public static AlyResponse OK()
         {
             return new AlyResponse { IsSuccess = true };
@@ -22,6 +30,12 @@ namespace AlyClient.CSharpSDK.Models
         public static AlyResponse NG(Exception e)
         {
             return new AlyResponse { IsSuccess = false, ErrorMsg = e.Message };
+        }
+
+        /// <summary>失败响应 + reason 机器码（#13）。</summary>
+        public static AlyResponse NG(string errMsg, string reason)
+        {
+            return new AlyResponse { IsSuccess = false, ErrorMsg = errMsg, Reason = reason };
         }
     }
 

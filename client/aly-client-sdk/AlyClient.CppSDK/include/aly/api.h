@@ -15,8 +15,20 @@ struct Response {
     bool isSuccess;
     std::string errorMsg;
     Optional<T> data;
+    /// download_update 失败终态的原因机器码（协议 #13）：
+    /// already_latest / partial_failure / materialize_failed / version_state_failed。
+    /// 机器判定优先于 errorMsg 文案匹配；空串表示未知/旧版客户端。
+    std::string reason;
 
-    Response() : isSuccess(false), errorMsg(), data() {}
+    Response() : isSuccess(false), errorMsg(), data(), reason() {}
+
+    /// 便捷判定：下载失败是否"已是最新"（#13：reason 优先，文案匹配兼容回退）。
+    bool isAlreadyLatest() const {
+        if (reason == "already_latest") {
+            return true;
+        }
+        return reason.empty() && errorMsg.find("already at latest version") != std::string::npos;
+    }
 };
 
 /// 取消令牌；生命周期停止时 cancel()。

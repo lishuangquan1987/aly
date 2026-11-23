@@ -132,8 +132,13 @@ int main(int argc, char** argv) {
         if (response.isSuccess) {
             return "expected failure";
         }
-        if (response.errorMsg.find("checksum mismatch") == std::string::npos) {
+        // 协议 #3：FAIL 进度行不再终止读取，errorMsg 来自终态信封（聚合文案）；
+        // reason 机器码供宿主机器判定（#13）。
+        if (response.errorMsg.find("1 个文件失败") == std::string::npos) {
             return "errorMsg=" + response.errorMsg;
+        }
+        if (response.reason != "partial_failure") {
+            return "reason=" + response.reason;
         }
         return std::string();
     });

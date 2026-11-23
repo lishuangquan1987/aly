@@ -232,9 +232,27 @@ public final class API {
                 return Response.ng("invalid progress line: " + ex.getMessage());
             }
             if (!Json.bool(payload, "isSuccess", false)) {
+                // 协议 #3：进度行（含 status:"FAIL" 行）isSuccess 恒为 true，只承载信息，
+                // 终态由最后一行信封表达（host-contract.md §6）。data:null 的失败行才是终态；
+                // 带 data 的失败行（旧版 FAIL 进度行）当普通进度行继续读，避免 stdout
+                // 失去消费者导致客户端管道写满挂死。
+                Object failDataObj = payload.get("data");
+                if (failDataObj == null) {
+                    kill(process);
+                    String message = Json.str(payload, "errorMsg");
+                    return Response.ng(message.isEmpty() ? "download failed" : message);
+                }
+                // 终态失败：解出 data.reason 机器码（#13）
+                String reason = null;
+                if (failDataObj instanceof Map) {
+                    Object r = ((Map<?, ?>) failDataObj).get("reason");
+                    if (r instanceof String && !((String) r).isEmpty()) {
+                        reason = (String) r;
+                    }
+                }
                 kill(process);
                 String message = Json.str(payload, "errorMsg");
-                return Response.ng(message.isEmpty() ? "download failed" : message);
+                return Response.ng(message.isEmpty() ? "download failed" : message, reason);
             }
             Object data = payload.get("data");
             if (data == null) {

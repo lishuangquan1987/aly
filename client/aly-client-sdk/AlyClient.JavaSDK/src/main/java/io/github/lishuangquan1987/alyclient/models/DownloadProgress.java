@@ -22,7 +22,7 @@ public final class DownloadProgress {
     public long total;
     // 当前文件相对路径；BEGIN 行为空串。
     public String file;
-    // 行类型。未知值必须被宿主容忍。
+    // 行类型。FAIL 行 isSuccess=true，仅表达该文件下载失败，不表达整轮成败；未知值必须被宿主容忍。
     public String status;
     // 当前文件字节数。
     public long fileSize;

@@ -698,6 +698,24 @@ Response<bool> Api::downloadUpdate(const DownloadOptions& options) const {
                 bool success = jsonBool(payload, "isSuccess", false);
                 if (!success) {
                     std::string message = jsonString(payload, "errorMsg");
+                    // 协议 #3：进度行（含 FAIL）isSuccess 恒为 true；data:null 的失败行
+                    // 才是终态。带 data 的失败行（旧版 FAIL 进度行）当普通进度行继续读；
+                    // 终态解出 data.reason 机器码（#13）。
+                    if (!payload.has("data") || payload["data"].isNull()) {
+                        closeDownload(
+                            process.process,
+                            process.thread,
+                            process.stdoutRead,
+                            process.stderrRead,
+                            stdoutThread,
+                            stderrThread);
+                        return ng<bool>(message.empty() ? "download failed" : message);
+                    }
+                    std::string reason = payload["data"].has("reason")
+                        ? jsonString(payload["data"], "reason")
+                        : std::string();
+                    Response<bool> failed = ng<bool>(message.empty() ? "download failed" : message);
+                    failed.reason = reason;
                     closeDownload(
                         process.process,
                         process.thread,
@@ -705,7 +723,7 @@ Response<bool> Api::downloadUpdate(const DownloadOptions& options) const {
                         process.stderrRead,
                         stdoutThread,
                         stderrThread);
-                    return ng<bool>(message.empty() ? "download failed" : message);
+                    return failed;
                 }
                 if (!payload.has("data") || payload["data"].isNull()) {
                     closeDownload(

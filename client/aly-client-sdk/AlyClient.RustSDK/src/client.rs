@@ -292,7 +292,8 @@ fn run_loop(
                 return;
             }
             if !downloaded.is_success {
-                if downloaded.error_msg.contains("already at latest version") {
+                // 协议 #13：机器判定优先 reason 码，文案匹配仅作旧版客户端兼容回退
+                if downloaded.is_already_latest() {
                     set_status(&status, &on_status, Status::NONE, "Update status cleared");
                     if !sleep(&running, idle_delay(idle_poll)) {
                         return;

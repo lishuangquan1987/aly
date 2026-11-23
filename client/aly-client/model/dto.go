@@ -90,7 +90,23 @@ type DownloadUpdateData struct {
 	// FailedFiles 是"单文件失败不整体失败"策略下最终失败的文件清单
 	//（omitempty：全部成功时不下发，旧 SDK 无感）。
 	FailedFiles []string `json:"failed_files,omitempty"`
+	// Reason 是失败原因的机器码（审查 #13）：宿主/SDK 据此做机器判定，
+	// 不再匹配人类文案。取值见 DownloadFailReason* 常量。
+	Reason string `json:"reason,omitempty"`
 }
+
+// download_update 失败原因机器码（DownloadUpdateData.reason，审查 #13）。
+// 机器判定以此为准，errorMsg 人类文案仅用于展示。
+const (
+	// DownloadFailReasonAlreadyLatest 已是最新版本，无需下载（防倒退）。
+	DownloadFailReasonAlreadyLatest = "already_latest"
+	// DownloadFailReasonPartialFailure 部分文件下载失败（断点续传可重试）。
+	DownloadFailReasonPartialFailure = "partial_failure"
+	// DownloadFailReasonMaterializeFailed 物化未变化文件失败。
+	DownloadFailReasonMaterializeFailed = "materialize_failed"
+	// DownloadFailReasonVersionStateFailed version.json 读写失败。
+	DownloadFailReasonVersionStateFailed = "version_state_failed"
+)
 
 // DownloadProgress 是 download_update 命令的过程进度输出（每行一个 JSON）
 type DownloadProgress struct {
@@ -107,6 +123,16 @@ type DownloadProgress struct {
 	TotalBytes      int64 `json:"total_bytes,omitempty"`
 	SpeedBps        int64 `json:"speed_bps,omitempty"`
 }
+
+// download_update 进度行 status 取值（协议 #3：FAIL 行 isSuccess=true，
+// 只承载"该文件失败"信息，不表达整轮成败；终态由最后一行信封表达）。
+const (
+	DownloadProgressStatusBegin = "BEGIN"
+	DownloadProgressStatusStart = "START"
+	DownloadProgressStatusDone  = "DONE"
+	DownloadProgressStatusSkip  = "SKIP"
+	DownloadProgressStatusFail  = "FAIL"
+)
 
 // RollbackListData 是 list_rollback_versions 命令 data 字段
 type RollbackListData struct {

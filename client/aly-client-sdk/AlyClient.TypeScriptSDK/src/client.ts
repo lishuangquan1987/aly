@@ -155,7 +155,10 @@ export class AlyUpdateClient {
         if (this.disposed) return;
 
         if (!downloaded.isSuccess) {
-          if ((downloaded.errorMsg ?? "").includes("already at latest version")) {
+          // 协议 #13：机器判定优先用 reason 码（already_latest），
+          // errorMsg 文案匹配仅作旧版客户端（无 reason 字段）的兼容回退。
+          if (downloaded.reason === "already_latest" ||
+              (!downloaded.reason && (downloaded.errorMsg ?? "").includes("already at latest version"))) {
             this.setStatus("none", "Update status cleared");
             await this.sleep(this.idleDelayMs());
             continue;

@@ -174,7 +174,9 @@ func (c *UpdateClient) loop(ctx context.Context) {
 				return
 			}
 			if !downloaded.IsSuccess {
-				if strings.Contains(downloaded.ErrorMsg, "already at latest version") {
+				// 协议 #13：机器判定用 data.reason 码，errorMsg 文案匹配仅作
+				// 旧版客户端（无 reason 字段）的兼容回退。
+				if isAlreadyLatest(downloaded) {
 					c.setStatus(StatusNone, "Update status cleared")
 					if !sleepCtx(ctx, c.idleDelay()) {
 						return

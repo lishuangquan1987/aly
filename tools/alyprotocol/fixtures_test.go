@@ -21,8 +21,8 @@ const fixtureSchema = `{"$schema":"http://json-schema.org/draft-07/schema#","x-p
  "downloaded_bytes":{"type":"integer"},"total_bytes":{"type":"integer"},"speed_bps":{"type":"integer"}}},
 "DownloadUpdateData":{"type":"object","additionalProperties":false,
  "required":["version"],"properties":{"version":{"type":"string"},
- "failed_files":{"type":"array","items":{"type":"string"}}}}
-}}`
+ "failed_files":{"type":"array","items":{"type":"string"}},
+ "reason":{"type":"string"}}}}}`
 
 const validCheckScenario = `{
   "name": "check",
@@ -81,7 +81,7 @@ func TestValidateScenarioAcceptsPartialFailure(t *testing.T) {
 	    "download_update": {
 	      "lines": [
 	        {"isSuccess": true, "errorMsg": "", "data": {"index": 1, "total": 1, "file": "a.dll", "status": "FAIL", "file_size": 10, "error": "checksum mismatch"}},
-	        {"isSuccess": false, "errorMsg": "下载完成但有 1 个文件失败: a.dll", "data": {"version": "1.0.1", "failed_files": ["a.dll"]}}
+	        {"isSuccess": false, "errorMsg": "下载完成但有 1 个文件失败: a.dll", "data": {"version": "1.0.1", "failed_files": ["a.dll"], "reason": "partial_failure"}}
 	      ]
 	    }
 	  }

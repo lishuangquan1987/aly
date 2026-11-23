@@ -53,7 +53,10 @@ class APITests(unittest.TestCase):
         with scenario("download_partial_failure"):
             response = API(self.fake).download_update()
         self.assertFalse(response.is_success)
-        self.assertIn("checksum mismatch", response.error_msg)
+        # 协议 #3：FAIL 进度行不再终止读取，errorMsg 来自终态信封（聚合文案）；
+        # reason 机器码供宿主机器判定（#13）。
+        self.assertIn("1 个文件失败", response.error_msg)
+        self.assertEqual(response.reason, "partial_failure")
 
     def test_download_stall_watchdog(self) -> None:
         started = time.monotonic()

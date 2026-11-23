@@ -317,9 +317,22 @@ class API:
                 return ng(f"invalid progress line: {exc}")
 
             if not payload.get("isSuccess", False):
-                self._kill(proc)
-                self._reap(proc)
-                return ng(str(payload.get("errorMsg") or "download failed"))
+                # 协议 #3：进度行（含 status:"FAIL" 行）isSuccess 恒为 true，
+                # 只承载信息，不表达整轮成败——终态由最后一行信封表达。
+                # data:null 的失败行才是终态；带 data 的失败行（旧版 FAIL 进度行）
+                # 当普通进度行继续读，避免 stdout 失去消费者导致客户端挂死。
+                if payload.get("data") is None:
+                    self._kill(proc)
+                    self._reap(proc)
+                    return ng(str(payload.get("errorMsg") or "download failed"))
+                # 终态失败（isSuccess=false + data 带 reason/failed_files）：
+                # 解出 reason 机器码（#13）后返回。
+                fail_data = payload.get("data") or {}
+                self._track(proc)
+                return ng(
+                    str(payload.get("errorMsg") or "download failed"),
+                    reason=str(fail_data.get("reason")) if fail_data.get("reason") else None,
+                )
 
             data = payload.get("data")
             if data is None:

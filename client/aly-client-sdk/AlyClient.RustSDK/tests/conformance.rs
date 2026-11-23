@@ -109,11 +109,14 @@ fn download_progress_and_completion() {
 fn download_partial_failure() {
     let response = api("download_partial_failure").download_update(DownloadOptions::new());
     assert!(!response.is_success);
+    // 协议 #3：FAIL 进度行不再终止读取，errorMsg 来自终态信封（聚合文案）；
+    // reason 机器码供宿主机器判定（#13）。
     assert!(
-        response.error_msg.contains("checksum mismatch"),
+        response.error_msg.contains("1 个文件失败"),
         "{}",
         response.error_msg
     );
+    assert_eq!(response.reason.as_deref(), Some("partial_failure"));
 }
 
 #[test]

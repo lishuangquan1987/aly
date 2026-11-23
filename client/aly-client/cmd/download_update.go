@@ -93,6 +93,8 @@ func DownloadUpdate() {
 		clearUpdateTransientState(versionInfo)
 		if wErr := config.WriteVersion(versionInfo); wErr != nil {
 			printProgressFail(0, 0, "version.json", 0, fmt.Sprintf("write version: %v", wErr))
+			printOutput(false, fmt.Sprintf("write version: %v", wErr),
+				&model.DownloadUpdateData{Version: newVersion, Reason: model.DownloadFailReasonVersionStateFailed})
 			return
 		}
 		// 用标准完成行（data:null）收尾：SDK 视其为"下载完成"，随后 apply 会返回"无待应用更新"
@@ -131,7 +133,9 @@ func DownloadUpdate() {
 		}
 	}
 	if !reDownload && compareVersion(newVersion, currentVersion) <= 0 {
-		printOutput(false, "already at latest version", nil)
+		// 协议 #13：机器判定用 reason 码，不用人类文案匹配。
+		printOutput(false, "already at latest version",
+			&model.DownloadUpdateData{Version: newVersion, Reason: model.DownloadFailReasonAlreadyLatest})
 		return
 	}
 
@@ -369,9 +373,9 @@ func DownloadUpdate() {
 	// apply 激活——与既有不变量"下载未完成不写状态"一致），失败清单随结果
 	// 下发，宿主重试时已成功文件全部跳过（断点续传），等效"只重失败文件"。
 	if len(failedFiles) > 0 {
-		printOutput(false,
-			fmt.Sprintf("下载完成但有 %d 个文件失败: %s", len(failedFiles), strings.Join(failedFiles, ", ")),
-			&model.DownloadUpdateData{Version: newVersion, FailedFiles: failedFiles})
+		emitLine(&model.Output{IsSuccess: false,
+			ErrMsg: fmt.Sprintf("下载完成但有 %d 个文件失败: %s", len(failedFiles), strings.Join(failedFiles, ", ")),
+			Data:   &model.DownloadUpdateData{Version: newVersion, FailedFiles: failedFiles, Reason: model.DownloadFailReasonPartialFailure}})
 		return
 	}
 
@@ -393,6 +397,8 @@ func DownloadUpdate() {
 			fmt.Sprintf("stat main folder before materialize %s failed: %v", fc.MainFolder, mainStatErr))
 		printProgressFail(total, total, "materialize", 0,
 			fmt.Sprintf("stat main folder before materialize failed: %v", mainStatErr))
+		printOutput(false, fmt.Sprintf("stat main folder before materialize failed: %v", mainStatErr),
+			&model.DownloadUpdateData{Version: newVersion, Reason: model.DownloadFailReasonMaterializeFailed})
 		return
 	}
 	if mainMissing {
@@ -405,12 +411,14 @@ func DownloadUpdate() {
 		func(relPath string) bool {
 			return config.ShouldSkipFolder(relPath, fc.Shared.UnCopyFolders)
 		}); err != nil {
-		util.AppendToLog(logDir(), "download.log",
-			fmt.Sprintf("materialize unchanged files %s -> %s failed: %v", fc.MainFolder, targetDir, err))
-		printProgressFail(total, total, "materialize", 0,
-			fmt.Sprintf("materialize unchanged files failed: %v", err))
-		return
-	}
+			util.AppendToLog(logDir(), "download.log",
+				fmt.Sprintf("materialize unchanged files %s -> %s failed: %v", fc.MainFolder, targetDir, err))
+			printProgressFail(total, total, "materialize", 0,
+				fmt.Sprintf("materialize unchanged files failed: %v", err))
+			printOutput(false, fmt.Sprintf("materialize unchanged files failed: %v", err),
+				&model.DownloadUpdateData{Version: newVersion, Reason: model.DownloadFailReasonMaterializeFailed})
+			return
+		}
 	util.AppendToLog(logDir(), "download.log",
 		fmt.Sprintf("materialized unchanged files %s -> %s (apply will only rename)", fc.MainFolder, targetDir))
 
@@ -516,6 +524,8 @@ func DownloadUpdate() {
 	}
 	if err := config.WriteVersion(versionInfo); err != nil {
 		printProgressFail(0, 0, "version.json", 0, fmt.Sprintf("write version: %v", err))
+		printOutput(false, fmt.Sprintf("write version: %v", err),
+			&model.DownloadUpdateData{Version: newVersion, Reason: model.DownloadFailReasonVersionStateFailed})
 		return
 	}
 	downloadedOK = true // 成功：取消"失败清理半成品目录"的兜底

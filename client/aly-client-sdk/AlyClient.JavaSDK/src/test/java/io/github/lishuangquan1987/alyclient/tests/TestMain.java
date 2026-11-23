@@ -120,8 +120,13 @@ public final class TestMain {
                 if (response.isSuccess) {
                     return "部分失败应为 NG";
                 }
-                if (response.errorMsg == null || !response.errorMsg.contains("checksum mismatch")) {
+                // 协议 #3：FAIL 进度行不再终止读取，errorMsg 来自终态信封（聚合文案）；
+                // reason 机器码供宿主机器判定（#13）。
+                if (response.errorMsg == null || !response.errorMsg.contains("1 个文件失败")) {
                     return "errorMsg=" + response.errorMsg;
+                }
+                if (!"partial_failure".equals(response.reason)) {
+                    return "reason=" + response.reason;
                 }
                 return null;
             }

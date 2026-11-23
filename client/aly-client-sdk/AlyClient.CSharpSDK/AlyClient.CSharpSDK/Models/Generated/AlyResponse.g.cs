@@ -13,7 +13,7 @@ namespace AlyClient.CSharpSDK.Models
     public partial class AlyResponse
     {
         /// <summary>
-        /// 业务是否成功。宿主必须以此判断结果，不要用退出码判断。
+        /// 业务是否成功。宿主必须以此判断结果，不要用退出码判断。download_update 的进度行恒为 true（含 FAIL 状态行），终态成败看最后一行。
         /// </summary>
         [JsonProperty("isSuccess")]
         public bool IsSuccess { get; set; }

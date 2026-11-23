@@ -111,8 +111,12 @@ namespace AlySdkConformance
             UseScenario("download_partial_failure");
             AlyResponse r = AlyApi.DownloadUpdateAsync(_fake, null).Result;
             if (r.IsSuccess) return "部分失败应为 NG";
-            if (r.ErrorMsg == null || !r.ErrorMsg.Contains("checksum mismatch"))
+            // 协议 #3：FAIL 进度行不再终止读取，errorMsg 来自终态信封（聚合文案）；
+            // reason 机器码供宿主机器判定（#13）。
+            if (r.ErrorMsg == null || !r.ErrorMsg.Contains("1 个文件失败"))
                 return "errorMsg=" + r.ErrorMsg;
+            if (r.Reason != "partial_failure")
+                return "reason=" + (r.Reason ?? "<null>");
             return null;
         }
 
