@@ -73,12 +73,10 @@ func main() {
 		Addr:              fmt.Sprintf(":%d", port),
 		Handler:           r,
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       60 * time.Second,
-		// 审查 B11：WriteTimeout 是整个响应体的写出期限。原来固定 60s，
-		// 1GB 文件需要 ≥17.4MB/s 才能发完，百兆网（12.5MB/s）必被服务端断链。
-		// 这里置 0（无全局上限），改由各路由自行设置：
-		//   - DownloadFile：按文件大小 SetWriteDeadline（含 30min 上限）
-		//   - 普通 JSON 接口：JSONWriteDeadline 中间件给 60s
+		// 审查修复（轻微⑧）：60s 对 64MB 上限的分片偏紧（64MB/60s ≈ 11MB/s，
+		// 慢链路必掐）。提到 300s——分片默认 128KiB 不受影响，仅 ALY_CHUNK_SIZE
+		// 调大时才依赖这个余量。
+		ReadTimeout:  300 * time.Second,
 		WriteTimeout: 0,
 		IdleTimeout:  120 * time.Second,
 	}

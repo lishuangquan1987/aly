@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -73,6 +72,34 @@ func ValidateProjectName(name string) error {
 	upper := strings.ToUpper(name)
 	if reservedProjectNames[upper] {
 		return fmt.Errorf("项目名称不能使用系统保留名: %s", name)
+	}
+	return nil
+}
+
+// ValidateFileNameSegment 校验上传文件相对路径的单个路径段
+//（code-review-2026-11-23 轻微⑥）：与 ValidateProjectName 同口径——
+// 拒绝 Windows 保留设备名、尾点/尾空格（Windows 会静默剥离）、空段与 "."/".."。
+// 段内不允许出现分隔符（调用方已按 "/" 切段）。
+func ValidateFileNameSegment(seg string) error {
+	if seg == "" {
+		return fmt.Errorf("路径段为空")
+	}
+	if seg == "." || seg == ".." {
+		return fmt.Errorf("路径段不能为 . 或 ..")
+	}
+	upper := strings.ToUpper(seg)
+	if reservedProjectNames[upper] {
+		return fmt.Errorf("路径段不能使用系统保留名: %s", seg)
+	}
+	// 保留名带扩展名形式（CON.txt 等）在旧 Win32 上同样被解释为设备
+	if dot := strings.IndexByte(upper, '.'); dot > 0 && reservedProjectNames[upper[:dot]] {
+		return fmt.Errorf("路径段不能使用系统保留名: %s", seg)
+	}
+	if strings.HasSuffix(seg, ".") || strings.HasSuffix(seg, " ") {
+		return fmt.Errorf("路径段不能以点或空格结尾: %s", seg)
+	}
+	if len(seg) > 255 {
+		return fmt.Errorf("路径段超长: %d（上限 255）", len(seg))
 	}
 	return nil
 }
@@ -260,21 +287,20 @@ func PublishVersion(ctx context.Context, projectName string, version string, log
 		// "卡"在旧内容上：check 的 needUpdate 只认"严格更高"）。
 		// 用户决策（计划文档 §五.2）：不留 --allow-downgrade 例外口子，
 		// 确需回退内容时走"发布更高版本号"的正路。
-		allLogs, lErr := tx.ProjectChangeLog.Query().
+		// 审查修复（轻微⑨）：旧实现 All(ctx) 全量拉取该项目全部 changelog，
+		// 长期运行项目越查越慢。这里只需要"最大版本号"：直接查最新一条
+		//（ID 最大者；发布接口有防倒退保护，changelog 的 ID 序与版本序一致——
+		// 每次发布都要求严格大于已发布最新版本），无需全量。
+		latestLog, lErr := tx.ProjectChangeLog.Query().
 			Where(projectchangelog.ProjectID(p.ID), projectchangelog.IsDeletedEQ(false)).
-			All(ctx)
-		if lErr != nil {
+			Order(ent.Desc(projectchangelog.FieldID)).
+			First(ctx)
+		if lErr != nil && !ent.IsNotFound(lErr) {
 			return lErr
 		}
-		if len(allLogs) > 0 {
-			latest := allLogs[0].Version
-			for _, l := range allLogs[1:] {
-				if CompareVersion(l.Version, latest) > 0 {
-					latest = l.Version
-				}
-			}
-			if CompareVersion(version, latest) <= 0 {
-				return fmt.Errorf("版本 %s 不大于已发布的最新版本 %s（防倒退保护；如需回退内容，请发布更高的版本号）", version, latest)
+		if latestLog != nil {
+			if CompareVersion(version, latestLog.Version) <= 0 {
+				return fmt.Errorf("版本 %s 不大于已发布的最新版本 %s（防倒退保护；如需回退内容，请发布更高的版本号）", version, latestLog.Version)
 			}
 		}
 		// 更新项目版本号
@@ -304,13 +330,20 @@ func PublishVersion(ctx context.Context, projectName string, version string, log
 	// #4 删除同步：发布成功后把当前项目文件清单固化到数据目录（.updator_manifest.json），
 	// 客户端 download_update 依此清单删除版本目录中"发布端已删除"的文件。
 	// 写失败不阻断发布（返回成功）：清单缺失时客户端跳过删除（与旧行为兼容，仅退化为不删）。
+	// 审查修复（code-review-2026-11-23 #6）：写清单结果带回响应 data，
+	// 发布端可据此感知"DB 已是新版本但清单未更新"的不一致并重新发布触发补写。
+	manifestWritten := true
 	if mErr := writeReleaseManifest(projectName, manifestIgnoreFolders, manifestIgnoreFiles); mErr != nil {
+		manifestWritten = false
 		// 服务端日志留痕（不引入新依赖，沿用标准 log）
 		log.Printf("[manifest] publish version %s for project %s: write manifest failed: %v",
 			version, projectName, mErr)
 	}
 
-	return models.OKWithData(changelog)
+	return models.OKWithData(map[string]interface{}{
+		"changelog":        changelog,
+		"manifestWritten":  manifestWritten,
+	})
 }
 
 // ManifestFileName 发布清单文件名（位于项目数据目录根部）。
@@ -354,7 +387,7 @@ func writeReleaseManifest(projectName string, ignoreFolders, ignoreFiles []strin
 
 	manifestPath := filepath.Join(workDir, ManifestFileName)
 	tmpPath := manifestPath + ".tmp"
-	if wErr := ioutil.WriteFile(tmpPath, data, 0644); wErr != nil {
+	if wErr := os.WriteFile(tmpPath, data, 0644); wErr != nil {
 		return wErr
 	}
 	if rErr := os.Rename(tmpPath, manifestPath); rErr != nil {

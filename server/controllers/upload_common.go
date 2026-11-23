@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,22 +34,44 @@ const maxChunkTotalChunks = 65536
 
 // perFileLock 按目标文件串行化"合并/落盘"，避免两个发布者并发 complete 同一文件
 // 时互相清掉对方分片、静默产出损坏文件（审查 M3）。
+// 审查修复（轻微①）：旧实现 map 只增不减（慢内存泄漏），改为引用计数式：
+// 最后一个使用者释放时删除表项。
+type refLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
 var perFileLock = struct {
 	sync.Mutex
-	m map[string]*sync.Mutex
-}{m: make(map[string]*sync.Mutex)}
+	m map[string]*refLock
+}{m: make(map[string]*refLock)}
 
-// lockForFile 返回指定落盘路径对应的互斥锁（按路径懒创建）。
-func lockForFile(p string) *sync.Mutex {
+// releaseFileLock 释放 lockForFile 返回的锁；引用归零时从表中删除。
+func releaseFileLock(p string) {
 	key := strings.ToLower(filepath.Clean(p))
 	perFileLock.Lock()
 	defer perFileLock.Unlock()
-	mu, ok := perFileLock.m[key]
-	if !ok {
-		mu = &sync.Mutex{}
-		perFileLock.m[key] = mu
+	if l, ok := perFileLock.m[key]; ok {
+		l.refs--
+		if l.refs <= 0 {
+			delete(perFileLock.m, key)
+		}
 	}
-	return mu
+}
+
+// acquireFileLock 返回指定落盘路径对应的互斥锁（按路径懒创建），并递增引用计数。
+// 使用方必须 defer releaseFileLock(p)。
+func acquireFileLock(p string) *sync.Mutex {
+	key := strings.ToLower(filepath.Clean(p))
+	perFileLock.Lock()
+	defer perFileLock.Unlock()
+	l, ok := perFileLock.m[key]
+	if !ok {
+		l = &refLock{}
+		perFileLock.m[key] = l
+	}
+	l.refs++
+	return &l.mu
 }
 
 // checkUploadProject 校验上传目标任务存在且未软删除（审查 M5）。
@@ -78,7 +101,9 @@ func checkUploadProject(ctx *gin.Context, projectName string) bool {
 func checkDiskSpace(ctx *gin.Context, workDir string, needBytes int64) bool {
 	usage, err := disk.Usage(workDir)
 	if err != nil {
-		// 拿不到磁盘信息时放行（不能因统计接口故障阻断正常发布），仅记录
+		// 拿不到磁盘信息时放行（不能因统计接口故障阻断正常发布），但必须留痕——
+		// 审查修复（轻微②）：注释声称"仅记录"却没有任何 log 调用，故障完全无痕。
+		log.Printf("checkDiskSpace: disk.Usage(%s) failed (allowing upload): %v", workDir, err)
 		return true
 	}
 	if usage.Free < uint64(needBytes+minDiskFreeReserve) {
@@ -97,6 +122,10 @@ func checkDiskSpace(ctx *gin.Context, workDir string, needBytes int64) bool {
 //  2. 相对文件名规范化（反斜杠转正斜杠）并断言落点位于 workDir 内；
 //  3. workDir 由 service.GetProjectWorkPath 解析（内含 data 目录落位断言）。
 //
+// 审查修复（轻微⑥/⑦）：额外拒绝尾分隔符（"sub/" 经 Clean 会落到目录路径，
+// 造成后续同名目录/文件冲突与报错混乱）与路径段内的 Windows 保留设备名/尾点尾空格
+//（"CON"、"a/aux" 会在 Windows 上生成异常路径）。
+//
 // 返回 ok=false 时已向客户端写出 NG 响应。
 func resolveUploadTarget(ctx *gin.Context, projectName, relativeFileName string) (workDir, absFileName string, ok bool) {
 	workDir, err := service.GetProjectWorkPath(projectName)
@@ -106,6 +135,18 @@ func resolveUploadTarget(ctx *gin.Context, projectName, relativeFileName string)
 	}
 
 	fileName := stringUtils.Replace(relativeFileName, "\\", "/")
+	// 尾分隔符：Clean 后语义丢失，先拒（避免造出与目录同名的文件 / 语义混乱）
+	if strings.HasSuffix(fileName, "/") {
+		ctx.JSON(200, models.NG("非法的文件路径: 不能以 / 结尾"))
+		return "", "", false
+	}
+	// 每段校验：保留设备名（大小写不敏感）、尾点/尾空格（Windows 静默剥离）
+	for _, seg := range strings.Split(fileName, "/") {
+		if err := service.ValidateFileNameSegment(seg); err != nil {
+			ctx.JSON(200, models.NG(fmt.Sprintf("非法的文件路径: %v", err)))
+			return "", "", false
+		}
+	}
 	absFileName = filepath.Clean(path.Combine(workDir, fileName))
 	// 落点必须严格位于 workDir 之下（workDir 本身是目录，不允许作为文件落点）
 	if !strings.HasPrefix(absFileName, workDir+string(filepath.Separator)) {
@@ -137,7 +178,10 @@ func SweepStaleUploadTemps(maxAge time.Duration) (int, error) {
 		name := info.Name()
 		isChunksDir := info.IsDir() && strings.HasSuffix(name, ".chunks")
 		isMergingFile := !info.IsDir() && strings.HasSuffix(name, ".merging")
-		if !isChunksDir && !isMergingFile {
+		// 审查修复（轻微⑩）：writeReleaseManifest 的 .updator_manifest.json.tmp
+		// 崩溃残留同样清扫（它不在任何过滤白名单内，残留会被 get_all_files 下发一轮）。
+		isManifestTmp := !info.IsDir() && strings.HasPrefix(name, service.ManifestFileName+".")
+		if !isChunksDir && !isMergingFile && !isManifestTmp {
 			return nil
 		}
 		if info.ModTime().After(cutoff) {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"aly/server/internal/utils"
 	"aly/server/models"
 
+	"golang.org/x/sync/singleflight"
 	"github.com/utils-go/ngo/io/directory"
 )
 
@@ -47,6 +49,11 @@ var fileListCaches = struct {
 	sync.RWMutex
 	m map[string]*projectFileListCache
 }{m: make(map[string]*projectFileListCache)}
+
+// rebuildGroup 合并同一项目的并发缓存重建（code-review-2026-11-23 #7）：
+// 缓存失效后多个 get_all_files 同时到达时，旧实现各自全量重算哈希；
+// singleflight 保证同一项目同一时刻只有一个 goroutine 在重建，其余复用结果。
+var rebuildGroup singleflight.Group
 
 // InvalidateProjectFileList 使指定项目的文件列表缓存失效。
 // upload 等文件变更接口成功后调用，保证下次 get_all_files 重新缓存。
@@ -91,35 +98,54 @@ func GetProjectFileList(projectName, workDir string, ignoreFolders, ignoreFiles 
 	}
 
 	// 缓存缺失或指纹变化（upload 失效后 / 外部直接改动文件）：重新计算哈希并缓存。
-	infos, err := buildFileInfos(workDir, stamps)
+	// 审查修复（code-review-2026-11-23 #7）：singleflight 合并同一项目的并发重建，
+	// 避免多个 get_all_files 同时到达时各自全量重算（大项目下 IO/CPU 翻倍）。
+	// 缓存键包含指纹摘要：指纹不同（重建期间又发生变更）时不复用旧结果。
+	v, err, _ := rebuildGroup.Do(projectName+"\x00"+fingerprintKey(stamps), func() (interface{}, error) {
+		infos, bErr := buildFileInfos(workDir, stamps)
+		if bErr != nil {
+			return nil, bErr
+		}
+		log.Printf("file list cache REBUILD: project=%s files=%d (全量重算 md5/sha256)", projectName, len(infos))
+
+		fileListCaches.Lock()
+		entry := fileListCaches.m[projectName]
+		if entry == nil {
+			entry = &projectFileListCache{}
+			fileListCaches.m[projectName] = entry
+		}
+		fileListCaches.Unlock()
+
+		entry.mu.Lock()
+		entry.fileInfos = infos
+		entry.fingerprint = stamps
+		entry.built = true
+		entry.mu.Unlock()
+		return infos, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("file list cache REBUILD: project=%s files=%d (全量重算 md5/sha256)", projectName, len(infos))
-
-	fileListCaches.Lock()
-	entry = fileListCaches.m[projectName]
-	if entry == nil {
-		entry = &projectFileListCache{}
-		fileListCaches.m[projectName] = entry
-	}
-	fileListCaches.Unlock()
-
-	entry.mu.Lock()
-	entry.fileInfos = infos
-	entry.fingerprint = stamps
-	entry.built = true
-	entry.mu.Unlock()
+	infos, _ := v.([]models.FileInfo)
 	return infos, nil
 }
 
 // collectFileStamps 遍历项目目录，收集所有文件的指纹（相对路径/大小/mtime）。
 // 过滤规则与 get_all_files 完全一致：跳过上传中间态、应用忽略文件夹/文件规则。
+// 审查修复（轻微③）：单个文件/目录不可读（Windows 上被占用很常见）不再让整个
+// get_all_files 失败，改为跳过 + 告警日志——与 SweepStaleUploadTemps 的容错口径统一。
+// 仅根目录不可读（info==nil 且在根上）仍返回错误。
 func collectFileStamps(workDir string, ignoreFolders, ignoreFiles []string) ([]fileStamp, error) {
 	var stamps []fileStamp
+	var walkErrs int
 	err := filepath.Walk(workDir, func(absPath string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			walkErrs++
+			log.Printf("collectFileStamps: skip unreadable %s: %v", absPath, err)
+			if info != nil && info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		relPath, relErr := filepath.Rel(workDir, absPath)
 		if relErr != nil {
@@ -136,9 +162,11 @@ func collectFileStamps(workDir string, ignoreFolders, ignoreFiles []string) ([]f
 			return nil
 		}
 
-		// 跳过发布清单自身（#4）：.updator_manifest.json 是更新器协议文件，
-		// 不是项目内容，不得下发给客户端、也不参与指纹。
-		if relPath == ManifestFileName {
+		// 跳过发布清单自身及其中间态（#4 + 审查修复轻微⑩）：
+		// .updator_manifest.json 是更新器协议文件，不得下发；其 .tmp 中间态
+		//（writeReleaseManifest 崩溃残留）同样不得下发，否则会被客户端
+		// 当作项目文件接收后再被删除同步清掉（单轮自愈但会脏数据一轮）。
+		if relPath == ManifestFileName || strings.HasPrefix(relPath, ManifestFileName+".") {
 			return nil
 		}
 
@@ -169,6 +197,9 @@ func collectFileStamps(workDir string, ignoreFolders, ignoreFiles []string) ([]f
 	if err != nil {
 		return nil, err
 	}
+	if walkErrs > 0 {
+		log.Printf("collectFileStamps: %d entries skipped due to read errors in %s", walkErrs, workDir)
+	}
 
 	// 按相对路径排序，确保指纹比对与输出顺序稳定
 	sort.Slice(stamps, func(i, j int) bool {
@@ -178,15 +209,12 @@ func collectFileStamps(workDir string, ignoreFolders, ignoreFiles []string) ([]f
 }
 
 // buildFileInfos 计算每个文件的 md5/sha256，构建 FileInfo 列表（已按相对路径排序）。
+// 审查修复（code-review-2026-11-23 #7）：单遍双哈希（MultiWriter），IO 减半。
 func buildFileInfos(workDir string, stamps []fileStamp) ([]models.FileInfo, error) {
 	fileInfos := make([]models.FileInfo, 0, len(stamps))
 	for _, s := range stamps {
 		absPath := filepath.Join(workDir, s.relPath)
-		md5Str, err := utils.GetFileMD5(absPath)
-		if err != nil {
-			return nil, err
-		}
-		sha256Str, err := utils.GetFileSHA256(absPath)
+		md5Str, sha256Str, err := utils.GetFileMD5AndSHA256(absPath)
 		if err != nil {
 			return nil, err
 		}
@@ -200,6 +228,26 @@ func buildFileInfos(workDir string, stamps []fileStamp) ([]models.FileInfo, erro
 		})
 	}
 	return fileInfos, nil
+}
+
+// fingerprintKey 把指纹列表拼成 short key（数量+首个/末个样例 + 长度哈希近似），
+// 仅用于 singleflight 去重键——相同 key 不会错误共享不同结果（结果仍由传入的
+// stamps 决定，key 冲突只会导致多算一次，不会少算）。
+func fingerprintKey(stamps []fileStamp) string {
+	var sb strings.Builder
+	sb.WriteString(strconv.Itoa(len(stamps)))
+	if len(stamps) > 0 {
+		sb.WriteByte('|')
+		sb.WriteString(stamps[0].relPath)
+		sb.WriteByte('|')
+		last := stamps[len(stamps)-1]
+		sb.WriteString(last.relPath)
+		sb.WriteByte(':')
+		sb.WriteString(strconv.FormatInt(last.size, 10))
+		sb.WriteByte(':')
+		sb.WriteString(strconv.FormatInt(last.mtimeNano, 10))
+	}
+	return sb.String()
 }
 
 // sameFingerprint 比较两份指纹是否一致（文件集合、大小、mtime 均相同）。

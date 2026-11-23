@@ -40,3 +40,23 @@ func GetFileSHA256(filename string) (string, error) {
 	}
 	return fmt.Sprintf("%x", sha256Handle.Sum(nil)), nil
 }
+
+// GetFileMD5AndSHA256 单遍同时计算 MD5 与 SHA256（code-review-2026-11-23 #7）。
+//
+// 旧路径 GetFileMD5 + GetFileSHA256 各完整读一遍文件，1GB 项目一次缓存
+// 重建 = 2GB IO。MultiWriter 单次 io.Copy 同时喂两个哈希器，IO 减半。
+func GetFileMD5AndSHA256(filename string) (string, string, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return "", "", err
+	}
+	defer f.Close()
+
+	md5Handle := md5.New()
+	sha256Handle := sha256.New()
+	w := io.MultiWriter(md5Handle, sha256Handle)
+	if _, err := io.Copy(w, f); err != nil {
+		return "", "", err
+	}
+	return fmt.Sprintf("%x", md5Handle.Sum(nil)), fmt.Sprintf("%x", sha256Handle.Sum(nil)), nil
+}

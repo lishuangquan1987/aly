@@ -19,6 +19,14 @@ import (
 // "系统自己写进去的格式，用户手动发布时反而被拒"。
 var validVersion = regexp.MustCompile(`^[vV]?\d+(\.\d+)*(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$`)
 
+// maxLogEntries / maxLogLineLen publish_version 变更日志上限（#5）：
+// JSON 体已有 1MB 上限，这里再加业务层限制，防止合法体积下塞入海量空条目。
+// 50 条 × 2000 字符远超正常发布需求。
+const (
+	maxLogEntries = 50
+	maxLogLineLen = 2000
+)
+
 // PublishVersion 发布新版本
 func PublishVersion(ctx *gin.Context) {
 	var publishDto struct {
@@ -48,6 +56,21 @@ func PublishVersion(ctx *gin.Context) {
 	// "1.0.0 beta" 等）直接拒绝，防止整条发布链路各自按不同口径解析。
 	if !validVersion.MatchString(publishDto.Version) {
 		ctx.JSON(200, models.NG(fmt.Sprintf("版本号格式非法: %s（应为数字版本号，如 1.0.0 / 2.1.0-beta / v1.2.3）", publishDto.Version)))
+		return
+	}
+
+	if len(publishDto.Logs) > maxLogEntries {
+		ctx.JSON(200, models.NG(fmt.Sprintf("变更日志条数过多: %d（上限 %d）", len(publishDto.Logs), maxLogEntries)))
+		return
+	}
+	for i, l := range publishDto.Logs {
+		if len(l) > maxLogLineLen {
+			ctx.JSON(200, models.NG(fmt.Sprintf("变更日志第 %d 条超长: %d 字符（上限 %d）", i+1, len(l), maxLogLineLen)))
+			return
+		}
+	}
+	if len(publishDto.AfterApplyUpdateScript) > 500 {
+		ctx.JSON(200, models.NG(fmt.Sprintf("afterApplyUpdateScript 超长: %d 字符（上限 500）", len(publishDto.AfterApplyUpdateScript))))
 		return
 	}
 

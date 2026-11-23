@@ -99,17 +99,37 @@ func UploadFile(ctx *gin.Context) {
 			return
 		}
 	}
-	// 原子落盘（#3）：先保存到 .merging 临时文件，再 rename 切换 ——
-	// 与分片上传路径（UploadChunkComplete）同款保护。旧实现直接写最终路径，
-	// 上传进行中并发 get_all_files 会把半截文件当正式文件立刻缓存下发（撕裂读）。
-	// .merging 属上传中间态，file_cache 的 IsUploadTempPath 会跳过。
-	mergePath := absFileName + ".merging"
+	// 审查修复（code-review-2026-11-23 #1）：本函数此前不持锁，与
+	// UploadChunkComplete 并发针对同一目标文件时，两边同时写同一个
+	// X.merging：SaveUploadedFile 的 O_TRUNC 会把 Complete 正在写的合并
+	// 文件截断，最终 rename 进正式路径的是交错损坏数据（Complete 端仅在
+	// 调用方提供 md5 时才能拦下）。取同一把 perFileLock 与临时名唯一化
+	// （CreateTemp）后，直传与合并互斥，冲突不再可能。
+	fileLock := acquireFileLock(absFileName)
+	fileLock.Lock()
+	defer releaseFileLock(absFileName)
+	defer fileLock.Unlock()
+
+	// 临时名唯一化：不再共用固定 ".merging" 名，从根上消除共享临时名冲突。
+	// 后缀保留 ".merging" 以便 IsUploadTempPath/SweepStaleUploadTemps 识别。
+	tmp, err := os.CreateTemp(filepath.Dir(absFileName), filepath.Base(absFileName)+".merging-")
+	if err != nil {
+		ctx.JSON(200, models.NG(fmt.Sprintf("create temp upload file error:%v", err)))
+		return
+	}
+	mergePath := tmp.Name()
+	tmp.Close()
+	defer func() {
+		// rename 成功后 mergePath 已不存在，Remove 报错无害；仅在失败路径清理
+		if _, statErr := os.Stat(mergePath); statErr == nil {
+			os.Remove(mergePath)
+		}
+	}()
 	if err = ctx.SaveUploadedFile(f, mergePath); err != nil {
 		ctx.JSON(200, models.NG(fmt.Sprintf("save upload file error:%v", err)))
 		return
 	}
 	if err = os.Rename(mergePath, absFileName); err != nil {
-		os.Remove(mergePath)
 		ctx.JSON(200, models.NG(fmt.Sprintf("atomic rename upload file error:%v", err)))
 		return
 	}
@@ -200,6 +220,17 @@ func UploadChunk(ctx *gin.Context) {
 		return
 	}
 
+	// 审查修复（code-review-2026-11-23 #1）：分片写入此前无锁且非原子
+	//（SaveUploadedFile 直接 O_TRUNC 截断写 {i}），与 Complete 的合并循环
+	// 读取（:343 io.Copy）并发时，同 index 重传会截断正在被读取的分片。
+	// 虽然整文件 MD5 比对（publish-cli 始终上报）能拦下大部分损坏，但
+	// 未带 md5 的调用方仍会静默下发；这里取同一把 perFileLock 串行化。
+	// 分片写入开销极小，锁粒度可接受。
+	fileLock := acquireFileLock(absFileName)
+	fileLock.Lock()
+	defer releaseFileLock(absFileName)
+	defer fileLock.Unlock()
+
 	// 分片暂存目录：{文件路径}.chunks/
 	chunksDir := absFileName + ".chunks"
 	if !directory.Exists(chunksDir) {
@@ -271,8 +302,9 @@ func UploadChunkComplete(ctx *gin.Context) {
 
 	// 审查 M3：按目标文件加锁，避免两个发布者并发 complete 同一文件时
 	// 互相清掉对方分片、静默产出损坏文件。
-	fileLock := lockForFile(absFileName)
+	fileLock := acquireFileLock(absFileName)
 	fileLock.Lock()
+	defer releaseFileLock(absFileName)
 	defer fileLock.Unlock()
 
 	// 验证所有分片存在、累计文件大小

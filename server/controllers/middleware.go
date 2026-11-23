@@ -20,3 +20,18 @@ func JSONWriteDeadline(d time.Duration) gin.HandlerFunc {
 		ctx.Next()
 	}
 }
+
+// JSONMaxBytes 给 JSON 接口请求体设上限（code-review-2026-11-23 #5）。
+//
+// 上传链路已有 ContentLength 前置 + MaxBytesReader 三层限制，JSON 组此前裸奔：
+// publish_version 的 logs 数组可提交数百 MB → gin 全量读入内存 → 原样写进
+// SQLite。这与"无鉴权是有意设计"无关，属资源上限缺失。
+// 超限时返回 NG（业务信封，HTTP 仍 200，与全站错误风格一致）。
+func JSONMaxBytes(max int64) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		if ctx.Request.Body != nil {
+			ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, max)
+		}
+		ctx.Next()
+	}
+}
