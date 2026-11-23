@@ -5,6 +5,14 @@ description: AlyPublish.exe's runtime requirements, project bookmarks, initializ
 
 # Publish GUI (AlyPublish)
 
+::: info Two implementations
+This page describes the C# / Avalonia 12.1 build shipped by default (`publish-gui-csharp`). A Go / MyGo
+build, `publish-gui-go`, is feature- and config-compatible: select `gui=go` in the Release Build workflow
+to produce the **same four asset names** as a drop-in replacement. It has no extra runtime dependency on
+Windows and needs GTK3 (`libgtk-3.so.0`, with a warning from `install.sh` when missing) on Linux. Both
+share the same `payload.json` and installer scripts; see [Download & Install](/en/docs/download).
+:::
+
 `AlyPublish.exe` is the Avalonia desktop front end (.NET 8) for `aly-publish`, aimed at release engineers who are not comfortable with the command line. It does not reimplement the publishing logic: every operation goes through `aly-publish.exe --json` in the same directory, so the `.updator/` config, the staging area and the version rules are exactly the same as the CLI's.
 
 <ScreenshotFrame src="/images/publish-gui-overview.webp" alt="AlyPublish main window in English: project list on the left, unstaged and staged files in the middle, publish panel and version history on the right" caption="AlyPublish main window (English)" wide />

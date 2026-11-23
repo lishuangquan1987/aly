@@ -2,7 +2,7 @@ package main
 
 var translations = map[string]map[string]string{
 	"zh": {
-		"app.title":                     "AlyPublish（Go 实验版）",
+		"app.title":                     "AlyPublish",
 		"toolbar.addLocal":              "添加本地项目",
 		"toolbar.openCLI":               "打开 CLI 目录",
 		"toolbar.openLog":               "打开日志目录",
@@ -172,7 +172,7 @@ var translations = map[string]map[string]string{
 		"cli.found":                     "aly-publish：{path}",
 	},
 	"en": {
-		"app.title":                     "AlyPublish (Go experiment)",
+		"app.title":                     "AlyPublish",
 		"toolbar.addLocal":              "Add local project",
 		"toolbar.openCLI":               "Open CLI folder",
 		"toolbar.openLog":               "Open log folder",

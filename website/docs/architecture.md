@@ -8,7 +8,7 @@ description: Aly 的组件、发布到应用的数据流、双轨工具链与 GU
 ```text
 发布方（开发者 / CI / 发布员）                    终端用户机器
 ┌──────────────────────────────────────┐      ┌────────────────────────────────────┐
-│  AlyPublish.exe（Avalonia，可选）     │      │  宿主应用 YourApp.exe              │
+│  AlyPublish.exe（C# 或 Go，可选）    │      │  宿主应用 YourApp.exe              │
 │      │ 子进程 + --json                │      │      │ 子进程 / C# SDK / GUI     │
 │      ▼                               │      │      ▼                             │
 │  aly-publish（cobra CLI）────────────┼──┐   │  aly-client-ui（可选窗口）         │
@@ -78,7 +78,8 @@ aly/
 │   └── aly-client-sdk/         # 多语言 SDK（C#/TS/Go/Python/Java/Rust/C++/Pascal/COM）
 ├── publish/
 │   ├── publish-cli/            # 发布 CLI（cobra）
-│   └── publish-gui-csharp/     # 发布桌面端（Avalonia 12.1 · .NET 8）
+│   ├── publish-gui-csharp/     # 发布桌面端（Avalonia 12.1 · .NET 8，默认发布）
+│   └── publish-gui-go/         # 发布桌面端（Go / MyGo，可选替换实现）
 ├── test/tc/                    # 148 条端到端用例
 ├── deploy/                     # 部署脚本
 └── website/                    # 本站点（VitePress）

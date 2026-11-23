@@ -33,11 +33,16 @@ func updaterRIDs() []string {
 	return []string{"linux-amd64", "linux-arm64"}
 }
 
-func findUpdaterFile(name string) string {
-	app := appDir()
+func findUpdaterFile(name string) string { return findUpdaterFileIn(appDir(), name) }
+
+// findUpdaterFileIn takes an explicit package root for the same reason as
+// findCLIIn: payload.json's client_rid decides which packaged updater build to
+// copy into UpdateFolder, and that choice must be unit-testable.
+func findUpdaterFileIn(app, name string) string {
+	rids := updaterRIDsFor(app)
 	dir := app
 	for i := 0; i < 10; i++ {
-		for _, rid := range updaterRIDs() {
+		for _, rid := range rids {
 			candidates := []string{
 				filepath.Join(dir, "client", rid, name),
 				filepath.Join(dir, "client", name),

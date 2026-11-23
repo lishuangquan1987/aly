@@ -8,7 +8,7 @@ description: Aly's components, the data flow from publishing to application, the
 ```text
 Publisher (developer / CI / release manager)      End-user machine
 ┌────────────────────────────────────────┐      ┌────────────────────────────────────────────────────────────┐
-│ AlyPublish.exe (Avalonia, optional)    │      │  Host application YourApp.exe                              │
+│ AlyPublish.exe (C# or Go, optional)    │      │  Host application YourApp.exe                              │
 │      │ subprocess + --json             │      │      │ subprocess / C# SDK / GUI                           │
 │      ▼                                 │      │      ▼                                                     │
 │ aly-publish (cobra CLI)────────────────┼──┐   │  aly-client-ui (optional window)                           │
@@ -78,7 +78,8 @@ aly/
 │   └── aly-client-sdk/         # multi-language SDKs (C#/TS/Go/Python/Java/Rust/C++/Pascal/COM)
 ├── publish/
 │   ├── publish-cli/            # publish CLI (cobra)
-│   └── publish-gui-csharp/     # publish desktop app (Avalonia 12.1 · .NET 8)
+│   ├── publish-gui-csharp/     # publish desktop app (Avalonia 12.1 · .NET 8, shipped by default)
+│   └── publish-gui-go/         # publish desktop app (Go / MyGo, selectable replacement)
 ├── test/tc/                    # 148 end-to-end cases
 ├── deploy/                     # deployment scripts
 └── website/                    # this site (VitePress)

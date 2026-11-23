@@ -16,8 +16,9 @@ aly/
 │   │   └── aly-client-linuxui/  # Linux MyGo native UI (Go 1.27)
 │   └── aly-client-sdk/      # C# / TypeScript / Go / Python / Java / Rust / C++ / Pascal + VB.NET/F#/COM samples
 ├── publish/
-│   ├── publish-cli/      # CLI publish engine (Go, cobra)
-│   └── publish-gui-csharp/  # Desktop GUI (Avalonia 12.1, .NET 8)
+│   ├── publish-cli/         # CLI publish engine (Go, cobra)
+│   ├── publish-gui-csharp/  # Desktop GUI (Avalonia 12.1, .NET 8) — default release
+│   └── publish-gui-go/      # Go/MyGo GUI — selectable replacement (Release Build gui=go)
 ├── spec/           # JSON protocol schema, host contract and fixture scenarios (single source of truth)
 ├── test/           # E2E harness (test/tc: 148 cases) and integration tests
 ├── tools/          # Protocol model generator, fake client, SDK packaging and release scripts

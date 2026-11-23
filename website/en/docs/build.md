@@ -18,12 +18,20 @@ cd publish/publish-cli && go build -ldflags="-s -w" -o aly-publish.exe .
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o aly-server-linux-amd64 .
 ```
 
-Publish GUI (.NET 8 / Avalonia 12.1):
+Publish GUI (default C# build, .NET 8 / Avalonia 12.1):
 
 ```bash
 cd publish/publish-gui-csharp
 dotnet build src/AlyPublish/AlyPublish.csproj
 dotnet test tests/AlyPublish.Tests/AlyPublish.Tests.csproj
+```
+
+Optional Go / MyGo build (pure Go, no cgo, cross-compiles; `gui=go` in Release Build produces the same asset names):
+
+```bash
+cd publish/publish-gui-go
+./build.sh          # fmt / vet / test + windows-amd64, linux-amd64, linux-arm64 binaries
+# use build.ps1 on Windows; GTK3 is required at runtime on Linux
 ```
 
 ## XP Track: Updater + Windows GUI

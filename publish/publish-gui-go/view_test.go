@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -224,4 +226,68 @@ func TestThemeCycle(t *testing.T) {
 	if normalizeTheme("bogus") != "system" {
 		t.Fatal("invalid theme should normalize to system")
 	}
+}
+
+// TestShortcutsMatchCSharpGUI verifies the window-level shortcuts introduced
+// for feature parity with the C# GUI (F5 / Ctrl+Enter / Ctrl+E). The CLI is
+// intentionally unavailable so every action takes its no-CLI path: no
+// goroutines are started and a.win (nil in the tester) is never touched.
+func TestShortcutsMatchCSharpGUI(t *testing.T) {
+	t.Setenv("ALY_PUBLISH", "")
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".updator"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(dir, ".updator", "shared.json"),
+		[]byte(`{"server_url":"http://localhost:2000","project_name":"demo"}`),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	fresh := func() *app {
+		a := testApp()
+		a.cli = &cliClient{}
+		a.projects[0].ProjectPath = dir
+		a.detail.project.ProjectPath = dir
+		return a
+	}
+
+	t.Run("F5 refreshes", func(t *testing.T) {
+		a := fresh()
+		tt := ui.NewTester(a.view, 1440, 900)
+		tt.Key(0, ui.KeyF5)
+		if a.detail.status != a.t("toolbar.cliMissing") {
+			t.Fatalf("F5 did not trigger refresh: status=%q", a.detail.status)
+		}
+	})
+
+	t.Run("Ctrl+E opens project settings", func(t *testing.T) {
+		a := fresh()
+		tt := ui.NewTester(a.view, 1440, 900)
+		tt.Key(ui.Cmd, ui.KeyE)
+		if !a.editOpen {
+			t.Fatal("Ctrl+E did not open project settings")
+		}
+	})
+
+	t.Run("Ctrl+Enter does not publish an incomplete form", func(t *testing.T) {
+		a := fresh()
+		tt := ui.NewTester(a.view, 1440, 900)
+		tt.Key(ui.Cmd, ui.KeyEnter)
+		if a.detail.uploading {
+			t.Fatal("Ctrl+Enter started a publish without version/notes")
+		}
+	})
+
+	t.Run("modal owns the keyboard", func(t *testing.T) {
+		a := fresh()
+		a.editOpen = true
+		tt := ui.NewTester(a.view, 1440, 900)
+		tt.Key(ui.Cmd, ui.KeyE)
+		if a.editing != nil {
+			t.Fatal("shortcut fired while a modal was open")
+		}
+	})
 }

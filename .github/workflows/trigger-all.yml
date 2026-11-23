@@ -20,6 +20,15 @@ on:
         required: false
         type: boolean
         default: true
+      gui:
+        description: 'Release Build 使用的发布 GUI 实现（auto = 跟随仓库变量 PUBLISH_GUI）'
+        required: false
+        type: choice
+        options:
+          - auto
+          - csharp
+          - go
+        default: auto
 
 # GITHUB_TOKEN 需要 actions:write 才能触发其它 workflow（workflow_dispatch）
 permissions:
@@ -53,7 +62,7 @@ jobs:
           }
 
           if [ "${{ inputs.include_release }}" = "true" ]; then
-            run_wf release.yml -f upload_to_release=false
+            run_wf release.yml -f upload_to_release=false -f gui=${{ inputs.gui }}
           fi
 
           if [ "${{ inputs.include_sdks }}" = "true" ]; then

@@ -40,7 +40,8 @@ type appSettings struct {
 	Language string `json:"language"`
 }
 
-// appearanceSettings belongs to the Go experiment only.
+// appearanceSettings lives in its own file: the C# GUI rewrites settings.json
+// when switching language, so theme/accent must not be stored alongside it.
 type appearanceSettings struct {
 	Theme  string `json:"theme,omitempty"`
 	Accent string `json:"accent,omitempty"`
@@ -263,14 +264,19 @@ func executableName(rid string) string {
 
 // findCLI looks for aly-publish next to the app, in the packaged payload, in
 // the repository's development layout, and on PATH.
-func findCLI() string {
+func findCLI() string { return findCLIIn(appDir()) }
+
+// findCLIIn takes an explicit package root so the payload-driven lookup can
+// be unit-tested without touching the real application directory. The
+// packaged cli_rid from payload.json takes priority; host candidates are the
+// development-tree fallback.
+func findCLIIn(app string) string {
 	if v := strings.TrimSpace(os.Getenv("ALY_PUBLISH")); v != "" {
 		if fileExists(v) {
 			return v
 		}
 	}
-	app := appDir()
-	rids := hostRIDs()
+	rids := cliRIDs(app)
 	var candidates []string
 	for _, rid := range rids {
 		name := executableName(rid)

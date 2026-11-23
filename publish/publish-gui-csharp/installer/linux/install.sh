@@ -38,6 +38,18 @@ chmod 0755 "$prefix/publish-cli"/*/aly-publish 2>/dev/null || true
 chmod 0755 "$prefix/client"/*/aly-client "$prefix/client"/*/aly-client-ui 2>/dev/null || true
 chmod 0755 "$prefix/install.sh" "$prefix/uninstall.sh" 2>/dev/null || true
 
+# Go 版 GUI 运行时通过 dlopen 加载 libgtk-3.so.0，缺库时窗口无法启动。
+# 只有 Go 包带 aly-go-gui.marker，C# 包不会走到这里，避免误报；只提示、不阻断安装。
+# 没有 ldconfig 的发行版（如 Alpine）不做判断，免得误报。
+if [ -f "$here/aly-go-gui.marker" ] && command -v ldconfig >/dev/null 2>&1; then
+    if ! ldconfig -p 2>/dev/null | grep -q 'libgtk-3\.so\.0'; then
+        echo "警告：未检测到 GTK3（libgtk-3.so.0），Go 版 AlyPublish 需要它才能启动。" >&2
+        echo "      Debian/Ubuntu: sudo apt install libgtk-3-0" >&2
+        echo "      Fedora/RHEL:   sudo dnf install gtk3" >&2
+        echo "      Arch:         sudo pacman -S gtk3" >&2
+    fi
+fi
+
 # 便捷启动器：$HOME/.local/bin 通常已在 PATH 上。
 #
 # 审查 publish 轻微⑧：旧实现把 GUI 启动器命名为 `aly-publish`——与真正的发布

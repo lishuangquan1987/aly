@@ -18,12 +18,20 @@ cd publish/publish-cli && go build -ldflags="-s -w" -o aly-publish.exe .
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o aly-server-linux-amd64 .
 ```
 
-发布 GUI（.NET 8 / Avalonia 12.1）：
+发布 GUI（默认 C# 版，.NET 8 / Avalonia 12.1）：
 
 ```bash
 cd publish/publish-gui-csharp
 dotnet build src/AlyPublish/AlyPublish.csproj
 dotnet test tests/AlyPublish.Tests/AlyPublish.Tests.csproj
+```
+
+可选的 Go / MyGo 实现（纯 Go、无 cgo，可交叉编译；Release Build 选 `gui=go` 即产出同名发布包）：
+
+```bash
+cd publish/publish-gui-go
+./build.sh          # fmt / vet / test + windows-amd64、linux-amd64、linux-arm64 三平台产物
+# Windows 用 build.ps1；Linux 运行时需要 GTK3
 ```
 
 ## XP 轨：更新器 + Windows GUI

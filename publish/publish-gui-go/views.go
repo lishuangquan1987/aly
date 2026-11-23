@@ -183,6 +183,28 @@ func (a *app) view(c *ui.Context) {
 			c.Toast(msg)
 		}
 	})
+	// Declared after the tree is built, so inputs/buttons claim their keys
+	// first and these window-level shortcuts never steal typing.
+	a.handleShortcuts(c)
+}
+
+// handleShortcuts mirrors the C# MainWindow KeyBindings: F5 refreshes,
+// Ctrl+Enter publishes, Ctrl+E opens project settings. ui.Cmd is Control on
+// Windows/Linux and Command on macOS. While a modal is open its dialog owns
+// the keyboard, so the shortcuts stay inactive.
+func (a *app) handleShortcuts(c *ui.Context) {
+	if a.editOpen || a.addOpen || a.localPreviewOpen || a.removeOpen || a.clearOpen {
+		return
+	}
+	if c.Shortcut(0, ui.KeyF5) {
+		a.refreshDetail()
+	}
+	if c.Shortcut(ui.Cmd, ui.KeyEnter) {
+		a.publish()
+	}
+	if c.Shortcut(ui.Cmd, ui.KeyE) {
+		a.openEdit()
+	}
 }
 
 func (a *app) toolbar(c *ui.Context) {

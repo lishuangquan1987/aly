@@ -41,6 +41,18 @@ chmod +x install.sh                                 # zip does not keep the exec
 Start `AlyPublish` after install (on Linux it is the `AlyPublish` file inside the prefix; `install.sh`
 also writes a launcher into `$HOME/.local/bin`), then follow [Quick Start](/en/docs/getting-started).
 
+::: tip Two implementations of the publish GUI
+Releases ship the C# / Avalonia build by default (self-contained .NET 8). A Go / MyGo build,
+`publish-gui-go`, is also available: select `gui=go` when running the Release Build workflow
+(or the same input in "Full Build") and it produces the **same four asset names**. Package layout,
+`payload.json`, config files and download links are identical, so it is a drop-in replacement.
+To make the Go build the default for **published releases** (the `release` event), set the
+repository variable `PUBLISH_GUI` to `go`; `gui=auto` (the default) follows that variable.
+On Linux the Go build additionally needs GTK3 (`libgtk-3.so.0`); `install.sh` warns when it is
+missing. The Windows build has no extra runtime dependency. See
+[publish-gui-go/README](https://github.com/lishuangquan1987/aly/tree/master/publish/publish-gui-go).
+:::
+
 ## Step 2: install the server
 
 Server assets are named `aly-server-{goos}-{goarch}`: Windows uses

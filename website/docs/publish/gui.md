@@ -5,6 +5,14 @@ description: AlyPublish.exe 的运行条件、项目书签、初始化与本地�
 
 # 发布 GUI（AlyPublish）
 
+::: info 两种实现
+本文描述默认发布的 C# / Avalonia 12.1 版（`publish-gui-csharp`）。仓库另有 Go / MyGo 版
+`publish-gui-go`，功能与配置格式兼容：在 Release Build 工作流里把 `gui` 选为 `go`，即可产出
+**同名**的 4 个资产并直接替换。它在 Windows 上无额外运行依赖，Linux 上需要 GTK3
+（`libgtk-3.so.0`，安装脚本会在缺库时提示）。两者共用同一份 `payload.json` 与安装脚本，
+详见[下载与安装](/docs/download)。
+:::
+
 `AlyPublish.exe` 是 `aly-publish` 的 Avalonia 桌面前端（.NET 8），面向不习惯命令行的发布人员。它不重新实现发布逻辑：所有操作都通过同目录的 `aly-publish.exe --json` 完成，因此 `.updator/` 配置、暂存区和版本规则与 CLI 完全一致。
 
 <ScreenshotFrame src="/images/publish-gui-overview-zh.webp" alt="AlyPublish 中文主界面：左侧项目列表，中部未暂存与已暂存文件，右侧发布面板与版本历史" caption="AlyPublish 主界面（中文）" wide />
