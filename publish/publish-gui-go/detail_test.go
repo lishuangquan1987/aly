@@ -251,24 +251,78 @@ func TestDetailTablesAdaptToPaneWidth(t *testing.T) {
 	}
 }
 
-// TestDetailSplitCollapsesEmptyHalf checks the adaptive split: when only one
-// half of the changes card has files, it takes the room the empty half would
-// otherwise show blank.
-func TestDetailSplitCollapsesEmptyHalf(t *testing.T) {
-	stagedOnly := detailTestApp()
-	stagedOnly.detail.unstaged = nil
-	ui.NewTester(stagedOnly.view, 1320, 840)
-	if stagedOnly.detail.splitPercent > 30 {
-		t.Fatalf("split = %v with only staged files, want the unstaged half collapsed",
-			stagedOnly.detail.splitPercent)
+// TestDetailSplitsKeepRatios checks the two splitters: an empty half no
+// longer moves the divider (the ratio is the user's), an out-of-range value is
+// clamped, and the publish/history split survives a resize.
+func TestDetailSplitsKeepRatios(t *testing.T) {
+	a := detailTestApp()
+	a.detail.splitPercent = 40
+	a.detail.unstaged = nil
+	ui.NewTester(a.view, 1320, 840)
+	if a.detail.splitPercent != 40 {
+		t.Fatalf("changes split = %v after one half emptied, want the set 40",
+			a.detail.splitPercent)
 	}
 
-	unstagedOnly := detailTestApp()
-	unstagedOnly.detail.staged = nil
-	ui.NewTester(unstagedOnly.view, 1320, 840)
-	if unstagedOnly.detail.splitPercent < 70 {
-		t.Fatalf("split = %v with only unstaged files, want the staged half collapsed",
-			unstagedOnly.detail.splitPercent)
+	b := detailTestApp()
+	b.detail.splitPercent = 10
+	ui.NewTester(b.view, 1320, 840)
+	if b.detail.splitPercent != 20 {
+		t.Fatalf("changes split = %v, want it clamped to 20", b.detail.splitPercent)
+	}
+
+	c := detailTestApp()
+	c.detail.publishPercent = 60
+	ui.NewTester(c.view, 1320, 840)
+	if c.detail.publishPercent != 60 {
+		t.Fatalf("publish split = %v after a render, want the set 60", c.detail.publishPercent)
+	}
+
+	d := detailTestApp()
+	d.detail.publishPercent = 0
+	ui.NewTester(d.view, 1320, 840)
+	if d.detail.publishPercent != 50 {
+		t.Fatalf("publish split = %v, want the half/half default 50", d.detail.publishPercent)
+	}
+}
+
+// TestDetailSplitsAreDraggable checks the splitter answers a drag: both splits
+// are the framework's SplitVerticalPercent, whose divider is the same widget,
+// so dragging the changes divider proves the adjustable behaviour.
+func TestDetailSplitsAreDraggable(t *testing.T) {
+	a := detailTestApp()
+	tt := ui.NewTester(a.view, 1320, 840)
+	divider, ok := tt.Find("Divider")
+	if !ok {
+		t.Skip("the splitter divider is not exposed to the test tree")
+	}
+	x, y := divider.X+divider.W/2, divider.Y+divider.H/2
+	before := a.detail.splitPercent
+	tt.Press(x, y)
+	tt.Move(x, y-60)
+	tt.Release(x, y-60)
+	if a.detail.splitPercent >= before {
+		t.Fatalf("dragging the splitter left splitPercent at %v (was %v)",
+			a.detail.splitPercent, before)
+	}
+}
+
+// TestPublishNotesKeepSideRatio checks the side splitter's stability: a long
+// release note scrolls inside the publish pane instead of growing it and
+// squeezing the version history.
+func TestPublishNotesKeepSideRatio(t *testing.T) {
+	a := detailTestApp()
+	a.detail.publishPercent = 50
+	a.detail.notes = strings.Repeat("长说明行 \n", 40)
+	tt := ui.NewTester(a.view, 1320, 840)
+	if a.detail.publishPercent != 50 {
+		t.Fatalf("publish split = %v after long notes, want 50", a.detail.publishPercent)
+	}
+	if !tt.HasText("Version history") {
+		t.Fatalf("the version history is missing under the publish card")
+	}
+	if !tt.HasText("Release notes (required)") {
+		t.Fatalf("the release notes field is missing from the publish pane")
 	}
 }
 

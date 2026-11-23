@@ -61,12 +61,11 @@ type detailState struct {
 	// changesWidth is the changes card's width in the last layout, so its
 	// tables can drop columns when the window is narrow.
 	changesWidth float32
-	// emptyKnown, unstagedEmpty and stagedEmpty remember which half of the
-	// changes card was empty, so the split can give its room to the other half
-	// when that changes without fighting a drag in between.
-	emptyKnown    bool
-	unstagedEmpty bool
-	stagedEmpty   bool
+	// publishPercent is the share of the side column the publish card takes
+	// above the version history, like the C# GridSplitter running across it.
+	// Both splits keep their ratio as files change and grow the panes
+	// proportionally as the window resizes.
+	publishPercent float32
 }
 
 func (a *app) refreshDetail() {

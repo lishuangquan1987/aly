@@ -277,7 +277,7 @@ func (a *app) openSelected() {
 		a.detail = cached
 		return
 	}
-	a.detail = &detailState{project: p, splitPercent: 62, forceUpdate: false}
+	a.detail = &detailState{project: p, splitPercent: 50, publishPercent: 50, forceUpdate: false}
 	a.details[key] = a.detail
 	a.refreshDetail()
 }

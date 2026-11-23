@@ -79,7 +79,7 @@ func (a *app) detailHeader(c *ui.Context, d *detailState) {
 
 // detailSplit puts the changes area left and the publish/history side right.
 func (a *app) detailSplit(c *ui.Context, d *detailState, root ui.Element) {
-	a.adjustChangesSplit(d)
+	clampSplit(&d.splitPercent, 20, 80, 50)
 	total := root.Bounds().W - 2*detailPadding
 	if total <= 0 {
 		width, _ := c.Size()
@@ -108,28 +108,6 @@ func (a *app) detailSplit(c *ui.Context, d *detailState, root ui.Element) {
 	}
 }
 
-// adjustChangesSplit gives the split to the half that has changes: an empty
-// unstaged or staged half collapses to a strip, so a full half fills the card
-// instead of both halves showing blank table. It only runs when the empty
-// state changes, so a divider drag survives until the files change again.
-func (a *app) adjustChangesSplit(d *detailState) {
-	unstaged, staged := len(d.unstaged) == 0, len(d.staged) == 0
-	if d.emptyKnown && unstaged == d.unstagedEmpty && staged == d.stagedEmpty {
-		return
-	}
-	d.emptyKnown, d.unstagedEmpty, d.stagedEmpty = true, unstaged, staged
-	switch {
-	case unstaged && staged:
-		d.splitPercent = 50
-	case unstaged:
-		d.splitPercent = 18
-	case staged:
-		d.splitPercent = 84
-	default:
-		d.splitPercent = 62
-	}
-}
-
 // clampSideWidth keeps the side column between its minimum and maximum and
 // leaves the changes pane its own minimum room.
 func clampSideWidth(total, side float32) float32 {
@@ -151,12 +129,30 @@ func clampSideWidth(total, side float32) float32 {
 	return side
 }
 
-// sidePanel stacks the publish card over the growing history card.
+// sidePanel splits the side column between the publish form and the version
+// history: the ratio is fixed (half each by default) and drags like the C#
+// GridSplitter, so typing a long release note never squeezes the history.
 func (a *app) sidePanel(c *ui.Context, d *detailState) {
-	ui.Column(c).Grow(1).Shrink(1).FillHeight().MinHeight(0).Gap(12).Children(func() {
-		a.publishView(c, d)
-		a.historyView(c, d)
+	clampSplit(&d.publishPercent, 25, 75, 50)
+	ui.Column(c).Grow(1).Shrink(1).FillHeight().MinHeight(0).Children(func() {
+		ui.SplitVerticalPercent(c, &d.publishPercent,
+			func() { a.publishView(c, d) },
+			func() { a.historyView(c, d) },
+		).Grow(1).MinHeight(0)
 	})
+}
+
+// clampSplit keeps a splitter's percentage usable: it initialises a zero value
+// with the default and stops a drag before either pane becomes a sliver.
+func clampSplit(percent *float32, lo, hi, def float32) {
+	switch {
+	case *percent <= 0:
+		*percent = def
+	case *percent < lo:
+		*percent = lo
+	case *percent > hi:
+		*percent = hi
+	}
 }
 
 // changesView is the card holding the unstaged and staged file tables, with
@@ -423,61 +419,77 @@ func (a *app) publishButtonText(d *detailState) string {
 }
 
 // publishView is the release form: version, notes, advanced options, the
-// publish button with its hint, and the upload progress card.
+// publish button with its hint, and the upload progress card. Its body scrolls
+// inside the pane, so a long release note never changes the pane's size.
 func (a *app) publishView(c *ui.Context, d *detailState) {
+	p := a.pal(c)
 	canPublish := !d.busy && !d.uploading && len(d.staged) > 0 &&
 		strings.TrimSpace(d.newVersion) != "" && strings.TrimSpace(d.notes) != ""
 	hint := a.publishHint(d)
 	buttonText := a.publishButtonText(d)
 	nextVersion := suggestVersion(d.currentVersion)
-	ui.Column(c).Shrink(0).Children(func() {
-		a.card(c, func() {
-			a.cardHeader(c, iconUpload, a.t("publish.title"), len(d.staged), func() {
+	ui.Column(c).Grow(1).FillHeight().MinHeight(0).Background(p.card).
+		Border(1, p.border).Radius(12).Shadow(0, 1, 3, 0, p.shadow).Clip().
+		Children(func() {
+			ui.Row(c).Gap(8).Padding(8, 12).Shrink(0).AlignItems(ui.Center).
+				BorderWidth(0, 0, 1, 0).BorderColor(p.divider).Children(func() {
+				a.plainIcon(c, iconUpload, tonePrimary, 18)
+				ui.Text(c, a.t("publish.title")).FontSize(fontSection).FontWeight(600).
+					TextColor(p.text).SingleLine()
+				a.countTag(c, len(d.staged), toneNeutral)
+				ui.Box(c).Grow(1)
 				a.versionTag(c, d.currentVersion)
 			})
-			ui.Column(c).Gap(12).Children(func() {
-				a.field(c, a.t("publish.version"), func() {
-					ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-						in := ui.TextInput(c, &d.newVersion).Placeholder(a.t("publish.versionHint")).
-							Label(a.t("publish.version")).Grow(1).Height(controlHeight)
-						if in.Submitted() && canPublish {
-							a.publish()
-						}
-						if a.iconButtonSize(c, a.t("publish.nextVersion"), iconSparkles, btnGhost,
-							d.busy || d.uploading || nextVersion == "", controlHeight) {
-							d.newVersion = nextVersion
-						}
-					})
-				})
-				a.field(c, a.t("publish.notes"), func() {
-					ui.TextArea(c, &d.notes).Placeholder(a.t("publish.notesHint")).
-						Label(a.t("publish.notes")).MinHeight(88).Radius(8)
-				})
-				ui.Collapsible(c, a.t("publish.advanced"), &d.advancedOpen, func() {
-					ui.Column(c).Gap(10).PaddingY(2).Children(func() {
-						a.field(c, a.t("publish.script"), func() {
-							ui.TextInput(c, &d.script).Placeholder(a.t("publish.scriptHint")).
-								Label(a.t("publish.script")).Height(controlHeight)
+			ui.Scroll(c).Grow(1).MinHeight(0).Shrink(1).KeepScrollbars(true).Children(func() {
+				ui.Column(c).Padding(12).Gap(12).Children(func() {
+					a.field(c, a.t("publish.version"), func() {
+						ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+							in := ui.TextInput(c, &d.newVersion).Placeholder(a.t("publish.versionHint")).
+								Label(a.t("publish.version")).Grow(1).Height(controlHeight)
+							if in.Submitted() && canPublish {
+								a.publish()
+							}
+							if a.iconButtonSize(c, a.t("publish.nextVersion"), iconSparkles, btnGhost,
+								d.busy || d.uploading || nextVersion == "", controlHeight) {
+								d.newVersion = nextVersion
+							}
 						})
-						ui.Checkbox(c, &d.forceUpdate, a.t("publish.force"))
+					})
+					a.field(c, a.t("publish.notes"), func() {
+						// A fixed height keeps the form's size stable; long
+						// notes scroll inside the text area.
+						ui.TextArea(c, &d.notes).Placeholder(a.t("publish.notesHint")).
+							Label(a.t("publish.notes")).Height(110).Radius(8)
+					})
+					ui.Collapsible(c, a.t("publish.advanced"), &d.advancedOpen, func() {
+						ui.Column(c).Gap(10).PaddingY(2).Children(func() {
+							a.field(c, a.t("publish.script"), func() {
+								ui.TextInput(c, &d.script).Placeholder(a.t("publish.scriptHint")).
+									Label(a.t("publish.script")).Height(controlHeight)
+							})
+							ui.Checkbox(c, &d.forceUpdate, a.t("publish.force"))
+						})
 					})
 				})
 			})
-			tooltip := buttonText
-			if hint != "" {
-				tooltip = hint
-			}
-			if a.buttonSized(c, buttonText, tooltip, iconUpload, btnPrimary, !canPublish, 38) {
-				a.publish()
-			}
-			if hint != "" {
-				a.inlineNotice(c, iconInfo, hint, toneWarning)
-			}
-			if d.uploading || len(d.uploadItems) > 0 {
-				a.uploadCard(c, d)
-			}
+			a.divider(c)
+			ui.Column(c).Shrink(0).Padding(10, 12).Gap(6).Children(func() {
+				if d.uploading || len(d.uploadItems) > 0 {
+					a.uploadCard(c, d)
+					return
+				}
+				tooltip := buttonText
+				if hint != "" {
+					tooltip = hint
+				}
+				if a.buttonSized(c, buttonText, tooltip, iconUpload, btnPrimary, !canPublish, 38) {
+					a.publish()
+				}
+				if hint != "" {
+					a.inlineNotice(c, iconInfo, hint, toneWarning)
+				}
+			})
 		})
-	})
 }
 
 // uploadCard shows the streamed push progress: caption, bar, summary and the
@@ -567,9 +579,9 @@ func (a *app) historyView(c *ui.Context, d *detailState) {
 		}
 		logs := d.logs
 		rowsHeight := float32(32 + 34*len(logs))
-		// The side column holds the publish card above this one; its height is
-		// stable enough to estimate the room the history table leaves.
-		historyRoom := splitAreaHeight(c) - 12 - 400 - 42 - 26
+		// The split gives the history the share below the publish form; estimate
+		// the room its rows leave from that same percentage.
+		historyRoom := splitAreaHeight(c)*(100-d.publishPercent)/100 - 42 - 26
 		showHint := historyRoom-rowsHeight > 60
 		table := ui.Table(c, nil, cols, len(logs), func(row, col int) {
 			log := logs[row]
