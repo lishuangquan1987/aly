@@ -382,3 +382,51 @@ func TestDialogsFitMinimumWindow(t *testing.T) {
 		check(t, tt, "Add local project", "Cancel", "Add project")
 	})
 }
+
+func TestConfirmLocalProjectRejectsMalformedConfigWithoutBookmark(t *testing.T) {
+	t.Setenv("ALYPUBLISH_CONFIG_DIR", t.TempDir())
+	dir := editTestProjectDir(t, `{"server_url":broken`)
+	a := testApp()
+	a.cli = &cliClient{}
+	a.projects = nil
+	a.detail = nil
+	a.selected = -1
+	a.addLocalProject()
+	a.localPreview.path = dir
+	a.refreshLocalPreview(a.localPreview)
+	a.confirmLocalProject()
+	if len(a.projects) != 0 || a.selected != -1 {
+		t.Fatalf("malformed config changed bookmarks: %+v selected=%d", a.projects, a.selected)
+	}
+	if !a.localPreviewOpen || a.localPreview.error == "" {
+		t.Fatalf("dialog did not retain the error: open=%v state=%+v", a.localPreviewOpen, a.localPreview)
+	}
+	if _, err := os.Stat(configPath()); !os.IsNotExist(err) {
+		t.Fatalf("bookmark file exists after rejected config: %v", err)
+	}
+}
+
+func TestConfirmLocalProjectSaveFailureDoesNotChangeBookmarks(t *testing.T) {
+	configFile := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(configFile, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ALYPUBLISH_CONFIG_DIR", configFile)
+	dir := editTestProjectDir(t, `{"server_url":"http://server:2000","project_name":"demo"}`)
+	a := testApp()
+	a.cli = &cliClient{}
+	a.projects = nil
+	a.detail = nil
+	a.selected = -1
+	a.addLocalProject()
+	a.localPreview.path = dir
+	a.localPreview.displayName = "demo"
+	a.refreshLocalPreview(a.localPreview)
+	a.confirmLocalProject()
+	if len(a.projects) != 0 || a.selected != -1 {
+		t.Fatalf("failed save changed bookmarks: %+v selected=%d", a.projects, a.selected)
+	}
+	if !a.localPreviewOpen || a.localPreview.error == "" {
+		t.Fatalf("save failure was not retained in dialog: open=%v state=%+v", a.localPreviewOpen, a.localPreview)
+	}
+}

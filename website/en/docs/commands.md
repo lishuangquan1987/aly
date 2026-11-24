@@ -135,8 +135,9 @@ aly-client.exe check_update [--url <server_url>] [--project-name <project_name>]
    - `downloaded`: if `rollback_previous` is non-empty (an interrupted rollback), report that the rollback should continue; otherwise request the changelog; if the server version is higher, require a fresh download; if the server version is the same and the pending artifacts are missing or incomplete, require a re-download to fill them in; if the versions match and the artifacts are intact, or the server version is lower, require continuing with the apply.
    - `applying`: unconditionally report that the apply should continue (crash recovery) and skip the network comparison.
    - Any other unknown value: print a warning to stderr and treat it as `applied`; only `download_update` can rewrite it to `downloaded`.
-3. The latest changelog entry is the record with the highest version number; when versions are equal, the record with the largest `id` wins.
-4. Version comparison is semver-aware: `1.0.0-beta < 1.0.0`, and build metadata such as `+build` does not participate in the comparison; the legacy plain-numeric format keeps its previous behavior.
+3. All network requests share a **1-second total budget**, counting only time spent in real API calls; local directory scans between calls do not consume it. Connection refusal and HTTP errors return immediately, and only an unresponsive service consumes the full budget. In the `applied` branch, a failed first request prevents a second, pointless API call. This budget does not affect downloads, file manifests, or other commands.
+4. The latest changelog entry is the record with the highest version number; when versions are equal, the record with the largest `id` wins.
+5. Version comparison is semver-aware: `1.0.0-beta < 1.0.0`, and build metadata such as `+build` does not participate in the comparison; the legacy plain-numeric format keeps its previous behavior.
 
 ### Return Fields
 

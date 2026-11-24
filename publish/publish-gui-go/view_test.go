@@ -353,3 +353,27 @@ func TestShortcutsMatchCSharpGUI(t *testing.T) {
 		}
 	})
 }
+
+func TestCtrlFFocusesProjectSearch(t *testing.T) {
+	a := testApp()
+	tt := ui.NewTester(a.view, 1320, 840)
+	tt.Key(ui.Cmd, ui.KeyF)
+	if !tt.Focused(a.t("projects.search")) {
+		t.Fatal("Ctrl+F did not focus the project search field")
+	}
+	tt.Type("needle")
+	if a.filter != "needle" {
+		t.Fatalf("focused search did not receive input: filter=%q", a.filter)
+	}
+}
+
+func TestViewRendersChinese(t *testing.T) {
+	a := testApp()
+	a.lang = "zh"
+	tt := ui.NewTester(a.view, 1320, 840)
+	for _, text := range []string{"项目", "未暂存", "已暂存", "发布", "版本历史"} {
+		if !tt.HasText(text) {
+			t.Errorf("Chinese view missing %q; texts=%q", text, tt.Texts())
+		}
+	}
+}

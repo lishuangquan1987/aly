@@ -123,3 +123,27 @@ func TestParseJSONOutput(t *testing.T) {
 		t.Fatalf("out=%+v", out)
 	}
 }
+
+func TestParsePushLineEdgeCases(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		line      string
+		wantKind  pushKind
+		wantError string
+	}{
+		{name: "blank", line: " \n", wantKind: pushIgnored},
+		{name: "malformed object", line: "{broken", wantKind: pushIgnored},
+		{name: "nested data error", line: `{"isSuccess":false,"errorMsg":"","data":{"error":"nested boom"}}`, wantKind: pushFailure, wantError: "nested boom"},
+		{name: "empty failure", line: `{"isSuccess":false,"errorMsg":" ","data":null}`, wantKind: pushFailure},
+		{name: "array success is not final result", line: `{"isSuccess":true,"data":[]}`, wantKind: pushIgnored},
+		{name: "scalar success is not final result", line: `{"isSuccess":true,"data":"done"}`, wantKind: pushIgnored},
+		{name: "failed progress without error", line: `{"isSuccess":true,"data":{"index":1,"file":"a.exe","status":"FAIL","error":""}}`, wantKind: pushProgress},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parsePushLine(tc.line)
+			if got.Kind != tc.wantKind || got.Error != tc.wantError {
+				t.Fatalf("parsePushLine = %+v, want kind %v error %q", got, tc.wantKind, tc.wantError)
+			}
+		})
+	}
+}

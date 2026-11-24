@@ -80,7 +80,7 @@ aly/
 │   ├── publish-cli/            # 发布 CLI（cobra）
 │   ├── publish-gui-go/         # 发布桌面端（Go / MyGo，默认发布）
 │   └── publish-gui-csharp/     # 发布桌面端（Avalonia 12.1 · .NET 8，历史实现）
-├── test/tc/                    # 148 条端到端用例
+├── test/tc/                    # 150 条端到端用例
 ├── deploy/                     # 部署脚本
 └── website/                    # 本站点（VitePress）
 ```

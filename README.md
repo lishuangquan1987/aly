@@ -20,7 +20,7 @@ aly/
 │   ├── publish-gui-go/      # Desktop GUI (Go/MyGo native UI) — default release
 │   └── publish-gui-csharp/  # Historical GUI (Avalonia 12.1, .NET 8) — kept, not built by default
 ├── spec/           # JSON protocol schema, host contract and fixture scenarios (single source of truth)
-├── test/           # E2E harness (test/tc: 148 cases) and integration tests
+├── test/           # E2E harness (test/tc: 150 cases) and integration tests
 ├── tools/          # Protocol model generator, fake client, SDK packaging and release scripts
 ├── deploy/         # Client and server deployment scripts
 ├── website/        # Project website and online documentation (VitePress)
@@ -234,6 +234,7 @@ With materialization done at download time, `apply_update` closes your app only 
 
 Notes:
 
+- **`check_update` fails fast**: all of its network requests share a 1-second total budget, counting only real API-call time (local directory scans do not consume it). Connection refusal and HTTP errors return immediately, and a failed first request is not followed by a second pointless call. This does not shorten downloads or other API operations.
 - **Single-file failures don't abort the download**: files that fail after 3 retries are collected in a
   `failed_files` list on the final result line; a retry re-downloads only the failed files (already
   verified files are skipped).

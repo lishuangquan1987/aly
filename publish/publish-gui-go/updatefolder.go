@@ -73,9 +73,15 @@ func findUpdaterFileIn(app, name string) string {
 }
 
 func copyUpdaters(updateFolder string) (warning string) {
+	return copyUpdatersIn(appDir(), updateFolder)
+}
+
+// copyUpdatersIn is the package-root-injectable form of copyUpdaters, matching
+// findUpdaterFileIn and keeping payload lookup and copying testable together.
+func copyUpdatersIn(app, updateFolder string) (warning string) {
 	var missing []string
 	for _, name := range updaterNames() {
-		src := findUpdaterFile(name)
+		src := findUpdaterFileIn(app, name)
 		if src == "" {
 			missing = append(missing, name)
 			continue
@@ -143,7 +149,7 @@ func createUpdateFolder(projectPath, mainExePath, closeProcessName string) (stri
 // main executable and no UpdateFolder yet, matching the C# EnsureUpdaters
 // path. A missing main executable is skipped just like C# does.
 // 审查修复（code-review-2026-11-23 #15）：目录存在但 client.json 缺失
-//（首次创建中途失败的半成品）此前被静默跳过且永远不自愈——client.json
+// （首次创建中途失败的半成品）此前被静默跳过且永远不自愈——client.json
 // 缺失的 UpdateFolder 是不可用的，这里补齐检查并走完整创建。
 func ensureUpdatersFor(projectPath, mainExePath string) string {
 	if strings.TrimSpace(mainExePath) == "" {

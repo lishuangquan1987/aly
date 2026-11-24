@@ -128,3 +128,41 @@ func TestI18nKeyParity(t *testing.T) {
 			missingInEN, missingInZH)
 	}
 }
+
+func TestBookmarkRemovePreservesActualProjectFiles(t *testing.T) {
+	t.Setenv("ALYPUBLISH_CONFIG_DIR", t.TempDir())
+	projectDir := t.TempDir()
+	appPath := filepath.Join(projectDir, "app.exe")
+	sharedPath := filepath.Join(projectDir, ".updator", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(sharedPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	appBody := []byte("application-bytes")
+	sharedBody := []byte(`{"server_url":"http://server:2000","project_name":"demo"}`)
+	if err := os.WriteFile(appPath, appBody, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sharedPath, sharedBody, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	project := ProjectConfig{DisplayName: "demo", ProjectPath: projectDir}
+	a := testApp()
+	a.projects = []ProjectConfig{project}
+	a.selected = 0
+	a.detail = &detailState{project: project}
+	a.removeSelected()
+	if len(a.projects) != 0 || a.detail != nil || a.selected != -1 {
+		t.Fatalf("bookmark was not removed: projects=%v detail=%+v selected=%d", a.projects, a.detail, a.selected)
+	}
+	gotApp, err := os.ReadFile(appPath)
+	if err != nil || string(gotApp) != string(appBody) {
+		t.Fatalf("application changed: %q, %v", gotApp, err)
+	}
+	gotShared, err := os.ReadFile(sharedPath)
+	if err != nil || string(gotShared) != string(sharedBody) {
+		t.Fatalf("shared config changed: %q, %v", gotShared, err)
+	}
+	if got := loadProjects(); len(got) != 0 {
+		t.Fatalf("persisted bookmarks = %+v", got)
+	}
+}

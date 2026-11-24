@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"aly/client/aly-client/config"
 )
@@ -19,10 +21,10 @@ import (
 // compareVersion(newVersion, currentVersion) > 0 语义保持一致。
 func TestNeedUpdate(t *testing.T) {
 	tests := []struct {
-		name    string
-		server  string
-		local   string
-		want    bool
+		name   string
+		server string
+		local  string
+		want   bool
 	}{
 		{"服务器更高（补丁）", "2.0.1", "2.0.0", true},
 		{"服务器更高（主版本）", "3.0.0", "2.9.9", true},
@@ -51,6 +53,7 @@ type checkUpdateResult struct {
 		NeedDownloadUpdate bool     `json:"need_download_update"`
 		CurrentVersion     string   `json:"current_version"`
 		NewVersion         string   `json:"new_version"`
+		ForceUpdate        *bool    `json:"force_update"`
 		ReleaseNotes       []string `json:"release_notes"`
 	} `json:"data"`
 }
@@ -519,5 +522,180 @@ func TestCheckUpdateOmitsReleaseNotesWhenEmpty(t *testing.T) {
 
 	if strings.Contains(out, "release_notes") {
 		t.Errorf("没有变更内容时不应输出 release_notes，实际 %q", out)
+	}
+}
+
+// TestCheckUpdateServiceUnavailableStopsAfterFirstFailure 验证服务已明确返回
+// 不可用时不做第二次无效请求。静默 UI 等待的是整个 check_update 进程，
+// 两次独立超时会把无窗口时间放大一倍。
+func TestCheckUpdateServiceUnavailableStopsAfterFirstFailure(t *testing.T) {
+	var requests int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	setupCheckUpdateLayout(t,
+		`{"version_previous":"1.0","version":"1.0","version_status":"applied"}`,
+		srv.URL)
+
+	os.Args = []string{"aly-client", "check_update"}
+	got := runCheckUpdate(t)
+	if !got.IsSuccess || got.Data.HasUpdate {
+		t.Fatalf("服务不可用时须安全返回无更新，实际 %+v", got)
+	}
+	if got := atomic.LoadInt32(&requests); got != 1 {
+		t.Fatalf("首次 503 后不得再请求变更日志，请求次数=%d，期望 1", got)
+	}
+}
+
+// TestCheckUpdateStalledServiceReturnsQuickly 复现隐藏 UI 的后台等待：
+// 服务接受连接却迟迟不响应时，检查必须有独立于普通 API 的短总预算，
+// 不能沿用 httpClient 的 300 秒，也不能让 UI 等到 30 秒外层超时。
+func TestCheckUpdateStalledServiceReturnsQuickly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(5 * time.Second)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	setupCheckUpdateLayout(t,
+		`{"version_previous":"1.0","version":"1.0","version_status":"applied"}`,
+		srv.URL)
+
+	os.Args = []string{"aly-client", "check_update"}
+	start := time.Now()
+	got := runCheckUpdate(t)
+	elapsed := time.Since(start)
+	if !got.IsSuccess || got.Data.HasUpdate {
+		t.Fatalf("无响应服务须按不可核对处理并安全返回，实际 %+v", got)
+	}
+	if elapsed >= 3*time.Second {
+		t.Fatalf("检查更新应约 1 秒内返回，实际耗时 %s", elapsed)
+	}
+}
+
+// TestCheckUpdateStalledResponseBodyReturnsQuickly 验证 context 不只覆盖 Do：
+// 响应头已经返回但 body 迟迟不结束时，ReadAll 同样必须在共享预算内被取消。
+func TestCheckUpdateStalledResponseBodyReturnsQuickly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		time.Sleep(5 * time.Second)
+		w.Write([]byte(`{"isSuccess":true,"errorMsg":"","data":{}}`))
+	}))
+	defer srv.Close()
+	setupCheckUpdateLayout(t,
+		`{"version_previous":"1.0","version":"1.0","version_status":"applied"}`,
+		srv.URL)
+
+	os.Args = []string{"aly-client", "check_update"}
+	start := time.Now()
+	got := runCheckUpdate(t)
+	elapsed := time.Since(start)
+	if !got.IsSuccess || got.Data.HasUpdate {
+		t.Fatalf("body 无响应须安全返回无更新，实际 %+v", got)
+	}
+	if elapsed >= 3*time.Second {
+		t.Fatalf("body 读取必须受共享短预算约束，实际耗时 %s", elapsed)
+	}
+}
+
+// TestCheckUpdateStalledChangeLogsReturnsQuickly 验证共享预算也覆盖第二个请求：
+// 项目接口正常返回，只有日志接口无响应时，总耗时仍不得超过短预算与调度余量。
+func TestCheckUpdateStalledChangeLogsReturnsQuickly(t *testing.T) {
+	var requests int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "get_project_by_name") {
+			w.Write([]byte(`{"isSuccess":true,"errorMsg":"","data":{"id":1,"name":"test","version":"2.0","force_update":false}}`))
+			return
+		}
+		time.Sleep(5 * time.Second)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	setupCheckUpdateLayout(t,
+		`{"version_previous":"1.0","version":"1.0","version_status":"applied"}`,
+		srv.URL)
+
+	os.Args = []string{"aly-client", "check_update"}
+	start := time.Now()
+	got := runCheckUpdate(t)
+	elapsed := time.Since(start)
+	if !got.IsSuccess || got.Data.HasUpdate {
+		t.Fatalf("日志接口无响应须安全返回无更新，实际 %+v", got)
+	}
+	if elapsed >= 3*time.Second {
+		t.Fatalf("第二个请求也必须受共享短预算约束，实际耗时 %s", elapsed)
+	}
+	if got := atomic.LoadInt32(&requests); got != 2 {
+		t.Fatalf("正常项目响应后应请求一次日志，请求次数=%d，期望 2", got)
+	}
+}
+
+// TestCheckUpdateSlowLocalScanDoesNotConsumeNetworkBudget 验证 downloaded 分支
+// 在日志请求后扫描大型本地目录时，扫描耗时不会耗尽后续项目请求的网络预算。
+// 否则强制更新会被错误降级为 force_update=false，UI 又停在无人值守询问页。
+func TestCheckUpdateSlowLocalScanDoesNotConsumeNetworkBudget(t *testing.T) {
+	var projectRequests int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "get_project_by_name") {
+			atomic.AddInt32(&projectRequests, 1)
+			w.Write([]byte(`{"isSuccess":true,"errorMsg":"","data":{"id":1,"name":"test","version":"3.0","force_update":true}}`))
+			return
+		}
+		w.Write([]byte(`{"isSuccess":true,"errorMsg":"","data":[{"id":1,"version":"3.0"}]}`))
+	}))
+	defer srv.Close()
+	pkg := setupCheckUpdateLayout(t,
+		`{"version_previous":"1.0","version":"2.0","version_status":"downloaded","downloaded_file_count":1}`,
+		srv.URL)
+	writePkgFile(t, pkg, "ApplicationFolder_2.0/x.txt", "x")
+
+	originalCount := countRegularFilesForCheck
+	countRegularFilesForCheck = func(string) (int, error) {
+		time.Sleep(1100 * time.Millisecond)
+		return 1, nil
+	}
+	defer func() { countRegularFilesForCheck = originalCount }()
+
+	os.Args = []string{"aly-client", "check_update"}
+	got := runCheckUpdate(t)
+	if !got.Data.HasUpdate || !got.Data.NeedDownloadUpdate {
+		t.Fatalf("服务器更高时应要求下载，实际 %+v", got.Data)
+	}
+	if got.Data.ForceUpdate == nil || !*got.Data.ForceUpdate {
+		t.Fatalf("慢本地扫描不得把 force_update=true 降级，实际 %+v", got.Data.ForceUpdate)
+	}
+	if got := atomic.LoadInt32(&projectRequests); got != 1 {
+		t.Fatalf("扫描后项目接口应真实执行一次，实际 %d", got)
+	}
+}
+
+// TestCheckUpdateConnectionRefusedReturnsQuickly 覆盖服务端口完全不可达：
+// 连接拒绝应直接安全返回，不能重试或改写本地版本状态。
+func TestCheckUpdateConnectionRefusedReturnsQuickly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	url := srv.URL
+	srv.Close()
+	pkg := setupCheckUpdateLayout(t,
+		`{"version_previous":"1.0","version":"1.0","version_status":"applied"}`,
+		url)
+	before := readFileOrFail(t, filepath.Join(pkg, "UpdateFolder", "version.json"))
+
+	os.Args = []string{"aly-client", "check_update"}
+	start := time.Now()
+	got := runCheckUpdate(t)
+	if !got.IsSuccess || got.Data.HasUpdate {
+		t.Fatalf("连接拒绝须安全返回无更新，实际 %+v", got)
+	}
+	if elapsed := time.Since(start); elapsed >= 2*time.Second {
+		t.Fatalf("连接拒绝应快速返回，实际耗时 %s", elapsed)
+	}
+	if after := readFileOrFail(t, filepath.Join(pkg, "UpdateFolder", "version.json")); after != before {
+		t.Fatalf("check_update 不得改写 version.json：前=%q 后=%q", before, after)
 	}
 }

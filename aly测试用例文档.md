@@ -2,25 +2,21 @@
 
 > 唯一权威的测试用例文档。后续功能改动，按本文档逐条回归即可。
 >
-> - 文档版本：**v14**（Go 驱动 · 全量合并 · 单条自洽 · 总数 148；2026-11-13
->   修复后全量回归 **147 PASS / 1 SKIP / 0 FAIL**，明细见附录 B）
-> - 更新日期：2026-11-13
-> - 被测版本：2026-11-13 工作区（按全仓库审查报告修复后的未提交状态）
-> - 新增：**125–127**（发布 GUI 初始化：布局 / 三件套 / 原子写，2026-11-04 加入；2026-11-23 随主实现切换改写为对 publish-gui-go 的等价断言并复验 3/3 PASS，见 §十一·补四）
-> - 新增：**130–135**（自更新统一：`self_update` 执行命令、UI/SDK 委派与兜底、
->   UI 防循环、UI 自身 `-finish-self-update` 收尾，2026-11-09 加入并已在 Windows
->   实机执行；见 §十一·补五）
-> - 新增：**136–137**（两件套补齐：`self_update --include-ui` 的四种口径 +
->   SDK `AlyUpdateUIClient.Launch` 拉起前自动落位，2026-11-12 加入并在 Windows
->   实机执行；见 §十一·补六）
-> - 新增：**139–148**（2026-11-12 全仓库审查问题修复回归：服务端路径穿越/分片边界/软删除/删除同步，publish 三态与参数校验，client 脚本 marker 与参数解析，ignore 边界与路径归一；同日实测 10/10 PASS）
+> - 文档版本：**v15**（Go 驱动 · 全量合并 · 单条自洽 · 总数 150）
+> - 更新日期：2026-11-24
+> - 被测版本：2026-11-24 工作区（Go 发布 GUI 与更新检查快速失败改动）
+> - 改写：**104**（被测对象仅为 publish-gui-go：真实 helper-process、业务编排与 CLI 冒烟，
+>   不再读取历史 GUI 文件；同步扩充 Go GUI 的正常、错误与边界测试）
+> - 新增：**149–150**（首次 503 后不再请求第二个接口；慢服务下隐藏 `aly-client-ui -mode auto`
+>   在共享短预算后自行退出；见 §十三）
+> - 既有：**125–127**（发布 GUI 初始化）、**130–138**（自更新与宿主跟随）、
+>   **139–148**（审查修复回归）；本轮已把 139–148 补入用例索引
 - 编号：**连续 1..N**，无分组前缀，无优先级列
 > - 每条用例自带完整的 **前置条件 → 步骤 → 期望结果 → 失败判定**，只看单条即可独立复现
 > - 全部代码示例使用 **Go**（测试驱动框架见 §〇）
-> - 实测状态：**147 PASS / 1 SKIP / 0 FAIL**（2026-11-13 修复后全量回归，耗时 52.2 分钟，运行 `go test ./... -count=1 -timeout 240m -v`；
->   148 条用例全部执行，37 号为环境 SKIP（本机 200MB 17.5s 就下完，进不了 >90s 慢下载区间，已由 44/45 的 UI 侧覆盖））；
->   历史记录：2026-11-12 全量回归 146 PASS / 1 SKIP / 1 FAIL（104 号用例源码契约随重构更新后已修）；
->   2026-11-12 定点回归 124 + 130–148 全部 PASS；2026-11-10 历史：131 PASS / 0 FAIL / 1 SKIP / 3 未执行
+> - 本轮实测：**149–150 定点 2/2 PASS**；104 与受影响模块的复验证据见附录 B。
+>   最近一次历史全量为 v14（2026-11-13）：**147 PASS / 1 SKIP / 0 FAIL**，148 条全部执行，
+>   耗时 52.2 分钟；本轮新增两条后**不冒充已重跑 150 条全量**。历史 SKIP 为 37 号环境 SKIP。
 
 ---
 
@@ -48,6 +44,7 @@
 - [附录 C：已知缺陷与口径差异登记](#附录-c已知缺陷与口径差异登记)
 
 - [十二、审查修复回归（139–148）](#十二审查修复回归（139–148）)
+- [十三、更新检查快速失败（149–150）](#十三更新检查快速失败149150)
 
 ---
 
@@ -55,7 +52,7 @@
 
 ### 0.1 框架位置与职责
 
-测试代码只有一处，位于 `test/tc/`：
+端到端测试集中在 `test/tc/`；组件单元测试与源码同目录。两层都属于权威回归套件，发布 GUI 只执行 Go 主实现测试：
 
 | 文件 | 现状 | 职责 |
 |---|---|---|
@@ -69,11 +66,14 @@
 | `test/tc/cases_116_124_test.go` | 新增（~960 行） | 用例 116–124（并发 / ACL / 自愈链 / Range / i18n / SDK 失败路径） |
 | `test/tc/cases_125_127_test.go` | 改写（~210 行） | 用例 125–127（发布 GUI 初始化：布局 / 三件套 / 原子写；2026-11-23 起断言对象为 publish-gui-go） |
 | `test/tc/cases_130_135_test.go` | 新增（~420 行） | 用例 130–135（自更新统一：`self_update` 执行、UI 委派/自身收尾 + 防循环、SDK 委派） |
-| `client/aly-client-ui/aly-client-linuxui/*_test.go` | 新增 | **Linux UI 自身测试**（独立 Go module，不在 `test/tc` 的 135 条内）：client JSON 解析、flow 决策、i18n、journal、路径/复制、UI 自更新派生、收尾参数/改名、`ui.NewTester` 视图 |
+| `client/aly-client-ui/aly-client-linuxui/*_test.go` | 已有 | **Linux UI 自身测试**（独立 Go module）：client JSON 解析、flow 决策、i18n、journal、路径/复制、UI 自更新派生、收尾参数/改名、`ui.NewTester` 视图 |
+| `client/aly-client/**/*_test.go` | 已有 | **核心客户端组件测试**：HTTP、check/download/apply/rollback、配置、锁、自更新与文件/进程边界；用现代 Go 测试运行器执行，XP 产物仍单独用 Go 1.10.8 构建 |
+| `publish/publish-gui-go/*_test.go` | 已有并扩充 | **Go 发布 GUI 测试**：CLI helper-process 契约、参数分批、发布/暂存/设置业务编排、配置原子性、UpdateFolder、视图与偏好；不执行历史 GUI 测试 |
 
 > **125–127 的两层钉法**：发布 GUI 是 UI 程序，框架跑不了它的窗口，
-> 所以每条都分两层——**源码契约**（读 publish-gui-go 源码断言关键调用形态，与用例 104 的 ① 段同法）
-> 和**消费侧功能**（用真实 aly-client 消费 GUI 写出的那套目录布局与 `client.json`）。
+> 所以每条都分两层——**源码契约**（读 publish-gui-go 源码断言关键调用形态）
+> 和**消费侧功能**（用真实 aly-client 消费 GUI 写出的那套目录布局与 `client.json`）；
+> 用例 104 则进一步直接执行 Go GUI 的真实子进程与业务测试，三层互补。
 > 只在测试里把实现侧的路径算法重算一遍是自证自话，钉不住任何回归。
 
 截至 v11，用例总数 **135**（131 PASS / 0 FAIL / 1 SKIP / 3 未执行）；最近一次为
@@ -89,7 +89,9 @@
 | 用途 | 工具链 | 常量 | 说明 |
 |---|---|---|---|
 | server / publish-cli | **go1.27.3**（建议） | `tc.Go126` | `server/go.mod` 声明 `go 1.27.3`（需 ≥1.27.3）；`publish-cli/go.mod` 声明 `go 1.25.0`。本地可用 `ALY_GO126` 显式指定路径 |
-| aly-client / aly-client-ui / fake_main | **go1.10.8** | `tc.Go1108` | XP 兼容口径，必须 `GOARCH=386`；用 1.26 编出的 386 产物不保证可在 XP 运行 |
+| aly-client / aly-client-ui / fake_main **生产产物** | **go1.10.8** | `tc.Go1108` | XP 兼容口径，必须 `GOARCH=386`；现代测试运行器不改变该发布约束 |
+| aly-client 组件测试运行器 | **go1.27.3** | `tc.Go126` | 现有测试使用 `t.Cleanup` / `t.TempDir` 等现代 testing API；仍在 GOPATH 模式、Windows/386 下运行，生产代码另由 Go 1.10.8 编译验证 |
+| aly-client-winui 组件测试 | **go1.10.8** | `tc.Go1108` | 与 XP 生产工具链一致，GOPATH 模式、Windows/386 |
 | Linux aly-client + aly-client-linuxui | **go1.27.3** | 无（module tool 固定） | MyGo 0.8.3 原生 UI；纯 Go/无 cgo，可交叉编译；运行需 GTK3 |
 | C# SDK | dotnet 10 | — | 目标框架 net40 |
 
@@ -407,6 +409,18 @@ func TestCase01(t *testing.T) {
 | 136 | `self_update --include-ui` 两件套 | 自更新 | 缺 UI 副本→`replaced`；已存在→`existing_kepped`（不替换运行中的镜像）；收尾在途→`pending_inflight`；源缺失→`source_missing`；不带旗标→`ui_*` 缺省 |
 | 137 | SDK 拉起前自动落位 | SDK | 现场故障：UpdateFolder 缺 UI、主程序目录有 → `LauchAuto` 自动落位且 SHA 收敛；两处都缺 → NG 不抛异常；同一实例内不重复尝试 |
 | 138 | 宿主退出后 UI 跟随退出 | UI | 宿主（代拟 PowerShell 进程）退出 → UI 按映像名观测在数秒内消失；PID 复用不得把"宿主已退"误判成存活（winui 句柄等待 / linuxui starttime 校验） |
+| 139 | 上传项目名路径穿越 | server | 六种非法名全拒、合法名不受影响 |
+| 140 | 分片合并边界 | server | totalChunks 0/负数/超上界/空分片/缺片 |
+| 141 | 软删除项目 | server | 查询全部拒绝、磁盘保留 |
+| 142 | delete_file | server | 删除、幂等、穿越拒绝 |
+| 143 | force_update 三态 | publish | 不传保持、set/clear、互斥拒绝 |
+| 144 | CLI 参数校验 | publish | limit 边界、缺项目名不写配置 |
+| 145 | 删除同步全链路 | 集成 | deleted 暂存、push 删除、清单一致 |
+| 146 | 后置脚本失败 | client | 不写完成 marker、可重试 |
+| 147 | ignore 规则边界 | publish | 嵌套、大小写、glob |
+| 148 | add 路径归一 | publish | 同文件不重复、不跨 staged/unstaged |
+| 149 | 首次 503 后立即结束检查 | client | 不再调用第二个接口、保持离线协议、状态只读 |
+| 150 | 慢服务下隐藏 UI 快速退出 | ui | 真实 auto 进程不等外层看门狗、无后台残留 |
 
 ---
 
@@ -5840,76 +5854,53 @@ tc.Eq(t, "恢复后 has_update", cu.HasUpdate, true)
 
 ---
 
-### 用例 104 — GUI 与 CLI 同库（行为等价）
+### 用例 104 — Go 发布 GUI 与 CLI 同库（行为等价）
 
-> **⚠ 原期望技术上不可能（已重写）：** 原文写"publish-gui-csharp 与 publish-cli 必须共用 `internal/api` + `internal/staging` + `internal/diff`"，还给了 grep `using aly/publish-cli/internal/...` 的做法。
->
-> **这是跨语言误判**：publish-gui-csharp 是 **C#/Avalonia（net8.0）**，publish-cli 是 **Go**。C# 不可能 `using` Go 包。实测该 grep 命中 **0 条**（原用例据此写日志但没断言，所以"PASS"是假的）。
->
-> 真实的等价路径是**子进程复用**（`publish-gui-csharp/src/AlyPublish/Services/CliService.cs`）：
-> ```csharp
-> var exeName = OperatingSystem.IsWindows() ? "aly-publish.exe" : "aly-publish";
-> var fullArgs = $"{args} --json";                 // 统一追加 --json
-> var result = await _ps.RunAsync(CliPath, fullArgs, workDir, timeoutMs);
-> return JsonConvert.DeserializeObject<CliOutput<T>>(result.StandardOutput);
-> ```
-> GUI 的 HTTP / 暂存 / 扫描 / 差量**全部由同一个 `aly-publish.exe` 二进制完成**，GUI 只负责组装参数 + 解析 JSON。等价性由此成立——**同一份可执行文件，物理上不可能出现两套实现分叉**。
->
-> 所以本用例改钉这层"子进程契约"。
+> 当前被测对象仅为 `publish/publish-gui-go`。GUI 的 HTTP、暂存、扫描与差量全部由同一个
+> `aly-publish` 子进程完成；GUI 负责组装参数、流传进度并解析统一 JSON 信封。
+> 本用例直接执行 Go 主实现的真实 helper-process 测试，不读取历史 GUI 的源码或测试结果。
 
 **前置条件**
 
-1. publish-gui-csharp（Avalonia net8.0）与 publish-cli 都在。
-2. 同一个项目、同一批文件。
+1. `publish/publish-gui-go` 与 `publish/publish-cli` 均存在。
+2. 同一个项目、同一批文件；Go GUI 测试使用自身临时目录与 fake CLI，不依赖真实服务器。
 
 **步骤**
 
-1. **契约级**：核 GUI 的 `CliService.cs`——能找到 `aly-publish`、每条命令追加 `--json`、输出按 `CliOutput<T>`（`isSuccess`/`data`）解析、**源码里不得有 HttpClient 或直连 `/api/project/`**。
-2. **冒烟**：用 CLI 完成一轮发布，核服务端版本 / 文件集合 / 清单三者自洽。
-3. **暂存区互通**：CLI `add` 后再 `status`，暂存项应被正确读回（带 `status` 分类与 `md5`）。
+1. **Go GUI 契约**：在 `publish/publish-gui-go` 执行完整 `go test ./... -count=1 -v`。
+   其中 helper-process 用例以真实子进程验证 `--json` 注入、成功 data、业务失败、空错误文本、
+   非零退出与 stderr、坏 JSON、`data:null`、缺失 CLI、context 取消；分批用例验证
+   0/1/200/201/400 条与失败后停止。
+2. **真实 CLI 冒烟**：完成一轮发布，核对服务端版本、文件集合与发布清单。
+3. **暂存区互通**：CLI `add` 后再 `status`，暂存项应带正确 `status` 与 `md5`，且不同时出现在 unstaged。
 
 ```go
-// ① GUI 的子进程契约
-svc := tc.ReadText(filepath.Join(RepoRoot, "publish/publish-gui-csharp/src/AlyPublish/Services/CliService.cs"))
-tc.Contains(t, svc, `"aly-publish.exe"`,   "必须找 aly-publish.exe")
-tc.Contains(t, svc, "BaseDirectory",       "先查自身目录")
-tc.Contains(t, svc, `"..", "..", "..", "..", "publish-cli"`, "开发路径回退")
-tc.Eq(t, "追加 --json 的位置数（三条执行路径）", tc.Count(svc, "--json"), 3)
-tc.Contains(t, svc, `$"{args} --json"`, "字符串版必须带 --json")
-tc.Contains(t, svc, `new List<string>(args) { "--json" }`, "ArgumentList 版必须带 --json")
-tc.Contains(t, svc, `args.Add("--json")`, "push 专用路径必须带 --json")
-tc.Contains(t, svc, "CliOutput<T>", "必须反序列化成 CliOutput<T>")
-tc.Eq(t, "GUI 源码不得有 HttpClient 或直连路由", len(ownHTTP), 0)
+guiRoot := filepath.Join(RepoRoot, "publish", "publish-gui-go")
+code, out := e.GoTest(t, Go126, guiRoot, nil, "./...", "-count=1", "-v")
+tc.Eq(t, "publish-gui-go 单元测试退出码", code, 0)
+tc.NotContains(t, out, "--- FAIL", "publish-gui-go 不应有失败项")
 
-// ② 冒烟：CLI 发布的最终状态
 r := e.PublishCLI(t, ws, "push", "--version", "1.3.0", "--message", "cli 发布")
 tc.True(t, r.IsSuccess, "CLI push 失败: %s", r.ErrorMsg)
-tc.Eq(t, "版本", e.GetProject(t, proj).Version, "1.3.0")
-// 文件集合与清单必须完全一致（扫描口径唯一）
 tc.Eq(t, "文件集合 = 清单", strings.Join(fs1, ","), strings.Join(sorted, ","))
 
-// ③ 暂存区互通：add 后 status 能正确读回
 sd := tc.RespData[tc.StatusData](t, e.PublishCLI(t, ws, "status"))
-// app.exe 应在 staged 里，带 status="modified" 与 md5
+// app.exe 应在 staged 内，带 status="modified" 与 md5，且不在 unstaged。
 ```
 
 **期望结果**
 
-- GUI 的 `CliService` 能找到 `aly-publish`（同目录优先 + 开发路径回退）
-- GUI 三条执行路径（字符串拼接版 / ArgumentList 版 / push 专用）**都追加 `--json`**
-- GUI 输出按 `CliOutput<T>`（`isSuccess` / `errorMsg` / `data`）解析，与 CLI 输出契约一致
-- **GUI 源码里没有任何 `HttpClient` 或 `/api/project/` 直连**（否则就是第二套实现）
-- CLI 发布后服务端的版本、文件集合、清单完全一致
-- 暂存区文件格式互通（CLI `add` 后 `status` 能正确读回）
+- Go GUI 全部测试真实执行且退出码为 0，无 `--- FAIL`；不是仅做源码字符串匹配。
+- GUI 与 CLI 使用同一 `isSuccess` / `errorMsg` / `data` 信封；所有命令经 `aly-publish` 子进程。
+- CLI 发布后服务端版本、文件集合、清单一致；暂存区格式互通。
 
 **失败判定**
 
-- GUI 有自己的 HTTP 实现 → FAIL（两套代码必然分叉，一边修了另一边没修）
-- 漏加 `--json` 的执行路径 → FAIL（该路径下 GUI 必然 JSON 解析失败）
-- 文件集合与清单不一致 → FAIL（扫描口径/ignore 处理不同）
-- 暂存区格式不互通 → FAIL（用户 CLI→GUI 切换会丢暂存）
+- Go GUI 测试编译失败、任一测试失败或空跑 → FAIL。
+- 漏加 `--json`、业务失败被当成功、坏输出/空 data 未报错、取消不返回 → FAIL。
+- 文件集合与清单不一致，或同一文件同时出现在 staged/unstaged → FAIL。
 
-执行结果：`PASS（用例 104，5.53s）` — 3 处 `--json` 齐备、`CliOutput<T>` 契约对齐、GUI 源码 HttpClient 命中 0 条
+执行结果：**PASS（2026-11-24，52.12s）**，Go GUI 完整测试、MyGo vet 与真实 CLI 冒烟均通过。
 
 ---
 
@@ -8428,6 +8419,71 @@ linuxui 同构测试交叉编译验证（CI Ubuntu 实跑）。
 
 ---
 
+## 十三、更新检查快速失败（149–150）
+
+> 代码见 `test/tc/cases_149_150_test.go`；更细的请求次数、1 秒共享预算与连接拒绝边界见
+> `client/aly-client/cmd/check_update_test.go`（含响应头延迟、body 停滞、慢本地目录扫描不消耗网络预算）。
+> 两条用例都保持既有离线协议：
+> `isSuccess:true + has_update:false`，且不修改 `version.json`。
+
+### 用例 149 — 首次 503 后立即结束检查
+
+**前置条件**
+
+1. 真实 `aly-client.exe` 已构建，客户端为 `1.0.0/applied`。
+2. fake 服务器的项目接口立即返回 503；日志接口一旦被调用就记录并延迟 5 秒后返回 503。
+
+**步骤**
+
+1. 记录 `version.json`，执行真实 `check_update` 子进程并计时。
+2. 解析结果，读取日志接口调用次数，再次读取 `version.json`。
+
+**期望结果**
+
+- 首次 503 后直接返回，日志接口调用次数为 **0**，总耗时 **<3 秒**。
+- 输出 `isSuccess:true`、`has_update:false`、`current_version="1.0.0"`。
+- `version.json` 逐字节不变。
+
+**失败判定**
+
+- 调用日志接口或耗时达到 3 秒 → FAIL（首次失败后仍串行等待）。
+- 改成 `isSuccess:false` 或上报更新 → FAIL（破坏 27/84/103 的离线协议）。
+- 改写本地状态 → FAIL。
+
+执行结果：**PASS（2026-11-24，10.41s，含完整构建与现场搭建；命令自身 150.28ms）**。修复前同缝单测为 2 次请求；修复后为 1 次、日志接口 0 次。
+
+---
+
+### 用例 150 — 慢服务下隐藏 UI 快速退出
+
+**前置条件**
+
+1. 真实 `aly-client.exe` 与 `aly-client-ui.exe` 已构建并放在同一 `UpdateFolder`。
+2. 客户端为 `1.0.0/applied`；fake 服务器接受请求后延迟 5 秒才返回 503。
+3. UI 以 `-mode auto` 启动，因此正常情况下不创建可见卡片；外层看门狗为 8 秒。
+
+**步骤**
+
+1. 启动真实 UI，等待进程退出或外层看门狗。
+2. 记录退出码和 UI 自身耗时，校验 `version.json`。
+
+**期望结果**
+
+- UI 在核心 **1 秒共享检查预算 + 调度余量**内返回，并以退出码 0 自行结束；本用例要求 **<4 秒**。
+- 不得返回 `-999`（外层 8 秒看门狗），不得 panic，不得改写 `version.json`。
+- 项目接口必须真实收到 **1 次**请求，日志接口为 **0 次**，排除配置错误/单实例冲突导致提前退出的假绿。
+
+**失败判定**
+
+- 等到 5 秒服务端响应、30 秒 bridge 超时或 8 秒测试看门狗 → FAIL。
+- 慢服务没有收到项目请求，或首次失败后仍调用日志接口 → FAIL。
+- 进程仍存活但无界面 → FAIL（本用例要消除的后台残留）。
+- 离线语义或只读约束变化 → FAIL。
+
+执行结果：**PASS（2026-11-24，23.15s，含 Go 1.10.8 UI 构建与 fake 服务清理；UI 自身 1.86s，项目/日志请求 1/0）**。
+
+---
+
 ## 附录 A：故障注入手法速查
 
 > 用例 18–25、36–39、116–124 大量依赖"制造异常现场"。这些手法都在 `test/tc/` 里有现成函数，**不要自己发明 sleep 猜时序**。
@@ -8606,7 +8662,11 @@ linuxui 同构测试交叉编译验证（CI Ubuntu 实跑）。
 | 101 | SDK MainLoop 全链路 | PASS | 12.10s | |
 | 102 | SDK 断点续传 | PASS | 27.46s | |
 | 103 | SDK 断网轮询 | PASS | 28.39s | |
-| 104 | GUI 与 CLI 同库 | PASS | 5.53s | |
+| 104 | Go 发布 GUI 与 CLI 同库 | PASS | 52.12s | 执行 publish-gui-go 全部单元/视图测试 + 真实 CLI 冒烟，不再读取历史 GUI 文件 |
+| 149 | 首次 503 后立即结束检查 | PASS | 10.41s | 命令自身 150.28ms；日志接口 0 次调用、离线协议与只读状态不变 |
+| 150 | 慢服务下隐藏 UI 快速退出 | PASS | 23.15s | 真实 winui auto 退出码 0、UI 自身 1.86s、项目/日志请求 1/0、未等 8s 看门狗 |
+| — | v15 受影响离线协议回归（27/42/84/103） | PASS | 102.77s | downloaded 离线、真实无更新 UI、SDK 断网与恢复均通过 |
+| — | v15 UpdateFolder 集成回归（125–127） | PASS | 26.57s | 布局、三件套/相对路径、原子写均通过 |
 | 105 | 更新锁空窗期与崩溃残留 | PASS | 9.37s | ①空锁被 1 分钟宽限挡住（缺陷复现）②超宽限放行 ③死持有者立即清理 |
 | 106 | apply F3 守卫（文件数不符） | PASS | 14.11s | 记录 4/实际 3 → 拒绝 + 自愈 applied/1.0.0，主目录未动 |
 | 107 | version.json 0 字节 | PASS | 13.58s | 自愈：has_update=true / need_download=true / new=1.1.0，`.corrupt` 0 字节 |
@@ -8649,14 +8709,12 @@ linuxui 同构测试交叉编译验证（CI Ubuntu 实跑）。
 
 | 项 | 值 |
 |---|---|
-| 用例总数 | **148**（全部已实测） |
-| PASS | 131 |
-| FAIL | 0 |
-| SKIP | 1（用例 37） |
-| 未执行 | **0** |
-| 全量耗时 | **2470.71s**（上一轮 124 条全量）；本轮为定点回归（130–135 + 42/94），未重跑全量 |
-| 本轮新增 | 106–115（10 条 + 30 子测试，~850 行）+ 116–124（9 条，~985 行）+ 139–148（10 条，cases_139_148_test.go）；2026-11-04 追加 125–127（3 条，~190 行，未执行）；2026-11-06 追加 128–129（2 条，~170 行）；2026-11-09 追加 130–135（6 条，~420 行） |
-| 本轮新增结果 | 116–124 **9/9 PASS**；125–127 **3/3 PASS**；128–129 **2/2 PASS**；130–135 **6/6 PASS**（130 23.30s / 131 34.52s / 132 23.48s / 133 43.61s / 134 32.56s / 135 36.86s） |
+| 当前文档用例总数 | **150**（v14 的 148 条 + 本轮 149–150） |
+| 最近历史全量 | v14（2026-11-13）：**147 PASS / 1 SKIP / 0 FAIL**，148 条全部执行，52.2 分钟 |
+| 本轮定点回归 | **10/10 PASS**：104、125–127、149、150，以及受影响的 27/42/84/103 |
+| 本轮全量状态 | **未重跑 150 条全量**；不把历史全量结果冒充成本轮结果 |
+| 本轮新增 / 改写 | 104 改为 Go 发布 GUI 真实测试；149–150 更新检查快速失败；Go GUI 另扩充组件正常/错误/边界测试 |
+| 本轮新增结果 | 104 **PASS（52.12s）**；149–150 **2/2 PASS**；Go GUI **143 个测试函数，覆盖率 60.5% → 77.6%**，完整测试与 MyGo vet 通过 |
 
 **本轮修复的测试缺陷（非产品缺陷）**
 

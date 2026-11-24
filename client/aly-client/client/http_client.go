@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -47,9 +48,19 @@ var downloadHTTPClient = &http.Client{
 	},
 }
 
-// doGet 执行 GET 请求并返回响应体
+// doGet 执行 GET 请求并返回响应体。
 func doGet(url string) ([]byte, error) {
-	resp, err := httpClient.Get(url)
+	return doGetContext(context.Background(), url)
+}
+
+// doGetContext 在调用方预算内执行 GET。check_update 使用独立短 context，
+// 其他清单/下载前置请求仍沿用原有 300 秒上限，避免误伤大响应。
+func doGetContext(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %v", err)
+	}
+	resp, err := httpClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("请求失败: %v", err)
 	}
@@ -101,13 +112,18 @@ func buildAPIURL(serverURL, path string) (string, error) {
 	return base.Scheme + "://" + base.Host + "/" + strings.TrimPrefix(path, "/"), nil
 }
 
-// GetProjectByName 根据项目名称获取项目（走独立接口，不再拉全量列表）
+// GetProjectByName 根据项目名称获取项目（走独立接口，不再拉全量列表）。
 func GetProjectByName(serverURL string, name string) (*model.Project, error) {
+	return GetProjectByNameContext(context.Background(), serverURL, name)
+}
+
+// GetProjectByNameContext 同 GetProjectByName，但允许检查调用方限定总预算。
+func GetProjectByNameContext(ctx context.Context, serverURL string, name string) (*model.Project, error) {
 	u, err := buildAPIURL(serverURL, "api/project/get_project_by_name/"+urlEncodePath(name))
 	if err != nil {
 		return nil, err
 	}
-	data, err := doGet(u)
+	data, err := doGetContext(ctx, u)
 	if err != nil {
 		return nil, err
 	}
@@ -125,9 +141,14 @@ func GetProjectByName(serverURL string, name string) (*model.Project, error) {
 	return &project, nil
 }
 
-// FindProjectByName 根据项目名称查找项目（使用独立接口，不再拉全量列表）
+// FindProjectByName 根据项目名称查找项目（使用独立接口，不再拉全量列表）。
 func FindProjectByName(serverURL string, name string) (*model.Project, error) {
-	project, err := GetProjectByName(serverURL, name)
+	return FindProjectByNameContext(context.Background(), serverURL, name)
+}
+
+// FindProjectByNameContext 同 FindProjectByName，但允许检查调用方限定总预算。
+func FindProjectByNameContext(ctx context.Context, serverURL string, name string) (*model.Project, error) {
+	project, err := GetProjectByNameContext(ctx, serverURL, name)
 	if err != nil {
 		return nil, err
 	}
@@ -137,14 +158,19 @@ func FindProjectByName(serverURL string, name string) (*model.Project, error) {
 	return project, nil
 }
 
-// GetProjectChangeLogs 获取项目的变更日志（按项目名称）
+// GetProjectChangeLogs 获取项目的变更日志（按项目名称）。
 func GetProjectChangeLogs(serverURL string, projectName string) ([]model.ProjectChangeLog, error) {
+	return GetProjectChangeLogsContext(context.Background(), serverURL, projectName)
+}
+
+// GetProjectChangeLogsContext 同 GetProjectChangeLogs，但允许检查调用方限定总预算。
+func GetProjectChangeLogsContext(ctx context.Context, serverURL string, projectName string) ([]model.ProjectChangeLog, error) {
 	pn := urlEncodePath(projectName)
 	u, err := buildAPIURL(serverURL, "api/project/get_project_change_logs/"+pn)
 	if err != nil {
 		return nil, err
 	}
-	data, err := doGet(u)
+	data, err := doGetContext(ctx, u)
 	if err != nil {
 		return nil, err
 	}

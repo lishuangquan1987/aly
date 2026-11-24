@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -383,4 +385,381 @@ func bigDetailApp() *app {
 		})
 	}
 	return a
+}
+
+func TestToFileItemsFiltersDeleted(t *testing.T) {
+	got := toFileItems([]FileStatusItem{
+		{RelativePath: "new.exe", Status: "new"},
+		{RelativePath: "old.dll", Status: "deleted"},
+		{RelativePath: "changed.exe", Status: "modified"},
+	})
+	if len(got) != 2 || got[0].RelativePath != "new.exe" || got[1].RelativePath != "changed.exe" {
+		t.Fatalf("deleted entries must be hidden from changes: %+v", got)
+	}
+}
+
+func TestRefreshDetailFiltersAndWarnsDeleted(t *testing.T) {
+	a := detailTestApp()
+	a.detail.project.ProjectPath = t.TempDir()
+	cli, _ := newHelperCLI(t, "deleted-status")
+	a.cli = cli
+	a.detail.staged = nil
+	a.detail.logs = nil
+	a.refreshDetail()
+	deletedWarning := a.t("status.deletedIgnored")
+	waitForTestCondition(t, "deleted-status refresh", func() bool {
+		return a.detail.loaded && !a.detail.busy && a.statusTone == toneWarning && a.toastMsg == deletedWarning
+	})
+	if len(a.detail.staged) != 1 || a.detail.staged[0].RelativePath != "app.exe" {
+		t.Fatalf("staged = %+v, deleted entry was not filtered", a.detail.staged)
+	}
+	if got, want := a.toastMsg, a.t("status.deletedIgnored"); got != want || a.statusTone != toneWarning {
+		t.Fatalf("deleted warning = %q tone=%v, want %q/warning", got, a.statusTone, want)
+	}
+}
+
+func TestPublishDeletedOnlyDoesNotCallCLI(t *testing.T) {
+	a := detailTestApp()
+	a.detail.project.ProjectPath = t.TempDir()
+	cli, logPath := newHelperCLI(t, "push-success")
+	a.cli = cli
+	a.detail.staged = []fileItem{{RelativePath: "old.dll", Status: "deleted"}}
+	a.detail.newVersion = "V1.0.1"
+	a.detail.notes = "must not delete"
+	a.publish()
+	if a.detail.uploading {
+		waitForTestCondition(t, "unexpected legacy publish completion", func() bool {
+			return !a.detail.uploading
+		})
+	}
+	if calls := readHelperCalls(t, logPath); len(calls) != 0 {
+		t.Fatalf("deleted-only publish invoked CLI: %+v", calls)
+	}
+	if got, want := a.toastMsg, a.t("status.deletedIgnored"); got != want {
+		t.Fatalf("toast = %q, want %q", got, want)
+	}
+}
+
+func TestPublishResetsLegacyDeletedBeforePush(t *testing.T) {
+	a := detailTestApp()
+	a.detail.project.ProjectPath = t.TempDir()
+	cli, logPath := newHelperCLI(t, "push-success")
+	a.cli = cli
+	a.detail.staged = []fileItem{
+		{RelativePath: "old.dll", Status: "deleted"},
+		{RelativePath: "app.exe", Status: "modified"},
+	}
+	a.detail.newVersion = "V1.0.1"
+	a.detail.notes = "keep server-only files"
+	a.publish()
+	waitForTestCondition(t, "mixed legacy publish", func() bool {
+		return !a.detail.uploading && !a.detail.busy && a.busyText == "" && a.detail.status != ""
+	})
+	calls := readHelperCalls(t, logPath)
+	if len(calls) < 2 || len(calls[0].Args) != 3 || calls[0].Args[0] != "reset" || calls[0].Args[2] != "old.dll" {
+		t.Fatalf("deleted entry was not reset before push: %+v", calls)
+	}
+	if len(calls[1].Args) == 0 || calls[1].Args[0] != "push" {
+		t.Fatalf("push did not follow reset: %+v", calls)
+	}
+}
+
+func TestPublishStopsWhenLegacyDeletedResetFails(t *testing.T) {
+	a := detailTestApp()
+	a.detail.project.ProjectPath = t.TempDir()
+	cli, logPath := newHelperCLI(t, "push-success")
+	t.Setenv("ALY_GUI_TEST_FAIL_ON_CALL", "1")
+	a.cli = cli
+	a.detail.staged = []fileItem{
+		{RelativePath: "old.dll", Status: "deleted"},
+		{RelativePath: "app.exe", Status: "modified"},
+	}
+	a.detail.newVersion = "V1.0.1"
+	a.detail.notes = "keep this draft"
+	a.publish()
+	waitForTestCondition(t, "failed deleted reset", func() bool {
+		return !a.detail.uploading && a.busyText == "" && a.statusTone == toneDanger &&
+			strings.Contains(a.toastMsg, "injected call failure")
+	})
+	calls := readHelperCalls(t, logPath)
+	if len(calls) != 1 || len(calls[0].Args) == 0 || calls[0].Args[0] != "reset" {
+		t.Fatalf("only the failed reset may run; calls = %+v", calls)
+	}
+	if a.detail.notes != "keep this draft" || a.statusTone != toneDanger {
+		t.Fatalf("failed reset lost draft or danger state: notes=%q tone=%v", a.detail.notes, a.statusTone)
+	}
+}
+
+func TestApplyUploadProgressDuplicateTerminalEventsAreIdempotent(t *testing.T) {
+	a := detailTestApp()
+	d := a.detail
+	applyUploadProgress(a, d, UploadProgress{Index: 1, Total: 2, File: "a.exe", Status: "DONE"})
+	applyUploadProgress(a, d, UploadProgress{Index: 1, Total: 2, File: "a.exe", Status: "DONE"})
+	applyUploadProgress(a, d, UploadProgress{Index: 2, Total: 2, File: "b.exe", Status: "FAIL", Error: "denied"})
+	applyUploadProgress(a, d, UploadProgress{Index: 2, Total: 2, File: "b.exe", Status: "FAIL", Error: "denied"})
+	if d.uploadDone != 1 || d.uploadFailed != 1 {
+		t.Fatalf("duplicate terminal events changed counters: done=%d failed=%d", d.uploadDone, d.uploadFailed)
+	}
+	if len(d.uploadItems) != 2 {
+		t.Fatalf("duplicate terminal events added rows: %+v", d.uploadItems)
+	}
+}
+
+func TestApplyUploadProgressTerminalTransitionsKeepCounts(t *testing.T) {
+	a := detailTestApp()
+	d := a.detail
+	event := UploadProgress{Index: 1, Total: 1, File: "a.exe", Status: "DONE"}
+	applyUploadProgress(a, d, event)
+	event.Status = "FAIL"
+	event.Error = "late failure"
+	applyUploadProgress(a, d, event)
+	if d.uploadDone != 0 || d.uploadFailed != 1 {
+		t.Fatalf("DONE→FAIL must move the same file between counters: done=%d failed=%d", d.uploadDone, d.uploadFailed)
+	}
+	event.Status = "DONE"
+	event.Error = ""
+	applyUploadProgress(a, d, event)
+	if d.uploadDone != 1 || d.uploadFailed != 0 {
+		t.Fatalf("FAIL→DONE must move the same file between counters: done=%d failed=%d", d.uploadDone, d.uploadFailed)
+	}
+	event.Status = "START"
+	applyUploadProgress(a, d, event)
+	event.Status = "DONE"
+	applyUploadProgress(a, d, event)
+	if d.uploadDone != 1 || d.uploadFailed != 0 {
+		t.Fatalf("terminal→START→terminal must not double count: done=%d failed=%d", d.uploadDone, d.uploadFailed)
+	}
+}
+
+func TestStageSelectedUsesOnlySelectedPaths(t *testing.T) {
+	a := detailTestApp()
+	a.detail.project.ProjectPath = t.TempDir()
+	cli, logPath := newHelperCLI(t, "success")
+	a.cli = cli
+	a.detail.unstaged = []fileItem{
+		{RelativePath: "selected.txt", Status: "new", Selected: true},
+		{RelativePath: "other.txt", Status: "modified"},
+	}
+	a.detail.staged = nil
+	a.stageSelected(true)
+	refreshed := a.tf("status.refreshed", "unstaged", "0", "staged", "0")
+	waitForTestCondition(t, "selected staging and refresh", func() bool {
+		return !a.detail.busy && a.busyText == "" && a.detail.status == refreshed
+	})
+	calls := readHelperCalls(t, logPath)
+	if len(calls) == 0 || strings.Join(calls[0].Args, " ") != "add -- selected.txt" {
+		t.Fatalf("stageSelected args = %+v", calls)
+	}
+	if a.detail.busy || a.busyText != "" {
+		t.Fatalf("staging left busy state: detail=%v window=%q", a.detail.busy, a.busyText)
+	}
+}
+
+func TestStageSelectedFailureClearsBusy(t *testing.T) {
+	a := detailTestApp()
+	a.detail.project.ProjectPath = t.TempDir()
+	cli, _ := newHelperCLI(t, "business-failure")
+	a.cli = cli
+	a.detail.unstaged = []fileItem{{RelativePath: "selected.txt", Status: "new", Selected: true}}
+	a.stageSelected(true)
+	waitForTestCondition(t, "staging failure", func() bool {
+		return !a.detail.busy && a.busyText == "" && a.statusTone == toneDanger &&
+			strings.Contains(a.toastMsg, "Stage failed")
+	})
+	if !strings.Contains(a.detail.status, "Stage failed") || a.statusTone != toneDanger {
+		t.Fatalf("status = %q tone=%v", a.detail.status, a.statusTone)
+	}
+	if a.busyText != "" {
+		t.Fatalf("window busy text = %q", a.busyText)
+	}
+}
+
+func TestStageAllSuccess(t *testing.T) {
+	a := detailTestApp()
+	a.detail.project.ProjectPath = t.TempDir()
+	cli, logPath := newHelperCLI(t, "success")
+	a.cli = cli
+	a.stageAll(true)
+	refreshed := a.tf("status.refreshed", "unstaged", "0", "staged", "0")
+	staged := a.t("status.staged")
+	waitForTestCondition(t, "stage all and refresh", func() bool {
+		return !a.detail.busy && a.busyText == "" && a.status == staged && a.detail.status == refreshed
+	})
+	calls := readHelperCalls(t, logPath)
+	if len(calls) == 0 || strings.Join(calls[0].Args, " ") != "add --all" {
+		t.Fatalf("stageAll calls = %+v", calls)
+	}
+	if a.statusTone != toneSuccess {
+		t.Fatalf("stageAll success tone = %v", a.statusTone)
+	}
+}
+
+func TestStageAllFailureClearsBusy(t *testing.T) {
+	a := detailTestApp()
+	a.detail.project.ProjectPath = t.TempDir()
+	cli, _ := newHelperCLI(t, "business-failure")
+	a.cli = cli
+	a.stageAll(true)
+	waitForTestCondition(t, "stage all failure", func() bool {
+		return !a.detail.busy && a.busyText == "" && a.statusTone == toneDanger &&
+			strings.Contains(a.toastMsg, "Stage failed")
+	})
+	if !strings.Contains(a.detail.status, "Stage failed") || a.statusTone != toneDanger || a.busyText != "" {
+		t.Fatalf("stageAll failure status=%q tone=%v busy=%q", a.detail.status, a.statusTone, a.busyText)
+	}
+}
+
+func TestPublishForceKnownTriState(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		forceKnown bool
+		force      bool
+		wantArg    string
+	}{
+		{name: "unknown preserves server value", forceKnown: false},
+		{name: "known true sets", forceKnown: true, force: true, wantArg: "--set-force-update"},
+		{name: "known false clears", forceKnown: true, force: false, wantArg: "--clear-force-update"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := detailTestApp()
+			a.detail.project.ProjectPath = t.TempDir()
+			cli, logPath := newHelperCLI(t, "push-success")
+			a.cli = cli
+			a.detail.staged = []fileItem{{RelativePath: "app.exe", Status: "modified"}}
+			a.detail.newVersion = "V1.0.1"
+			a.detail.notes = "release"
+			a.detail.script = "after.cmd"
+			a.detail.forceKnown = tc.forceKnown
+			a.detail.forceUpdate = tc.force
+			a.publish()
+			published := a.tf("publish.published", "version", "V1.0.1")
+			refreshed := a.tf("status.refreshed", "unstaged", "0", "staged", "0")
+			waitForTestCondition(t, "publish success and refresh", func() bool {
+				return !a.detail.uploading && !a.detail.busy && a.busyText == "" &&
+					a.status == published && a.toastMsg == published && a.detail.status == refreshed
+			})
+			calls := readHelperCalls(t, logPath)
+			if len(calls) == 0 || len(calls[0].Args) == 0 || calls[0].Args[0] != "push" {
+				t.Fatalf("publish calls = %+v", calls)
+			}
+			if len(calls[0].RawArgs) < 2 || calls[0].RawArgs[0] != "--json" || calls[0].RawArgs[1] != "push" {
+				t.Fatalf("push raw args = %+v", calls[0].RawArgs)
+			}
+			joined := strings.Join(calls[0].Args, " ")
+			if tc.wantArg == "" && (strings.Contains(joined, "--set-force-update") || strings.Contains(joined, "--clear-force-update")) {
+				t.Fatalf("unknown force emitted an override: %s", joined)
+			}
+			if tc.wantArg != "" && !strings.Contains(joined, tc.wantArg) {
+				t.Fatalf("push args %s missing %s", joined, tc.wantArg)
+			}
+			if a.detail.newVersion != "" || a.detail.notes != "" || a.detail.script != "" {
+				t.Fatalf("successful publish retained form: version=%q notes=%q script=%q",
+					a.detail.newVersion, a.detail.notes, a.detail.script)
+			}
+		})
+	}
+}
+
+func TestPublishFailuresPreserveForm(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		mode        string
+		wantStatus  string
+		wantMessage string
+	}{
+		{name: "business failure", mode: "push-failure", wantStatus: "Publish failed", wantMessage: "push rejected"},
+		{name: "missing result", mode: "push-no-result", wantStatus: "No publish result", wantMessage: "No publish result"},
+		{name: "process failure", mode: "process-failure", wantStatus: "Publish failed", wantMessage: "helper process exploded"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := detailTestApp()
+			a.detail.project.ProjectPath = t.TempDir()
+			cli, _ := newHelperCLI(t, tc.mode)
+			a.cli = cli
+			a.detail.staged = []fileItem{{RelativePath: "app.exe", Status: "modified"}}
+			a.detail.newVersion = "V1.0.1"
+			a.detail.notes = "keep these notes"
+			a.detail.script = "keep.cmd"
+			a.publish()
+			waitForTestCondition(t, "publish failure", func() bool {
+				return !a.detail.uploading && a.busyText == "" && a.statusTone == toneDanger && a.toastMsg != ""
+			})
+			if !strings.Contains(a.detail.status, tc.wantStatus) || !strings.Contains(a.toastMsg, tc.wantMessage) {
+				t.Fatalf("status = %q toast = %q", a.detail.status, a.toastMsg)
+			}
+			if a.detail.newVersion != "V1.0.1" || a.detail.notes != "keep these notes" || a.detail.script != "keep.cmd" {
+				t.Fatalf("failed publish cleared form: %+v", a.detail)
+			}
+		})
+	}
+}
+
+func TestPublishCancellationPreservesForm(t *testing.T) {
+	a := detailTestApp()
+	a.detail.project.ProjectPath = t.TempDir()
+	cli, _ := newHelperCLI(t, "block")
+	a.cli = cli
+	ready := filepath.Join(t.TempDir(), "ready")
+	t.Setenv("ALY_GUI_TEST_READY_FILE", ready)
+	a.detail.staged = []fileItem{{RelativePath: "app.exe", Status: "modified"}}
+	a.detail.newVersion = "V1.0.1"
+	a.detail.notes = "cancel without losing notes"
+	a.publish()
+	waitForTestCondition(t, "publish helper readiness", func() bool {
+		_, err := os.Stat(ready)
+		return err == nil
+	})
+	a.cancelPublish()
+	waitForTestCondition(t, "publish cancellation", func() bool {
+		return !a.detail.uploading && a.detail.status == a.t("publish.cancelled")
+	})
+	if a.detail.notes != "cancel without losing notes" || a.detail.newVersion != "V1.0.1" {
+		t.Fatalf("cancel cleared form: version=%q notes=%q", a.detail.newVersion, a.detail.notes)
+	}
+}
+
+func TestPublishCancellationDuringDeletedResetPreservesForm(t *testing.T) {
+	a := detailTestApp()
+	a.detail.project.ProjectPath = t.TempDir()
+	cli, _ := newHelperCLI(t, "block")
+	a.cli = cli
+	ready := filepath.Join(t.TempDir(), "ready")
+	t.Setenv("ALY_GUI_TEST_READY_FILE", ready)
+	a.detail.staged = []fileItem{
+		{RelativePath: "old.dll", Status: "deleted"},
+		{RelativePath: "app.exe", Status: "modified"},
+	}
+	a.detail.newVersion = "V1.0.1"
+	a.detail.notes = "cancel during reset"
+	a.publish()
+	waitForTestCondition(t, "deleted reset helper readiness", func() bool {
+		_, err := os.Stat(ready)
+		return err == nil
+	})
+	a.cancelPublish()
+	cancelled := a.t("publish.cancelled")
+	waitForTestCondition(t, "deleted reset cancellation", func() bool {
+		return !a.detail.uploading && a.busyText == "" && a.detail.status == cancelled &&
+			a.statusTone == toneWarning && a.toastMsg == cancelled
+	})
+	if got, want := a.detail.status, a.t("publish.cancelled"); got != want {
+		t.Fatalf("wrapped reset cancellation reported as %q, want %q", got, want)
+	}
+	if a.detail.notes != "cancel during reset" || a.detail.newVersion != "V1.0.1" {
+		t.Fatalf("reset cancellation cleared form: version=%q notes=%q", a.detail.newVersion, a.detail.notes)
+	}
+}
+
+func TestDetailHistoryShowsAfterApplyScript(t *testing.T) {
+	a := detailTestApp()
+	a.detail.logs = []ChangeLog{{
+		Version:                "V1.0.1",
+		Time:                   "2026-11-24 10:00:00",
+		Logs:                   []string{"release"},
+		AfterApplyUpdateScript: "scripts/migrate.cmd",
+	}}
+	tt := ui.NewTester(a.view, 1320, 840)
+	if !tt.HasText("Post-update script: scripts/migrate.cmd") {
+		t.Fatalf("after-apply script missing; texts=%q", tt.Texts())
+	}
 }

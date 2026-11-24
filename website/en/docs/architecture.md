@@ -80,7 +80,7 @@ aly/
 │   ├── publish-cli/            # publish CLI (cobra)
 │   ├── publish-gui-go/         # publish desktop app (Go / MyGo, shipped by default)
 │   └── publish-gui-csharp/     # publish desktop app (Avalonia 12.1 · .NET 8, historical)
-├── test/tc/                    # 148 end-to-end cases
+├── test/tc/                    # 150 end-to-end cases
 ├── deploy/                     # deployment scripts
 └── website/                    # this site (VitePress)
 ```

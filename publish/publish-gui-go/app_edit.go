@@ -200,20 +200,22 @@ func (a *app) saveEdit() {
 				newProject.DisplayName = filepath.Base(newProject.ProjectPath)
 			}
 			newProject.MainExePath = storedMainExe
-			for i := range a.projects {
-				if normalizePath(a.projects[i].ProjectPath) == normalizePath(newProject.ProjectPath) {
-					a.projects[i] = newProject
+			nextProjects := append([]ProjectConfig(nil), a.projects...)
+			for i := range nextProjects {
+				if normalizePath(nextProjects[i].ProjectPath) == normalizePath(newProject.ProjectPath) {
+					nextProjects[i] = newProject
 					break
 				}
 			}
 			sameDetail := a.detail == d && normalizePath(d.project.ProjectPath) == normalizePath(newProject.ProjectPath)
-			if sameDetail {
-				d.project = newProject
-			}
-			if saveErr := saveProjects(a.projects); saveErr != nil {
+			if saveErr := saveProjects(nextProjects); saveErr != nil {
 				e.error = saveErr.Error()
 				a.toastMsg = saveErr.Error()
 				return
+			}
+			a.projects = nextProjects
+			if sameDetail {
+				d.project = newProject
 			}
 			a.editOpen = false
 			a.status = a.t("edit.saved")

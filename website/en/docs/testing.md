@@ -1,11 +1,11 @@
 ---
 title: Testing
-description: Aly's 148 end-to-end cases, unit-test coverage and how to run them locally.
+description: Aly's 150 end-to-end cases, unit-test coverage and how to run them locally.
 ---
 
 # Testing
 
-Aly tracks end-to-end cases in its repository test case document, `aly测试用例文档.md`. There are **148** of them, numbered consecutively from 1 to 148; each records its own "preconditions → steps → expected result → failure criteria" and can be reproduced independently. The most recent full regression result is whatever that document records; PASS counts are not frozen on this site. The document is currently Chinese-only; its numbered cases mirror test/tc cases 1..148, which are readable as Go code.
+Aly tracks end-to-end cases in its repository test case document, `aly测试用例文档.md`. There are **150** of them, numbered consecutively from 1 to 150; each records its own "preconditions → steps → expected result → failure criteria" and can be reproduced independently. The most recent full regression result is whatever that document records; PASS counts are not frozen on this site. The document is currently Chinese-only; its numbered cases mirror test/tc cases 1..150, which are readable as Go code.
 
 ## E2E Framework (test/tc)
 
@@ -23,7 +23,8 @@ A Go-driven harness, not a patchwork of scripts:
 | Rollback and cleanup | All rollback paths, clean snapshot retention |
 | Concurrency and locking | Two instances triggering an update concurrently |
 | Self-update | Unified execution entry point, UI/SDK delegation, loop prevention, the Linux finisher process |
-| Publishing tools | All commands, chunked-upload boundaries, atomic initialization writes, publish GUI |
+| Publishing tools | All commands, chunked-upload boundaries, atomic initialization writes, Go publish GUI |
+| Fast failure | No second request after the first 503, shared budget for a stalled service, automatic hidden-UI exit (149–150) |
 
 ## Unit Tests
 
@@ -33,7 +34,7 @@ A Go-driven harness, not a patchwork of scripts:
 | `cmd/` | JSON protocol of each command, lock semantics, script execution |
 | `config/` / `util/` / `model/` | Configuration loading, platform utility functions |
 | `linuxui` | Finisher process, replacement orchestration, argument parsing |
-| `publish-gui-go` tests | Windowless view tests: dialogs/wizard/detail layout, split ratios, i18n key parity, payload-driven discovery (`go test ./...`) |
+| `publish-gui-go` tests | Real CLI helper-process contracts, argument batching boundaries, publish/stage/edit orchestration, config and UpdateFolder atomicity, plus windowless dialogs/wizard/detail layout, split ratios, i18n key parity and payload-driven discovery (`go test ./...`) |
 | `publish-gui-csharp` tests (historical) | Configuration, versioning, CLI output parsing, payload probing and more (54; kept, no longer in default CI) |
 | `server/controllers` | API boundaries: path traversal, chunk boundaries (0 / -1 / 65537), zero-byte merge, MD5 mismatch, concurrent merges, Range/If-Range, soft-delete filtering, idempotent delete, changelog cap (~40 cases) |
 | `publish-cli` (api/diff/staging) | Chunked upload and complete retries, ignore-rule normalization, deleted staging and manifest criterion, force-update tri-state |

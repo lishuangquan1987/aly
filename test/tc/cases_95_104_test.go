@@ -10,7 +10,6 @@ package tc
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -347,9 +346,10 @@ func TestCase98(t *testing.T) {
 // 环境下就是永久挂起（实测 318s 后被测试超时杀掉，主目录仍是 app-100）。
 //
 // 所以本用例分两段：
-//  ① 断「非强制更新时 `-mode update` 会阻塞在询问卡片上」——这是真实交互语义，
-//     不是缺陷，必须钉死，否则将来有人把 Ask 判断改错没人发现；
-//  ② 把项目设成 force_update=true 再跑，验证真正的全链路自动完成。
+//
+//	① 断「非强制更新时 `-mode update` 会阻塞在询问卡片上」——这是真实交互语义，
+//	   不是缺陷，必须钉死，否则将来有人把 Ask 判断改错没人发现；
+//	② 把项目设成 force_update=true 再跑，验证真正的全链路自动完成。
 //
 // 为什么 `-mode update` 存在却没有"跳过询问"的语义：它只影响**窗口可见性**
 // （run.go:164 的 `if mode == "check"` 分支）与单实例转发，不参与 Decide。
@@ -517,8 +517,10 @@ func TestCase100(t *testing.T) {
 // 故本次新增 **sd14** 作为驱动入口，本用例断言它输出的状态序列。
 //
 // 分两段，各验一件事：
-//  ① sd14 —— MainLoop 自己完成 发现 → 下载 → 下载完成 → apply 阶段；
-//  ② sd9  —— 宿主重启后读 version.json 确认版本真的切过去了。
+//
+//	① sd14 —— MainLoop 自己完成 发现 → 下载 → 下载完成 → apply 阶段；
+//	② sd9  —— 宿主重启后读 version.json 确认版本真的切过去了。
+//
 // ────────────────────────────────────────────────────────────────
 func TestCase101(t *testing.T) {
 	e := NewEnv(t, true, 0)
@@ -602,9 +604,11 @@ func TestCase101(t *testing.T) {
 // 开销），不是缺陷；但文档必须写清楚，否则测试会误判成"续传失效"。
 //
 // 本用例因此分两段，把两种行为都钉死：
-//  ① 50MB（< 阈值）：重试时**全量重下**——断"起点不接续"，避免有人误以为
-//     续传对所有大小生效；
-//  ② 120MB（> 阈值）：重试时**真的续传**——断 Range 生效、起点接近暂停点。
+//
+//	① 50MB（< 阈值）：重试时**全量重下**——断"起点不接续"，避免有人误以为
+//	   续传对所有大小生效；
+//	② 120MB（> 阈值）：重试时**真的续传**——断 Range 生效、起点接近暂停点。
+//
 // ────────────────────────────────────────────────────────────────
 func TestCase102(t *testing.T) {
 	e := NewEnv(t, true, 0)
@@ -745,28 +749,13 @@ func TestCase103(t *testing.T) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// 用例 104 — GUI 与 CLI 同库（行为等价）
+// 用例 104 — Go 发布 GUI 与 CLI 同库（行为等价）
 //
-// **文档原期望有误，必须改正**：原文写"GUI 必须复用 publish-cli 的
-// internal/{api,staging,diff}"，暗示 GUI 会 `using` Go 包——这在技术上不可能：
-// publish-gui-csharp 是 C#/Avalonia（net8.0），publish-cli 是 Go。跨语言不存在 import。
-//
-// GUI 实际走的等价路径是**子进程复用**（Services/CliService.cs）：
-//
-//	var exeName = OperatingSystem.IsWindows() ? "aly-publish.exe" : "aly-publish";
-//	var fullArgs = $"{args} --json";                 // 统一追加 --json
-//	var result = await _ps.RunAsync(CliPath, fullArgs, workDir, timeoutMs);
-//	return JsonConvert.DeserializeObject<CliOutput<T>>(result.StandardOutput);
-//
-// 也就是说：GUI 的 HTTP / 暂存 / 扫描 / 差量全部由 CLI 做，GUI 只负责
-// 组装参数 + 解析 CLI 的 JSON。等价性由此成立——**同一份二进制**，
-// 不可能出现两套实现分叉。
-//
-// 所以本用例要钉的是这层"子进程契约"，共四条：
-//  ① GUI 启动时必须能找到 `aly-publish`（同目录 → 开发路径回退）；
-//  ② GUI 每条命令都必须追加 `--json`（否则解析必挂）；
-//  ③ GUI 的输出结构必须与 CLI 的 `CliOutput<T>` 对齐（isSuccess/data）；
-//  ④ CLI 侧的行为确实自洽（发布 → 文件集合 = 清单、暂存区可回读）。
+// 当前主实现是 publish-gui-go。GUI 的 HTTP、暂存、扫描和差量全部通过
+// 同一个 aly-publish 子进程完成，GUI 只组装参数并解析统一 JSON 信封。
+// 本用例直接执行 Go GUI 的真实 helper-process 单元测试，验证 --json 注入、
+// 成功/业务失败/进程失败/坏输出/取消等契约，再用真实 CLI 做发布与暂存冒烟。
+// 不再读取或执行历史 C# GUI 的任何源码。
 // ────────────────────────────────────────────────────────────────
 func TestCase104(t *testing.T) {
 	e := NewEnv(t, true, 0)
@@ -779,81 +768,13 @@ func TestCase104(t *testing.T) {
 	WriteText(t, filepath.Join(ws, "new.txt"), "new-content")
 	True(t, e.PublishCLI(t, ws, "add", "--all").IsSuccess, "add --all")
 
-	// ① 子进程契约：GUI 必须通过 aly-publish.exe 干活，且必须追加 --json
-	guiRoot := filepath.Join(RepoRoot, "publish", "publish-gui-csharp")
-	if !Exists(guiRoot) {
-		t.Skip("publish-gui-csharp 目录不存在，跳过")
-	}
-	cliSvc := filepath.Join(guiRoot, "src", "AlyPublish", "Services", "CliService.cs")
-	True(t, Exists(cliSvc), "GUI 必须有 CliService.cs（子进程复用 CLI 的唯一入口）")
-	svc := ReadText(cliSvc)
-
-	// ①-1 能找到 exe（payload 目录 → 同目录 → 开发路径回退）
-	//
-	// 2026-11-12 重构：平台文件名与探测顺序收敛到 Helpers（HostHelper / PkHelper），
-	// CliService 只做委派，不再各自拼 "aly-publish.exe" / BaseDirectory / 上溯路径。
-	// 源码契约断言随实现更新，语义（Windows 下找 .exe、先查自身目录、开发路径回退）不变。
-	hostHelper := filepath.Join(guiRoot, "src", "AlyPublish", "Helpers", "HostHelper.cs")
-	pkHelper := filepath.Join(guiRoot, "src", "AlyPublish", "Helpers", "PkHelper.cs")
-	True(t, Exists(hostHelper), "必须有 HostHelper（平台文件名唯一来源）")
-	True(t, Exists(pkHelper), "必须有 PkHelper（payload 探测顺序唯一来源）")
-	Contains(t, ReadText(hostHelper), `"aly-publish.exe"`, "GUI 必须在 Windows 下找 aly-publish.exe")
-	Contains(t, ReadText(pkHelper), "publish-cli", "payload 目录名必须是 publish-cli")
-	Contains(t, ReadText(pkHelper), `"..", "..", "..", "..", "..", ".."`,
-		"GUI 必须有开发路径回退（从 bin/Debug/net8 上溯 6 级到仓库根）")
-	Contains(t, svc, "AppDomain.CurrentDomain.BaseDirectory", "GUI 必须先查自身目录")
-	Contains(t, svc, "PkHelper.PubProbes(", "CliService 必须走统一探测（不得各自拼路径）")
-
-	// ①-2 每条命令都要追加 --json。
-	//
-	// 2026-11-12 重构后只有两条执行入口：
-	//   · RunAsync（普通命令统一入口）：arguments 首部插入 AppConstants.JsonOutputArgument
-	//   · PushAsync（流式进度，独立走 ProcessService.RunWithProgressAsync）：同样首部插入
-	// 常量值定义在 Constants/AppConstants.cs。断言"两条路径都带 + 常量值确为 --json"。
-	codeOnly := stripCLineComments(svc)
-	Eq(t, "追加 --json 的执行路径数（RunAsync + PushAsync）",
-		strings.Count(codeOnly, "AppConstants.JsonOutputArgument"), 2)
-	Contains(t, svc, "new List<string>(arguments.Count + 1) { AppConstants.JsonOutputArgument }",
-		"普通命令必须把 --json 作为独立首参数（避免用户输入注入）")
-	Contains(t, svc, "AppConstants.JsonOutputArgument,",
-		"push 专用路径也要带 --json")
-
-	appConstants := filepath.Join(guiRoot, "src", "AlyPublish", "Constants", "AppConstants.cs")
-	True(t, Exists(appConstants), "必须有 AppConstants（--json 常量唯一来源）")
-	Contains(t, ReadText(appConstants), `JsonOutputArgument = "--json"`,
-		"JsonOutputArgument 的值必须是 --json")
-
-	// ①-3 输出结构必须与 CLI 的 CliOutput<T> 对齐（同一套 isSuccess/data 契约）
-	Contains(t, svc, "CliOutput<T>", "GUI 必须反序列化成 CliOutput<T>（与 CLI 同结构）")
-	cliModel := filepath.Join(guiRoot, "src", "AlyPublish", "Models", "Cli", "CliOutput.cs")
-	True(t, Exists(cliModel), "必须有 CliOutput 模型定义")
-	m := ReadText(cliModel)
-	for _, f := range []string{"isSuccess", "data"} {
-		Contains(t, m, f, "CliOutput 必须映射 CLI 的字段 "+f)
-	}
-
-	// ①-4 反证：GUI 不得自带 HTTP / 扫描实现（一旦有第二套，契约就失效）
-	var ownHTTP []string
-	filepath.Walk(guiRoot, func(p string, fi os.FileInfo, err error) error {
-		if err != nil || fi.IsDir() || !strings.HasSuffix(p, ".cs") {
-			return nil
-		}
-		// 排除 bin/obj（构建产物里会有 SDK 自带的 HttpClient 引用）
-		rel := strings.ReplaceAll(p, "\\", "/")
-		if strings.Contains(rel, "/bin/") || strings.Contains(rel, "/obj/") {
-			return nil
-		}
-		body := ReadText(p)
-		if strings.Contains(body, "HttpClient") || strings.Contains(body, "/api/project/") {
-			ownHTTP = append(ownHTTP, filepath.Base(p))
-		}
-		return nil
-	})
-	Eq(t, "GUI 源码不得直接发 HTTP 或直连服务端路由（否则等于第二套实现）",
-		len(ownHTTP), 0)
-	if len(ownHTTP) > 0 {
-		t.Logf("违规文件：%v", ownHTTP)
-	}
+	// ① Go GUI 子进程契约及其正常/边界测试必须真实执行并通过。
+	guiRoot := filepath.Join(RepoRoot, "publish", "publish-gui-go")
+	True(t, Exists(guiRoot), "Go 发布 GUI 主实现必须存在")
+	code, out := e.GoTest(t, Go126, guiRoot, nil, "./...", "-count=1", "-v")
+	Eq(t, "publish-gui-go 单元测试退出码", code, 0)
+	NotContains(t, out, "--- FAIL", "publish-gui-go 不应有失败项")
+	Contains(t, out, "aly/publish-gui-go", "必须确实执行 Go GUI 测试，而非空跑")
 
 	// ② 冒烟：CLI 发布一轮，核服务端最终状态的自洽性
 	r := e.PublishCLI(t, ws, "push", "--version", "1.3.0", "--message", "cli 发布")

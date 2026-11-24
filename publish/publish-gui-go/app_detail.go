@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -21,7 +22,10 @@ type detailState struct {
 
 	unstaged []fileItem
 	staged   []fileItem
-	logs     []ChangeLog
+	// ignoredDeleted keeps legacy deleted staged entries out of the view while
+	// retaining their paths so publish can unstage them before calling the CLI.
+	ignoredDeleted []string
+	logs           []ChangeLog
 
 	currentVersion string
 	newVersion     string
@@ -123,7 +127,15 @@ func (a *app) refreshDetail() {
 				a.toastMsg = d.status
 				return
 			}
-			// Keep the order the CLI returned: the file tables mirror it.
+			// Keep the order the CLI returned: the file tables mirror it. Deleted
+			// entries are retained server-side, but legacy staged deletions must
+			// be remembered so a later push can unstage rather than publish them.
+			d.ignoredDeleted = d.ignoredDeleted[:0]
+			for _, item := range status.Staged {
+				if item.Status == "deleted" {
+					d.ignoredDeleted = append(d.ignoredDeleted, item.RelativePath)
+				}
+			}
 			d.unstaged = toFileItems(status.Unstaged)
 			d.staged = toFileItems(status.Staged)
 			if logErr == nil {
@@ -142,6 +154,11 @@ func (a *app) refreshDetail() {
 			d.status = a.tf("status.refreshed",
 				"unstaged", fmt.Sprint(len(d.unstaged)),
 				"staged", fmt.Sprint(len(d.staged)))
+			if len(d.ignoredDeleted) > 0 {
+				d.status = a.t("status.deletedIgnored")
+				a.statusTone = toneWarning
+				a.toastMsg = d.status
+			}
 		})
 	}()
 }
@@ -149,6 +166,9 @@ func (a *app) refreshDetail() {
 func toFileItems(items []FileStatusItem) []fileItem {
 	out := make([]fileItem, 0, len(items))
 	for _, item := range items {
+		if item.Status == "deleted" {
+			continue
+		}
 		out = append(out, fileItem{
 			RelativePath: item.RelativePath,
 			Status:       item.Status,
@@ -277,6 +297,7 @@ func (a *app) stageSelected(staged bool) {
 					key = "status.stageFailed"
 				}
 				d.status = a.tf(key, "error", err.Error())
+				a.statusTone = toneDanger
 				a.toastMsg = d.status
 				return
 			}
@@ -298,9 +319,27 @@ func (a *app) publish() {
 	if d == nil || d.busy || d.uploading || !a.cli.available() {
 		return
 	}
+	deleted := append([]string(nil), d.ignoredDeleted...)
+	staged := make([]fileItem, 0, len(d.staged))
+	for _, f := range d.staged {
+		if f.Status == "deleted" {
+			deleted = appendUnique(deleted, f.RelativePath)
+			continue
+		}
+		staged = append(staged, f)
+	}
+	if len(staged) == 0 {
+		if len(deleted) > 0 {
+			d.status = a.t("status.deletedIgnored")
+			a.statusTone = toneWarning
+			a.toastMsg = d.status
+		}
+		return
+	}
+	d.staged = staged
 	version := strings.TrimSpace(d.newVersion)
 	notes := strings.TrimSpace(d.notes)
-	if len(d.staged) == 0 || version == "" || notes == "" {
+	if version == "" || notes == "" {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
@@ -334,26 +373,34 @@ func (a *app) publish() {
 	go func() {
 		failure := ""
 		sawResult := false
-		err := cli.push(ctx, path, version, messages, script, force, func(line string) {
-			ev := parsePushLine(line)
-			switch ev.Kind {
-			case pushFailure:
-				if failure == "" {
-					failure = ev.Error
+		var err error
+		if len(deleted) > 0 {
+			// The CLI owns the staging file. Removing legacy deleted entries from
+			// the Go view alone would still let push delete them on the server.
+			err = cli.resetFiles(ctx, path, deleted)
+		}
+		if err == nil {
+			err = cli.push(ctx, path, version, messages, script, force, func(line string) {
+				ev := parsePushLine(line)
+				switch ev.Kind {
+				case pushFailure:
+					if failure == "" {
+						failure = ev.Error
+					}
+				case pushSuccess:
+					sawResult = true
 				}
-			case pushSuccess:
-				sawResult = true
-			}
-			if ev.Kind != pushProgress {
-				return
-			}
-			a.post(func() {
-				if a.detail != d {
+				if ev.Kind != pushProgress {
 					return
 				}
-				applyUploadProgress(a, d, ev.Progress)
+				a.post(func() {
+					if a.detail != d {
+						return
+					}
+					applyUploadProgress(a, d, ev.Progress)
+				})
 			})
-		})
+		}
 		cancel()
 		a.post(func() {
 			if a.detail == d {
@@ -371,11 +418,11 @@ func (a *app) publish() {
 				return
 			}
 			switch {
-			case err == context.Canceled:
+			case errors.Is(err, context.Canceled):
 				d.status = a.t("publish.cancelled")
 				a.statusTone = toneWarning
 				a.toastMsg = d.status
-			case err == context.DeadlineExceeded:
+			case errors.Is(err, context.DeadlineExceeded):
 				d.status = a.t("publish.timeout")
 				a.statusTone = toneWarning
 				a.toastMsg = d.status
@@ -395,6 +442,7 @@ func (a *app) publish() {
 				d.newVersion = ""
 				d.notes = ""
 				d.script = ""
+				d.ignoredDeleted = nil
 				d.status = a.tf("publish.published", "version", version)
 				a.statusTone = toneSuccess
 				a.status = d.status
@@ -422,10 +470,28 @@ func applyUploadProgress(a *app, d *detailState, p UploadProgress) {
 			break
 		}
 	}
+	previousStatus := ""
 	if idx >= 0 {
+		previousStatus = d.uploadItems[idx].Status
 		d.uploadItems[idx] = p
 	} else {
 		d.uploadItems = append(d.uploadItems, p)
+	}
+	// A replayed terminal event is idempotent; a changed status moves the file
+	// between counters instead of counting the same index once per status.
+	if previousStatus != p.Status {
+		switch previousStatus {
+		case "DONE":
+			d.uploadDone--
+		case "FAIL":
+			d.uploadFailed--
+		}
+		switch p.Status {
+		case "DONE":
+			d.uploadDone++
+		case "FAIL":
+			d.uploadFailed++
+		}
 	}
 	total := fmt.Sprint(d.uploadTotal)
 	switch p.Status {
@@ -435,7 +501,6 @@ func applyUploadProgress(a *app, d *detailState, p UploadProgress) {
 			"count", fmt.Sprint(d.uploadDone+d.uploadFailed),
 			"total", total)
 	case "DONE":
-		d.uploadDone++
 		d.uploadText = a.tf("publish.doneCount",
 			"file", p.File,
 			"count", fmt.Sprint(d.uploadDone+d.uploadFailed),
@@ -445,7 +510,6 @@ func applyUploadProgress(a *app, d *detailState, p UploadProgress) {
 			"failed", fmt.Sprint(d.uploadFailed),
 			"total", total)
 	case "FAIL":
-		d.uploadFailed++
 		d.uploadText = a.tf("publish.failedCount",
 			"file", p.File,
 			"count", fmt.Sprint(d.uploadDone+d.uploadFailed),

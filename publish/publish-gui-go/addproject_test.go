@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -333,5 +334,225 @@ func TestAddProjectWizardFitsSmallWindow(t *testing.T) {
 		if !tt.HasText(text) {
 			t.Errorf("local step is missing %q at 1080x640; texts=%q", text, tt.Texts())
 		}
+	}
+}
+
+func TestFetchServerProjectsSuccessAndSelectionClamp(t *testing.T) {
+	a := newAddProjectApp()
+	cli, logPath := newHelperCLI(t, "success")
+	a.cli = cli
+	t.Setenv("ALY_GUI_TEST_PROJECT_LIST_JSON", `[
+		{"id":1,"name":"alpha","title":"Alpha","version":"V1.0.0"},
+		{"id":2,"name":"beta","title":"Beta","version":"V1.1.0","force_update":true}
+	]`)
+	a.adding.projectName = "beta"
+	s := a.adding
+	a.fetchServerProjects()
+	waitForTestCondition(t, "server project fetch", func() bool {
+		return !s.fetching && len(s.allProjects) == 2 && s.selected == 1 &&
+			s.projectName == "beta" && s.displayName == "beta" && s.forceUpdate
+	})
+	if s.selected != 1 || s.projectName != "beta" || s.displayName != "beta" || !s.forceUpdate {
+		t.Fatalf("selected project was not restored: %+v", s)
+	}
+	s.selected = 99
+	s.clampSelection()
+	if s.selected != 1 {
+		t.Fatalf("selection above list = %d, want 1", s.selected)
+	}
+	s.filter = "no-match"
+	s.clampSelection()
+	if s.selected != -1 {
+		t.Fatalf("empty filtered selection = %d, want -1", s.selected)
+	}
+	calls := readHelperCalls(t, logPath)
+	if len(calls) != 1 || strings.Join(calls[0].Args, " ") != "project list --server http://127.0.0.1:2000" {
+		t.Fatalf("fetch args = %+v", calls)
+	}
+}
+
+func TestFetchServerProjectsFailureClearsSelection(t *testing.T) {
+	a := newAddProjectApp()
+	cli, _ := newHelperCLI(t, "business-failure")
+	a.cli = cli
+	s := a.adding
+	s.allProjects = []ProjectInfo{{ID: 1, Name: "stale"}}
+	s.selected = 0
+	a.fetchServerProjects()
+	waitForTestCondition(t, "server project fetch failure", func() bool {
+		return !s.fetching && s.fetchError != ""
+	})
+	if s.allProjects != nil || s.selected != -1 || !strings.Contains(s.fetchError, "business rejected") {
+		t.Fatalf("failed fetch retained stale state: %+v", s)
+	}
+}
+
+func TestFetchServerProjectsEmptyList(t *testing.T) {
+	a := newAddProjectApp()
+	cli, _ := newHelperCLI(t, "success")
+	a.cli = cli
+	t.Setenv("ALY_GUI_TEST_PROJECT_LIST_JSON", `[]`)
+	s := a.adding
+	s.selected = 0
+	a.fetchServerProjects()
+	waitForTestCondition(t, "empty server project fetch", func() bool {
+		return !s.fetching
+	})
+	if len(s.allProjects) != 0 || s.selected != -1 || s.canNext() {
+		t.Fatalf("empty fetch state: projects=%v selected=%d", s.allProjects, s.selected)
+	}
+}
+
+func TestCreateServerProjectSuccessFetchesAndSelects(t *testing.T) {
+	a := newAddProjectApp()
+	cli, logPath := newHelperCLI(t, "success")
+	a.cli = cli
+	t.Setenv("ALY_GUI_TEST_PROJECT_NAME", "new-project")
+	t.Setenv("ALY_GUI_TEST_PROJECT_LIST_JSON", `[{"id":7,"name":"new-project","title":"new-project","version":"V1.0.0","force_update":true}]`)
+	s := a.adding
+	s.stage = addStageCreate
+	s.createName = " new-project "
+	s.createForceUpdate = true
+	s.createIgnoreFolders = []string{"bin"}
+	s.createIgnoreFiles = []string{"*.log"}
+	a.createServerProject()
+	waitForTestCondition(t, "create and subsequent fetch", func() bool {
+		return !s.creating && !s.fetching && s.stage == addStageServer && len(s.allProjects) == 1
+	})
+	if s.projectName != "new-project" || s.title != "new-project" || s.displayName != "new-project" || s.selected != 0 || !s.forceUpdate {
+		t.Fatalf("created project was not selected: %+v", s)
+	}
+	calls := readHelperCalls(t, logPath)
+	if len(calls) != 2 {
+		t.Fatalf("create calls = %+v, want create then list", calls)
+	}
+	want := "project create --server http://127.0.0.1:2000 --name new-project --title new-project --force-update --ignore-folders bin --ignore-files *.log"
+	if got := strings.Join(calls[0].Args, " "); got != want {
+		t.Fatalf("create args = %q, want %q", got, want)
+	}
+}
+
+func TestCreateServerProjectFailureStaysOnCreatePage(t *testing.T) {
+	a := newAddProjectApp()
+	cli, logPath := newHelperCLI(t, "business-failure")
+	a.cli = cli
+	s := a.adding
+	s.stage = addStageCreate
+	s.createName = "new-project"
+	a.createServerProject()
+	waitForTestCondition(t, "create failure", func() bool {
+		return !s.creating && s.actionError != ""
+	})
+	if s.stage != addStageCreate || !strings.Contains(s.actionError, "business rejected") {
+		t.Fatalf("create failure state = %+v", s)
+	}
+	if calls := readHelperCalls(t, logPath); len(calls) != 1 {
+		t.Fatalf("failed create triggered a fetch: %+v", calls)
+	}
+}
+
+func prepareInitializeAddProject(a *app, path string) {
+	s := a.adding
+	s.stage = addStageLocal
+	s.path = path
+	s.displayName = "alpha"
+	s.allProjects = []ProjectInfo{{ID: 1, Name: "alpha", Title: "Alpha"}}
+	s.selected = 0
+}
+
+func TestInitializeAddProjectSuccess(t *testing.T) {
+	t.Setenv("ALYPUBLISH_CONFIG_DIR", t.TempDir())
+	a := newAddProjectApp()
+	a.projects = nil
+	a.detail = nil
+	a.selected = -1
+	cli, logPath := newHelperCLI(t, "success")
+	a.cli = cli
+	projectDir := t.TempDir()
+	prepareInitializeAddProject(a, projectDir)
+	s := a.adding
+	a.initializeAddProject()
+	waitForTestCondition(t, "initialize and initial refresh", func() bool {
+		return !s.busy && !a.addOpen && a.detail != nil && a.detail.loaded && !a.detail.busy
+	})
+	if len(a.projects) != 1 || a.projects[0].ProjectPath != projectDir || a.selected != 0 || a.adding != nil {
+		t.Fatalf("initialized state: projects=%+v selected=%d adding=%+v", a.projects, a.selected, a.adding)
+	}
+	if got := loadProjects(); len(got) != 1 || got[0].DisplayName != "alpha" {
+		t.Fatalf("persisted bookmarks = %+v", got)
+	}
+	calls := readHelperCalls(t, logPath)
+	if len(calls) == 0 || !strings.HasPrefix(strings.Join(calls[0].Args, " "), "config init --server http://127.0.0.1:2000 --project alpha") {
+		t.Fatalf("initialize calls = %+v", calls)
+	}
+}
+
+func TestInitializeAddProjectCLIFailureDoesNotAddBookmark(t *testing.T) {
+	t.Setenv("ALYPUBLISH_CONFIG_DIR", t.TempDir())
+	a := newAddProjectApp()
+	cli, _ := newHelperCLI(t, "business-failure")
+	a.cli = cli
+	prepareInitializeAddProject(a, t.TempDir())
+	s := a.adding
+	a.initializeAddProject()
+	waitForTestCondition(t, "initialize CLI failure", func() bool {
+		return !s.busy && s.actionError != ""
+	})
+	if len(a.projects) != 1 || a.projects[0].DisplayName != "demo" || !a.addOpen || a.adding != s {
+		t.Fatalf("CLI failure changed project state: projects=%+v open=%v", a.projects, a.addOpen)
+	}
+	if _, err := os.Stat(configPath()); !os.IsNotExist(err) {
+		t.Fatalf("CLI failure wrote bookmarks: %v", err)
+	}
+}
+
+func TestInitializeAddProjectUpdateFolderFailureDoesNotAddBookmark(t *testing.T) {
+	t.Setenv("ALYPUBLISH_CONFIG_DIR", t.TempDir())
+	a := newAddProjectApp()
+	cli, _ := newHelperCLI(t, "success")
+	a.cli = cli
+	base := t.TempDir()
+	projectDir := filepath.Join(base, "App")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectDir, "demo.exe"), []byte("exe"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "UpdateFolder"), []byte("not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	prepareInitializeAddProject(a, projectDir)
+	a.adding.mainExe = "demo.exe"
+	s := a.adding
+	a.initializeAddProject()
+	waitForTestCondition(t, "initialize UpdateFolder failure", func() bool {
+		return !s.busy && s.actionError != ""
+	})
+	if len(a.projects) != 1 || !a.addOpen || a.adding != s {
+		t.Fatalf("UpdateFolder failure changed project state: projects=%+v open=%v", a.projects, a.addOpen)
+	}
+	if _, err := os.Stat(configPath()); !os.IsNotExist(err) {
+		t.Fatalf("UpdateFolder failure wrote bookmarks: %v", err)
+	}
+}
+
+func TestInitializeAddProjectBookmarkFailureKeepsState(t *testing.T) {
+	configFile := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(configFile, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ALYPUBLISH_CONFIG_DIR", configFile)
+	a := newAddProjectApp()
+	cli, _ := newHelperCLI(t, "success")
+	a.cli = cli
+	prepareInitializeAddProject(a, t.TempDir())
+	s := a.adding
+	a.initializeAddProject()
+	waitForTestCondition(t, "initialize bookmark failure", func() bool {
+		return !s.busy && s.actionError != ""
+	})
+	if len(a.projects) != 1 || a.projects[0].DisplayName != "demo" || a.selected != 0 || !a.addOpen || a.adding != s {
+		t.Fatalf("bookmark failure changed project state: projects=%+v selected=%d open=%v", a.projects, a.selected, a.addOpen)
 	}
 }

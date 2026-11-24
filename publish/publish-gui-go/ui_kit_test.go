@@ -35,6 +35,29 @@ func TestToastExpiresAfterItsDuration(t *testing.T) {
 		t.Fatalf("toasts = %d after expiry, want 0", len(a.toasts))
 	}
 	if tt.HasText("Stale message") {
-		t.Fatalf("an expired toast is still drawn")
+		t.Fatal("an expired toast is still drawn")
+	}
+}
+
+func TestToastIgnoresBlankAndKeepsNewestThree(t *testing.T) {
+	a := testApp()
+	a.notify(toastInfo, "")
+	for _, message := range []string{"one", "two", "three", "four"} {
+		a.notify(toastInfo, message)
+	}
+	if len(a.toasts) != 3 || a.toasts[0].text != "two" || a.toasts[2].text != "four" {
+		t.Fatalf("toast queue = %+v", a.toasts)
+	}
+}
+
+func TestToastManualClose(t *testing.T) {
+	a := testApp()
+	a.notify(toastInfo, "Dismiss me")
+	tt := ui.NewTester(a.view, 1320, 840)
+	if err := tt.Click("Close"); err != nil {
+		t.Fatalf("clicking toast close: %v", err)
+	}
+	if len(a.toasts) != 0 || tt.HasText("Dismiss me") {
+		t.Fatalf("toast was not dismissed: %+v texts=%q", a.toasts, tt.Texts())
 	}
 }

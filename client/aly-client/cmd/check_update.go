@@ -1,14 +1,62 @@
 package cmd
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	apiclient "aly/client/aly-client/client"
 	"aly/client/aly-client/config"
 	"aly/client/aly-client/model"
 )
+
+// checkUpdateTimeout 是一次更新检查所有网络请求共享的总预算。
+// 连接拒绝与 HTTP 错误会立即返回；只有无响应服务才用满该预算。
+// 该值不作用于下载、文件清单等其他命令。
+const checkUpdateTimeout = time.Second
+
+// countRegularFilesForCheck 保留真实目录扫描，同时让慢盘场景可做确定性回归。
+var countRegularFilesForCheck = countRegularFiles
+
+// checkUpdateRequestBudget 只在真实 API 调用期间消耗预算。目录扫描等本地工作
+// 发生在两次请求之间，不得挤占后续请求的时间，更不能改变 force_update 语义。
+type checkUpdateRequestBudget struct {
+	remaining time.Duration
+}
+
+func (b *checkUpdateRequestBudget) run(request func(context.Context) error) error {
+	started := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), b.remaining)
+	err := request(ctx)
+	cancel()
+	b.remaining -= time.Since(started)
+	if b.remaining < 0 {
+		b.remaining = 0
+	}
+	return err
+}
+
+func (b *checkUpdateRequestBudget) findProject(serverURL, projectName string) (*model.Project, error) {
+	var project *model.Project
+	err := b.run(func(ctx context.Context) error {
+		var err error
+		project, err = apiclient.FindProjectByNameContext(ctx, serverURL, projectName)
+		return err
+	})
+	return project, err
+}
+
+func (b *checkUpdateRequestBudget) changeLogs(serverURL, projectName string) ([]model.ProjectChangeLog, error) {
+	var logs []model.ProjectChangeLog
+	err := b.run(func(ctx context.Context) error {
+		var err error
+		logs, err = apiclient.GetProjectChangeLogsContext(ctx, serverURL, projectName)
+		return err
+	})
+	return logs, err
+}
 
 // CheckUpdate checks for new version
 func CheckUpdate() {
@@ -41,13 +89,14 @@ func CheckUpdate() {
 
 	localVersion := stripVPrefix(versionInfo.Version)
 	status := versionInfo.VersionStatus
+	budget := checkUpdateRequestBudget{remaining: checkUpdateTimeout}
 
 	switch {
 	case status == "" || status == config.VersionStatusApplied:
-		checkUpdateApplied(fc, localVersion)
+		checkUpdateApplied(&budget, fc, localVersion)
 
 	case status == config.VersionStatusDownloaded || status == config.VersionStatusApplying:
-		checkUpdatePending(fc, versionInfo, localVersion)
+		checkUpdatePending(&budget, fc, versionInfo, localVersion)
 
 	default:
 		// 未知状态一律按 applied 处理（与 apply/download/rollback 的口径统一，F6）：
@@ -56,17 +105,24 @@ func CheckUpdate() {
 		// 注意：check_update 可能被宿主每秒调用，故只写 stderr，不写 update.log（避免刷爆日志）。
 		fmt.Fprintf(os.Stderr,
 			"check_update: unknown version_status %q, treating as applied (only download_update can rewrite it)\n", status)
-		checkUpdateApplied(fc, localVersion)
+		checkUpdateApplied(&budget, fc, localVersion)
 	}
 }
 
-// checkUpdateApplied 处理 applied / 空状态：必须联系服务器判断是否有更新
-func checkUpdateApplied(fc *FullConfig, localVersion string) {
-	project, projectErr := apiclient.FindProjectByName(fc.Shared.ServerURL, fc.Shared.ProjectName)
+// checkUpdateApplied 处理 applied / 空状态：必须联系服务器判断是否有更新。
+func checkUpdateApplied(budget *checkUpdateRequestBudget, fc *FullConfig, localVersion string) {
+	project, projectErr := budget.findProject(fc.Shared.ServerURL, fc.Shared.ProjectName)
 	if projectErr != nil {
 		fmt.Fprintf(os.Stderr, "check_update: FindProjectByName failed: %v\n", projectErr)
+		// 首次请求已明确失败时不再串行请求日志。否则 503/连接拒绝会多等一次，
+		// 无响应服务更会把隐藏 UI 的后台存活时间放大一倍。
+		printOutput(true, "", &model.CheckUpdateData{
+			HasUpdate:      false,
+			CurrentVersion: localVersion,
+		})
+		return
 	}
-	logs, logsErr := apiclient.GetProjectChangeLogs(fc.Shared.ServerURL, fc.Shared.ProjectName)
+	logs, logsErr := budget.changeLogs(fc.Shared.ServerURL, fc.Shared.ProjectName)
 	if logsErr != nil {
 		fmt.Fprintf(os.Stderr, "check_update: GetProjectChangeLogs failed: %v\n", logsErr)
 	}
@@ -108,7 +164,7 @@ func checkUpdateApplied(fc *FullConfig, localVersion string) {
 // 无法与服务器核对就不上报，避免断网时上位机显示"可更新"、联网时却是另一种状态；已下载内容
 // 与 version.json 保持不动，服务器恢复后自动继续 apply。
 // applying（崩溃恢复）与回滚续跑必须在断网时照样上报（见函数内提前返回的两条分支）。
-func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVersion string) {
+func checkUpdatePending(budget *checkUpdateRequestBudget, fc *FullConfig, versionInfo *config.VersionInfo, localVersion string) {
 	// 回滚中断（status=applying && rollback_previous != ""）：优先完成回滚，
 	// 绝不因服务器发布新版本而转向下载/升级（修复 Bug#1/#5）。
 	// SDK 据此得到 NeedDownloadUpdate=false → 调用 apply_update → resumeRollback 续跑回滚。
@@ -168,7 +224,7 @@ func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVe
 	}
 
 	// 只请求变更日志（1 次 HTTP），减少断网时的等待
-	logs, logsErr := apiclient.GetProjectChangeLogs(fc.Shared.ServerURL, fc.Shared.ProjectName)
+	logs, logsErr := budget.changeLogs(fc.Shared.ServerURL, fc.Shared.ProjectName)
 	if logsErr != nil {
 		fmt.Fprintf(os.Stderr, "check_update: GetProjectChangeLogs failed: %v\n", logsErr)
 	}
@@ -198,7 +254,7 @@ func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVe
 	// A2：目录存在但读不到（ACL/杀软锁）时不当成"丢失"，避免无谓重下。
 	pendingMissing := false
 	if pendingDir, dirErr := fc.ExeCfg.AppVersionDir(versionInfo.Version); dirErr == nil {
-		pendingCount, countErr := countRegularFiles(pendingDir)
+		pendingCount, countErr := countRegularFilesForCheck(pendingDir)
 		switch {
 		case countErr != nil && !os.IsNotExist(countErr):
 			fmt.Fprintf(os.Stderr,
@@ -224,7 +280,7 @@ func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVe
 		// "already at latest version"拒绝重下（永远补不回来），必须落到下面的 apply 自愈。
 		if pendingMissing && serverVersion == localVersion {
 			forceUpdate := false
-			project, projectErr := apiclient.FindProjectByName(fc.Shared.ServerURL, fc.Shared.ProjectName)
+			project, projectErr := budget.findProject(fc.Shared.ServerURL, fc.Shared.ProjectName)
 			if projectErr != nil {
 				fmt.Fprintf(os.Stderr, "check_update: FindProjectByName failed: %v\n", projectErr)
 			} else {
@@ -278,7 +334,7 @@ func checkUpdatePending(fc *FullConfig, versionInfo *config.VersionInfo, localVe
 	} else {
 		// 服务器有新版本：需要重新下载，补拿 ForceUpdate
 		forceUpdate := false
-		project, projectErr := apiclient.FindProjectByName(fc.Shared.ServerURL, fc.Shared.ProjectName)
+		project, projectErr := budget.findProject(fc.Shared.ServerURL, fc.Shared.ProjectName)
 		if projectErr != nil {
 			fmt.Fprintf(os.Stderr, "check_update: FindProjectByName failed: %v\n", projectErr)
 		} else {
