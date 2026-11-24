@@ -80,6 +80,18 @@ Go 1.27.3 交叉编译；产物无扩展名。完整两件套（更新器 + MyGo
 `deploy/deploy-client.go`，它会用 Docker 镜像内的 Go 1.10.8 同时构建
 `aly-client.exe` 与 `aly-client-ui.exe`（需要 WSL 内 docker 可用且镜像已存在）。
 
+> **`.bat` 必须保持纯 ASCII + CRLF（见 `AGENTS.md` §6.2）。** 早先这些脚本里写了
+> 中文注释，cmd.exe 按 GBK 解析时行偏移错乱，会把注释碎片当命令执行
+> （报 `'xxx' 不是内部或外部命令`）、把 `set` 行劈成两半，`GOARCH`/`GOROOT`
+> 静默没设上后接着报"系统找不到指定的路径"。中文说明一律写在本文件里。
+>
+> 脚本也不再硬编码 `GOROOT`/`GOPATH` 的机器路径：清空 `GOROOT` 让 go 从自身
+> 可执行文件推导（避免继承到 1.10.8 的 root 后报 `-lang` 错误），
+> `GOPATH` 未定义时回落到 `%USERPROFILE%\go`。
+>
+> `.bat` 里跑 `deploy-client.go` 会先 `chcp 65001 >nul`，否则程序输出的
+> UTF-8 中文在 936 控制台里是乱码。
+
 ## 常见问题
 
 ### Q: 为什么不能用 `go build` 在项目根目录直接编译？

@@ -83,7 +83,9 @@
 
 ---
 
-## 六、PowerShell 编码警告
+## 六、编码警告（PowerShell / 批处理）
+
+### 6.1 PowerShell 写文件
 
 > PowerShell `Set-Content` 不加 `-Encoding UTF8` 会将 UTF-8 中文按 GBK 编码导致乱码。
 >
@@ -92,6 +94,21 @@
 >
 > **禁止**：`Set-Content`、`Out-File`、`echo >`（不加 `-Encoding UTF8`）
 > **已乱码时**：`git checkout -- <file>` 恢复后用 Python 重新编辑
+
+### 6.2 批处理文件（`*.bat` / `*.cmd`）必须纯 ASCII + CRLF
+
+> cmd.exe 按 OEM 代码页（中文 Windows 为 936/GBK）逐字节解析批处理。文件里出现
+> UTF-8 中文会让 cmd 的行偏移算错：它把注释行的碎片当命令执行（报
+> `'xxx' 不是内部或外部命令`），并把 `set` 行劈成两半——`GOARCH`/`GOROOT`
+> 静默没设上，紧接着报"系统找不到指定的路径"。行尾被重复转换成 `\r\r\n`
+> 同样有毒：每条 `set` 的值都会带一个尾随 CR。
+>
+> - 注释、`echo` 一律用英文；中文说明写到 `*.md` 里（如 `client/aly-client/BUILD.md`）。
+> - `.bat` 里若要跑会输出中文的 Go 程序（`deploy-client.go` / `deploy-server.go`），
+>   先 `chcp 65001 >nul`，否则控制台按 936 显示成乱码。
+> - 自检（应无任何输出）：`git grep -nP '[^\x00-\x7F]' -- '*.bat' '*.cmd'`
+> - 不硬编码 `GOROOT`/`GOPATH` 的机器路径：清空 `GOROOT` 让 go 从自身可执行文件推导，
+>   `GOPATH` 未定义时回落到 `%USERPROFILE%\go`。
 
 ---
 
