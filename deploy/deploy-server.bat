@@ -1,44 +1,32 @@
-@echo off
-
-rem 本文件必须保持 CRLF 行尾：cmd 对 LF 行尾 + 中文注释会误拆行，
-
-rem 把注释碎片当命令执行（报 "is not recognized as an internal ..."）。
-
-rem
-
-rem 宿主编译必须落在本机默认目标（windows/amd64）。机器环境里若残留交叉
-
-rem 编译变量 GOOS/GOARCH（如 GOOS=linux GOARCH=arm64），go 会按该目标产出
-
-rem 不带 .exe 的产物，Windows 执行查找只认 .com/.exe/.bat/.cmd，于是报
-
-rem "executable file not found in %PATH%"。这里清空，回退 go 自带默认值。
-
-rem 交叉编译目标由 deploy-server.go 内部显式设定，与宿主环境无关。
-
-set GOOS=
-
-set GOARCH=
-
-rem GOROOT must point at the toolchain that actually compiles this machine:
-
-
-rem the windows-cross builds run on the 1.27.3 toolchain, so its root must be used
-
-
-rem (leaving the 1.10.8 root makes its own compile report "-lang" per package).
-
-
-set GOROOT=D:\Install\go1.27.3
-rem server is a go.mod module (gin/ent/...): modules must stay enabled so the
-rem deps are fetched; GOPATH keeps the source tree the import paths resolve to.
-set GOPATH=C:\Users\5001494\go
-set GO111MODULE=
-
-
-cd /d "%~dp0"
-
-go run "%~dp0deploy-server.go" %*
-
-pause
-
+@echo off
+rem ===========================================================================
+rem  KEEP THIS FILE PURE ASCII AND CRLF. Never paste non-ASCII text here.
+rem  cmd.exe decodes batch bytes with the OEM codepage (936/GBK on Chinese
+rem  Windows); UTF-8 Chinese makes it lose its line offset and run fragments of
+rem  comments as commands, while splitting "set" lines in half.
+rem  (This file used to have a doubled CR on every line - CRCRLF - which left a
+rem  trailing \r inside every set value, e.g. GOROOT, hence "path not found".)
+rem ===========================================================================
+chcp 65001 >nul
+
+rem  Clear inherited cross-compile vars: with GOOS/GOARCH exported go produces
+rem  an extension-less binary and Windows reports
+rem  "executable file not found in %PATH%".
+set GOOS=
+set GOARCH=
+rem  Clear GOROOT so the go.exe on PATH (1.27.3) derives its own root; leaving a
+rem  1.10.8 root behind makes its own compile report per-package "-lang" errors.
+set GOROOT=
+rem  server is a go.mod module (gin/ent/...): modules must stay enabled so deps
+rem  are fetched (clearing GO111MODULE leaves it at the default "on" for
+rem  modules); GOPATH only holds the module cache and the source tree.
+if not defined GOPATH set GOPATH=%USERPROFILE%\go
+set GO111MODULE=
+
+cd /d "%~dp0"
+go run "%~dp0deploy-server.go" %*
+
+rem  Capture the exit code before pause: pause resets errorlevel to 0.
+set RC=%ERRORLEVEL%
+pause
+exit /b %RC%
