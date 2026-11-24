@@ -131,3 +131,6 @@ publish/publish-gui-go/.mygo/
 publish/publish-gui-go/artifacts/
 publish/publish-gui-go/publish-gui-go.exe
 publish/publish-gui-go/logs/
+tools/
+.gopath_review/
+deploy_known_hosts
