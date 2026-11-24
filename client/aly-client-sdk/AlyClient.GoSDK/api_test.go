@@ -102,6 +102,28 @@ func TestDownloadPartialFailure(t *testing.T) {
 	}
 }
 
+// TestDownloadLegacyProgressFailLine 复审 P2 回归（旧客户端 × 新 SDK 兼容）：
+// 旧版 aly-client（协议 1.1.0）的 FAIL 进度行 isSuccess=false。SDK 必须把它
+// 当普通进度行继续读，最终从终态行拿到聚合结果；不得见失败行就 Kill/返回
+// （Kill 会让终态行丢失，不 Kill 直接 return 会让旧客户端 stdout 管道写满挂死）。
+func TestDownloadLegacyProgressFailLine(t *testing.T) {
+	fake := fakeClient(t)
+	useScenario(t, "download_legacy_progress_fail")
+	ctx, cancel := withTimeout(t)
+	defer cancel()
+
+	response := NewAPI(fake).DownloadUpdate(ctx, DownloadOptions{})
+	if response.IsSuccess {
+		t.Fatal("legacy partial failure should be NG")
+	}
+	if !strings.Contains(response.ErrorMsg, "1 个文件失败") {
+		t.Fatalf("errorMsg = %q（终态行应在 FAIL 进度行之后被读到）", response.ErrorMsg)
+	}
+	if response.Reason() != DownloadFailReasonPartialFailure {
+		t.Fatalf("reason = %q", response.Reason())
+	}
+}
+
 func TestDownloadStall(t *testing.T) {
 	fake := fakeClient(t)
 	useScenario(t, "download_stall")
