@@ -2,7 +2,7 @@
 
 > 唯一权威的测试用例文档。后续功能改动，按本文档逐条回归即可。
 >
-> - 文档版本：**v15**（Go 驱动 · 全量合并 · 单条自洽 · 总数 150）
+> - 文档版本：**v15.1**（Go 驱动 · 全量合并 · 单条自洽 · 总数 150）
 > - 更新日期：2026-11-24
 > - 被测版本：2026-11-24 工作区（Go 发布 GUI 与更新检查快速失败改动）
 > - 改写：**104**（被测对象仅为 publish-gui-go：真实 helper-process、业务编排与 CLI 冒烟，
@@ -337,11 +337,11 @@ func TestCase01(t *testing.T) {
 | 64 | 并发下载 | server | 只读无锁、均成功 |
 | 65 | 路径穿越防护 | server | 越界路径 404、中间态 404 |
 | 66 | config init | publish | shared.json + publish.json |
-| 67 | status 分类 | publish | 增/删/改正确分类 |
-| 68 | add --all | publish | 全部暂存 |
-| 69 | push 发布 | publish | 上传 + 发布 + 清单固化 |
-| 70 | push 后 status 干净 | publish | 无差异 |
-| 71 | push --dry-run | publish | 不实际上传、版本不变 |
+| 67 | status 分类 | publish | 增/改正确分类；服务端独有文件被 diff 忽略（2026-11-23 移除删除同步） |
+| 68 | add --all | publish | 暂存 new+modified（不再含 deleted） |
+| 69 | push 发布 | publish | 上传 + 发布 + 清单固化（不再调 delete_file） |
+| 70 | push 后 status 干净 | publish | 无差异；本地删除不再同步、服务端文件保留 |
+| 71 | push --dry-run | publish | 不实际上传、版本不变；json 信封带 dryRun:true |
 | 72 | 缺 message 拒绝 | publish | 参数校验 |
 | 73 | 项目不存在 | publish | 报错不崩溃 |
 | 74 | 重复/倒退版本号 | publish | 拒绝 |
@@ -366,7 +366,7 @@ func TestCase01(t *testing.T) {
 | 93 | 已是最新不死循环 | sdk | 复位 None |
 | 94 | Launch 拉 UI 进程 | sdk | 返回 OK、退出码可读 |
 | 95 | server ↔ client 全链路 | 集成 | 发布→更新→回滚闭环 |
-| 96 | 删除同步联动 | 集成 | 服务端删 → 客户端删 |
+| 96 | 删除同步联动 | 集成 | 服务端删 → 客户端删（客户端清单差集口径，不受发布端删除同步移除影响） |
 | 97 | 推送后立即可见 | 集成 | 缓存失效链路 |
 | 98 | 待应用被新版本覆盖 | 集成 | 重下新版、旧目录不干扰 |
 | 99 | client ↔ UI 全链路 | 集成 | check→download→apply→重启 |
@@ -412,10 +412,10 @@ func TestCase01(t *testing.T) {
 | 139 | 上传项目名路径穿越 | server | 六种非法名全拒、合法名不受影响 |
 | 140 | 分片合并边界 | server | totalChunks 0/负数/超上界/空分片/缺片 |
 | 141 | 软删除项目 | server | 查询全部拒绝、磁盘保留 |
-| 142 | delete_file | server | 删除、幂等、穿越拒绝 |
+| 142 | delete_file | server | 接口已下线（404）且文件保留（2026-11-23 移除删除同步） |
 | 143 | force_update 三态 | publish | 不传保持、set/clear、互斥拒绝 |
 | 144 | CLI 参数校验 | publish | limit 边界、缺项目名不写配置 |
-| 145 | 删除同步全链路 | 集成 | deleted 暂存、push 删除、清单一致 |
+| 145 | 删除同步已移除 | 集成 | 本地删除不产生差异、服务端文件保留、modified 链路正常 |
 | 146 | 后置脚本失败 | client | 不写完成 marker、可重试 |
 | 147 | ignore 规则边界 | publish | 嵌套、大小写、glob |
 | 148 | add 路径归一 | publish | 同文件不重复、不跨 staged/unstaged |
@@ -4057,7 +4057,10 @@ tc.True(t, e.PublishCLI(t, ws, "config", "init", "--project", "tc-app").IsSucces
 
 ---
 
-### 用例 67 — status 分类（新增 / 修改 / 删除 / 未暂存 / 已暂存）
+### 用例 67 — status 分类（新增 / 修改 / 未暂存 / 已暂存；服务端独有文件忽略）
+
+> **2026-11-23 契约变更（d17cc69）**：删除同步已移除。「服务端有、本地没有」的文件
+> 不再标 `deleted`，diff 直接忽略——服务端文件永久保留，status 里不再出现 deleted 分类。
 
 **前置条件**
 
@@ -4065,7 +4068,7 @@ tc.True(t, e.PublishCLI(t, ws, "config", "init", "--project", "tc-app").IsSucces
 2. 工作区有同名文件，但状态各异：
    - `a.txt` 内容相同（无差异）
    - `b.txt` 内容不同（modified）
-   - `c.txt` 本地删除（deleted）
+   - `c.txt` 本地删除（服务端独有 → **被 diff 忽略**）
    - `d.txt` 本地新增（new）
 
 ```go
@@ -4079,14 +4082,14 @@ tc.True(t, e.Publish(t, proj, "1.0.0", []string{"首版"}, "", "").IsSuccess, "�
 ws := e.NewPublishWS(t, proj, "pub-status")
 tc.WriteText(t, filepath.Join(ws, "a.txt"), "a.txt-v1")   // 相同
 tc.WriteText(t, filepath.Join(ws, "b.txt"), "b.txt-v2")   // 修改
-// c.txt 不建 → 本地缺失
+// c.txt 不建 → 服务端独有，新契约下不算差异
 tc.WriteText(t, filepath.Join(ws, "d.txt"), "d.txt-new")  // 新增
 ```
 
 **步骤**
 
 1. `status --json`。
-2. 校验 `unstaged` 数组里四项分类都正确。
+2. 校验 `unstaged` 数组分类正确。
 
 ```go
 r := e.PublishCLI(t, ws, "status")
@@ -4098,39 +4101,43 @@ for _, it := range sd.Unstaged { byPath[it.RelativePath] = it }
 
 tc.Eq(t, "a.txt 无差异", func() bool { _, ok := byPath["a.txt"]; return ok }(), false)
 tc.Eq(t, "b.txt 状态", byPath["b.txt"].Status, "modified")
-tc.Eq(t, "c.txt 状态", byPath["c.txt"].Status, "deleted")
+_, cIn := byPath["c.txt"]
+tc.Eq(t, "c.txt（服务端独有）不再出现在差异里", cIn, false)
 tc.Eq(t, "d.txt 状态", byPath["d.txt"].Status, "new")
-tc.Eq(t, "unstaged 条数", len(sd.Unstaged), 3)
+tc.Eq(t, "unstaged 条数", len(sd.Unstaged), 2)
 ```
 
 **期望结果**
 
 - `a.txt` 内容与 MD5 都一致 → **不出现**在差异列表（不噪音）
 - `b.txt` → `modified`（带 `serverMd5` 与 `localMd5`，两者不同）
-- `c.txt` → `deleted`（服务端有、本地无）
+- `c.txt`（服务端独有）→ **不出现**（删除同步已移除，不算差异）
 - `d.txt` → `new`（本地有、服务端无，`serverMd5` 为空）
-- 条数恰为 3（不是 4）
+- 条数恰为 2（b/d，不含 `.updator/shared.json` 时）
 - `status` 会顺手把"与服务端一致"的文件从暂存区摘掉（自动同步）
 
 **失败判定**
 
 - `a.txt` 出现在列表里 → FAIL（MD5 比较口径错，`status` 永远不干净）
 - `d.txt` 被标 `modified` → FAIL（`serverMd5` 空串被当成"内容不同"）
-- `c.txt` 不出现 → FAIL（删除同步失效，服务端旧文件永远删不掉）
+- `c.txt` 仍以 `deleted` 出现 → FAIL（删除同步没删干净，与新契约不符）
 
-执行结果：`PASS（用例 67，4.67s）`
+执行结果：`PASS（用例 67，13.76s，2026-11-24 契约改写后复跑）`
 
 ---
 
-### 用例 68 — add --all 全部暂存（含 deleted）
+### 用例 68 — add --all 全部暂存（new + modified）
+
+> **2026-11-23 契约变更（d17cc69）**：diff 不再产生 deleted，`add --all` 只暂存
+> new + modified + `.updator/shared.json`；服务端独有的文件不参与。
 
 **前置条件**
 
-1. 承用例 67 的现场（3 项差异）。
+1. 承用例 67 的现场（2 项差异 + `.updator/shared.json`）。
 2. 暂存区为空。
 
 ```go
-// 承上：b.txt modified / c.txt deleted / d.txt new
+// 承上：b.txt modified / d.txt new（c.txt 服务端独有被忽略）
 ```
 
 **步骤**
@@ -4150,7 +4157,7 @@ staged := tc.Data[[]tc.StagedItem](t, st)
 names := []string{}
 for _, s := range staged { names = append(names, s.RelativePath) }
 sort.Strings(names)
-tc.Eq(t, "暂存内容", strings.Join(names, ","), "b.txt,c.txt,d.txt")
+tc.Eq(t, "暂存内容", strings.Join(names, ","), ".updator/shared.json,b.txt,d.txt")
 
 sd := tc.Data[tc.StatusData](t, e.PublishCLI(t, ws, "status"))
 tc.Eq(t, "unstaged 应为空", len(sd.Unstaged), 0)
@@ -4159,26 +4166,30 @@ tc.Eq(t, "staged 为 3", len(sd.Staged), 3)
 
 **期望结果**
 
-- `add --all` 的 data 为 `{"added":3}`
+- `add --all` 的 data 为 `{"added":3}`（b.txt modified + d.txt new + `.updator/shared.json` new）
 - 暂存区含 3 条，每条带 `relativePath` / `md5` / `status`（`status` 记录加入时的分类）
+- 服务端独有的 `c.txt` 不在暂存区
 - `status` 里 `unstaged` 归零、`staged` 为 3
-- **`deleted` 也会被暂存**（删除也是一种变更，必须在暂存区里，push 后服务端才知道要删）
 
 **失败判定**
 
-- `added` = 2 → FAIL（`deleted` 没被暂存，push 后服务端旧文件残留）
+- 暂存区出现 `c.txt`（deleted）→ FAIL（与新契约不符，旧 CLI 行为残留）
 - 暂存区 md5 为空 → FAIL（`push` 前的 MD5 复核失去基线）
 - `status` 里同一条既在 staged 又在 unstaged → FAIL（`mergeStagedIntoStatusData` 的过滤失效，`push` 会重复上传）
 
-执行结果：`PASS（用例 68，5.92s）`
+执行结果：`PASS（用例 68，14.61s，2026-11-24 契约改写后复跑）`
 
 ---
 
-### 用例 69 — push 发布（上传 + 删除同步 + 创建版本 + 清单固化）
+### 用例 69 — push 发布（上传 + 创建版本 + 清单固化；不再同步删除）
+
+> **2026-11-23 契约变更（d17cc69）**：push 只上传暂存条目并建版本，不再调用
+> `file/delete_file`（该接口已一并移除）。服务端独有文件永久保留，
+> 清单按发布后磁盘实际内容固化（含服务端独有的 c.txt）。
 
 **前置条件**
 
-1. 承用例 68（3 项已暂存）。
+1. 承用例 68（3 项已暂存：b.txt / d.txt / `.updator/shared.json`）。
 2. 服务端最新版本是 `1.0.0`。
 
 **步骤**
@@ -4198,18 +4209,18 @@ tc.Eq(t, "日志条数", len(logs), 2)
 tc.Eq(t, "最新日志版本", logs[0].Version, "1.1.0")
 tc.Eq(t, "最新日志内容数", len(logs[0].Logs), 2)
 
-// 服务端文件集合：b.txt 内容更新、c.txt 被删、d.txt 新增
+// 服务端文件集合：b.txt 内容更新、d.txt 新增、c.txt 保留（服务端独有）
 fs := e.GetAllFiles(t, proj)
 var rels []string
 for _, f := range fs { rels = append(rels, f.FileRelativePath) }
 sort.Strings(rels)
-tc.Eq(t, "服务端文件集合", strings.Join(rels, ","), "a.txt,b.txt,d.txt")
-tc.True(t, !tc.Exists(filepath.Join(e.DataDir(proj), "c.txt")), "c.txt 应被删除")
+tc.Eq(t, "服务端文件集合", strings.Join(rels, ","), "a.txt,b.txt,c.txt,d.txt")
+tc.True(t, tc.Exists(filepath.Join(e.DataDir(proj), "c.txt")), "c.txt 应保留")
 
 // 清单与文件集合一致
 m := e.GetManifest(t, proj)
 sort.Strings(m.Files)
-tc.Eq(t, "清单", strings.Join(m.Files, ","), "a.txt,b.txt,d.txt")
+tc.Eq(t, "清单", strings.Join(m.Files, ","), "a.txt,b.txt,c.txt,d.txt")
 
 // 暂存区被清空
 staged := tc.Data[[]tc.StagedItem](t, e.PublishCLI(t, ws, "staged"))
@@ -4220,22 +4231,26 @@ tc.Eq(t, "推送成功后暂存区应清空", len(staged), 0)
 
 - `push` 成功，服务端版本 = `1.1.0`
 - 两条 `--message` 都落库（顺序与入参一致）
-- `b.txt` 内容更新、`c.txt` **物理删除**、`d.txt` 落地
-- 清单 = `{a.txt, b.txt, d.txt}`（发布时固化）
+- `b.txt` 内容更新、`d.txt` 落地、`c.txt` **保留**（删除同步已移除）
+- 清单 = `{a.txt, b.txt, c.txt, d.txt}`（发布时按磁盘实际内容固化）
 - 暂存区被清空（`push` 成功才清，失败要保留）
 
 **失败判定**
 
-- `c.txt` 仍在服务端 → FAIL（**最严重**：删除暂存了但 push 没执行删除）
+- `c.txt` 被删 → FAIL（删除同步应已移除，出现说明旧 CLI 在调已下线的接口）
 - 暂存区没清空 → FAIL（下次 push 会重复上传同样文件，版本号又得往前推）
-- 清单与文件集合不一致 → FAIL（客户端删除同步会删错）
+- 清单与文件集合不一致 → FAIL（客户端差量删除会删错）
 - 日志只有一条 → FAIL（多次 `--message` 只取了最后一个）
 
-执行结果：`PASS（用例 69，4.94s）`
+执行结果：`PASS（用例 69，14.14s，2026-11-24 契约改写后复跑）`
 
 ---
 
-### 用例 70 — push 后 status 干净 + 删除同步
+### 用例 70 — push 后 status 干净 + 本地删除不再同步（新契约）
+
+> **2026-11-23 契约变更（d17cc69）**：push 后 status 收敛为干净；本地删除文件
+> **不再**产生 deleted 差异——服务端文件保留，status 保持干净，
+> 不产生可暂存/可推送的删除条目（防误删只存在于服务端的资源）。
 
 **前置条件**
 
@@ -4243,31 +4258,43 @@ tc.Eq(t, "推送成功后暂存区应清空", len(staged), 0)
 
 **步骤**
 
-1. 立刻 `status`。
-2. 校验 `unstaged` 与 `staged` 都为空。
+1. 立刻 `status`，校验 `unstaged` 与 `staged` 都为空。
+2. 本地删掉 `d.txt`，再 `status` / `add --all`：应无差异、无可暂存项、服务端文件保留。
+3. 改 `b.txt` 走完整 modified 链路，确认忽略逻辑没有误伤正常更新。
 
 ```go
 sd := tc.Data[tc.StatusData](t, e.PublishCLI(t, ws, "status"))
 tc.Eq(t, "unstaged 应为空", len(sd.Unstaged), 0)
 tc.Eq(t, "staged 应为空", len(sd.Staged), 0)
+
+os.Remove(filepath.Join(ws, "d.txt"))
+sd2 := tc.Data[tc.StatusData](t, e.PublishCLI(t, ws, "status"))
+tc.Eq(t, "本地删除后 status 仍干净", len(sd2.Unstaged), 0)
+tc.Eq(t, "add --all 无可暂存项", tc.Data[tc.AddData](t, e.PublishCLI(t, ws, "add", "--all")).Added, 0)
+tc.True(t, tc.Exists(filepath.Join(e.DataDir(proj), "d.txt")), "服务端 d.txt 保留")
 ```
 
 **期望结果**
 
-- `unstaged` = 0、`staged` = 0（工作区与服务端完全一致）
-- 无任何 `modified` / `new` / `deleted` 残留
-- 若 `c.txt` 是本地删除的，push 后它**不该**再出现（服务端也没了，本地也没了 → 无差异）
+- push 后 `unstaged` = 0、`staged` = 0（工作区与服务端完全一致）
+- 本地删除后 status 仍干净（服务端独有文件被 diff 忽略）、服务端文件保留
+- modified 链路照常可用（改 b.txt → add → push 成功且服务端更新）
 
 **失败判定**
 
-- 仍有差异 → FAIL（**这条最能暴露口径不一致**：常见原因是 MD5 计算口径不同（大小写/编码），或 ignore 规则发布端与服务端不一致）
-- `deleted` 残留 → FAIL（服务端删了但本地还在？说明本地文件被重建，或 push 未真正删除）
+- 本地删除后出现 `deleted` 差异或可暂存条目 → FAIL（与新契约不符）
+- 服务端 `d.txt` 被删 → FAIL（误删只存在于服务端的资源，正是新契约要防的）
+- modified 链路失效 → FAIL（diff 忽略逻辑误伤正常更新）
 
-执行结果：`PASS（用例 70，5.87s）`
+执行结果：`PASS（用例 70，15.16s，2026-11-24 契约改写后复跑）`
 
 ---
 
 ### 用例 71 — push --dry-run 不实际推送
+
+> **2026-11-23 修复（审查轻微①）**：`--dry-run` 在 `--json` 下也输出一行成功信封
+> （`data.dryRun="true"`），GUI 的 `parsePushLine` 依赖看到结果行，否则误报
+> `publish.noResult`。人读文本 `[DRY RUN]` 预告保留。
 
 **前置条件**
 
@@ -4277,15 +4304,20 @@ tc.Eq(t, "staged 应为空", len(sd.Staged), 0)
 **步骤**
 
 1. `push --version 1.2.0 --message "x" --dry-run`。
-2. 校验服务端**完全没变**。
-3. 校验暂存区**保留**。
+2. 校验 json 信封带 `dryRun:true`。
+3. 校验服务端**完全没变**。
+4. 校验暂存区**保留**。
 
 ```go
 tc.WriteText(t, filepath.Join(ws, "b.txt"), "b.txt-v3")
 tc.True(t, e.PublishCLI(t, ws, "add", "b.txt").IsSuccess, "add b.txt")
 
-r := e.PublishCLI(t, ws, "push", "--version", "1.2.0", "--message", "x", "--dry-run")
-tc.True(t, r.IsSuccess, "dry-run 失败: %s", r.ErrorMsg)
+raw := e.PublishCLIRaw(t, ws, "push", "--version", "1.2.0", "--message", "x", "--dry-run")
+tc.Contains(t, raw.Stdout, "[DRY RUN]", "人读预告")
+tc.Contains(t, raw.Stdout, `"dryRun":"true"`, "json 信封（GUI parsePushLine 依赖）")
+dry := tc.Data[tc.PushDryData](t, e.PublishCLI(t, ws, "push",
+    "--version", "1.2.0", "--message", "x", "--dry-run"))
+tc.Eq(t, "dry-run 信封的版本", dry.Version, "1.2.0")
 
 tc.Eq(t, "服务端版本未变", e.GetProject(t, proj).Version, "1.1.0")
 tc.Eq(t, "服务端 b.txt 未变",
@@ -4296,18 +4328,18 @@ tc.Eq(t, "暂存区应保留", len(staged), 1)
 
 **期望结果**
 
-- `isSuccess:true`（dry-run 本身是成功的）
+- `isSuccess:true`，data 含 `dryRun:"true"` / `version` / `files`
 - 服务端版本仍 `1.1.0`，文件内容未变，无新 change_log
 - 暂存区保留（dry-run 不清暂存）
-- 人类可读模式会打印"将上传以下文件"清单（`--json` 下走 JSON）
+- 人读模式打印 `[DRY RUN] 将上传以下文件` 预告
 
 **失败判定**
 
 - 服务端版本变了 → FAIL（**严重**：dry-run 竟然真发布，CI 里很危险）
+- `--json` 下没有结果信封 → FAIL（GUI 会误报 noResult）
 - 暂存区被清 → FAIL（dry-run 后用户必须重新 `add`）
-- dry-run 也做了 MD5 复核 → 属预期（复核是只读的，应执行）
 
-执行结果：`PASS（用例 71，5.41s）`
+执行结果：`PASS（用例 71，13.72s，2026-11-24 契约改写后复跑）`
 
 ---
 
@@ -8240,7 +8272,10 @@ linuxui 同构测试交叉编译验证（CI Ubuntu 实跑）。
 
 ---
 
-### 用例 142 — delete_file 删除同步（B6）
+### 用例 142 — delete_file 接口已下线（B6，2026-11-23 契约变更）
+
+> **2026-11-23 契约变更（d17cc69）**：删除同步按反馈移除，服务端同步删掉了
+> `/api/file/delete_file` 路由与控制器——防止旧 CLI 误删只存在于服务端的资源。
 
 **前置条件**
 
@@ -8248,23 +8283,20 @@ linuxui 同构测试交叉编译验证（CI Ubuntu 实跑）。
 
 **步骤**
 
-1. `delete_file` 删 `sub/drop.txt`；
-2. 重复删除同一文件（幂等性）；
-3. 检查 `keep.txt` 不受影响；
-4. 以 `../../aly.db`、`../other/x`、`..\..\win.ini` 调删除。
+1. 向 `/api/file/delete_file` 发表单请求（`projectName` + `relativeFileName`）；
+2. 检查 `sub/drop.txt` 与 `keep.txt` 仍在磁盘上。
 
 **期望结果**
 
-- 首次删除生效；重复删除仍返回成功（幂等）；
-- 同项目其它文件不受影响；穿越路径全部拒绝。
+- 接口返回 HTTP 404（gin 默认 404 页，非 JSON 信封）；
+- `drop.txt` 与 `keep.txt` 原样保留。
 
 **失败判定**
 
-- 文件仍在 → FAIL（删除未生效）；
-- 重复删除报错 → FAIL（不幂等，重试会卡住发布）；
-- 穿越路径被接受 → FAIL。
+- 接口仍返回 JSON 信封（非 404）→ FAIL（路由没删干净，旧 CLI 仍可误删）；
+- 文件被删 → FAIL。
 
-执行结果：**PASS（12.66s）**。
+执行结果：**PASS（18.17s，2026-11-24 契约改写后复跑）**。
 
 ---
 
@@ -8321,7 +8353,10 @@ linuxui 同构测试交叉编译验证（CI Ubuntu 实跑）。
 
 ---
 
-### 用例 145 — 删除同步全链路（B6）
+### 用例 145 — 删除同步已移除：本地删除不产生差异（B6，2026-11-23 契约变更）
+
+> **2026-11-23 契约变更（d17cc69）**：diff 忽略服务端独有文件（服务端保留、不算差异），
+> status 不再输出 deleted；push 忽略历史遗留的 deleted 暂存条目。
 
 **前提条件**
 
@@ -8330,20 +8365,21 @@ linuxui 同构测试交叉编译验证（CI Ubuntu 实跑）。
 **步骤**
 
 1. 删本地 `a.txt`；
-2. `add --all` 后 `status`，查 `a.txt` 是否以 `deleted` 状态进暂存区；
-3. `push 1.2.0`；
+2. `add --all` 后 `status`：应无差异、无可暂存条目；
+3. 改 `b.txt` 走 modified 链路推 1.2.0；
 4. 查服务端磁盘与发布清单。
 
 **期望结果**
 
-- `a.txt` 以 deleted 进暂存；push 后服务端 `a.txt` 消失、`b.txt` 保留，清单不再含 `a.txt`。
+- 本地删除后 status 仍干净（`a.txt` 服务端独有被 diff 忽略）、`add --all` 暂存 0 项；
+- push 1.2.0 后服务端 `a.txt` **保留**、`b.txt` 更新，清单仍含 `a.txt`（按磁盘实际内容固化）。
 
 **失败判定**
 
-- `add --all` 跳过 deleted → FAIL（无法进暂存）；
-- push 后文件仍在 → FAIL（删除未同步）。
+- status 出现 `deleted` 或暂存区出现 `a.txt` → FAIL（与新契约不符）；
+- 服务端 `a.txt` 被删 → FAIL（误删只存在于服务端的资源，正是移除删除同步要防的）。
 
-执行结果：**PASS（19.18s）**。
+执行结果：**PASS（13.38s，2026-11-24 契约改写后复跑）**。
 
 ---
 
@@ -8759,6 +8795,26 @@ linuxui 同构测试交叉编译验证（CI Ubuntu 实跑）。
 
 > 这些不是"文档写错、实现没跟上"，而是**修复改变了契约**：用例断言随实现一起更新，
 > 并用 2026-11-12 的全量回归（见附录 B）作为证据。
+
+### C.10 2026-11-23 移除删除同步导致的契约变更（用例期望已同步，d17cc69）
+
+发布端「删除同步」按反馈整体移除：根因是 diff 把「服务端有、本地没有」的文件标为
+deleted，GUI 走 add 路径时按 modified 去 Hash 本地已不存在的文件导致暂存失败；
+且 push 会调 delete_file，存在**误删只存在于服务端资源**的风险。变更后口径：
+
+| 用例 | 变更前口径 | 变更后口径 | 原因 |
+| ---- | ---------- | ---------- | ---- |
+| 67 | 服务端独有文件在 status 里标 `deleted` | diff **忽略**服务端独有文件，status 不再出现 deleted 分类 | 删除同步移除；服务端文件永久保留 |
+| 68 | `add --all` 也暂存 deleted | `add --all` 只暂存 new + modified（+ `.updator/shared.json`） | 同上 |
+| 69 | push 对 deleted 条目调 `file/delete_file`，服务端文件被删、清单排除 | push 只上传并建版本；服务端独有文件**保留**，清单按发布后磁盘实际内容固化（仍含 c.txt） | 同上 |
+| 70 | 本地删除 → deleted 差异 → add → push 删除服务端文件 | 本地删除不产生差异、不进暂存区、服务端文件保留；modified 链路不受影响 | 同上 |
+| 71 | `--dry-run` 在 `--json` 下一行 JSON 都不输出 | `--dry-run` 在 `--json` 下也输出一行成功信封（`data.dryRun="true"`） | 审查轻微①：GUI 的 parsePushLine 依赖结果行，否则误报 publish.noResult |
+| 142 | `file/delete_file` 存在：删除生效、幂等、拒绝穿越 | 接口已**下线**（HTTP 404），文件保留 | 服务端同步移除路由与控制器，防旧 CLI 误删 |
+| 145 | 删除同步全链路（deleted 暂存 → push 删除 → 清单排除） | 本地删除不产生差异、服务端文件保留、modified 链路正常 | 同上 |
+
+> 客户端（aly-client）的清单差集删除口径**不受影响**：它是按「上一版清单 ∖ 本版清单」
+> 在客户端本地执行的，与发布端是否提供 delete_file 无关。用例 96 已确认仍 PASS。
+> 2026-11-24 定点复跑：67–71、142、145 共 7 条全部 PASS（13.4s–18.2s）。
 
 > 用例都"PASS"不代表产品没问题——有些用例是**按真实（有缺陷的）行为**写成记录式断言。
 > 这张表把这类条目集中起来，方便跟产品侧对齐优先级。修掉一项，就把对应用例改成严格断言并在此标注。

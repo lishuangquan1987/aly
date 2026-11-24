@@ -68,16 +68,16 @@ func jsonUnmarshalBytes(b []byte, v interface{}) bool {
 }
 
 // ────────────────────────────────────────────────────────────────
-// 用例 67 — status 分类（new / modified / deleted / unchanged）
+// 用例 67 — status 分类（new / modified / unchanged）
 //
 // 重要口径一（易踩）：`.updator/shared.json` **必须参与扫描并上传**——
 // 它是随版本下发的客户端配置（scanner.go 明确只排除 `.updator/publish.json`
 // 与 `.updator/staging/`）。所以工作区里这个文件永远算一个 `new`。
 // 下面的断言把业务文件与 .updator/shared.json 分开计算。
 //
-// 重要口径二（2026-11-12 修复后）：`deleted` 出现在 status 里，`add --all` **也收**
-// ——删除同步（B6）补齐了 server 的 file/delete_file 接口与 push 的删除调用，
-// 所以 deleted 不再是"推不动"的残留；它暂存后由 push 执行删除。
+// 重要口径二（2026-11-23 契约变更，d17cc69）：**删除同步已移除**。
+// 「服务端有、本地没有」的文件不再标 `deleted`，diff 直接忽略——
+// 服务端文件永久保留，status 里也不会再出现 deleted 分类。
 // ────────────────────────────────────────────────────────────────
 func TestCase67(t *testing.T) {
 	e := NewEnv(t, true, 0)
@@ -91,7 +91,7 @@ func TestCase67(t *testing.T) {
 	ws := e.NewPublishWS(t, proj, "pub-status")
 	WriteText(t, filepath.Join(ws, "a.txt"), "a.txt-v1") // 相同
 	WriteText(t, filepath.Join(ws, "b.txt"), "b.txt-v2") // 修改
-	// c.txt 不建 → 本地缺失（服务端有 = deleted）
+	// c.txt 不建 → 本地缺失（服务端独有，新契约下不算差异）
 	WriteText(t, filepath.Join(ws, "d.txt"), "d.txt-new") // 新增
 
 	r := e.PublishCLI(t, ws, "status")
@@ -106,9 +106,12 @@ func TestCase67(t *testing.T) {
 	_, aIn := byPath["a.txt"]
 	Eq(t, "a.txt 无差异不应出现", aIn, false)
 	Eq(t, "b.txt 状态", byPath["b.txt"].Status, "modified")
-	Eq(t, "c.txt 状态", byPath["c.txt"].Status, "deleted")
+	// 2026-11-23 契约：服务端独有文件被 diff 忽略，不再标 deleted
+	_, cIn := byPath["c.txt"]
+	Eq(t, "c.txt（服务端独有）不再出现在差异里", cIn, false)
 	Eq(t, "d.txt 状态", byPath["d.txt"].Status, "new")
-	Eq(t, "unstaged 条数（3 个业务差异 + .updator/shared.json）", len(sd.Unstaged), 4)
+	// 2 个业务差异（b/d）+ .updator/shared.json（new）；c.txt 已被忽略
+	Eq(t, "unstaged 条数（2 个业务差异 + .updator/shared.json）", len(sd.Unstaged), 3)
 	Eq(t, ".updator/shared.json 也在差异里（随版本下发的客户端配置）",
 		byPath[".updator/shared.json"].Status, "new")
 
@@ -127,13 +130,12 @@ func TestCase67(t *testing.T) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// 用例 68 — add --all 暂存【全部变更，含 deleted】
+// 用例 68 — add --all 暂存【全部变更（new + modified）】
 //
-// 2026-11-12 修复后口径（B6 删除同步）：server 已补 `file/delete_file` 接口、
-// push 对 `deleted` 条目调用删除。所以：
-//     add --all 暂存 new + modified + **deleted** + `.updator/shared.json`
-// 本例：b.txt(modified) + d.txt(new) + c.txt(deleted) + .updator/shared.json = 4 项，
-// 暂存后 unstaged 清空（不再有"推不动的 deleted 残留"）。
+// 2026-11-23 契约变更（d17cc69）：删除同步已移除，diff 不再产生 deleted
+// 分类，add --all 只暂存 new + modified + `.updator/shared.json`。
+// 本例：b.txt(modified) + d.txt(new) + .updator/shared.json(new) = 3 项，
+// 暂存后 unstaged 清空；服务端独有的 c.txt 不参与。
 // ────────────────────────────────────────────────────────────────
 func TestCase68(t *testing.T) {
 	e := NewEnv(t, true, 0)
@@ -151,8 +153,8 @@ func TestCase68(t *testing.T) {
 
 	r := e.PublishCLI(t, ws, "add", "--all")
 	True(t, r.IsSuccess, "add --all 失败: %s", r.ErrorMsg)
-	// 4 业务变更（b.txt modified、d.txt new、c.txt deleted）+ .updator/shared.json（new）
-	Eq(t, "暂存数量（b + d + c(deleted) + .updator/shared.json）", RespData[AddData](t, r).Added, 4)
+	// 3 项（b.txt modified、d.txt new、.updator/shared.json new）；c.txt 服务端独有被忽略
+	Eq(t, "暂存数量（b + d + .updator/shared.json）", RespData[AddData](t, r).Added, 3)
 
 	st := e.PublishCLI(t, ws, "staged")
 	True(t, st.IsSuccess, "staged 失败: %s", st.ErrorMsg)
@@ -162,8 +164,8 @@ func TestCase68(t *testing.T) {
 		names = append(names, s.RelativePath)
 	}
 	sort.Strings(names)
-	Eq(t, "暂存内容（含 c.txt：deleted 也暂存）",
-		strings.Join(names, ","), ".updator/shared.json,b.txt,c.txt,d.txt")
+	Eq(t, "暂存内容（不含服务端独有的 c.txt）",
+		strings.Join(names, ","), ".updator/shared.json,b.txt,d.txt")
 
 	byPath := map[string]StagedItem{}
 	for _, s := range staged {
@@ -171,23 +173,20 @@ func TestCase68(t *testing.T) {
 	}
 	Eq(t, "b.txt 暂存 status 记录加入时的分类", byPath["b.txt"].Status, "modified")
 	Eq(t, "d.txt 暂存 status 记录加入时的分类", byPath["d.txt"].Status, "new")
-	Eq(t, "c.txt 暂存 status 为 deleted（删除同步）", byPath["c.txt"].Status, "deleted")
 	True(t, byPath["b.txt"].LocalMd5 != "", "暂存项必须带 md5（push 前复核的基线）")
-	Eq(t, "deleted 项没有 md5（本地文件已不存在）", byPath["c.txt"].LocalMd5, "")
 
-	// 暂存后 status：staged 为 4，unstaged 清空
+	// 暂存后 status：staged 为 3，unstaged 清空
 	sd := RespData[StatusData](t, e.PublishCLI(t, ws, "status"))
-	Eq(t, "staged 为 4", len(sd.Staged), 4)
-	Eq(t, "unstaged 清空（deleted 也能暂存）", len(sd.Unstaged), 0)
+	Eq(t, "staged 为 3", len(sd.Staged), 3)
+	Eq(t, "unstaged 清空", len(sd.Unstaged), 0)
 }
 
 // ────────────────────────────────────────────────────────────────
-// 用例 69 — push 发布（上传 + 删除同步 + 建版本 + 清单固化）
+// 用例 69 — push 发布（上传 + 建版本 + 清单固化）
 //
-// 2026-11-12 修复后口径（B6/M21）：push 除上传外，对暂存区里 `deleted` 的条目
-// 调用 `file/delete_file`，所以服务端会真的删掉 c.txt；随后 PublishVersion 按
-// **删除后的磁盘内容**固化清单，客户端据清单做差集删除。
-// 本例断言：c.txt 已不在服务端、清单里也不含 c.txt。
+// 2026-11-23 契约变更（d17cc69）：push 只上传暂存条目并建版本，不再调用
+// file/delete_file（该接口已随删除同步一并移除）。服务端独有文件永久保留。
+// 本例断言：上传的 b/d 落地、c.txt 保留、清单按发布后磁盘内容固化。
 // ────────────────────────────────────────────────────────────────
 func TestCase69(t *testing.T) {
 	e := NewEnv(t, true, 0)
@@ -209,8 +208,8 @@ func TestCase69(t *testing.T) {
 	True(t, r.IsSuccess, "push 失败: %s", r.ErrorMsg)
 	pd := RespData[PushData](t, r)
 	Eq(t, "push 回报的版本", pd.Version, "1.1.0")
-	// staged 4 项（b.txt / d.txt / c.txt(deleted) / .updator/shared.json）
-	Eq(t, "push 回报的文件数（含 1 个删除）", pd.Files, "4")
+	// staged 3 项（b.txt / d.txt / .updator/shared.json）
+	Eq(t, "push 回报的文件数", pd.Files, "3")
 
 	Eq(t, "服务端版本", e.GetProject(t, proj).Version, "1.1.0")
 	logs := e.ChangeLogs(t, proj)
@@ -220,10 +219,11 @@ func TestCase69(t *testing.T) {
 	Eq(t, "第一条 message", logs[0].Logs[0], "更新说明")
 	Eq(t, "第二条 message", logs[0].Logs[1], "第二条")
 
-	// 服务端文件集合：b 更新、d 新增、c **已被删除同步删掉**
-	want := ".updator/shared.json,a.txt,b.txt,d.txt"
+	// 服务端文件集合：b 更新、d 新增；c.txt 服务端独有，**保留**
+	want := ".updator/shared.json,a.txt,b.txt,c.txt,d.txt"
 	Eq(t, "服务端文件集合", strings.Join(relsOf(e.GetAllFiles(t, proj)), ","), want)
-	Eq(t, "c.txt 已被删除（删除同步生效）", Exists(filepath.Join(e.DataDir(proj), "c.txt")), false)
+	Eq(t, "c.txt 保留（删除同步已移除，服务端文件不再被删）",
+		Exists(filepath.Join(e.DataDir(proj), "c.txt")), true)
 	Eq(t, "b.txt 已更新",
 		strings.TrimSpace(ReadText(filepath.Join(e.DataDir(proj), "b.txt"))), "b.txt-v2")
 	Eq(t, "d.txt 已落地",
@@ -240,10 +240,11 @@ func TestCase69(t *testing.T) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// 用例 70 — push 后 status 干净 + 本地删除可同步到服务端
+// 用例 70 — push 后 status 干净 + 本地删除不再同步（新契约）
 //
-// 2026-11-12 修复后口径（B6 删除同步）：本地删文件 → status 出现 deleted →
-// add --all 可暂存 → push 调 file/delete_file 真的删服务端。全程 status 可收敛为干净。
+// 2026-11-23 契约变更（d17cc69）：push 后 status 收敛为干净；本地删除文件
+// **不再**产生 deleted 差异——服务端文件保留，status 保持干净，不产生
+// 可暂存/可推送的删除条目（防误删只存在于服务端的资源）。
 // ────────────────────────────────────────────────────────────────
 func TestCase70(t *testing.T) {
 	e := NewEnv(t, true, 0)
@@ -262,9 +263,9 @@ func TestCase70(t *testing.T) {
 	True(t, e.PublishCLI(t, ws, "add", "--all").IsSuccess, "add --all")
 	True(t, e.PublishCLI(t, ws, "push", "--version", "1.1.0", "--message", "更新").IsSuccess, "push")
 
-	// 推完立刻 status：所有**参与发布**的文件都应与服务端一致
+	// 推完立刻 status：所有参与发布的文件都应与服务端一致
 	sd := RespData[StatusData](t, e.PublishCLI(t, ws, "status"))
-	Eq(t, "unstaged 应为空（无非 deleted 残留）", len(sd.Unstaged), 0)
+	Eq(t, "unstaged 应为空", len(sd.Unstaged), 0)
 	Eq(t, "staged 应为空", len(sd.Staged), 0)
 
 	// unchanged 里应能看到 a.txt / b.txt / d.txt / .updator/shared.json
@@ -276,34 +277,34 @@ func TestCase70(t *testing.T) {
 	Eq(t, "已上传文件全部归入 unchanged",
 		strings.Join(unchanged, ","), ".updator/shared.json,a.txt,b.txt,d.txt")
 
-	// ── 本地删了文件：删除必须能同步到服务端 ──
+	// ── 本地删了文件：新契约下不再同步删除 ──
 	if err := os.Remove(filepath.Join(ws, "d.txt")); err != nil {
 		t.Fatalf("删本地 d.txt 失败: %v", err)
 	}
 	sd2 := RespData[StatusData](t, e.PublishCLI(t, ws, "status"))
-	Eq(t, "本地删除后 unstaged 出现 1 项", len(sd2.Unstaged), 1)
-	Eq(t, "它就是 d.txt 且为 deleted",
-		sd2.Unstaged[0].RelativePath+"/"+sd2.Unstaged[0].Status, "d.txt/deleted")
-	Eq(t, "add --all 可暂存 deleted（删除同步的第一步）",
-		RespData[AddData](t, e.PublishCLI(t, ws, "add", "--all")).Added, 1)
-	True(t, e.PublishCLI(t, ws, "push", "--version", "1.2.0", "--message", "删 d").IsSuccess, "push 删除")
-	Eq(t, "服务端 d.txt 已被删除同步删掉",
-		Exists(filepath.Join(e.DataDir(proj), "d.txt")), false)
+	// d.txt 服务端独有 → diff 忽略，status 仍干净；服务端文件保留
+	Eq(t, "本地删除后 status 仍干净（服务端独有文件不算差异）", len(sd2.Unstaged), 0)
+	Eq(t, "staged 仍为空", len(sd2.Staged), 0)
+	Eq(t, "add --all 无可暂存项", RespData[AddData](t, e.PublishCLI(t, ws, "add", "--all")).Added, 0)
+	Eq(t, "服务端 d.txt 保留", Exists(filepath.Join(e.DataDir(proj), "d.txt")), true)
 
-	// 删除同步后 status 必须回到干净（deleted 不再常驻）
+	// 服务端 b.txt 照常可更新（确认忽略逻辑没有误伤 modified 链路）
+	WriteText(t, filepath.Join(ws, "b.txt"), "b.txt-v3")
 	sd3 := RespData[StatusData](t, e.PublishCLI(t, ws, "status"))
-	Eq(t, "删除同步后 unstaged 清空", len(sd3.Unstaged), 0)
-	Eq(t, "删除同步后 staged 清空", len(sd3.Staged), 0)
+	Eq(t, "modified 仍正常出现", sd3.Unstaged[0].RelativePath+"/"+sd3.Unstaged[0].Status, "b.txt/modified")
+	True(t, e.PublishCLI(t, ws, "add", "b.txt").IsSuccess, "add b.txt")
+	True(t, e.PublishCLI(t, ws, "push", "--version", "1.2.0", "--message", "b3").IsSuccess, "push b3")
+	Eq(t, "服务端 b.txt 已更新",
+		strings.TrimSpace(ReadText(filepath.Join(e.DataDir(proj), "b.txt"))), "b.txt-v3")
 }
 
 // ────────────────────────────────────────────────────────────────
 // 用例 71 — push --dry-run 不实际推送
 //
-// 重要口径（文档原期望是错的）：`--dry-run` 在 `--json` 下**一行 JSON 都不输出**。
-// push.go 的分支是：
-//     if isDryRun { printHumanLn("[DRY RUN] 将上传…"); ...; return false }
-// 直接跳过 outputResult，只打人读文本。所以只能用原始输出断 stdout 含
-// `[DRY RUN]`，靠"服务端零变化"来证明真的没推。
+// 2026-11-23 修复（审查轻微①）：`--dry-run` 在 `--json` 下也输出一行
+// 成功信封（data.dryRun="true"），GUI 的 parsePushLine 依赖看到结果行，
+// 否则误报 "publish.noResult"。人读文本 [DRY RUN] 预告保留。
+// 用"服务端零变化"证明真的没推。
 // ────────────────────────────────────────────────────────────────
 func TestCase71(t *testing.T) {
 	e := NewEnv(t, true, 0)
@@ -320,11 +321,14 @@ func TestCase71(t *testing.T) {
 	beforeLogs := len(e.ChangeLogs(t, proj))
 
 	raw := e.PublishCLIRaw(t, ws, "push", "--version", "1.2.0", "--message", "x", "--dry-run")
-	Contains(t, raw.Stdout, "[DRY RUN]", "dry-run 应打印人读预告（json 模式下确实没有 JSON）")
+	Contains(t, raw.Stdout, "[DRY RUN]", "dry-run 应打印人读预告")
 	Contains(t, raw.Stdout, "b.txt", "预告应列出待上传文件")
 	Contains(t, raw.Stdout, "1.2.0", "预告应列出待创建版本")
-	Eq(t, "dry-run 不产生 JSON 结果行（真实行为）",
-		strings.Count(raw.Stdout, `"isSuccess"`), 0)
+	// 修复后：--json 下也有一行结果信封，且 data.dryRun=true
+	Contains(t, raw.Stdout, `"dryRun":"true"`, "json 模式必须输出 dryRun 信封（GUI parsePushLine 依赖）")
+	dry := RespData[PushDryData](t, e.PublishCLI(t, ws, "push", "--version", "1.2.0", "--message", "x", "--dry-run"))
+	Eq(t, "dry-run 信封的版本", dry.Version, "1.2.0")
+	Eq(t, "dry-run 信封的文件数", dry.Files, "1")
 
 	// 服务端零变化
 	Eq(t, "服务端版本未变", e.GetProject(t, proj).Version, before)

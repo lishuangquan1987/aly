@@ -1588,6 +1588,14 @@ type PushData struct {
 	Files   string `json:"files"`
 }
 
+// PushDryData 是 `push --dry-run` 在 json 模式下的 data：
+// {"dryRun":"true","version":"1.2.0","files":"1"}（files 同为字符串）。
+type PushDryData struct {
+	DryRun  string `json:"dryRun"`
+	Version string `json:"version"`
+	Files   string `json:"files"`
+}
+
 // PublishCLIAt 与 PublishCLI 相同，但可指定 server 地址（用例 75 验不可达）。
 func (e *Env) PublishCLIAt(t *testing.T, ws, server string, args ...string) Resp {
 	t.Helper()
