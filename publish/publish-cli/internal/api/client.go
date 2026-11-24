@@ -237,13 +237,71 @@ func (c *Client) GetServerInfo() ([]models.ServerOSInfo, error) {
 	return info, nil
 }
 
-// PublishVersion 发布新版本
-func (c *Client) PublishVersion(req models.PublishVersionRequest) (*models.ProjectChangeLog, error) {
-	var log models.ProjectChangeLog
-	if err := c.post("/api/project/publish_version", req, &log); err != nil {
+// PublishVersionResult publish_version 的解析结果。
+//
+// 新服务端 data 结构为 {"changelog": {...}, "manifestWritten": bool}；
+// 老服务端 data 直接就是 changelog 对象。PublishVersion 两种都吃。
+type PublishVersionResult struct {
+	Changelog *models.ProjectChangeLog
+	// ManifestWritten 仅新服务端会上报。老服务端不报时置 true（老服务端
+	// 同样会写清单，只是没把结果回传），避免对老服务端误报警告。
+	ManifestWritten bool
+}
+
+// PublishVersion 发布新版本。
+//
+// 审查 P3-a：服务端为诊断"DB 已是新版本但发布清单没写成"（客户端会因此漏删
+// 文件）把响应 data 从 changelog 改成了 {changelog, manifestWritten}，
+// 而 CLI 仍按旧结构把整个 data 反序列化成 changelog —— 新服务端下
+// Changelog 会拿到一个全零对象，且 manifestWritten 被彻底丢弃，
+// 发布端永远看不到清单写失败。这里按新结构解析并保留老服务端兼容。
+func (c *Client) PublishVersion(req models.PublishVersionRequest) (*PublishVersionResult, error) {
+	var raw json.RawMessage
+	if err := c.post("/api/project/publish_version", req, &raw); err != nil {
 		return nil, err
 	}
-	return &log, nil
+	return parsePublishVersionData(raw)
+}
+
+// publishVersionData 新服务端 data 结构。ManifestWritten 用指针以区分
+// "字段缺失（老服务端）" 与 "字段为 false（写清单失败）"。
+type publishVersionData struct {
+	Changelog       *models.ProjectChangeLog `json:"changelog"`
+	ManifestWritten *bool                    `json:"manifestWritten"`
+}
+
+// parsePublishVersionData 兼容解析 publish_version 的 data。
+func parsePublishVersionData(raw json.RawMessage) (*PublishVersionResult, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		// 服务端没回 data（例如被中间层裁掉）：不当作失败，
+		// 只是拿不到 changelog，清单状态按未知=正常处理。
+		return &PublishVersionResult{ManifestWritten: true}, nil
+	}
+
+	var wrapped publishVersionData
+	if err := json.Unmarshal(trimmed, &wrapped); err != nil {
+		return nil, fmt.Errorf("解析 publish_version 响应失败: %w", err)
+	}
+
+	// 新服务端：带 changelog 字段（或显式 manifestWritten）。
+	if wrapped.Changelog != nil || wrapped.ManifestWritten != nil {
+		res := &PublishVersionResult{
+			Changelog:       wrapped.Changelog,
+			ManifestWritten: true,
+		}
+		if wrapped.ManifestWritten != nil {
+			res.ManifestWritten = *wrapped.ManifestWritten
+		}
+		return res, nil
+	}
+
+	// 老服务端：data 本身就是 changelog。
+	var log models.ProjectChangeLog
+	if err := json.Unmarshal(trimmed, &log); err != nil {
+		return nil, fmt.Errorf("解析 publish_version 响应失败: %w", err)
+	}
+	return &PublishVersionResult{Changelog: &log, ManifestWritten: true}, nil
 }
 
 // ─── File API ──────────────────────────────────────────────────────────

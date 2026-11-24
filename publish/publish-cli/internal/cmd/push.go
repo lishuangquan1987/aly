@@ -93,7 +93,7 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 		// GUI 的 parsePushLine 依赖看到结果行，否则误报 "publish.noResult"。
 		if jsonOutput {
 			printOutput(true, "", map[string]string{
-				"dryRun": "true",
+				"dryRun":  "true",
 				"version": version,
 				"files":   fmt.Sprintf("%d", len(filesToUpload)),
 			})
@@ -183,7 +183,7 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 
 	// 阶段 2：创建版本记录
 	timeStr := time.Now().Format("2006-01-02 15:04:05")
-	_, err := client.PublishVersion(models.PublishVersionRequest{
+	pubResult, err := client.PublishVersion(models.PublishVersionRequest{
 		ProjectName:            cfg.Shared.ProjectName,
 		Version:                version,
 		Logs:                   messages,
@@ -204,10 +204,23 @@ func pushFiles(cfg RuntimeConfig, version string, messages []string, filesToUplo
 		return false
 	}
 
+	// 审查 P3-a：服务端把"发布清单写失败"如实带回（manifestWritten=false）。
+	// 清单是客户端 download_update 删文件的唯一依据——清单没写成时，
+	// 版本记录已经是新的、但客户端仍按上一版清单删除，会漏删发布端已删的文件。
+	// 服务端不阻断发布（写失败只降级为"不删"），所以这里也不返错，
+	// 但必须让发布者看到：再推一次同版本号即可触发补写。
+	manifestOK := pubResult == nil || pubResult.ManifestWritten
+	if !manifestOK {
+		fmt.Fprintf(os.Stderr, "Warning: 版本 %s 已发布，但服务端写入发布清单失败：\n"+
+			"  客户端将按上一版清单执行删除，可能残留发布端已删除的文件。\n"+
+			"  请重新 push 同一版本号（或修复服务端数据目录权限）以补写清单。\n", version)
+	}
+
 	if jsonOutput {
-		printOutput(true, "", map[string]string{
-			"version": version,
-			"files":   fmt.Sprintf("%d", len(filesToUpload)),
+		printOutput(true, "", map[string]interface{}{
+			"version":         version,
+			"files":           fmt.Sprintf("%d", len(filesToUpload)),
+			"manifestWritten": manifestOK,
 		})
 		printProgressDone()
 		return true
