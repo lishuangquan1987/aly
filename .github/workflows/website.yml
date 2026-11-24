@@ -43,6 +43,8 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: website/pnpm-lock.yaml
+      - name: Docs structure check
+        run: python3 website/scripts/check_docs_parity.py
       # 文档防漂移：二进制自述清单 vs 网站文档，缺一条即构建失败。
       # CLI 走 `aly-publish docs`，服务端走 `-print-routes`，见 check_docs.py。
       - uses: actions/setup-go@v5

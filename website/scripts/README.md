@@ -44,9 +44,25 @@ python website/scripts/capture_screenshots.py --keep
 
 ## 文档防漂移 / Docs drift check
 
-\\powershell
+```powershell
 python website/scripts/check_docs.py
-\
-比对两个二进制的自述清单与网站文档：\ly-publish docs\（全部命令与参数）与
-\server -print-routes\（全部路由）。缺一条即退出码 1；确属不写入文档的项加到
-同目录 \docs-whitelist.txt\。网站 CI 在部署前自动执行本检查（需要 Go 工具链）。
+```
+
+比对两个二进制的自述清单与网站文档：`aly-publish docs`（全部命令与参数）与
+`server -print-routes`（全部路由）。缺一条即退出码 1；确属不写入文档的项加到同目录
+`docs-whitelist.txt`。网站 CI 在部署前自动执行本检查（需要 Go 工具链）。
+
+## 文档结构检查 / Docs structure check
+
+```powershell
+python website/scripts/check_docs_parity.py
+```
+
+两件事，任一失败即退出码 1：
+
+- **中英页面对齐**：`website/docs/**/*.md` 与 `website/en/docs/**/*.md` 的相对路径集合必须完全一致，
+  每个页面必须有 frontmatter `title`；
+- **起步页零原理**：`docs/start/*.md` 与 `en/docs/start/*.md` 不得出现原理类词汇
+  （状态机 / 原子替换 / 架构、state machine / atomic / architecture），且必须带 `✅` 完成态与至少一个代码块。
+
+CI 在 `check_docs.py` 之前执行本检查（纯 Python，无额外依赖）。
