@@ -13,8 +13,8 @@ import (
 	"aly/server/internal/utils"
 	"aly/server/models"
 
-	"golang.org/x/sync/singleflight"
 	"github.com/utils-go/ngo/io/directory"
+	"golang.org/x/sync/singleflight"
 )
 
 // 按项目缓存 get_all_files 的文件列表（含每个文件的 md5/sha256），
@@ -230,9 +230,11 @@ func buildFileInfos(workDir string, stamps []fileStamp) ([]models.FileInfo, erro
 	return fileInfos, nil
 }
 
-// fingerprintKey 把指纹列表拼成 short key（数量+首个/末个样例 + 长度哈希近似），
-// 仅用于 singleflight 去重键——相同 key 不会错误共享不同结果（结果仍由传入的
-// stamps 决定，key 冲突只会导致多算一次，不会少算）。
+// fingerprintKey 把指纹列表拼成 short key（数量+首个/末个样例），
+// 仅用于 singleflight 去重键。注意：key 碰撞的后果是两个不同指纹的并发
+// 重建共享同一次执行——后到者拿到按先到者 stamps 算出的结果直接返回（错配）。
+// 碰撞需要"数量+首路径+末路径+末文件大小+mtime 纳秒"全部相同，概率趋近于零，
+// 且错配结果仍会被下一次指纹比对纠正，可接受；要彻底消除应改用全量指纹哈希。
 func fingerprintKey(stamps []fileStamp) string {
 	var sb strings.Builder
 	sb.WriteString(strconv.Itoa(len(stamps)))

@@ -1,10 +1,10 @@
 package controllers
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"aly/server/internal/service"
 	"aly/server/models"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -50,8 +50,8 @@ func UploadFile(ctx *gin.Context) {
 	}
 
 	var fileInfo struct {
-		ProjectName string `form:"projectName"`
-		RelativeFileName    string `form:"relativeFileName"`
+		ProjectName      string `form:"projectName"`
+		RelativeFileName string `form:"relativeFileName"`
 	}
 	if err := ctx.ShouldBind(&fileInfo); err != nil {
 		ctx.JSON(200, models.NGWithError(err))
@@ -111,8 +111,12 @@ func UploadFile(ctx *gin.Context) {
 	defer fileLock.Unlock()
 
 	// 临时名唯一化：不再共用固定 ".merging" 名，从根上消除共享临时名冲突。
-	// 后缀保留 ".merging" 以便 IsUploadTempPath/SweepStaleUploadTemps 识别。
-	tmp, err := os.CreateTemp(filepath.Dir(absFileName), filepath.Base(absFileName)+".merging-")
+	// pattern 用 "{name}.*.merging"（* 在中间）：生成的名字形如 "X.123456789.merging"，
+	// 随机数插在中间、".merging" 后缀保留——IsUploadTempPath 与
+	// SweepStaleUploadTemps 均按 HasSuffix(".merging") 识别，崩溃残留才能被
+	// 正确跳过下发/清扫（复审修复：原 pattern "X.merging-" 生成 "X.merging-123"，
+	// 两个识别规则都匹配不到，残留会被当正式文件下发且永不清扫）。
+	tmp, err := os.CreateTemp(filepath.Dir(absFileName), filepath.Base(absFileName)+".*.merging")
 	if err != nil {
 		ctx.JSON(200, models.NG(fmt.Sprintf("create temp upload file error:%v", err)))
 		return

@@ -124,7 +124,7 @@ func checkDiskSpace(ctx *gin.Context, workDir string, needBytes int64) bool {
 //
 // 审查修复（轻微⑥/⑦）：额外拒绝尾分隔符（"sub/" 经 Clean 会落到目录路径，
 // 造成后续同名目录/文件冲突与报错混乱）与路径段内的 Windows 保留设备名/尾点尾空格
-//（"CON"、"a/aux" 会在 Windows 上生成异常路径）。
+// （"CON"、"a/aux" 会在 Windows 上生成异常路径）。
 //
 // 返回 ok=false 时已向客户端写出 NG 响应。
 func resolveUploadTarget(ctx *gin.Context, projectName, relativeFileName string) (workDir, absFileName string, ok bool) {

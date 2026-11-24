@@ -43,11 +43,17 @@ func InitRouter(r *gin.Engine) {
 		{
 			serverGroup.GET("info", controllers.ServerInfo)
 		}
-		fileGroup := group.Group("file", jsonGroup)
+		// fileGroup 只挂写期限，不挂 1MB MaxBytes（复审 P1 修复）：
+		// upload_file/upload_chunk 的 body 是 multipart 文件载荷（上限 1GB/64MB），
+		// 由 handler 自身的 ContentLength 早退 + MaxBytesReader 分层限制；
+		// 挂 1MB 组级限制会把 ALY_CHUNK_SIZE 调大后的分片全部截断，
+		// 且 MaxBytesError 被误报为"文件过大: 上限 1GB"（报的上限与真实限制不符）。
+		fileGroup := group.Group("file", json)
 		{
 			fileGroup.POST("upload_file", controllers.UploadFile)
 			fileGroup.POST("upload_chunk", controllers.UploadChunk)
-			fileGroup.POST("upload_chunk_complete", controllers.UploadChunkComplete)
+			// upload_chunk_complete 的 body 只有表单字段（通常 <1KB），挂 1MB 防滥用。
+			fileGroup.POST("upload_chunk_complete", controllers.UploadChunkComplete, jsonMaxBytes)
 			fileGroup.GET("get_all_files/:projectName", controllers.GetAllFilesByProjectName)
 			fileGroup.GET("get_release_manifest/:projectName", controllers.GetReleaseManifest)
 		}

@@ -106,10 +106,10 @@ func setupManifestTestDir(t *testing.T) string {
 	files := []string{
 		"app.exe",
 		"sub/lib.dll",
-		"normal.tmp",          // 普通文件：不在中间态拦截范围，应入清单
-		"probe.merging",       // 上传中间态：拦截
-		"dir.chunks/aa.bin",   // 中间态目录：整目录拦截
-		"deep/x.merging",      // 深层中间态：按段拦截
+		"normal.tmp",             // 普通文件：不在中间态拦截范围，应入清单
+		"probe.merging",          // 上传中间态：拦截
+		"dir.chunks/aa.bin",      // 中间态目录：整目录拦截
+		"deep/x.merging",         // 深层中间态：按段拦截
 		".updator_manifest.json", // 清单自身：排除
 	}
 	for _, rel := range files {
@@ -183,6 +183,11 @@ func TestIsUploadTempPath(t *testing.T) {
 		"a/b/deep.chunks/x",
 		"a/b/deep.merging",
 		"a.chunks", // 整个路径就是中间态目录
+		// 复审 P2 回归：UploadFile 的 CreateTemp pattern "{name}.*.merging"
+		// 生成的唯一化临时名（随机数在中间），崩溃残留必须被拦截，
+		// 否则半截上传文件会被 get_all_files 当正式文件下发。
+		"app.123456789.merging",
+		"a/b/big.bin.42.merging",
 	}
 	for _, p := range block {
 		if !IsUploadTempPath(p) {

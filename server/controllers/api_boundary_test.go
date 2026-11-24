@@ -196,12 +196,12 @@ func TestProjectNameValidationBoundaries(t *testing.T) {
 	}{
 		{".", false},
 		{"..", false},
-		{"...", false}, // 尾部点是 Windows 无法稳定创建的形态（被静默剥离）
-		{"a.b", true},  // 含点在中间合法
-		{"abc.", false},// 尾部点 Windows 会被剥掉
-		{"abc ", false},// 尾部空格同上
-		{"CON", false}, // Windows 保留名
-		{"nul", false}, // 大小写不敏感
+		{"...", false},  // 尾部点是 Windows 无法稳定创建的形态（被静默剥离）
+		{"a.b", true},   // 含点在中间合法
+		{"abc.", false}, // 尾部点 Windows 会被剥掉
+		{"abc ", false}, // 尾部空格同上
+		{"CON", false},  // Windows 保留名
+		{"nul", false},  // 大小写不敏感
 		{"normal-name", true},
 		{"中文项目", true},
 		{strings.Repeat("a", 64), true},
@@ -595,4 +595,130 @@ func TestChangeLogsAreLimited(t *testing.T) {
 
 func urlEscape(s string) string {
 	return url.QueryEscape(s)
+}
+
+// ────────────────────────────────────────────────────────────────
+// 复审 P1 回归：fileGroup 不得挂 1MB MaxBytes（上传路由曾被组级限制截断）
+// ────────────────────────────────────────────────────────────────
+
+// TestUploadAbove1MBNotTruncatedByGroupMiddleware 回归复审 P1：
+// routers.go 曾把 JSON 组的 1MB MaxBytesReader 挂到 fileGroup，
+// ALY_CHUNK_SIZE 调大后的 multipart 上传（>1MB）被组级中间件截断，
+// 且 MaxBytesError 被误报为"文件过大: 上限 1GB"。上传路由必须只挂写期限。
+func TestUploadAbove1MBNotTruncatedByGroupMiddleware(t *testing.T) {
+	r := newRouter()
+	const proj = "tc-p1-bigdirect"
+	mustCreateProject(t, r, proj)
+
+	// 2MB 载荷：直传路径上限 1GB，组级 1MB 限制必须不生效
+	payload := bytes.Repeat([]byte("A"), 2<<20)
+	resp := uploadFile(t, r, proj, "big/direct.bin", payload)
+	if !resp.IsSuccess {
+		t.Fatalf("2MB 直传被拒（组级 1MB 限制仍在截断上传？）: %s", resp.ErrorMsg)
+	}
+	got, err := os.ReadFile(filepath.Join(dataDirOf(t, proj), "big", "direct.bin"))
+	if err != nil {
+		t.Fatalf("读取直传结果失败: %v", err)
+	}
+	if !bytes.Equal(got, payload) {
+		t.Fatalf("直传内容不完整: got %d bytes, want %d", len(got), len(payload))
+	}
+
+	// 2MB 单分片：分片路径上限 64MB，同样不得被组级限制截断
+	const proj2 = "tc-p1-bigchunk"
+	mustCreateProject(t, r, proj2)
+	prepareChunks(t, r, proj2, "big/chunked.bin", [][]byte{payload})
+	resp = completeChunks(t, r, proj2, "big/chunked.bin", 1, md5Hex(payload))
+	if !resp.IsSuccess {
+		t.Fatalf("2MB 单分片合并被拒: %s", resp.ErrorMsg)
+	}
+	got, err = os.ReadFile(filepath.Join(dataDirOf(t, proj2), "big", "chunked.bin"))
+	if err != nil {
+		t.Fatalf("读取分片合并结果失败: %v", err)
+	}
+	if !bytes.Equal(got, payload) {
+		t.Fatalf("分片合并内容不完整: got %d bytes, want %d", len(got), len(payload))
+	}
+}
+
+// TestChunkCompleteRejectsOversizedBody 复审 P1 修复的对称面：
+// upload_chunk_complete 的 body 只有表单字段，单独挂 1MB MaxBytes 防滥用
+// （正常请求 <1KB，超限只可能是攻击或客户端 bug）。
+func TestChunkCompleteRejectsOversizedBody(t *testing.T) {
+	r := newRouter()
+	const proj = "tc-p1-completecap"
+	const rel = "cap.bin"
+	mustCreateProject(t, r, proj)
+
+	// 2MB 的无关表单字段（正常请求不可能这么大）
+	req := httptest.NewRequest(http.MethodPost, "/api/file/upload_chunk_complete", strings.NewReader(strings.Repeat("x", 2<<20)))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var resp models.CommonResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("响应不是合法 JSON 信封: %v; body=%.100s", err, w.Body.String())
+	}
+	if resp.IsSuccess {
+		t.Fatal("2MB 的 complete 请求体应被 1MB 上限拒绝")
+	}
+}
+
+// TestUploadTempFileRecognizedAsIntermediate 复审 P2 回归：
+// UploadFile 的 CreateTemp 临时名必须是 "{name}.{rand}.merging" 形态
+// （HasSuffix(".merging") 可识别）。旧 pattern "{name}.merging-{rand}" 生成的
+// "X.merging-123" 两个识别规则都匹配不到：崩溃残留会被 get_all_files 当正式
+// 文件下发，且 SweepStaleUploadTemps 永不清扫。
+func TestUploadTempFileRecognizedAsIntermediate(t *testing.T) {
+	r := newRouter()
+	const proj = "tc-p2-temptag"
+	const rel = "sub/keep.bin"
+	mustCreateProject(t, r, proj)
+
+	// 预置一个"崩溃残留"：与 UploadFile 生成形态一致的唯一化临时名
+	workDir := dataDirOf(t, proj)
+	staleTmp := filepath.Join(workDir, "sub", "keep.bin.987654321.merging")
+	if err := os.MkdirAll(filepath.Dir(staleTmp), 0o755); err != nil {
+		t.Fatalf("建目录失败: %v", err)
+	}
+	if err := os.WriteFile(staleTmp, []byte("half-written garbage"), 0o644); err != nil {
+		t.Fatalf("写残留文件失败: %v", err)
+	}
+
+	// get_all_files 不得把残留当正式文件下发
+	resp := doJSON(t, r, http.MethodGet, "/api/file/get_all_files/"+proj, nil)
+	if !resp.IsSuccess {
+		t.Fatalf("get_all_files 失败: %s", resp.ErrorMsg)
+	}
+	raw, _ := json.Marshal(resp.Data)
+	if strings.Contains(string(raw), "keep.bin.987654321.merging") {
+		t.Fatalf("中间态残留 %s 被当正式文件下发: %s", staleTmp, raw)
+	}
+	// 正式文件此时还不存在，列表不应包含任何 keep.bin
+	if strings.Contains(string(raw), "keep.bin") {
+		t.Fatalf("正式文件不应存在却被下发: %s", raw)
+	}
+
+	// 直传同一目标：与残留同名前缀，不得互相干扰；成功后正式文件可见
+	payload := []byte("final-content")
+	if resp := uploadFile(t, r, proj, rel, payload); !resp.IsSuccess {
+		t.Fatalf("直传失败: %s", resp.ErrorMsg)
+	}
+	got, err := os.ReadFile(filepath.Join(workDir, "sub", "keep.bin"))
+	if err != nil || string(got) != "final-content" {
+		t.Fatalf("直传结果错误: content=%q err=%v", got, err)
+	}
+	// 残留仍在（未超清扫时限），但 get_all_files 依旧不得下发它
+	resp = doJSON(t, r, http.MethodGet, "/api/file/get_all_files/"+proj, nil)
+	if !resp.IsSuccess {
+		t.Fatalf("二次 get_all_files 失败: %s", resp.ErrorMsg)
+	}
+	raw, _ = json.Marshal(resp.Data)
+	if strings.Contains(string(raw), "keep.bin.987654321.merging") {
+		t.Fatalf("直传后残留仍被下发: %s", raw)
+	}
+	if !strings.Contains(string(raw), "sub/keep.bin") {
+		t.Fatalf("正式文件未出现在列表: %s", raw)
+	}
 }

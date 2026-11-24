@@ -77,7 +77,7 @@ func ValidateProjectName(name string) error {
 }
 
 // ValidateFileNameSegment 校验上传文件相对路径的单个路径段
-//（code-review-2026-11-23 轻微⑥）：与 ValidateProjectName 同口径——
+// （code-review-2026-11-23 轻微⑥）：与 ValidateProjectName 同口径——
 // 拒绝 Windows 保留设备名、尾点/尾空格（Windows 会静默剥离）、空段与 "."/".."。
 // 段内不允许出现分隔符（调用方已按 "/" 切段）。
 func ValidateFileNameSegment(seg string) error {
@@ -341,8 +341,8 @@ func PublishVersion(ctx context.Context, projectName string, version string, log
 	}
 
 	return models.OKWithData(map[string]interface{}{
-		"changelog":        changelog,
-		"manifestWritten":  manifestWritten,
+		"changelog":       changelog,
+		"manifestWritten": manifestWritten,
 	})
 }
 
