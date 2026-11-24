@@ -411,14 +411,14 @@ func DownloadUpdate() {
 		func(relPath string) bool {
 			return config.ShouldSkipFolder(relPath, fc.Shared.UnCopyFolders)
 		}); err != nil {
-			util.AppendToLog(logDir(), "download.log",
-				fmt.Sprintf("materialize unchanged files %s -> %s failed: %v", fc.MainFolder, targetDir, err))
-			printProgressFail(total, total, "materialize", 0,
-				fmt.Sprintf("materialize unchanged files failed: %v", err))
-			printOutput(false, fmt.Sprintf("materialize unchanged files failed: %v", err),
-				&model.DownloadUpdateData{Version: newVersion, Reason: model.DownloadFailReasonMaterializeFailed})
-			return
-		}
+		util.AppendToLog(logDir(), "download.log",
+			fmt.Sprintf("materialize unchanged files %s -> %s failed: %v", fc.MainFolder, targetDir, err))
+		printProgressFail(total, total, "materialize", 0,
+			fmt.Sprintf("materialize unchanged files failed: %v", err))
+		printOutput(false, fmt.Sprintf("materialize unchanged files failed: %v", err),
+			&model.DownloadUpdateData{Version: newVersion, Reason: model.DownloadFailReasonMaterializeFailed})
+		return
+	}
 	util.AppendToLog(logDir(), "download.log",
 		fmt.Sprintf("materialized unchanged files %s -> %s (apply will only rename)", fc.MainFolder, targetDir))
 
