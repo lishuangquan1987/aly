@@ -1,9 +1,9 @@
 ---
-title: GUI Front-End aly-client-ui
+title: Update window (aly-client-ui)
 description: The Windows and Linux forms of aly-client-ui, its launch modes, the -lang and -project-name parameters, single-instance forwarding, and the -finish-self-update finisher flow.
 ---
 
-# GUI Front-End aly-client-ui
+# Update Window (aly-client-ui)
 
 `aly-client-ui` is an optional graphical front-end for `aly-client`. It implements no update logic of its own; instead it launches the updater subprocess from the same directory (or from the main program directory), parses its JSON output, and shows check results, download progress and prompt buttons in a topmost card in the bottom-right corner of the screen.
 
@@ -198,4 +198,4 @@ aly-client-ui.exe -finish-self-update ^
 
 ## Related Pages
 
-[Command reference](/en/docs/commands) · [Configuration reference](/en/docs/client/config) · [Updater overview](/en/docs/client/) · [Self-update design](/en/docs/self-update)
+[Command reference](/en/docs/commands) · [Configuration reference](/en/docs/client/config) · [Host integration](/en/docs/client/) · [Self-update design](/en/docs/self-update) · [Troubleshooting](/en/docs/troubleshooting)

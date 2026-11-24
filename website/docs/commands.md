@@ -5,7 +5,7 @@ description: aly-client 更新器九个命令的完整参考，包含用途、�
 
 # aly-client 命令参考
 
-`aly-client` 是部署在终端 `UpdateFolder` 下的更新器。一次进程执行一个子命令，所有结果以 JSON 写到 stdout。本页按命令列出签名、参数、返回字段、示例与副作用；部署布局和宿主接入见[更新器概览](/docs/client/)，配置文件字段见[配置参考](/docs/client/config)。
+`aly-client` 是部署在终端 `UpdateFolder` 下的更新器。一次进程执行一个子命令，所有结果以 JSON 写到 stdout。本页按命令列出签名、参数、返回字段、示例与副作用；三步跑通见[接入更新器](/docs/start/integrate)，宿主侧约束见[宿主集成](/docs/client/)，配置文件字段见[配置参考](/docs/client/config)。
 
 下文示例统一使用 Windows 文件名 `aly-client.exe`。Linux 下可执行文件名为 `aly-client`，子命令与参数完全一致。
 
@@ -216,7 +216,7 @@ aly-client.exe check_update [--url <server_url>] [--project-name <project_name>]
 
 ### 相关命令
 
-[`download_update`](#download-update) · [`apply_update`](#apply-update) · [更新器概览](/docs/client/) · [配置参考](/docs/client/config)
+[`download_update`](#download-update) · [`apply_update`](#apply-update) · [宿主集成](/docs/client/) · [配置参考](/docs/client/config)
 
 ## check_diff
 
@@ -629,7 +629,7 @@ aly-client.exe list_rollback_versions [--main-exe-path <relative_path>]
 
 ### 相关命令
 
-[`rollback`](#rollback) · [`clean`](#clean) · [更新器概览](/docs/client/#安全与回滚)
+[`rollback`](#rollback) · [`clean`](#clean) · [宿主集成](/docs/client/#回滚)
 
 ## rollback
 
@@ -718,7 +718,7 @@ aly-client.exe rollback --version <target_version> [--main-exe-path <relative_pa
 
 ### 相关命令
 
-[`list_rollback_versions`](#list-rollback-versions) · [`apply_update`](#apply-update) · [`clean`](#clean) · [更新器概览](/docs/client/#安全与回滚)
+[`list_rollback_versions`](#list-rollback-versions) · [`apply_update`](#apply-update) · [`clean`](#clean) · [宿主集成](/docs/client/#回滚)
 
 ## clean
 

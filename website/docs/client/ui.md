@@ -1,9 +1,9 @@
 ---
-title: 图形前端 aly-client-ui
+title: 更新窗口（aly-client-ui）
 description: aly-client-ui 的 Windows/Linux 形态、启动模式、-lang 与 -project-name 参数、单实例转发以及 -finish-self-update 收尾流程。
 ---
 
-# 图形前端 aly-client-ui
+# 更新窗口（aly-client-ui）
 
 `aly-client-ui` 是 `aly-client` 的可选图形前端。它不实现更新逻辑，而是启动同目录（或主程序目录）的更新器子进程，解析其 JSON 输出，在屏幕右下角用置顶卡片展示检查结果、下载进度和询问按钮。
 
@@ -198,4 +198,4 @@ aly-client-ui.exe -finish-self-update ^
 
 ## 相关页面
 
-[命令参考](/docs/commands) · [配置参考](/docs/client/config) · [更新器概览](/docs/client/) · [自更新设计](/docs/self-update)
+[命令参考](/docs/commands) · [配置参考](/docs/client/config) · [宿主集成](/docs/client/) · [自更新设计](/docs/self-update) · [排障](/docs/troubleshooting)

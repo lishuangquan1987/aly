@@ -1,9 +1,9 @@
 ---
-title: Client Configuration Reference
+title: Configuration files
 description: Fields, locations, effective timing and precedence for client.json, .updator/shared.json, version.json, publish.json and the staging file.
 ---
 
-# Client Configuration Reference
+# Configuration Files
 
 The client involves three core configuration files, plus two publisher-side local files that are easy to confuse with them:
 
@@ -15,7 +15,7 @@ The client involves three core configuration files, plus two publisher-side loca
 | `publish.json` | Publish directory `.updator/publish.json` | Exclusive to `aly-publish` | No; local, not uploaded |
 | `staged-files.json` | Publish directory `.updator/staging/staged-files.json` | Exclusive to `aly-publish` | No; local staging |
 
-`UpdateFolder` is the directory holding the updater and `MainFolder` is the currently running directory (derived from `client.json`). For the deployment layout see the [updater overview](/en/docs/client/).
+`UpdateFolder` is the directory holding the updater and `MainFolder` is the currently running directory (derived from `client.json`). For the layout see [Package layout & distribution](/en/docs/guide/package); for host-side constraints see [Host integration](/en/docs/client/).
 
 ## client.json
 

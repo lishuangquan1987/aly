@@ -1,9 +1,9 @@
 ---
-title: Deploying aly-server
+title: Deployment & operations
 description: "Deploying aly-server as a single binary: startup flags, data directory layout, SQLite WAL and automatic migration, systemd unit, reverse proxy and security hardening, backup/restore, and upgrades."
 ---
 
-# Deploying aly-server
+# Deployment & Operations
 
 aly-server is the server side of the update system: it stores project and version metadata, receives release artifacts, and serves file lists and downloads to the updater.
 
@@ -271,18 +271,7 @@ sudo systemctl start aly-server
 
 ## Troubleshooting
 
-| Symptom | Common cause | Fix |
-| --- | --- | --- |
-| Exits immediately on startup; the log shows `failed opening connection to sqlite` | The `-db` directory is not writable | Check the directory owner and permissions |
-| Exits immediately on startup; the log shows `failed creating schema resources` | The database file is corrupted or held by another process | Stop duplicate instances; restore from a backup |
-| Upload returns "file too large" (`文件过大`) | The single file exceeds 1 GB, or the proxy's `client_max_body_size` is too small | Adjust the proxy limit; confirm this is a real business need |
-| The proxy returns 413 | Nginx's default 1 MB limit | Set `client_max_body_size 1050m` |
-| Download returns 404 | `path` is not an absolute path under `data/`, or the binary has moved | Request the `fileAbsolutePath` from `get_all_files` verbatim |
-| Download is cut off midway | Each download gets a write deadline based on file size (`5 minutes + 1 second per MiB`, capped at 30 minutes); the global `WriteTimeout` is 0 | Very large files on slow links can still hit the deadline; the client retries with Range resumption |
-| `database is locked` | The same database file is opened by multiple processes | Ensure only one aly-server instance is running |
-| Changelog time differs from local time | `time` is a string supplied by the publisher and stored verbatim by the server | Have the publisher consistently use `yyyy-MM-dd HH:mm:ss` and the same time zone |
-
-The server has no built-in version-query endpoint; confirm the running version from the `version` returned by `GET /api/server/info` (the Go runtime version) together with the binary filename/release record.
+Startup failures (sqlite / schema), upload 413, download 404, `database is locked` and other common symptoms are collected by “which log → how to fix” in [Troubleshooting · Server](/en/docs/troubleshooting#server).
 
 ## Related pages
 

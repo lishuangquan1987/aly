@@ -84,6 +84,33 @@ cd client/aly-client-ui
 ./deploy-client-linux.sh <UpdateFolder> <MainFolder> [arch]
 ```
 
+## Publishing the GUI
+
+The Release workflow builds and uploads **four GUI assets** (see `.github/workflows/release.yml`):
+
+- `AlyPublish-Setup.exe`: a Windows x64 installer bundling the GUI, `publish-cli/`, `client/` and `payload.json`;
+- `AlyPublish-win-x64.zip`: a portable bundle that runs after extraction;
+- `AlyPublish-linux-x64.zip`, `AlyPublish-linux-arm64.zip`: Linux packages (with `install.sh` / `uninstall.sh` inside); after extraction run `chmod +x install.sh` (the zip does not preserve the executable bit), then `./install.sh` to install into `/opt/aly/AlyPublish` (`--prefix` overrides; `install.sh` also restores the 0755 bits on the payload executables).
+
+The publish CLI and the terminal updaters are **not** uploaded as standalone assets: they ship only inside the GUI package. The payload is staged by the inline pwsh step (`Stage the package payload`): it lays out the per-platform artifacts into the layout above, copies the platform's `payload.json`, and asserts all 10 items (9 binaries + the manifest) are present; for local development `publish/deploy-publish.bat` copies the same file names into the GUI output directory.
+
+Building `publish-gui-go` from source:
+
+```bash
+cd publish/publish-gui-go
+go test ./... -count=1
+go tool mygo vet
+
+# Windows single file (-H windowsgui removes the console window)
+go build -trimpath -ldflags "-H windowsgui" -o build/windows-amd64/AlyPublish.exe .
+
+# Linux cross-compile (CI adds install.sh and zips on top)
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o build/linux-amd64/AlyPublish .
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o build/linux-arm64/AlyPublish .
+```
+
+(Or run `build.ps1` / `build.sh`: one run of fmt/vet/test plus all three platform binaries.) When distributing manually, keep the GUI next to `payload.json`, `publish-cli/` and `client/` in one directory. The historical C# build: `cd publish/publish-gui-csharp && dotnet build`.
+
 ## One-Step Deployment
 
 ```bash

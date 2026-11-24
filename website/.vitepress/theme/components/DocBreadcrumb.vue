@@ -4,39 +4,82 @@ import { useData, withBase } from 'vitepress'
 
 const { lang, page } = useData()
 const isEn = computed(() => lang.value === 'en-US')
+const prefix = computed(() => (isEn.value ? '/en' : ''))
 
-const groups = {
-  client: { zh: '更新器 aly-client', en: 'Updater aly-client', link: '/docs/client/' },
-  publish: { zh: '发布工具 aly-publish', en: 'Publisher aly-publish', link: '/docs/publish' },
-  server: { zh: '服务端 aly-server', en: 'Server aly-server', link: '/docs/server/deploy' },
-  sdk: { zh: 'C# SDK', en: 'C# SDK', link: '/docs/sdk' }
+// 侧栏五组的落地页，与 config.mts 的 sidebar 保持同一口径。
+const GROUPS = {
+  start: { zh: '开始使用', en: 'Start here', link: '/docs/getting-started' },
+  guide: { zh: '指南', en: 'Guides', link: '/docs/guide/package' },
+  reference: { zh: '参考', en: 'Reference', link: '/docs/commands' },
+  concepts: { zh: '原理', en: 'Concepts', link: '/docs/concepts' },
+  help: { zh: '帮助', en: 'Help', link: '/docs/troubleshooting' }
 } as const
 
-const prefix = computed(() => (isEn.value ? '/en' : ''))
+type GroupKey = keyof typeof GROUPS
+
+// 每个页面归到哪一组：目录名不足以表达归属（发布/接入/部署分散在多个目录），所以按页面显式映射。
+const PAGE_GROUPS: Record<string, GroupKey> = {
+  'getting-started': 'start',
+  download: 'start',
+
+  'guide/package': 'guide',
+  publish: 'guide',
+  'publish/gui': 'guide',
+  'server/deploy': 'guide',
+  'client/index': 'guide',
+  'client/ui': 'guide',
+  sdk: 'guide',
+
+  commands: 'reference',
+  'publish/commands-config': 'reference',
+  'publish/commands-project': 'reference',
+  'publish/commands-workflow': 'reference',
+  'client/config': 'reference',
+  api: 'reference',
+  'server/api-project': 'reference',
+  'server/api-file': 'reference',
+  'server/api-models': 'reference',
+  'sdk/api': 'reference',
+  'sdk/languages': 'reference',
+
+  concepts: 'concepts',
+  architecture: 'concepts',
+  'self-update': 'concepts',
+  build: 'concepts',
+  testing: 'concepts',
+
+  troubleshooting: 'help',
+  faq: 'help',
+  versions: 'help'
+}
+
+function groupOf(path: string): GroupKey | null {
+  if (path.startsWith('start/')) return 'start'
+  return PAGE_GROUPS[path] ?? null
+}
 
 const crumbs = computed(() => {
   const relative = page.value.relativePath.replace(/^en\//, '')
   if (!relative.startsWith('docs/')) return []
 
-  const segments = relative.slice('docs/'.length).split('/').filter(Boolean)
-  if (segments.length === 0 || segments[0] === 'index.md') return []
+  const path = relative.slice('docs/'.length).replace(/\.md$/, '')
+  if (path === 'index' || path === '') return []
 
-  const root = {
-    label: isEn.value ? 'Documentation' : '文档中心',
-    link: `${prefix.value}/docs/`
-  }
+  const root = { label: isEn.value ? 'Documentation' : '文档中心', link: '/docs/' }
+  const pageTitle = page.value.title || path.split('/').pop() || ''
 
-  const first = segments[0]
-  const group = groups[first as keyof typeof groups]
-  if (group && segments.length > 1) {
-    const groupLabel = isEn.value ? group.en : group.zh
-    const groupCrumb = { label: groupLabel, link: `${prefix.value}${group.link}` }
-    const isGroupIndex = segments.length === 2 && segments[1] === 'index.md'
-    if (isGroupIndex) return [root, { label: groupLabel, link: '' }]
-    return [root, groupCrumb, { label: page.value.title || segments[segments.length - 1], link: '' }]
-  }
+  const key = groupOf(path)
+  if (!key) return [root, { label: pageTitle, link: '' }]
 
-  return [root, { label: page.value.title || segments[segments.length - 1], link: '' }]
+  const group = GROUPS[key]
+  const groupLabel = isEn.value ? group.en : group.zh
+  const groupLink = `${prefix.value}${group.link}`
+
+  // 组落地页自身不再指向自己。
+  const landing = group.link.replace(/^\/docs\//, '')
+  if (path === landing) return [root, { label: pageTitle, link: '' }]
+
+  return [root, { label: groupLabel, link: groupLink }, { label: pageTitle, link: '' }]
 })
 </script>
 

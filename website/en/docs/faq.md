@@ -5,6 +5,8 @@ description: Common questions about platforms, host languages, downtime, power-l
 
 # FAQ
 
+Short answers with links to the detail. Steps live in [Quick Start](/en/docs/getting-started); errors are traced in [Troubleshooting](/en/docs/troubleshooting).
+
 ## Why keep supporting Windows XP?
 
 Industrial PCs, cashier terminals and hospital equipment still run XP, and those are exactly the machines that most need security updates. Mainstream update frameworks (Squirrel, Velopack, Electron updater) usually require Windows 7+; Aly keeps this path open by pinning Go 1.10.8 + 386, with CI validating the PE header and manifest.
@@ -35,7 +37,7 @@ The current version has no built-in authentication or signing and is designed fo
 
 ## Are incremental updates supported?
 
-Yes. The publisher uploads only differing files, and the client downloads only files whose local hash differs; large files are chunked with resumable transfers; a single-file failure never aborts the whole run, and a retry covers only the failed files.
+Yes. The publisher uploads only differing files, and the client downloads only files whose local hash differs; large files are chunked with resumable transfers; a single-file failure never aborts the whole run, and a retry covers only the failed files. See [Core Concepts](/en/docs/concepts).
 
 ## Why is my first push rejected?
 

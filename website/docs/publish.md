@@ -1,13 +1,15 @@
 ---
-title: 发布工具 aly-publish
-description: aly-publish 的职责、CLI 与 GUI 的分工、全局参数、命令树、典型发布流程、配置文件与退出码语义。
+title: 打包与发布
+description: aly-publish 的日常发版流程——命令树、status → add → push、版本号规则与退出码语义；第一次跑通看「发布第一个版本」。
 ---
 
-# 发布工具 aly-publish
+# 打包与发布
 
-`aly-publish` 是发布侧命令行工具（Go + cobra）。它在一个**构建产物目录**中工作：把本地产物与服务端清单比对、把变更放入暂存区，再上传文件并登记一个新版本。文件与版本日志保存在服务端，终端上的 [aly-client](/docs/commands) 据此完成更新。
+`aly-publish` 在**构建产物目录**里工作：把本地产物与服务端清单比对、把变更放进暂存区，再上传文件并登记一个新版本。服务端保存文件与版本日志，终端上的 [aly-client](/docs/commands) 据此完成更新。
 
 它不负责编译、打包，也不负责在服务端创建项目——后者是 `project create` 的职责。两个常见误解由此而来：`config init` 只写本地配置，`push` 只上传已暂存的文件。
+
+第一次跑通请看[发布第一个版本](/docs/start/publish)；桌面界面见[发布 GUI](/docs/publish/gui)。
 
 ## CLI 与 GUI
 
@@ -18,9 +20,9 @@ description: aly-publish 的职责、CLI 与 GUI 的分工、全局参数、命�
 | 配置 | 直接读写当前目录的 `.updator/` | 调用 CLI，读写同一份配置 |
 | 输出 | human 文本或 `--json` | 解析 CLI 的 `--json` 输出并展示进度 |
 | 依赖 | 无（CLI 自己就是包内 `publish-cli/<rid>/` 那一份） | 必须能找到同一安装包内的 `publish-cli/<cli_rid>/aly-publish(.exe)` |
-| 获取方式 | 随 AlyPublish 安装包分发（`publish-cli/<rid>/`）；不再有独立单文件资产 | 装 AlyPublish 安装包（Windows 安装包/压缩包；Linux 压缩包） |
+| 获取方式 | 随 AlyPublish 安装包分发（`publish-cli/<rid>/`） | 装 AlyPublish 安装包 |
 
-GUI 的细节见[发布 GUI](/docs/publish/gui)。两者可以混用：GUI 只是 CLI 的调用方，`.updator/` 配置与暂存区完全一致。
+GUI 只是 CLI 的调用方，`.updator/` 配置与暂存区完全一致，两者可以混用。
 
 ## 全局参数
 
@@ -93,69 +95,14 @@ aly-publish push --version V1.0.1 --message "修复登录超时"
 几点约束：
 
 - `config init` **不会**创建服务端项目；`project create` **不会**写本地配置。两边通过 `project_name` 与 `--name` 保持一致。
-- `push` 只能上传暂存区中的文件。暂存区为空时直接失败。
+- `push` 只能上传暂存区中的文件；暂存区为空时直接失败。
 - `add --all` 暂存 `new` / `modified` / `deleted`；本地删除的文件在 `push` 时调用 `file/delete_file` 同步删除，随后从发布清单中消失，客户端据此删除本地旧文件。
 
 ## 配置文件
 
-| 文件 | 归属 | 是否上传 | 说明 |
-|---|---|---|---|
-| `.updator/shared.json` | CLI 与客户端共用 | **是** | 服务端地址、项目名、忽略规则、不复制规则 |
-| `.updator/publish.json` | CLI 专有 | 否 | 当前为空对象，预留给 CLI 专属配置 |
-| `.updator/staging/staged-files.json` | CLI 专有 | 否 | 暂存区条目，`add` 写入，`push` 读取 |
+`.updator/` 下的三个文件——`shared.json`（CLI 与客户端共用、随版本上传）、`publish.json`、`staging/staged-files.json`——的字段、位置与生效时机，见[配置文件参考](/docs/client/config)。
 
-`shared.json` 会作为普通文件随版本上传，因此终端上的 `aly-client` 能继承同一份服务端地址、项目名和忽略规则：
-
-```json
-{
-  "server_url": "http://192.168.1.100:2000",
-  "project_name": "myapp",
-  "ignore_folders": ["logs", "temp"],
-  "ignore_files": ["*.log", ".DS_Store"],
-  "un_copy_folders": ["docs"],
-  "un_copy_files": ["*.md"]
-}
-```
-
-`publish.json` 目前固定写入 `{}`：
-
-```json
-{}
-```
-
-`staged-files.json` 是暂存条目的数组，记录加入暂存区时的 MD5 与大小：
-
-```json
-[
-  {
-    "relativePath": "DemoApp.dll",
-    "status": "modified",
-    "localMd5": "96c15c2bb2921193bf290df8cd85e2ba",
-    "localSize": 90052
-  }
-]
-```
-
-扫描发布目录时，`.updator/publish.json` 与 `.updator/staging/` 总被跳过，`.updator/shared.json` 则会被上传。`un_copy_folders` / `un_copy_files` 只影响客户端应用更新时的复制行为，不参与发布扫描。
-
-## 退出码与输出契约
-
-| 场景 | 退出码 | 判断依据 |
-|---|---|---|
-| 命令成功 | 0 | `isSuccess` 为 `true` |
-| 业务失败：配置缺失、网络错误、服务端拒绝、暂存区为空、版本冲突 | **0** | `isSuccess` 为 `false`，`errorMsg` 给出原因 |
-| 用法错误：未知命令/参数、缺少命令级必填参数、参数类型错误 | 1 | cobra 打印 `Error: ...` 与 usage |
-
-**业务失败也返回 0**，这是脚本接入时最容易踩的坑。请解析输出中的 `isSuccess`，不要只看退出码：
-
-```json
-{"isSuccess":false,"errorMsg":"暂存区为空，请先 add 文件","data":null}
-```
-
-- human 模式下，业务错误写到 stderr，前缀为 `Error:`。
-- `--json` 模式下，错误 JSON 写到 stdout，成功与失败都是单行 JSON。
-- `--quiet` 只抑制 human 文本，不抑制 `--json`。
-- 退出码 1 只表示命令没有真正执行（参数层面就被拒绝），不代表服务端返回了业务失败。
+`shared.json` 会随版本上传，因此终端上的 `aly-client` 能继承同一份服务端地址、项目名和忽略规则；改规则后发一次版本即可生效。
 
 ## 版本号规则
 
@@ -172,10 +119,30 @@ aly-publish push --version V1.0.1 --message "修复登录超时"
 
 版本格式由服务端校验：`^[vV]?\d+(\.\d+)*(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$`，长度不超过 50。`V`/`v` 前缀可选；比较时忽略前缀与构建元数据，预发布版本低于同号正式版（`V1.0.1-beta` < `V1.0.1`）。
 
+## 退出码与输出契约
+
+| 场景 | 退出码 | 判断依据 |
+|---|---|---|
+| 命令成功 | 0 | `isSuccess` 为 `true` |
+| 业务失败：配置缺失、网络错误、服务端拒绝、暂存区为空、版本冲突 | **0** | `isSuccess` 为 `false`，`errorMsg` 给出原因 |
+| 用法错误：未知命令/参数、缺少命令级必填参数、参数类型错误 | 1 | cobra 打印 `Error: ...` 与 usage |
+
+**业务失败也返回 0**，这是脚本接入时最容易踩的坑。请解析输出中的 `isSuccess`，不要只看退出码：
+
+```json
+{"isSuccess":false,"errorMsg":"暂存区为空，请先 add 文件","data":null}
+```
+
+- human 模式下，业务错误写到 stderr，前缀为 `Error:`；
+- `--json` 模式下，成功与失败都是单行 JSON；
+- `--quiet` 只抑制 human 文本，不抑制 `--json`；
+- 退出码 1 只表示命令没有真正执行（参数层面就被拒绝），不代表服务端返回了业务失败。
+
+更新器（`aly-client`）的退出码与进度行语义是另一套，见[命令参考 · 统一约定](/docs/commands#统一约定)。
+
 ## 下一步
 
-- 第一次使用：从[下载与安装](/docs/download)取得 CLI，按[快速开始](/docs/getting-started)跑通服务端与首个版本。
-- 配置细节：[配置命令](/docs/publish/commands-config)
+- 配置细节：[配置命令](/docs/publish/commands-config) · [配置文件参考](/docs/client/config)
 - 服务端项目：[项目命令](/docs/publish/commands-project)
 - 日常发布：[发布流程命令](/docs/publish/commands-workflow)
-- 桌面操作：[发布 GUI](/docs/publish/gui)
+- 桌面操作：[发布 GUI](/docs/publish/gui) · 包内结构：[发行包结构与分发](/docs/guide/package)

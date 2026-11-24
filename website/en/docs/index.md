@@ -1,21 +1,49 @@
 ---
 title: Documentation
-description: "Enter Aly by role: publish a release, integrate the updater, deploy the server, or look up commands and APIs."
+description: The Aly documentation index — start here, guides, reference, concepts, help.
 ---
 
-<DocHub />
+# Documentation
 
-## Common entry points
+New to Aly? Open [Quick Start](/en/docs/getting-started) and pick the path that matches what you want to do. For what Aly is and which components it contains, read the [introduction](/en/intro).
 
-- First time here: [Quick start](/en/docs/getting-started); just need binaries: [Download & install](/en/docs/download)
-- Updater commands and return fields: [aly-client command reference](/en/docs/commands)
-- Publish, staging and push: [aly-publish](/en/docs/publish)
-- Server deployment and REST API: [Deployment](/en/docs/server/deploy) · [API overview](/en/docs/api)
-- Multi-language host integration: [Language SDKs](/en/docs/sdk/languages) · [C# SDK](/en/docs/sdk) · [C# API](/en/docs/sdk/api)
-- Understand reliability first: [Core concepts](/en/docs/concepts) · [Architecture](/en/docs/architecture)
+## Start here
 
-## Direct downloads
+- [Quick Start](/en/docs/getting-started) — three paths: publish, integrate, deploy
+- [Publish your first release](/en/docs/start/publish) — install, start the server, ship `V1.0.1` from the GUI
+- [Integrate the updater](/en/docs/start/integrate) — launch the updater from your host and verify one update
+- [Deploy the server](/en/docs/start/server) — download, start, verify the API
+- [Download & install](/en/docs/download) — every asset, package layout, checks and versions
 
-<ReleaseDownloads group="package" compact :show-latest-hint="false" :show-version="false" />
+## Guides
 
-The full matrix (server binaries and language SDKs) is on [Download & Install](/en/docs/download).
+- [Package layout & distribution](/en/docs/guide/package) — what is inside the `AlyPublish` package and how to ship the updater
+- [Packaging & publishing](/en/docs/publish) — command tree, release flow, version rules
+- [Publish GUI](/en/docs/publish/gui) — fields, shortcuts, logs and troubleshooting
+- [Deployment & operations](/en/docs/server/deploy) — systemd, reverse proxy, hardening, backups and upgrades
+- [Host integration](/en/docs/client/) — lifecycle, JSON contract, exit codes and rollback
+- [Update window](/en/docs/client/ui) — `aly-client-ui` modes, arguments and exit codes
+- [C# SDK integration](/en/docs/sdk) — the two integration styles and the build-time targets
+
+## Reference
+
+- [aly-client commands](/en/docs/commands) — flags, return fields and failure behavior per command
+- [Config commands](/en/docs/publish/commands-config) · [Project commands](/en/docs/publish/commands-project) · [Workflow commands](/en/docs/publish/commands-workflow) — the full `aly-publish` surface
+- [Configuration files](/en/docs/client/config) — `client.json`, `shared.json`, `version.json` and the staging area
+- [Server API](/en/docs/api) — envelope, error semantics and the endpoint index; [Project API](/en/docs/server/api-project) · [File API](/en/docs/server/api-file) · [Data models](/en/docs/server/api-models)
+- [C# SDK API](/en/docs/sdk/api) — classes, methods, enums and data models
+- [Language SDKs](/en/docs/sdk/languages) — assets and capability matrix per language
+
+## Concepts
+
+- [Core concepts](/en/docs/concepts) — version state machine, atomic swap, crash recovery, delta download, update lock
+- [Architecture](/en/docs/architecture) — data flow of one update and the dual toolchain
+- [Self-update design](/en/docs/self-update) — how the updater updates itself
+- [Build & cross-platform](/en/docs/build) — how the server, the XP-track updater and the GUI are built
+- [Testing](/en/docs/testing) — E2E framework, unit tests and CI
+
+## Help
+
+- [Troubleshooting](/en/docs/troubleshooting) — by symptom: update not triggered, swap failing, lock held
+- [FAQ](/en/docs/faq) — platforms, host languages, downtime, authentication and rules
+- [Documentation versions](/en/docs/versions) — which code version these pages describe

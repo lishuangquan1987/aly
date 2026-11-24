@@ -36,7 +36,7 @@ A host application can either spawn a subprocess and parse the JSON, or integrat
 | Updater / update window | Windows 32-bit (XP+), Linux amd64/arm64 | The same Go source can build for darwin, freebsd and others |
 | Server | Windows amd64, Linux amd64/arm64, macOS amd64/arm64 | Other Go targets |
 | Publishing tools | Windows amd64, Linux amd64/arm64, macOS amd64/arm64 | Other Go targets |
-| Publish GUI | Windows (.NET 8) | Desktop platforms supported by .NET 8 |
+| Publish GUI | Windows amd64, Linux amd64/arm64 | Other Go targets (no extra dependency on Windows, GTK3 on Linux) |
 
 ## Download the Latest Release
 
@@ -47,10 +47,9 @@ refresh on every publish; see [Download & Install](/en/docs/download) for the fu
 
 ## Design Principles
 
-- **Single file, zero dependencies**: the updater and the server are each a single executable; the Linux GUI only depends on the GTK3 preinstalled by the distribution.
-- **Protocol before implementation**: a single `{isSuccess, errorMsg, data}` shape; GUI, SDK and updater are decoupled.
-- **Configuration ships with the version**: `.updator/shared.json` is uploaded together with each version, so a server address change takes effect with the next update.
-- **Everything is verifiable**: MD5 + SHA256 double verification; monotonically increasing versions; [148 end-to-end cases](/en/docs/testing) cover crashes, power loss, concurrency and self-update.
+- **Single file, zero dependencies**: the updater and the server are each a single executable; the publish GUI is a pure Go / MyGo program and the Linux GUI only depends on the distribution's GTK3.
+- **Protocol before implementation**: one `{isSuccess, errorMsg, data}` shape; GUI, SDK and updater are decoupled, and configuration ships with the version so `.updator/shared.json` rule changes take effect with the next update.
+- **Everything is verifiable**: MD5 + SHA256 double verification; monotonically increasing versions; end-to-end cases cover crashes, power loss, concurrency and self-update — see [Testing](/en/docs/testing).
 
 ## When to Use It
 

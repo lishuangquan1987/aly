@@ -6,161 +6,167 @@ const siteUrl = 'https://lishuangquan1987.github.io/aly/'
 
 const zhSidebar = [
   {
-    text: '开始',
+    text: '开始使用',
     items: [
-      { text: '文档首页', link: '/docs/' },
+      { text: '文档中心', link: '/docs/' },
       { text: '快速开始', link: '/docs/getting-started' },
-      { text: '下载与安装', link: '/docs/download' },
-      { text: '文档版本', link: '/docs/versions' }
+      { text: '发布第一个版本', link: '/docs/start/publish' },
+      { text: '接入更新器', link: '/docs/start/integrate' },
+      { text: '部署服务端', link: '/docs/start/server' },
+      { text: '下载与安装', link: '/docs/download' }
     ]
   },
   {
-    text: '理解',
+    text: '指南',
     items: [
-      { text: '项目简介', link: '/intro' },
-      { text: '核心概念', link: '/docs/concepts' },
-      { text: '系统架构', link: '/docs/architecture' }
-    ]
-  },
-  {
-    text: '更新器 aly-client',
-    items: [
-      { text: '概览与集成', link: '/docs/client/' },
-      { text: '命令参考', link: '/docs/commands' },
-      { text: '配置参考', link: '/docs/client/config' },
-      { text: 'GUI 前端', link: '/docs/client/ui' }
-    ]
-  },
-  {
-    text: '发布工具 aly-publish',
-    items: [
-      { text: '概览与工作流', link: '/docs/publish' },
+      { text: '发行包结构与分发', link: '/docs/guide/package' },
+      { text: '打包与发布', link: '/docs/publish' },
       { text: '发布 GUI', link: '/docs/publish/gui' },
+      { text: '部署与运维', link: '/docs/server/deploy' },
+      { text: '宿主集成', link: '/docs/client/' },
+      { text: '更新窗口', link: '/docs/client/ui' },
+      { text: 'C# SDK 集成', link: '/docs/sdk' }
+    ]
+  },
+  {
+    text: '参考',
+    items: [
+      { text: 'aly-client 命令', link: '/docs/commands' },
       { text: '配置命令', link: '/docs/publish/commands-config' },
       { text: '项目命令', link: '/docs/publish/commands-project' },
-      { text: '发布流程命令', link: '/docs/publish/commands-workflow' }
-    ]
-  },
-  {
-    text: '服务端 aly-server',
-    items: [
-      { text: '部署', link: '/docs/server/deploy' },
-      { text: 'API 总览', link: '/docs/api' },
+      { text: '发布流程命令', link: '/docs/publish/commands-workflow' },
+      { text: '配置文件参考', link: '/docs/client/config' },
+      { text: '服务端 API 总览', link: '/docs/api' },
       { text: '项目接口', link: '/docs/server/api-project' },
       { text: '文件接口', link: '/docs/server/api-file' },
-      { text: '数据模型', link: '/docs/server/api-models' }
+      { text: '数据模型', link: '/docs/server/api-models' },
+      { text: 'C# SDK API', link: '/docs/sdk/api' },
+      { text: '多语言 SDK', link: '/docs/sdk/languages' }
     ]
   },
   {
-    text: 'SDK',
+    text: '原理',
     items: [
-      { text: '多语言 SDK 总览', link: '/docs/sdk/languages' },
-      { text: 'C# 集成指南', link: '/docs/sdk' },
-      { text: 'C# API 参考', link: '/docs/sdk/api' }
-    ]
-  },
-  {
-    text: '进阶',
-    items: [
+      { text: '核心概念', link: '/docs/concepts' },
+      { text: '系统架构', link: '/docs/architecture' },
       { text: '自更新设计', link: '/docs/self-update' },
       { text: '构建与跨平台', link: '/docs/build' },
-      { text: '测试体系', link: '/docs/testing' },
-      { text: 'FAQ', link: '/docs/faq' }
+      { text: '测试体系', link: '/docs/testing' }
+    ]
+  },
+  {
+    text: '帮助',
+    items: [
+      { text: '排障', link: '/docs/troubleshooting' },
+      { text: 'FAQ', link: '/docs/faq' },
+      { text: '文档版本', link: '/docs/versions' }
     ]
   }
 ]
 
 const enSidebar = [
   {
-    text: 'Getting Started',
+    text: 'Start here',
     items: [
-      { text: 'Docs Home', link: '/en/docs/' },
+      { text: 'Documentation', link: '/en/docs/' },
       { text: 'Quick Start', link: '/en/docs/getting-started' },
-      { text: 'Download & Install', link: '/en/docs/download' },
-      { text: 'Documentation Versions', link: '/en/docs/versions' }
+      { text: 'Publish your first release', link: '/en/docs/start/publish' },
+      { text: 'Integrate the updater', link: '/en/docs/start/integrate' },
+      { text: 'Deploy the server', link: '/en/docs/start/server' },
+      { text: 'Download & install', link: '/en/docs/download' }
     ]
   },
   {
-    text: 'Understand',
+    text: 'Guides',
     items: [
-      { text: 'Introduction', link: '/en/intro' },
-      { text: 'Core Concepts', link: '/en/docs/concepts' },
-      { text: 'Architecture', link: '/en/docs/architecture' }
-    ]
-  },
-  {
-    text: 'Updater aly-client',
-    items: [
-      { text: 'Overview & Integration', link: '/en/docs/client/' },
-      { text: 'Command Reference', link: '/en/docs/commands' },
-      { text: 'Configuration', link: '/en/docs/client/config' },
-      { text: 'GUI Front-End', link: '/en/docs/client/ui' }
-    ]
-  },
-  {
-    text: 'Publisher aly-publish',
-    items: [
-      { text: 'Overview & Workflow', link: '/en/docs/publish' },
+      { text: 'Package layout & distribution', link: '/en/docs/guide/package' },
+      { text: 'Packaging & publishing', link: '/en/docs/publish' },
       { text: 'Publish GUI', link: '/en/docs/publish/gui' },
-      { text: 'Config Commands', link: '/en/docs/publish/commands-config' },
-      { text: 'Project Commands', link: '/en/docs/publish/commands-project' },
-      { text: 'Workflow Commands', link: '/en/docs/publish/commands-workflow' }
+      { text: 'Deployment & operations', link: '/en/docs/server/deploy' },
+      { text: 'Host integration', link: '/en/docs/client/' },
+      { text: 'Update window', link: '/en/docs/client/ui' },
+      { text: 'C# SDK integration', link: '/en/docs/sdk' }
     ]
   },
   {
-    text: 'Server aly-server',
+    text: 'Reference',
     items: [
-      { text: 'Deployment', link: '/en/docs/server/deploy' },
-      { text: 'API Overview', link: '/en/docs/api' },
+      { text: 'aly-client commands', link: '/en/docs/commands' },
+      { text: 'Config commands', link: '/en/docs/publish/commands-config' },
+      { text: 'Project commands', link: '/en/docs/publish/commands-project' },
+      { text: 'Workflow commands', link: '/en/docs/publish/commands-workflow' },
+      { text: 'Configuration files', link: '/en/docs/client/config' },
+      { text: 'Server API', link: '/en/docs/api' },
       { text: 'Project API', link: '/en/docs/server/api-project' },
       { text: 'File API', link: '/en/docs/server/api-file' },
-      { text: 'Data Models', link: '/en/docs/server/api-models' }
+      { text: 'Data models', link: '/en/docs/server/api-models' },
+      { text: 'C# SDK API', link: '/en/docs/sdk/api' },
+      { text: 'Language SDKs', link: '/en/docs/sdk/languages' }
     ]
   },
   {
-    text: 'SDK',
+    text: 'Concepts',
     items: [
-      { text: 'Language SDKs', link: '/en/docs/sdk/languages' },
-      { text: 'C# Integration Guide', link: '/en/docs/sdk' },
-      { text: 'C# API Reference', link: '/en/docs/sdk/api' }
+      { text: 'Core concepts', link: '/en/docs/concepts' },
+      { text: 'Architecture', link: '/en/docs/architecture' },
+      { text: 'Self-update design', link: '/en/docs/self-update' },
+      { text: 'Build & cross-platform', link: '/en/docs/build' },
+      { text: 'Testing', link: '/en/docs/testing' }
     ]
   },
   {
-    text: 'Advanced',
+    text: 'Help',
     items: [
-      { text: 'Self-Update Design', link: '/en/docs/self-update' },
-      { text: 'Build & Cross-Platform', link: '/en/docs/build' },
-      { text: 'Testing', link: '/en/docs/testing' },
-      { text: 'FAQ', link: '/en/docs/faq' }
+      { text: 'Troubleshooting', link: '/en/docs/troubleshooting' },
+      { text: 'FAQ', link: '/en/docs/faq' },
+      { text: 'Documentation versions', link: '/en/docs/versions' }
     ]
   }
 ]
 
 const zhNav = [
+  { text: '文档', link: '/docs/', activeMatch: '^/docs/$' },
   { text: '快速开始', link: '/docs/getting-started' },
-  { text: '文档', link: '/docs/', activeMatch: '^/docs/' },
   {
     text: '参考',
     items: [
       { text: 'aly-client 命令', link: '/docs/commands' },
       { text: 'aly-publish 命令', link: '/docs/publish' },
       { text: '服务端 API', link: '/docs/api' },
-      { text: 'C# SDK API', link: '/docs/sdk/api' }
+      { text: 'C# SDK API', link: '/docs/sdk/api' },
+      { text: '多语言 SDK', link: '/docs/sdk/languages' }
+    ]
+  },
+  {
+    text: '帮助',
+    items: [
+      { text: '排障', link: '/docs/troubleshooting' },
+      { text: 'FAQ', link: '/docs/faq' },
+      { text: '文档版本', link: '/docs/versions' }
     ]
   },
   { text: '下载', link: '/docs/download' }
 ]
 
 const enNav = [
+  { text: 'Docs', link: '/en/docs/', activeMatch: '^/en/docs/$' },
   { text: 'Quick Start', link: '/en/docs/getting-started' },
-  { text: 'Docs', link: '/en/docs/', activeMatch: '^/en/docs/' },
   {
     text: 'Reference',
     items: [
-      { text: 'aly-client Commands', link: '/en/docs/commands' },
-      { text: 'aly-publish Commands', link: '/en/docs/publish' },
+      { text: 'aly-client commands', link: '/en/docs/commands' },
+      { text: 'aly-publish commands', link: '/en/docs/publish' },
       { text: 'Server API', link: '/en/docs/api' },
-      { text: 'C# SDK API', link: '/en/docs/sdk/api' }
+      { text: 'C# SDK API', link: '/en/docs/sdk/api' },
+      { text: 'Language SDKs', link: '/en/docs/sdk/languages' }
+    ]
+  },
+  {
+    text: 'Help',
+    items: [
+      { text: 'Troubleshooting', link: '/en/docs/troubleshooting' },
+      { text: 'FAQ', link: '/en/docs/faq' },
+      { text: 'Documentation versions', link: '/en/docs/versions' }
     ]
   },
   { text: 'Download', link: '/en/docs/download' }

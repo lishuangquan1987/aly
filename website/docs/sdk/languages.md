@@ -1,3 +1,8 @@
+---
+title: 多语言 SDK
+description: 各语言 SDK 的发布资产、能力对照，以及从同一份协议 schema 生成模型的一致性验证方式。
+---
+
 # 多语言 SDK
 
 Aly 的协议是语言无关的：`aly-client` 只输出统一的 JSON，SDK 负责参数拼接、超时、

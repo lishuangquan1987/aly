@@ -1,27 +1,21 @@
 ---
-title: Download & Install
-description: One AlyPublish package gives you the publish GUI, the publish CLI and the terminal updater; this page covers the Windows installer, the Linux packages, the in-package payload layout and the server download.
+title: Download & install
+description: Every release asset at a glance — the AlyPublish package, the server binaries and the language SDKs — plus the first step after installing.
 ---
 
-# Download & Install
+# Download & install
 
-Both the updater and the publish CLI ship **inside the AlyPublish package**: install one package and you
-have the publish GUI, `aly-publish`, `aly-client` and `aly-client-ui` ready. The server is a separate
-download.
+On the publishing side you only need one **AlyPublish** package: the publish GUI, the publish CLI and the terminal updater ship together. The server is a separate single binary; each language SDK is its own zip.
 
-All assets live on GitHub Releases. The table below is **generated from the latest release** — click any
-file name to download. Links and the version badge refresh automatically whenever a release is published
-or the docs are re-deployed manually.
+The table below is **generated from the latest release**; click a file name to download it.
 
 <ReleaseDownloads group="all" />
 
-## Step 1: install AlyPublish (one package)
+## Install the publishing side
 
-On Windows download <ReleaseLink asset="AlyPublish-Setup.exe" /> (installer: start-menu entry,
-installs to `Program Files\AlyPublish`) or
-<ReleaseLink asset="AlyPublish-win-x64.zip" /> (portable: unzip and run). On Linux download
-<ReleaseLink asset="AlyPublish-linux-x64.zip" /> (x64) or
-<ReleaseLink asset="AlyPublish-linux-arm64.zip" /> (arm64). The full matrix with file sizes is above.
+On Windows use <ReleaseLink asset="AlyPublish-Setup.exe" /> (start-menu entry, installs to `Program Files\AlyPublish`) or <ReleaseLink asset="AlyPublish-win-x64.zip" /> (portable); on Linux use <ReleaseLink asset="AlyPublish-linux-x64.zip" /> or <ReleaseLink asset="AlyPublish-linux-arm64.zip" />.
+
+::: code-group
 
 ```powershell [Windows]
 Invoke-WebRequest -Uri "https://github.com/lishuangquan1987/aly/releases/latest/download/AlyPublish-Setup.exe" -OutFile "AlyPublish-Setup.exe"
@@ -34,90 +28,48 @@ mkdir -p AlyPublish-linux-x64
 unzip -q AlyPublish-linux-x64.zip -d AlyPublish-linux-x64   # the zip has no top-level folder
 cd AlyPublish-linux-x64
 chmod +x install.sh                                 # zip does not keep the exec bit
-./install.sh                                        # installs to /opt/aly/AlyPublish (needs write access)
-# without root use: ./install.sh --prefix $HOME/.local/lib/AlyPublish
+./install.sh                                        # installs to /opt/aly/AlyPublish
+# without root: ./install.sh --prefix $HOME/.local/lib/AlyPublish
 ```
 
-Start `AlyPublish` after install (on Linux it is the `AlyPublish` file inside the prefix; `install.sh`
-also writes a launcher into `$HOME/.local/bin`), then follow [Quick Start](/en/docs/getting-started).
-
-::: tip The publish GUI implementation
-Releases ship the Go / MyGo build by default: no extra runtime dependency on Windows, GTK3
-(`libgtk-3.so.0`) required on Linux, where `install.sh` warns when it is missing. The historical
-C# / Avalonia build (self-contained .NET 8) is kept in the repository: select `gui=csharp` when
-running the Release Build workflow (or the same input in "Full Build"), or set the repository
-variable `PUBLISH_GUI` to `csharp`, and it produces the **same four asset names**. Package layout,
-`payload.json`, config files and download links are identical. See
-[publish-gui-go/README](https://github.com/lishuangquan1987/aly/tree/master/publish/publish-gui-go).
 :::
 
-## Step 2: install the server
+Start `AlyPublish` afterwards and follow [Publish your first release](/en/docs/start/publish). What each directory of the package holds is in [Package layout & distribution](/en/docs/guide/package).
 
-Server assets are named `aly-server-{goos}-{goarch}`: Windows uses
-<ReleaseLink asset="aly-server-windows-amd64.exe" />, Linux uses
-<ReleaseLink asset="aly-server-linux-amd64" /> / <ReleaseLink asset="aly-server-linux-arm64" />,
-macOS uses <ReleaseLink asset="aly-server-darwin-amd64" /> /
-<ReleaseLink asset="aly-server-darwin-arm64" />. All clickable links are in the table above.
+::: tip The publish GUI implementation
+Releases ship the Go / MyGo build by default: no extra runtime on Windows, GTK3 (`libgtk-3.so.0`) on Linux. The historical C# / Avalonia build stays in the repository: select `gui=csharp` in the Release Build workflow (or set the repository variable `PUBLISH_GUI` to `csharp`) and it produces the **same** four asset names, with identical package layout and config formats.
+:::
 
-```bash [Linux]
+## Install the server
+
+Server assets are named `aly-server-{goos}-{goarch}`: Windows uses <ReleaseLink asset="aly-server-windows-amd64.exe" />, Linux uses <ReleaseLink asset="aly-server-linux-amd64" /> / <ReleaseLink asset="aly-server-linux-arm64" />, macOS uses <ReleaseLink asset="aly-server-darwin-amd64" /> / <ReleaseLink asset="aly-server-darwin-arm64" />.
+
+```bash
 curl -fL -o aly-server "https://github.com/lishuangquan1987/aly/releases/latest/download/aly-server-linux-amd64"
 chmod +x aly-server
 ./aly-server -p 2000
 ```
 
-The first run creates `aly.db` and `data/` next to the executable. macOS binaries are unsigned;
-Gatekeeper may block the first run — allow it in System Settings.
+The first run creates `aly.db` and `data/` next to the executable. The shortest deployment path is [Deploy the server](/en/docs/start/server); macOS binaries are unsigned, so Gatekeeper may block the first run — allow it in System Settings.
 
-## The in-package payload: GUI, CLI, updater
+## Get an SDK
 
-After install (or after unzipping the portable package):
-
-```text
-AlyPublish(.exe)                        # publish GUI
-payload.json                            # platform and payload index: the GUI picks its builds from it
-publish-cli/<rid>/aly-publish(.exe)     # publish CLI: windows-amd64 | linux-amd64 | linux-arm64
-client/<rid>/aly-client(-ui)(.exe)      # terminal updater and its front end: windows-x86 | linux-amd64 | linux-arm64
-install.sh  uninstall.sh                # Linux packages only
-```
-
-- The GUI reads `cli_rid` / `client_rid` from `payload.json` and uses the builds of its own platform —
-  you never pick by hand;
-- When you initialize a project, or add the main executable in “Project settings”, the GUI copies the two
-  updaters from `client/<rid>/` into the sibling `UpdateFolder/` and writes `client.json`;
-- To deliver updaters for another platform (for example preparing a Windows app's `UpdateFolder` on
-  Linux), take `client/windows-x86/` straight out of the package;
-- Files taken out of a zip **must** be `chmod 0755`: zip does not carry the exec bit.
-
-::: tip Platform boundaries of the updater
-Prebuilt updaters exist for Windows (32-bit, XP through Win11) and Linux (amd64 / arm64). macOS and
-FreeBSD updaters can be compiled from the same sources, but there is no official prebuild; the server and
-the publish tool do have macOS prebuilds.
-::
-
-## Language SDKs
-
-Every zip in the “Language SDKs” group above is a direct download link. C# also has a `.nupkg` (not on
-the public NuGet feed); each other language ships one versioned zip (wheel / jar / `.crate` / sources).
+Every zip in the “Language SDKs” group above is a direct download: C# also ships a `.nupkg` (not on the public NuGet feed), each other language gets one versioned zip (wheel / jar / `.crate` / sources).
 
 ```bash
 gh release download --pattern 'AlyClient.*SDK-*.zip'
 ```
 
-SDKs no longer download or copy the updater binaries: `UpdateFolder/` is produced by the AlyPublish GUI,
-or you place the files by hand following the payload layout above. See [C# SDK integration](/en/docs/sdk)
-and [language SDKs](/en/docs/sdk/languages).
+Integration is covered in [C# SDK integration](/en/docs/sdk) and [Language SDKs](/en/docs/sdk/languages).
 
 ## Verification and versions
 
-- Release assets have no separate checksum file; verify with `Get-FileHash` / `sha256sum` against the
-  Release page afterwards.
-- The version number is the Git tag (for example `v1.2.3`). The server, the publish tool and the client
-  do not need matching versions, but a client only accepts a strictly higher server version.
-- See [Documentation Versions](/en/docs/versions) for when these links are regenerated.
+- Release assets have no separate checksum file; verify with `Get-FileHash` / `sha256sum` against the Release page.
+- The version number is the Git tag (for example `v1.2.3`). Server, publish tool and client do not need matching versions, but a client only accepts a **strictly higher** server version.
+- See [Documentation versions](/en/docs/versions) for when these links are regenerated.
 
 ## Next
 
-- **Run it in three steps**: [Quick Start](/en/docs/getting-started)
-- **Deploy the server**: [Server deployment](/en/docs/server/deploy)
-- **Publish with the GUI**: [Publish GUI](/en/docs/publish/gui)
-- **Integrate a host**: [C# SDK integration](/en/docs/sdk)
+- **Get running now**: [Publish your first release](/en/docs/start/publish) · [Deploy the server](/en/docs/start/server)
+- **Integrate a host**: [Integrate the updater](/en/docs/start/integrate)
+- **Inside the package**: [Package layout & distribution](/en/docs/guide/package)

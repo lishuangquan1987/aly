@@ -1,9 +1,9 @@
 ---
-title: 部署 aly-server
+title: 部署与运维
 description: aly-server 的单二进制部署：启动参数、数据目录布局、SQLite WAL 与自动迁移、systemd 单元、反向代理与安全加固、备份恢复与升级。
 ---
 
-# 部署 aly-server
+# 部署与运维
 
 aly-server 是更新系统的服务端：保存项目与版本元数据、接收发布产物、向更新器提供文件清单与下载。
 
@@ -270,18 +270,7 @@ sudo systemctl start aly-server
 
 ## 排障
 
-| 现象 | 常见原因 | 处理 |
-| --- | --- | --- |
-| 启动即退出，日志 `failed opening connection to sqlite` | `-db` 目录不可写 | 检查目录属主与权限 |
-| 启动即退出，日志 `failed creating schema resources` | 库文件损坏或被其他进程占用 | 停掉重复实例；用备份恢复 |
-| 上传返回「文件过大」 | 单文件超 1 GB，或代理 `client_max_body_size` 太小 | 调整代理限制；确认是业务需要 |
-| 代理返回 413 | Nginx 默认 1 MB 限制 | 设 `client_max_body_size 1050m` |
-| 下载 404 | `path` 不是 `data/` 下的绝对路径，或二进制搬过位置 | 用 `get_all_files` 的 `fileAbsolutePath` 原样请求 |
-| 下载到一半中断 | 单次下载按文件大小设置写期限（`5 分钟 + 每 MiB 1 秒`，上限 30 分钟），全局 `WriteTimeout` 为 0 | 慢链路超大文件仍可能超期断开；客户端按 Range 续传重试 |
-| `database is locked` | 同一库文件被多进程打开 | 保证只有一个 aly-server 实例 |
-| 变更日志时间与本地不一致 | `time` 由发布端传入字符串，服务端原样存储 | 发布端统一使用 `yyyy-MM-dd HH:mm:ss` 与同一时区 |
-
-服务端没有内置的版本查询接口，确认运行版本以 `GET /api/server/info` 返回的 `version`（Go 运行时版本）与二进制文件名/发布记录为准。
+启动失败（sqlite / schema）、上传 413、下载 404、`database is locked` 等常见症状按「看哪个日志 → 怎么修」整理在[排障 · 服务端](/docs/troubleshooting#服务端)。
 
 ## 相关页面
 

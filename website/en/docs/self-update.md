@@ -1,3 +1,8 @@
+---
+title: Self-update design
+description: How the updater replaces itself — detection separated from execution, a single source of new updater versions, the updater pair, circuit breaking and the testing story.
+---
+
 # Self-Update Design
 
 "How does the updater update itself?" is the classic blind spot of auto-update systems: you must replace a running executable, survive power cuts, and never spin into a loop. Aly's self-update is built around **detection separated from execution**.

@@ -84,22 +84,11 @@ or you can take them out of the package by hand (`chmod 0755` on Linux). See
 [Download & Install](/en/docs/download).
 :::
 
-## Deployment Layout: UpdateFolder
+## The SDK's directory convention
 
-Aly's client directory convention is a three-layer structure of "package directory + application directory + update directory":
+The client-side three-layer layout (`PackageFolder/` + `ApplicationFolder/` + `UpdateFolder/`) and the `<rid>` mapping inside the package are documented in [Package layout & distribution](/en/docs/guide/package); the shortest integration steps are in [Integrate the updater](/en/docs/start/integrate). This section covers only the SDK-side path conventions.
 
-```text
-PackageFolder/
-├── ApplicationFolder/            # the active application (replaced wholesale on apply)
-│   ├── YourApp.exe
-│   └── .updator/shared.json      # server_url, project_name, ignore rules
-├── ApplicationFolder_1.0.0/      # historical version snapshot (for rollback)
-└── UpdateFolder/
-    ├── aly-client.exe            # updater (required)
-    ├── aly-client-ui.exe         # GUI front-end (required by AlyUpdateUIClient)
-    ├── client.json               # host relative path + processes to close
-    └── version.json              # version state machine (maintained automatically, do not edit)
-```
+`AlyUpdateUIClient` requires both `aly-client` and `aly-client-ui` in `UpdateFolder/` (no extension on Linux).
 
 The default paths of `AlyUpdateClient` and `AlyUpdateUIClient` are both one level above `AppDomain.CurrentDomain.BaseDirectory`: `..\UpdateFolder\aly-client.exe` and `..\UpdateFolder\aly-client-ui.exe`. The host process output directory must therefore live where `..\UpdateFolder` can find the updater: production usually publishes straight into `ApplicationFolder/`, while development uses `bin\Debug\net40\`.
 
@@ -140,44 +129,11 @@ In this case the host path in `client.json` should be written as `../net40/YourA
 
 For the full semantics of these fields see [Configuration Reference](/en/docs/client/config); for updater commands see [Command Reference](/en/docs/commands).
 
-## Quick Start (Minimal Host)
+## Minimal host
 
-Three prerequisites: the host project references `AlyClient.CSharpSDK` (including `Newtonsoft.Json`), `UpdateFolder` already contains `aly-client.exe` and `aly-client-ui.exe`, and `client.json` has been adjusted for the actual directory layout.
+Three prerequisites: the host project references `AlyClient.CSharpSDK` (including `Newtonsoft.Json`), `UpdateFolder` already contains `aly-client` and `aly-client-ui`, and `client.json` has been adjusted for the actual directory layout.
 
-A complete, compilable minimal host (`net40` + C# 5). The repository's `client/aly-client-sdk/samples/MinimalHost` is the same project (`net40` + `net8.0`) and can be used as a starting point:
-
-```csharp
-using System;
-using AlyClient.CSharpSDK;
-using AlyClient.CSharpSDK.Models;
-
-namespace MyApp
-{
-    internal static class Program
-    {
-        private static void Main()
-        {
-            // Locates ..\UpdateFolder\aly-client-ui.exe by default
-            AlyUpdateUIClient ui = new AlyUpdateUIClient();
-            ui.Language = "zh-CN";
-
-            AlyResponse result = ui.LaunchAuto();
-            if (!result.IsSuccess)
-            {
-                Console.WriteLine("Update component unavailable: " + result.ErrorMsg);
-            }
-
-            // Host initialization and message loop
-            Console.WriteLine("Host started; press Enter to exit");
-            Console.ReadLine();
-
-            ui.Dispose();
-        }
-    }
-}
-```
-
-This code only uses the constructor, `LaunchAuto()` and `Dispose()`; `ui.Dispose()` does not close an update window that is already open. To control the update UI and its timing yourself, use `AlyUpdateClient` in the next section.
+The shortest compilable example is in [Integrate the updater](/en/docs/start/integrate); the repository's `client/aly-client-sdk/samples/MinimalHost` is the same complete project (`net40` + `net8.0`) and can be used as a starting point. The next two sections cover both integration styles in full: handing the whole chain to the GUI, and driving the event loop yourself.
 
 ## Integration Style 1: AlyUpdateUIClient (Recommended)
 

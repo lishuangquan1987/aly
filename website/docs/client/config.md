@@ -1,9 +1,9 @@
 ---
-title: 客户端配置参考
+title: 配置文件参考
 description: client.json、.updator/shared.json、version.json、publish.json 与暂存文件的字段、位置、生效时机和优先级。
 ---
 
-# 客户端配置参考
+# 配置文件参考
 
 客户端涉及三份核心配置，另有两份发布侧本地文件容易混淆：
 
@@ -15,7 +15,7 @@ description: client.json、.updator/shared.json、version.json、publish.json �
 | `publish.json` | 发布目录 `.updator/publish.json` | `aly-publish` 专有 | 否，本地不上传 |
 | `staged-files.json` | 发布目录 `.updator/staging/staged-files.json` | `aly-publish` 专有 | 否，本地暂存 |
 
-`UpdateFolder` 是更新器所在目录，`MainFolder` 是当前运行目录（由 `client.json` 推导）。部署布局见[更新器概览](/docs/client/)。
+`UpdateFolder` 是更新器所在目录，`MainFolder` 是当前运行目录（由 `client.json` 推导）。部署布局见[发行包结构与分发](/docs/guide/package)，宿主侧约束见[宿主集成](/docs/client/)。
 
 ## client.json
 

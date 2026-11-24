@@ -1,3 +1,8 @@
+---
+title: Language SDKs
+description: Release assets and the capability matrix per language SDK, plus how every SDK's models are generated from the same protocol schema and verified.
+---
+
 # Language SDKs
 
 Aly's protocol is language-neutral: `aly-client` only emits a uniform JSON envelope,

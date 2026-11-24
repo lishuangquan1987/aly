@@ -82,22 +82,11 @@ dotnet pack -c Release -o nupkg -p:Version=1.0.0
 复制进同级 `UpdateFolder/`，也可以手工从包里取（Linux 取出后记得 `chmod 0755`）。见[下载与安装](/docs/download)。
 :::
 
-## 部署布局：UpdateFolder
+## SDK 的目录约定
 
-Aly 的客户端目录约定是「包目录 + 应用目录 + 更新目录」三层结构：
+客户端的三层目录（`PackageFolder/` + `ApplicationFolder/` + `UpdateFolder/`）与包内 `<rid>` 的对应关系见[发行包结构与分发](/docs/guide/package)，最短接入步骤见[接入更新器](/docs/start/integrate)。这一节只讲 SDK 侧的路径约定。
 
-```text
-PackageFolder/
-├── ApplicationFolder/            # 当前生效的应用（apply 时整体替换）
-│   ├── YourApp.exe
-│   └── .updator/shared.json      # server_url、project_name、忽略规则
-├── ApplicationFolder_1.0.0/      # 历史版本快照（回滚用）
-└── UpdateFolder/
-    ├── aly-client.exe            # 更新器（必需）
-    ├── aly-client-ui.exe         # GUI 前端（AlyUpdateUIClient 必需）
-    ├── client.json               # 主程序相对路径 + 需关闭进程
-    └── version.json              # 版本状态机（自动维护，勿手改）
-```
+`AlyUpdateUIClient` 要求 `UpdateFolder/` 里同时有 `aly-client` 与 `aly-client-ui`（Linux 为无扩展名）。
 
 `AlyUpdateClient` 与 `AlyUpdateUIClient` 的默认路径都在 `AppDomain.CurrentDomain.BaseDirectory` 的上一级：`..\UpdateFolder\aly-client.exe` 与 `..\UpdateFolder\aly-client-ui.exe`。所以宿主进程的输出目录要落在能靠 `..\UpdateFolder` 找到更新器的位置：生产环境通常直接发布到 `ApplicationFolder/`，开发环境则是 `bin\Debug\net40\`。
 
@@ -138,44 +127,11 @@ bin\Debug\
 
 字段完整语义见[配置参考](/docs/client/config)；更新器命令见[命令参考](/docs/commands)。
 
-## 快速开始（最小宿主）
+## 最小宿主
 
-前置条件三项：宿主工程引用了 `AlyClient.CSharpSDK`（含 `Newtonsoft.Json`）、`UpdateFolder` 里已有 `aly-client.exe` 与 `aly-client-ui.exe`、`client.json` 已按实际目录改过。
+前置条件三项：宿主工程引用了 `AlyClient.CSharpSDK`（含 `Newtonsoft.Json`）、`UpdateFolder` 里已有 `aly-client` 与 `aly-client-ui`、`client.json` 已按实际目录改过。
 
-完整可编译的最小宿主（`net40` + C# 5）。仓库里的 `client/aly-client-sdk/samples/MinimalHost` 就是同一份可编译工程（`net40` + `net8.0`），可直接作为起点：
-
-```csharp
-using System;
-using AlyClient.CSharpSDK;
-using AlyClient.CSharpSDK.Models;
-
-namespace MyApp
-{
-    internal static class Program
-    {
-        private static void Main()
-        {
-            // 默认定位 ..\UpdateFolder\aly-client-ui.exe
-            AlyUpdateUIClient ui = new AlyUpdateUIClient();
-            ui.Language = "zh-CN";
-
-            AlyResponse result = ui.LaunchAuto();
-            if (!result.IsSuccess)
-            {
-                Console.WriteLine("更新组件不可用：" + result.ErrorMsg);
-            }
-
-            // 宿主的初始化与消息循环
-            Console.WriteLine("宿主已启动，按回车退出");
-            Console.ReadLine();
-
-            ui.Dispose();
-        }
-    }
-}
-```
-
-这段代码只用到构造函数、`LaunchAuto()` 与 `Dispose()`；`ui.Dispose()` 不会结束已经打开的更新窗口。需要自己控制更新 UI 与时机时，改用下一节的 `AlyUpdateClient`。
+最短可编译示例见[接入更新器](/docs/start/integrate)；仓库里的 `client/aly-client-sdk/samples/MinimalHost` 是同一份完整工程（`net40` + `net8.0`），可直接作为起点。下面两节分别是「整条链交给 GUI」与「自己驱动事件循环」两种集成方式的完整说明。
 
 ## 集成方式一：AlyUpdateUIClient（推荐）
 

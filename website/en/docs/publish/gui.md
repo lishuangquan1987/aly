@@ -232,7 +232,7 @@ The GUI writes file logs with the Go standard library: it appends to `log.log` a
 2. `logs/` in the config directory (`%LOCALAPPDATA%\AlyPublish\logs\` on Windows);
 3. `AlyPublish\logs\` under the temp directory.
 
-The "Logs" button in the status bar opens that directory directly.
+The "Logs" button in the status bar opens that directory directly. Troubleshooting on the server and terminal-update side is in [Troubleshooting](/en/docs/troubleshooting).
 
 | Symptom | Likely cause and fix |
 |---|---|
@@ -249,45 +249,10 @@ The "Logs" button in the status bar opens that directory directly.
 
 ## Building and distribution
 
-The Release workflow builds and uploads **four GUI assets** (see `.github/workflows/release.yml`):
-
-- `AlyPublish-Setup.exe`: a Windows x64 installer bundling the GUI, `publish-cli/`, `client/` and `payload.json`;
-- `AlyPublish-win-x64.zip`: a portable bundle that runs after extraction;
-- `AlyPublish-linux-x64.zip`, `AlyPublish-linux-arm64.zip`: Linux packages (with `install.sh` / `uninstall.sh` inside); after extraction run `chmod +x install.sh` first (the zip does not preserve the executable bit), then `./install.sh` to install into `/opt/aly/AlyPublish` (`--prefix` can override; `install.sh` also restores the 0755 bits on the payload executables).
-
-The publish CLI and the terminal updaters are **not** uploaded as standalone assets: they ship only inside the GUI package (one package is all a user needs).
-
-The payload is staged by the inline pwsh step in the release workflow (`Stage the package payload`): it lays out the downloaded per-platform artifacts into the layout above, copies the platform's `payload.json`, and asserts that all 10 items (9 binaries + the manifest) are present (any miss fails the build). For local development `publish/deploy-publish.bat` copies the same file names into the GUI output directory.
-
-Build from source:
-
-```bash
-cd publish/publish-gui-go
-
-# Tests and static checks
-go test ./... -count=1
-go tool mygo vet
-
-# Windows single file (-H windowsgui removes the console window)
-go build -trimpath -ldflags "-H windowsgui" -o build/windows-amd64/AlyPublish.exe .
-
-# Linux cross-compile (same source, switch GOOS/GOARCH; CI adds install.sh and zips on top)
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o build/linux-amd64/AlyPublish .
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o build/linux-arm64/AlyPublish .
-```
-
-(Or run `build.ps1` / `build.sh` directly: one run of fmt/vet/test plus all three platform binaries.)
-
-When distributing manually, keep `AlyPublish.exe` together with `payload.json`, `publish-cli/` and `client/` in the same directory (the initialization wizard picks the updaters from that layout).
-
-The historical C# build from source (kept, no longer released by default):
-
-```bash
-cd publish/publish-gui-csharp && dotnet build
-```
+Release assets, payload staging and building from source are covered in [Build & cross-platform · Publishing the GUI](/en/docs/build#publishing-the-gui).
 
 ## Next steps
 
-- CLI command details: [Config Commands](/en/docs/publish/commands-config), [Project Commands](/en/docs/publish/commands-project), [Workflow Commands](/en/docs/publish/commands-workflow)
+- CLI command details: [Config commands](/en/docs/publish/commands-config), [Project commands](/en/docs/publish/commands-project), [Workflow commands](/en/docs/publish/commands-workflow)
 - Publisher tool overview: [aly-publish](/en/docs/publish)
-- Get the CLI and the server: [Download & Install](/en/docs/download)
+- Get the CLI and the server: [Download & install](/en/docs/download)

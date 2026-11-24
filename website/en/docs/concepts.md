@@ -5,7 +5,7 @@ description: Precise semantics of the version state machine, atomic replacement,
 
 # Core Concepts
 
-Understand these five mechanisms and you can explain how Aly behaves under power loss, network loss, repeated triggers and rollback.
+Understand these five mechanisms and you can explain how Aly behaves under power loss, network loss, repeated triggers and rollback. This page covers **why**; to get running see [Integrate the updater](/en/docs/start/integrate), and for flags see the [command reference](/en/docs/commands).
 
 ## Version State Machine (version.json)
 

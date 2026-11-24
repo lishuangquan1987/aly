@@ -36,7 +36,7 @@ Aly 是一套**自包含的桌面应用自动更新系统**：发布方用发布
 | 更新器 / 更新窗口 | Windows 32 位（XP+）、Linux amd64/arm64 | 同一份 Go 源码可编译 darwin/freebsd 等 |
 | 服务端 | Windows amd64、Linux amd64/arm64、macOS amd64/arm64 | 其他 Go 目标 |
 | 发布工具 | Windows amd64、Linux amd64/arm64、macOS amd64/arm64 | 其他 Go 目标 |
-| 发布 GUI | Windows（.NET 8） | .NET 8 支持的桌面平台 |
+| 发布 GUI | Windows amd64、Linux amd64/arm64 | 其他 Go 目标（Windows 无额外依赖，Linux 需 GTK3） |
 
 ## 下载最新 Release
 

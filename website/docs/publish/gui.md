@@ -231,7 +231,7 @@ GUI 用 Go 标准库写文件日志：追加写 `log.log`，同时镜像到 stde
 2. 配置目录的 `logs/`（Windows 为 `%LOCALAPPDATA%\AlyPublish\logs\`）；
 3. 临时目录下的 `AlyPublish\logs\`。
 
-状态栏的“日志”按钮直接打开该目录。
+状态栏的“日志”按钮直接打开该目录。服务端与终端更新侧的排障见[排障](/docs/troubleshooting)。
 
 | 现象 | 可能原因与处理 |
 |---|---|
@@ -248,42 +248,7 @@ GUI 用 Go 标准库写文件日志：追加写 `log.log`，同时镜像到 stde
 
 ## 构建与分发
 
-Release 工作流会构建并上传 **4 个 GUI 资产**（见 `.github/workflows/release.yml`）：
-
-- `AlyPublish-Setup.exe`：Windows x64 安装包，内含 GUI 本体、`publish-cli/`、`client/`、`payload.json`；
-- `AlyPublish-win-x64.zip`：Windows 便携包，解压即用；
-- `AlyPublish-linux-x64.zip`、`AlyPublish-linux-arm64.zip`：Linux 压缩包（安装包），包内另有 `install.sh` / `uninstall.sh`；解压后先 `chmod +x install.sh`（zip 不保留可执行位）再 `./install.sh` 装到 `/opt/aly/AlyPublish`（`--prefix` 可改；`install.sh` 会替 payload 里的可执行文件补齐 0755）。
-
-发布 CLI 与终端更新器**不再作为独立资产上传**：它们只随 GUI 安装包分发（用户装一个包就够）。
-
-payload 的铺装由 release 工作流里的内联 pwsh 步骤完成（`Stage the package payload`）：按工作流下载的各平台产物铺成上面那份布局，拷入对应平台的 `payload.json`，并断言 10 项（9 个二进制 + 清单）全部到位（缺任一即构建失败）。本地开发走 `publish/deploy-publish.bat`，它用同一套文件名直接 copy 到 GUI 输出目录。
-
-从源码构建：
-
-```bash
-cd publish/publish-gui-go
-
-# 测试与静态检查
-go test ./... -count=1
-go tool mygo vet
-
-# Windows 单文件（-H windowsgui 去掉控制台窗口）
-go build -trimpath -ldflags "-H windowsgui" -o build/windows-amd64/AlyPublish.exe .
-
-# Linux 交叉编译（同一份代码，换 GOOS/GOARCH；CI 在此之上再加 install.sh 并压 zip）
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o build/linux-amd64/AlyPublish .
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o build/linux-arm64/AlyPublish .
-```
-
-（或直接运行 `build.ps1` / `build.sh`：一次跑 fmt/vet/test 并产出三平台二进制。）
-
-手工分发时，把 GUI 本体与 `payload.json`、`publish-cli/`、`client/` 放在同一目录即可（初始化向导就是按这个布局取更新器的）。
-
-历史 C# 版从源码构建（保留能力，不再默认发布）：
-
-```bash
-cd publish/publish-gui-csharp && dotnet build
-```
+Release 产物、payload 铺装与从源码构建的细节在[构建与跨平台 · 发布 GUI 的打包与分发](/docs/build#发布-gui-的打包与分发)。
 
 ## 下一步
 

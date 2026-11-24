@@ -5,7 +5,7 @@ description: Complete reference for the nine aly-client updater commands, with p
 
 # aly-client Command Reference
 
-`aly-client` is the updater deployed under `UpdateFolder` on the endpoint machine. Each process run executes one subcommand, and every result is written to stdout as JSON. This page documents the signature, parameters, return fields, examples and side effects of each command. For the deployment layout and host integration, see the [updater overview](/en/docs/client/); for configuration fields, see the [configuration reference](/en/docs/client/config).
+`aly-client` is the updater deployed under `UpdateFolder` on the endpoint machine. Each process run executes one subcommand, and every result is written to stdout as JSON. This page documents the signature, parameters, return fields, examples and side effects of each command. For the three-step setup see [Integrate the updater](/en/docs/start/integrate); for host-side constraints see [Host integration](/en/docs/client/); for configuration fields see the [configuration reference](/en/docs/client/config).
 
 The examples below use the Windows file name `aly-client.exe` throughout. On Linux the executable is named `aly-client`; subcommands and parameters are identical.
 
@@ -220,7 +220,7 @@ Failure:
 
 ### Related Commands
 
-[`download_update`](#download-update) · [`apply_update`](#apply-update) · [Updater overview](/en/docs/client/) · [Configuration reference](/en/docs/client/config)
+[`download_update`](#download-update) · [`apply_update`](#apply-update) · [Host integration](/en/docs/client/) · [Configuration reference](/en/docs/client/config)
 
 ## check_diff
 
@@ -633,7 +633,7 @@ Configuration read failure:
 
 ### Related Commands
 
-[`rollback`](#rollback) · [`clean`](#clean) · [Updater overview](/en/docs/client/#security-and-rollback)
+[`rollback`](#rollback) · [`clean`](#clean) · [Host integration](/en/docs/client/#rollback)
 
 ## rollback
 
@@ -722,7 +722,7 @@ An unfinished apply:
 
 ### Related Commands
 
-[`list_rollback_versions`](#list-rollback-versions) · [`apply_update`](#apply-update) · [`clean`](#clean) · [Updater overview](/en/docs/client/#security-and-rollback)
+[`list_rollback_versions`](#list-rollback-versions) · [`apply_update`](#apply-update) · [`clean`](#clean) · [Host integration](/en/docs/client/#rollback)
 
 ## clean
 
