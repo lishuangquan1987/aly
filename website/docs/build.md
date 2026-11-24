@@ -18,23 +18,7 @@ cd publish/publish-cli && go build -ldflags="-s -w" -o aly-publish.exe .
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o aly-server-linux-amd64 .
 ```
 
-发布 GUI（默认 Go / MyGo 版：纯 Go、无 cgo，可交叉编译；Windows 无额外运行依赖，Linux 需要 GTK3）：
-
-```bash
-cd publish/publish-gui-go
-go test ./... -count=1      # 无窗口视图测试
-go tool mygo vet            # MyGo 静态检查
-./build.sh                  # windows-amd64、linux-amd64、linux-arm64 三平台产物
-# Windows 用 build.ps1
-```
-
-历史 C# / Avalonia 版（.NET 8；保留在仓库中，不再默认构建，Release Build 选 `gui=csharp` 可产出）：
-
-```bash
-cd publish/publish-gui-csharp
-dotnet build src/AlyPublish/AlyPublish.csproj
-dotnet test tests/AlyPublish.Tests/AlyPublish.Tests.csproj
-```
+发布 GUI（默认 Go / MyGo 版）与历史 C# 版的构建命令、payload 铺装与 Release 产物，见[发布 GUI 的打包与分发](#发布-gui-的打包与分发)。
 
 ## XP 轨：更新器 + Windows GUI
 
@@ -109,7 +93,15 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o build/linux-amd64/Al
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o build/linux-arm64/AlyPublish .
 ```
 
-（或直接跑 `build.ps1` / `build.sh`：一次跑 fmt/vet/test 并产出三平台二进制。）手工分发时把 GUI 本体与 `payload.json`、`publish-cli/`、`client/` 放同一目录即可。历史 C# 版：`cd publish/publish-gui-csharp && dotnet build`。
+（或直接跑 `build.ps1` / `build.sh`：一次跑 fmt/vet/test 并产出三平台二进制。）手工分发时把 GUI 本体与 `payload.json`、`publish-cli/`、`client/` 放同一目录即可。
+
+历史 C# / Avalonia 版（.NET 8；保留在仓库中，不再默认构建，Release Build 选 `gui=csharp` 可产出）：
+
+```bash
+cd publish/publish-gui-csharp
+dotnet build src/AlyPublish/AlyPublish.csproj
+dotnet test tests/AlyPublish.Tests/AlyPublish.Tests.csproj
+```
 
 ## 一键部署
 

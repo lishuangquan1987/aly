@@ -18,23 +18,7 @@ cd publish/publish-cli && go build -ldflags="-s -w" -o aly-publish.exe .
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o aly-server-linux-amd64 .
 ```
 
-Publish GUI (default Go / MyGo build: pure Go, no cgo, cross-compiles; no extra runtime dependency on Windows, GTK3 required on Linux):
-
-```bash
-cd publish/publish-gui-go
-go test ./... -count=1      # windowless view tests
-go tool mygo vet            # MyGo static checks
-./build.sh                  # windows-amd64, linux-amd64, linux-arm64 binaries
-# use build.ps1 on Windows
-```
-
-Historical C# / Avalonia build (.NET 8; kept in the repository, no longer built by default — select `gui=csharp` in Release Build to produce it):
-
-```bash
-cd publish/publish-gui-csharp
-dotnet build src/AlyPublish/AlyPublish.csproj
-dotnet test tests/AlyPublish.Tests/AlyPublish.Tests.csproj
-```
+Build commands for the publish GUI (default Go / MyGo build) and the historical C# build, the payload staging and the release assets live in [Publishing the GUI](#publishing-the-gui).
 
 ## XP Track: Updater + Windows GUI
 
@@ -109,7 +93,15 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o build/linux-amd64/Al
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o build/linux-arm64/AlyPublish .
 ```
 
-(Or run `build.ps1` / `build.sh`: one run of fmt/vet/test plus all three platform binaries.) When distributing manually, keep the GUI next to `payload.json`, `publish-cli/` and `client/` in one directory. The historical C# build: `cd publish/publish-gui-csharp && dotnet build`.
+(Or run `build.ps1` / `build.sh`: one run of fmt/vet/test plus all three platform binaries.) When distributing manually, keep the GUI next to `payload.json`, `publish-cli/` and `client/` in one directory.
+
+The historical C# / Avalonia build (.NET 8; kept in the repository, no longer built by default — select `gui=csharp` in Release Build to produce it):
+
+```bash
+cd publish/publish-gui-csharp
+dotnet build src/AlyPublish/AlyPublish.csproj
+dotnet test tests/AlyPublish.Tests/AlyPublish.Tests.csproj
+```
 
 ## One-Step Deployment
 
