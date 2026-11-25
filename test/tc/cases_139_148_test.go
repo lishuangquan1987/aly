@@ -8,11 +8,11 @@ package tc
 //	139  B1  上传接口 projectName 路径穿越必须被拒（. / .. / ../.. / ..\..\ / ../sub）
 //	140  B3  分片合并 totalChunks<=0 / 超上界 / 全零字节 不得清空目标文件；缺片如实上报
 //	141  M2  软删除项目不再对外服务（文件列表/清单/项目查询全部拒绝，磁盘目录保留）
-//	142  B6  delete_file 接口已下线（2026-11-23 移除删除同步）：404 且文件保留
+//	142  B6  【已废弃 2026-11-24】delete_file 接口随删除同步移除，用例留 Skip 占位
 //	143  B5  push 的 force_update 三态：不传不动 / --set 打开 / --clear 关闭
 //	144  M13/14 CLI 参数校验：log --limit 负数不 panic、config init 缺项目名报错
-//	145  B6  删除同步已移除（2026-11-23）：本地删除不产生差异、服务端文件保留、
-//	         modified 链路不受影响
+//	145  B6  【已废弃 2026-11-24】删除同步全链路随删除同步移除，用例留 Skip 占位；
+//	         现行行为（本地删除不产生差异、服务端文件保留）见用例 70
 //	146  B9  后置脚本失败不写 marker（崩溃恢复会重跑，不再"一次失败永久标记完成"）
 //	147  M19 ignore 规则边界：嵌套目录 / 大小写 / 文件名 glob
 //	148  M21 add 路径归一：反斜杠与 ./ 写法不得造成"同一文件既 staged 又 unstaged"
@@ -20,7 +20,6 @@ package tc
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -52,30 +51,6 @@ func tcPostForm(t *testing.T, e *Env, path string, fields map[string]string) Res
 	}
 	defer resp.Body.Close()
 	return decodeResp(t, resp.Body, path)
-}
-
-// tcPostFormRaw 发表单请求并返回（状态码, 响应体）。接口可能已下线（404 非 JSON），不能强解析。
-func tcPostFormRaw(t *testing.T, e *Env, path string, fields map[string]string) (int, string) {
-	t.Helper()
-	form := url.Values{}
-	for k, v := range fields {
-		form.Set(k, v)
-	}
-	req, err := http.NewRequest("POST", e.BaseURL()+path, strings.NewReader(form.Encode()))
-	if err != nil {
-		t.Fatalf("构造请求失败: %v", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := e.base.Do(req)
-	if err != nil {
-		t.Fatalf("POST %s 失败: %v", path, err)
-	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("读响应失败(%s): %v", path, err)
-	}
-	return resp.StatusCode, string(b)
 }
 
 // tcUploadChunk 上传单分片
@@ -251,28 +226,14 @@ func TestCase141(t *testing.T) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// 142 M2（2026-11-23 契约变更）：delete_file 接口已随删除同步一并移除
+// 142 B6：delete_file —— **已废弃（2026-11-24）**
 //
-// d17cc69：push 不再调 file/delete_file，服务端也删掉了该路由——
-// 防止旧 CLI 误删只存在于服务端的资源。本用例钉死"接口不存在 + 文件保留"。
+// 原用例随 2026-11-23 移除删除同步（d17cc69）先改写为"接口 404 + 文件保留"，
+// 后按"过期用例即删除"的口径整体删除：它存在的唯一理由是钉一个已下线的接口，
+// 防回归价值由 server 侧单测与用例 145 的 modified 链路覆盖。编号不回收。
 // ────────────────────────────────────────────────────────────────
-
 func TestCase142(t *testing.T) {
-	e := NewEnv(t, true, 0)
-	const proj = "tc-b6-delete-api"
-	e.EnsureProject(t, proj, false, nil, nil)
-	e.PutFile(t, proj, "keep.txt", "keep")
-	e.PutFile(t, proj, "sub/drop.txt", "drop")
-
-	// 接口已下线：任何调用都 404（gin 默认 404 页，非 JSON 信封）
-	code, body := tcPostFormRaw(t, e, "/api/file/delete_file", map[string]string{
-		"projectName": proj, "relativeFileName": "sub/drop.txt",
-	})
-	True(t, code == 404, "delete_file 应已下线（404），实际 %d（body=%s）", code, truncate(body, 120))
-
-	// 文件必须原样保留
-	True(t, Exists(filepath.Join(e.DataDir(proj), "sub", "drop.txt")), "drop.txt 不应被删")
-	Eq(t, "keep.txt 不受影响", ReadText(filepath.Join(e.DataDir(proj), "keep.txt")), "keep")
+	t.Skip("已废弃：delete_file 接口随 2026-11-23 移除删除同步一并下线（d17cc69），原用例失去被测对象")
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -356,63 +317,16 @@ func TestCase144(t *testing.T) {
 // 服务端独有文件保留，modified 链路不受影响
 // ────────────────────────────────────────────────────────────────
 
+// ────────────────────────────────────────────────────────────────
+// 145 B6：删除同步全链路 —— **已废弃（2026-11-24）**
+//
+// 原用例钉的是"本地删 → deleted 暂存 → push 删服务端文件"的全链路，
+// 该功能随 2026-11-23 d17cc69 整体移除（防误删只存在于服务端的资源），
+// 被测对象不复存在。modified 链路与"服务端独有文件忽略"由用例 70 覆盖。
+// 编号不回收，历史报告引用 145 时指向本占位。
+// ────────────────────────────────────────────────────────────────
 func TestCase145(t *testing.T) {
-	e := NewEnv(t, true, 0)
-	const proj = "tc-b6-fullchain"
-	e.EnsureProject(t, proj, false, nil, nil)
-
-	ws := e.NewPublishWS(t, proj, "b6ws")
-	WriteText(t, filepath.Join(ws, "a.txt"), "a")
-	WriteText(t, filepath.Join(ws, "b.txt"), "b")
-	if r := e.PublishCLI(t, ws, "add", "--all"); !r.IsSuccess {
-		t.Fatalf("add 失败: %s", r.ErrorMsg)
-	}
-	if r := e.PublishCLI(t, ws, "push", "--version", "1.1.0", "--message", "init"); !r.IsSuccess {
-		t.Fatalf("push 1.1.0 失败: %s", r.ErrorMsg)
-	}
-	// 首发前两个文件都在服务端
-	if len(e.GetAllFiles(t, proj)) < 2 {
-		t.Fatal("首发后服务端应至少有 2 个文件")
-	}
-
-	// 本地删除 a.txt
-	if err := os.Remove(filepath.Join(ws, "a.txt")); err != nil {
-		t.Fatalf("删除本地文件失败: %v", err)
-	}
-
-	// 2026-11-23 契约（d17cc69）：删除同步已移除。
-	// a.txt 成为服务端独有文件 → diff 忽略，不产生 deleted，也不进暂存区。
-	r := e.PublishCLI(t, ws, "add", "--all")
-	True(t, r.IsSuccess, "add --all 失败: %s", r.ErrorMsg)
-	var sd StatusData
-	st := e.PublishCLI(t, ws, "status")
-	True(t, st.IsSuccess, "status 失败: %s", st.ErrorMsg)
-	if err := json.Unmarshal(st.Data, &sd); err != nil {
-		t.Fatalf("解析 status 失败: %v", err)
-	}
-	Eq(t, "本地删除不产生可暂存条目（服务端独有文件被 diff 忽略）", len(sd.Staged), 0)
-	Eq(t, "unstaged 也不含 a.txt", len(sd.Unstaged), 0)
-
-	// push 只为后续 modified 走通链路：改 b.txt 再推一版
-	WriteText(t, filepath.Join(ws, "b.txt"), "b-v2")
-	True(t, e.PublishCLI(t, ws, "add", "b.txt").IsSuccess, "add b.txt")
-	r = e.PublishCLI(t, ws, "push", "--version", "1.2.0", "--message", "b-v2")
-	True(t, r.IsSuccess, "push 1.2.0 失败: %s", r.ErrorMsg)
-
-	// 服务端 a.txt 必须保留（防误删只存在于服务端的资源）
-	True(t, Exists(filepath.Join(e.DataDir(proj), "a.txt")), "服务端 a.txt 应保留")
-	Eq(t, "服务端 a.txt 内容未变", ReadText(filepath.Join(e.DataDir(proj), "a.txt")), "a")
-	True(t, Exists(filepath.Join(e.DataDir(proj), "b.txt")), "服务端 b.txt 必须保留")
-	Eq(t, "服务端 b.txt 已更新", ReadText(filepath.Join(e.DataDir(proj), "b.txt")), "b-v2")
-	// 清单仍包含 a.txt（按磁盘实际内容固化）
-	m := e.GetManifest(t, proj)
-	foundA := false
-	for _, f := range m.Files {
-		if f == "a.txt" {
-			foundA = true
-		}
-	}
-	True(t, foundA, "发布清单应仍包含 a.txt（服务端保留）")
+	t.Skip("已废弃：删除同步随 2026-11-23 d17cc69 整体移除，原全链路失去被测对象；现行行为见用例 70")
 }
 
 // ────────────────────────────────────────────────────────────────
